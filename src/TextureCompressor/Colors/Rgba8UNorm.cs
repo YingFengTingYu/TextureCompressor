@@ -3,7 +3,14 @@ using TextureCompressor.Formats;
 namespace TextureCompressor.Colors;
 
 public struct Rgba8UNorm(byte red, byte green, byte blue, byte alpha = 255)
-    : IConvertibleToRgba8UNorm<Rgba8UNorm>, IConvertibleToRgba32Float<Rgba8UNorm>
+    : IConvertibleToRgba8UNorm<Rgba8UNorm>,
+      IConvertibleToRgba8SNorm<Rgba8UNorm>,
+      IConvertibleToRgba16UNorm<Rgba8UNorm>,
+      IConvertibleToRgba16SNorm<Rgba8UNorm>,
+      IConvertibleToRgba32UNorm<Rgba8UNorm>,
+      IConvertibleToRgba32SNorm<Rgba8UNorm>,
+      IConvertibleToRgba16Float<Rgba8UNorm>,
+      IConvertibleToRgba32Float<Rgba8UNorm>
 {
     public byte Red = red;
     public byte Green = green;
@@ -21,28 +28,130 @@ public struct Rgba8UNorm(byte red, byte green, byte blue, byte alpha = 255)
     {
         return value;
     }
-    
+
+    public static Rgba8SNorm ToRgba8SNorm(Rgba8UNorm value)
+    {
+        return new Rgba8SNorm(
+            RgbaColorConversions.ToSNorm8(value.Red),
+            RgbaColorConversions.ToSNorm8(value.Green),
+            RgbaColorConversions.ToSNorm8(value.Blue),
+            RgbaColorConversions.ToSNorm8(value.Alpha));
+    }
+
+    public static Rgba8UNorm FromRgba8SNorm(Rgba8SNorm value)
+    {
+        return new Rgba8UNorm(
+            RgbaColorConversions.ToUNorm8(value.Red),
+            RgbaColorConversions.ToUNorm8(value.Green),
+            RgbaColorConversions.ToUNorm8(value.Blue),
+            RgbaColorConversions.ToUNorm8(value.Alpha));
+    }
+
+    public static Rgba16UNorm ToRgba16UNorm(Rgba8UNorm value)
+    {
+        return new Rgba16UNorm(
+            RgbaColorConversions.ToUNorm16(value.Red),
+            RgbaColorConversions.ToUNorm16(value.Green),
+            RgbaColorConversions.ToUNorm16(value.Blue),
+            RgbaColorConversions.ToUNorm16(value.Alpha));
+    }
+
+    public static Rgba8UNorm FromRgba16UNorm(Rgba16UNorm value)
+    {
+        return new Rgba8UNorm(
+            RgbaColorConversions.ToUNorm8(value.Red),
+            RgbaColorConversions.ToUNorm8(value.Green),
+            RgbaColorConversions.ToUNorm8(value.Blue),
+            RgbaColorConversions.ToUNorm8(value.Alpha));
+    }
+
+    public static Rgba16SNorm ToRgba16SNorm(Rgba8UNorm value)
+    {
+        return new Rgba16SNorm(
+            RgbaColorConversions.ToSNorm16(value.Red),
+            RgbaColorConversions.ToSNorm16(value.Green),
+            RgbaColorConversions.ToSNorm16(value.Blue),
+            RgbaColorConversions.ToSNorm16(value.Alpha));
+    }
+
+    public static Rgba8UNorm FromRgba16SNorm(Rgba16SNorm value)
+    {
+        return new Rgba8UNorm(
+            RgbaColorConversions.ToUNorm8(value.Red),
+            RgbaColorConversions.ToUNorm8(value.Green),
+            RgbaColorConversions.ToUNorm8(value.Blue),
+            RgbaColorConversions.ToUNorm8(value.Alpha));
+    }
+
+    public static Rgba32UNorm ToRgba32UNorm(Rgba8UNorm value)
+    {
+        return new Rgba32UNorm(
+            RgbaColorConversions.ToUNorm32(value.Red),
+            RgbaColorConversions.ToUNorm32(value.Green),
+            RgbaColorConversions.ToUNorm32(value.Blue),
+            RgbaColorConversions.ToUNorm32(value.Alpha));
+    }
+
+    public static Rgba8UNorm FromRgba32UNorm(Rgba32UNorm value)
+    {
+        return new Rgba8UNorm(
+            RgbaColorConversions.ToUNorm8(value.Red),
+            RgbaColorConversions.ToUNorm8(value.Green),
+            RgbaColorConversions.ToUNorm8(value.Blue),
+            RgbaColorConversions.ToUNorm8(value.Alpha));
+    }
+
+    public static Rgba32SNorm ToRgba32SNorm(Rgba8UNorm value)
+    {
+        return new Rgba32SNorm(
+            RgbaColorConversions.ToSNorm32(value.Red),
+            RgbaColorConversions.ToSNorm32(value.Green),
+            RgbaColorConversions.ToSNorm32(value.Blue),
+            RgbaColorConversions.ToSNorm32(value.Alpha));
+    }
+
+    public static Rgba8UNorm FromRgba32SNorm(Rgba32SNorm value)
+    {
+        return new Rgba8UNorm(
+            RgbaColorConversions.ToUNorm8(value.Red),
+            RgbaColorConversions.ToUNorm8(value.Green),
+            RgbaColorConversions.ToUNorm8(value.Blue),
+            RgbaColorConversions.ToUNorm8(value.Alpha));
+    }
+
+    public static Rgba16Float ToRgba16Float(Rgba8UNorm value)
+    {
+        return new Rgba16Float(
+            RgbaColorConversions.ToHalf(value.Red),
+            RgbaColorConversions.ToHalf(value.Green),
+            RgbaColorConversions.ToHalf(value.Blue),
+            RgbaColorConversions.ToHalf(value.Alpha));
+    }
+
+    public static Rgba8UNorm FromRgba16Float(Rgba16Float value)
+    {
+        return new Rgba8UNorm(
+            RgbaColorConversions.ToUNorm8(value.Red),
+            RgbaColorConversions.ToUNorm8(value.Green),
+            RgbaColorConversions.ToUNorm8(value.Blue),
+            RgbaColorConversions.ToUNorm8(value.Alpha));
+    }
+
     public static Rgba32Float ToRgba32Float(Rgba8UNorm value)
     {
-        return new Rgba32Float(value.Red / 255f, value.Green / 255f, value.Blue / 255f, value.Alpha / 255f);
+        return new Rgba32Float(
+            RgbaColorConversions.ToFloat(value.Red),
+            RgbaColorConversions.ToFloat(value.Green),
+            RgbaColorConversions.ToFloat(value.Blue),
+            RgbaColorConversions.ToFloat(value.Alpha));
     }
 
     public static Rgba8UNorm FromRgba32Float(Rgba32Float value)
     {
         return new Rgba8UNorm(
-            FloatToByte(value.Red),
-            FloatToByte(value.Green),
-            FloatToByte(value.Blue),
-            FloatToByte(value.Alpha));
-    }
-
-    private static byte FloatToByte(float value)
-    {
-        if (float.IsNaN(value))
-        {
-            return 0;
-        }
-
-        return (byte)MathF.Round(Math.Clamp(value, 0f, 1f) * 255f);
+            RgbaColorConversions.FloatToUNorm8(value.Red),
+            RgbaColorConversions.FloatToUNorm8(value.Green),
+            RgbaColorConversions.FloatToUNorm8(value.Blue),
+            RgbaColorConversions.FloatToUNorm8(value.Alpha));
     }
 }

@@ -14,6 +14,24 @@ public static class TextureFormats
     public static readonly TextureFormat Rgba8UNorm =
         TextureFormat.Uncompressed("RGBA8_UNORM", TextureComponents.Rgba, TextureValueKind.UNorm, 8, 8, 8, 8);
 
+    public static readonly TextureFormat Rgba8SNorm =
+        TextureFormat.Uncompressed("RGBA8_SNORM", TextureComponents.Rgba, TextureValueKind.SNorm, 8, 8, 8, 8);
+
+    public static readonly TextureFormat Rgba16UNorm =
+        TextureFormat.Uncompressed("RGBA16_UNORM", TextureComponents.Rgba, TextureValueKind.UNorm, 16, 16, 16, 16);
+
+    public static readonly TextureFormat Rgba16SNorm =
+        TextureFormat.Uncompressed("RGBA16_SNORM", TextureComponents.Rgba, TextureValueKind.SNorm, 16, 16, 16, 16);
+
+    public static readonly TextureFormat Rgba32UNorm =
+        TextureFormat.Uncompressed("RGBA32_UNORM", TextureComponents.Rgba, TextureValueKind.UNorm, 32, 32, 32, 32);
+
+    public static readonly TextureFormat Rgba32SNorm =
+        TextureFormat.Uncompressed("RGBA32_SNORM", TextureComponents.Rgba, TextureValueKind.SNorm, 32, 32, 32, 32);
+
+    public static readonly TextureFormat Rgba16Float =
+        TextureFormat.Uncompressed("RGBA16_FLOAT", TextureComponents.Rgba, TextureValueKind.Float, 16, 16, 16, 16);
+
     public static readonly TextureFormat Rgba32Float =
         TextureFormat.Uncompressed("RGBA32_FLOAT", TextureComponents.Rgba, TextureValueKind.Float, 32, 32, 32, 32);
 
