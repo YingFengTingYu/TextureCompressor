@@ -1,0 +1,8 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/TextureCompressor/TextureCompressor.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/TextureCompressor.Tests/TextureCompressor.Tests.csproj" />
+  </Folder>
+</Solution>
