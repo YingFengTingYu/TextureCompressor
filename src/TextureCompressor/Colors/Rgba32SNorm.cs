@@ -3,14 +3,7 @@ using TextureCompressor.Formats;
 namespace TextureCompressor.Colors;
 
 public struct Rgba32SNorm(int red, int green, int blue, int alpha = int.MaxValue)
-    : IConvertibleToRgba8UNorm<Rgba32SNorm>,
-      IConvertibleToRgba8SNorm<Rgba32SNorm>,
-      IConvertibleToRgba16UNorm<Rgba32SNorm>,
-      IConvertibleToRgba16SNorm<Rgba32SNorm>,
-      IConvertibleToRgba32UNorm<Rgba32SNorm>,
-      IConvertibleToRgba32SNorm<Rgba32SNorm>,
-      IConvertibleToRgba16Float<Rgba32SNorm>,
-      IConvertibleToRgba32Float<Rgba32SNorm>
+    : IPixel<Rgba32SNorm>
 {
     public int Red = red;
     public int Green = green;
