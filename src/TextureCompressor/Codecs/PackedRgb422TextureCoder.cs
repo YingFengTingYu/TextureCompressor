@@ -7,27 +7,21 @@ namespace TextureCompressor.Codecs;
 
 public sealed class PackedRgb422TextureCoder : IPitchTextureCoder
 {
-    private readonly PackedRgb422Plan _plan;
+    private readonly PackedRgb422Transfer _transfer;
 
     public PackedRgb422TextureCoder(TextureFormat format)
     {
-        _plan = GetPlan(format);
+        if (!TryGetTransfer(format, out _transfer))
+        {
+            throw CreateUnsupportedFormatException(format);
+        }
+
         Format = format;
     }
 
     public TextureFormat Format { get; }
 
-    public static bool IsSupported(TextureFormat format) =>
-        format == TextureFormats.R8G8B8G8_422UNorm
-        || format == TextureFormats.G8R8G8B8_422UNorm
-        || format == TextureFormats.G8B8G8R8_422UNorm
-        || format == TextureFormats.B8G8R8G8_422UNorm
-        || format == TextureFormats.G10X6B10X6G10X6R10X6_422UNorm
-        || format == TextureFormats.B10X6G10X6R10X6G10X6_422UNorm
-        || format == TextureFormats.G12X4B12X4G12X4R12X4_422UNorm
-        || format == TextureFormats.B12X4G12X4R12X4G12X4_422UNorm
-        || format == TextureFormats.G16B16G16R16_422UNorm
-        || format == TextureFormats.B16G16R16G16_422UNorm;
+    public static bool IsSupported(TextureFormat format) => TryGetTransfer(format, out _);
 
     public int GetDefaultPitch(int width) => Format.GetRowByteCount(width);
 
@@ -48,7 +42,100 @@ public sealed class PackedRgb422TextureCoder : IPitchTextureCoder
         where TPixel : unmanaged, IPixel<TPixel>
     {
         ValidateSourceLength(destination.Width, destination.Height, source, rowPitch);
+        DecodeByTransfer(source, destination, rowPitch);
+    }
 
+    public void Encode<TPixel>(ImageView<TPixel> source, Span<byte> destination, int rowPitch)
+        where TPixel : unmanaged, IPixel<TPixel>
+    {
+        ValidateDestinationLength(source.Width, source.Height, destination, rowPitch);
+        EncodeByTransfer(source, destination, rowPitch);
+    }
+
+    private void DecodeByTransfer<TPixel>(ReadOnlySpan<byte> source, ImageView<TPixel> destination, int rowPitch)
+        where TPixel : unmanaged, IPixel<TPixel>
+    {
+        switch (_transfer)
+        {
+            case PackedRgb422Transfer.RgBg8:
+                Decode8<TPixel, RgBg8Transfer>(source, destination, rowPitch);
+                return;
+            case PackedRgb422Transfer.GrGb8:
+                Decode8<TPixel, GrGb8Transfer>(source, destination, rowPitch);
+                return;
+            case PackedRgb422Transfer.GbGr8:
+                Decode8<TPixel, GbGr8Transfer>(source, destination, rowPitch);
+                return;
+            case PackedRgb422Transfer.BgRg8:
+                Decode8<TPixel, BgRg8Transfer>(source, destination, rowPitch);
+                return;
+            case PackedRgb422Transfer.GbGr10:
+                Decode16<TPixel, GbGr10Transfer>(source, destination, rowPitch);
+                return;
+            case PackedRgb422Transfer.BgRg10:
+                Decode16<TPixel, BgRg10Transfer>(source, destination, rowPitch);
+                return;
+            case PackedRgb422Transfer.GbGr12:
+                Decode16<TPixel, GbGr12Transfer>(source, destination, rowPitch);
+                return;
+            case PackedRgb422Transfer.BgRg12:
+                Decode16<TPixel, BgRg12Transfer>(source, destination, rowPitch);
+                return;
+            case PackedRgb422Transfer.GbGr16:
+                Decode16<TPixel, GbGr16Transfer>(source, destination, rowPitch);
+                return;
+            case PackedRgb422Transfer.BgRg16:
+                Decode16<TPixel, BgRg16Transfer>(source, destination, rowPitch);
+                return;
+            default:
+                throw CreateUnsupportedFormatException(Format);
+        }
+    }
+
+    private void EncodeByTransfer<TPixel>(ImageView<TPixel> source, Span<byte> destination, int rowPitch)
+        where TPixel : unmanaged, IPixel<TPixel>
+    {
+        switch (_transfer)
+        {
+            case PackedRgb422Transfer.RgBg8:
+                Encode8<TPixel, RgBg8Transfer>(source, destination, rowPitch);
+                return;
+            case PackedRgb422Transfer.GrGb8:
+                Encode8<TPixel, GrGb8Transfer>(source, destination, rowPitch);
+                return;
+            case PackedRgb422Transfer.GbGr8:
+                Encode8<TPixel, GbGr8Transfer>(source, destination, rowPitch);
+                return;
+            case PackedRgb422Transfer.BgRg8:
+                Encode8<TPixel, BgRg8Transfer>(source, destination, rowPitch);
+                return;
+            case PackedRgb422Transfer.GbGr10:
+                Encode16<TPixel, GbGr10Transfer>(source, destination, rowPitch);
+                return;
+            case PackedRgb422Transfer.BgRg10:
+                Encode16<TPixel, BgRg10Transfer>(source, destination, rowPitch);
+                return;
+            case PackedRgb422Transfer.GbGr12:
+                Encode16<TPixel, GbGr12Transfer>(source, destination, rowPitch);
+                return;
+            case PackedRgb422Transfer.BgRg12:
+                Encode16<TPixel, BgRg12Transfer>(source, destination, rowPitch);
+                return;
+            case PackedRgb422Transfer.GbGr16:
+                Encode16<TPixel, GbGr16Transfer>(source, destination, rowPitch);
+                return;
+            case PackedRgb422Transfer.BgRg16:
+                Encode16<TPixel, BgRg16Transfer>(source, destination, rowPitch);
+                return;
+            default:
+                throw CreateUnsupportedFormatException(Format);
+        }
+    }
+
+    private static void Decode8<TPixel, TTransfer>(ReadOnlySpan<byte> source, ImageView<TPixel> destination, int rowPitch)
+        where TPixel : unmanaged, IPixel<TPixel>
+        where TTransfer : IPackedRgb422Transfer<Rgba8UNorm>
+    {
         var blocksPerRow = destination.Width / 2;
         var rowOffset = 0;
         for (var y = 0; y < destination.Height; y++)
@@ -58,21 +145,10 @@ public sealed class PackedRgb422TextureCoder : IPitchTextureCoder
             var pixelX = 0;
             for (var blockX = 0; blockX < blocksPerRow; blockX++)
             {
-                var block = source.Slice(blockOffset, _plan.BytesPerBlock);
-                if (_plan.BitsPerComponent == 8)
-                {
-                    DecodeBlock8(block, out var first, out var second);
-                    destinationRow[pixelX] = TPixel.FromRgba8UNorm(first);
-                    destinationRow[pixelX + 1] = TPixel.FromRgba8UNorm(second);
-                }
-                else
-                {
-                    DecodeBlock16(block, out var first, out var second);
-                    destinationRow[pixelX] = TPixel.FromRgba16UNorm(first);
-                    destinationRow[pixelX + 1] = TPixel.FromRgba16UNorm(second);
-                }
-
-                blockOffset = checked(blockOffset + _plan.BytesPerBlock);
+                TTransfer.DecodeBlock(source.Slice(blockOffset, TTransfer.BytesPerBlock), out var first, out var second);
+                destinationRow[pixelX] = TPixel.FromRgba8UNorm(first);
+                destinationRow[pixelX + 1] = TPixel.FromRgba8UNorm(second);
+                blockOffset = checked(blockOffset + TTransfer.BytesPerBlock);
                 pixelX += 2;
             }
 
@@ -80,11 +156,10 @@ public sealed class PackedRgb422TextureCoder : IPitchTextureCoder
         }
     }
 
-    public void Encode<TPixel>(ImageView<TPixel> source, Span<byte> destination, int rowPitch)
+    private static void Encode8<TPixel, TTransfer>(ImageView<TPixel> source, Span<byte> destination, int rowPitch)
         where TPixel : unmanaged, IPixel<TPixel>
+        where TTransfer : IPackedRgb422Transfer<Rgba8UNorm>
     {
-        ValidateDestinationLength(source.Width, source.Height, destination, rowPitch);
-
         var blocksPerRow = source.Width / 2;
         var rowOffset = 0;
         for (var y = 0; y < source.Height; y++)
@@ -94,17 +169,11 @@ public sealed class PackedRgb422TextureCoder : IPitchTextureCoder
             var pixelX = 0;
             for (var blockX = 0; blockX < blocksPerRow; blockX++)
             {
-                var block = destination.Slice(blockOffset, _plan.BytesPerBlock);
-                if (_plan.BitsPerComponent == 8)
-                {
-                    EncodeBlock8(TPixel.ToRgba8UNorm(sourceRow[pixelX]), TPixel.ToRgba8UNorm(sourceRow[pixelX + 1]), block);
-                }
-                else
-                {
-                    EncodeBlock16(TPixel.ToRgba16UNorm(sourceRow[pixelX]), TPixel.ToRgba16UNorm(sourceRow[pixelX + 1]), block);
-                }
-
-                blockOffset = checked(blockOffset + _plan.BytesPerBlock);
+                TTransfer.EncodeBlock(
+                    TPixel.ToRgba8UNorm(sourceRow[pixelX]),
+                    TPixel.ToRgba8UNorm(sourceRow[pixelX + 1]),
+                    destination.Slice(blockOffset, TTransfer.BytesPerBlock));
+                blockOffset = checked(blockOffset + TTransfer.BytesPerBlock);
                 pixelX += 2;
             }
 
@@ -112,142 +181,268 @@ public sealed class PackedRgb422TextureCoder : IPitchTextureCoder
         }
     }
 
-    private void DecodeBlock8(ReadOnlySpan<byte> block, out Rgba8UNorm first, out Rgba8UNorm second)
+    private static void Decode16<TPixel, TTransfer>(ReadOnlySpan<byte> source, ImageView<TPixel> destination, int rowPitch)
+        where TPixel : unmanaged, IPixel<TPixel>
+        where TTransfer : IPackedRgb422Transfer<Rgba16UNorm>
     {
-        var c0 = block[0];
-        var c1 = block[1];
-        var c2 = block[2];
-        var c3 = block[3];
-
-        byte red;
-        byte green0;
-        byte green1;
-        byte blue;
-        switch (_plan.Layout)
+        var blocksPerRow = destination.Width / 2;
+        var rowOffset = 0;
+        for (var y = 0; y < destination.Height; y++)
         {
-            case PackedRgb422Layout.RgBg:
-                red = c0;
-                green0 = c1;
-                blue = c2;
-                green1 = c3;
-                break;
-            case PackedRgb422Layout.GrGb:
-                green0 = c0;
-                red = c1;
-                green1 = c2;
-                blue = c3;
-                break;
-            case PackedRgb422Layout.GbGr:
-                green0 = c0;
-                blue = c1;
-                green1 = c2;
-                red = c3;
-                break;
-            case PackedRgb422Layout.BgRg:
-                blue = c0;
-                green0 = c1;
-                red = c2;
-                green1 = c3;
-                break;
-            default:
-                throw new ArgumentOutOfRangeException(nameof(_plan));
+            var destinationRow = destination.GetRowSpan(y);
+            var blockOffset = rowOffset;
+            var pixelX = 0;
+            for (var blockX = 0; blockX < blocksPerRow; blockX++)
+            {
+                TTransfer.DecodeBlock(source.Slice(blockOffset, TTransfer.BytesPerBlock), out var first, out var second);
+                destinationRow[pixelX] = TPixel.FromRgba16UNorm(first);
+                destinationRow[pixelX + 1] = TPixel.FromRgba16UNorm(second);
+                blockOffset = checked(blockOffset + TTransfer.BytesPerBlock);
+                pixelX += 2;
+            }
+
+            rowOffset = checked(rowOffset + rowPitch);
+        }
+    }
+
+    private static void Encode16<TPixel, TTransfer>(ImageView<TPixel> source, Span<byte> destination, int rowPitch)
+        where TPixel : unmanaged, IPixel<TPixel>
+        where TTransfer : IPackedRgb422Transfer<Rgba16UNorm>
+    {
+        var blocksPerRow = source.Width / 2;
+        var rowOffset = 0;
+        for (var y = 0; y < source.Height; y++)
+        {
+            var sourceRow = source.GetRowSpan(y);
+            var blockOffset = rowOffset;
+            var pixelX = 0;
+            for (var blockX = 0; blockX < blocksPerRow; blockX++)
+            {
+                TTransfer.EncodeBlock(
+                    TPixel.ToRgba16UNorm(sourceRow[pixelX]),
+                    TPixel.ToRgba16UNorm(sourceRow[pixelX + 1]),
+                    destination.Slice(blockOffset, TTransfer.BytesPerBlock));
+                blockOffset = checked(blockOffset + TTransfer.BytesPerBlock);
+                pixelX += 2;
+            }
+
+            rowOffset = checked(rowOffset + rowPitch);
+        }
+    }
+
+    private interface IPackedRgb422Transfer<TCarrier>
+    {
+        static abstract int BytesPerBlock { get; }
+
+        static abstract void DecodeBlock(ReadOnlySpan<byte> block, out TCarrier first, out TCarrier second);
+
+        static abstract void EncodeBlock(TCarrier first, TCarrier second, Span<byte> block);
+    }
+
+    private readonly struct RgBg8Transfer : IPackedRgb422Transfer<Rgba8UNorm>
+    {
+        public static int BytesPerBlock => 4;
+
+        public static void DecodeBlock(ReadOnlySpan<byte> block, out Rgba8UNorm first, out Rgba8UNorm second)
+        {
+            var red = block[0];
+            var green0 = block[1];
+            var blue = block[2];
+            var green1 = block[3];
+            first = new Rgba8UNorm(red, green0, blue);
+            second = new Rgba8UNorm(red, green1, blue);
         }
 
+        public static void EncodeBlock(Rgba8UNorm first, Rgba8UNorm second, Span<byte> block)
+        {
+            block[0] = AverageUNorm8(first.Red, second.Red);
+            block[1] = first.Green;
+            block[2] = AverageUNorm8(first.Blue, second.Blue);
+            block[3] = second.Green;
+        }
+    }
+
+    private readonly struct GrGb8Transfer : IPackedRgb422Transfer<Rgba8UNorm>
+    {
+        public static int BytesPerBlock => 4;
+
+        public static void DecodeBlock(ReadOnlySpan<byte> block, out Rgba8UNorm first, out Rgba8UNorm second)
+        {
+            var green0 = block[0];
+            var red = block[1];
+            var green1 = block[2];
+            var blue = block[3];
+            first = new Rgba8UNorm(red, green0, blue);
+            second = new Rgba8UNorm(red, green1, blue);
+        }
+
+        public static void EncodeBlock(Rgba8UNorm first, Rgba8UNorm second, Span<byte> block)
+        {
+            block[0] = first.Green;
+            block[1] = AverageUNorm8(first.Red, second.Red);
+            block[2] = second.Green;
+            block[3] = AverageUNorm8(first.Blue, second.Blue);
+        }
+    }
+
+    private readonly struct GbGr8Transfer : IPackedRgb422Transfer<Rgba8UNorm>
+    {
+        public static int BytesPerBlock => 4;
+
+        public static void DecodeBlock(ReadOnlySpan<byte> block, out Rgba8UNorm first, out Rgba8UNorm second) =>
+            DecodeGbGr8(block, out first, out second);
+
+        public static void EncodeBlock(Rgba8UNorm first, Rgba8UNorm second, Span<byte> block) =>
+            EncodeGbGr8(first, second, block);
+    }
+
+    private readonly struct BgRg8Transfer : IPackedRgb422Transfer<Rgba8UNorm>
+    {
+        public static int BytesPerBlock => 4;
+
+        public static void DecodeBlock(ReadOnlySpan<byte> block, out Rgba8UNorm first, out Rgba8UNorm second) =>
+            DecodeBgRg8(block, out first, out second);
+
+        public static void EncodeBlock(Rgba8UNorm first, Rgba8UNorm second, Span<byte> block) =>
+            EncodeBgRg8(first, second, block);
+    }
+
+    private readonly struct GbGr10Transfer : IPackedRgb422Transfer<Rgba16UNorm>
+    {
+        public static int BytesPerBlock => 8;
+
+        public static void DecodeBlock(ReadOnlySpan<byte> block, out Rgba16UNorm first, out Rgba16UNorm second) =>
+            DecodeGbGr16(block, unusedLowBits: 6, out first, out second);
+
+        public static void EncodeBlock(Rgba16UNorm first, Rgba16UNorm second, Span<byte> block) =>
+            EncodeGbGr16(first, second, block, unusedLowBits: 6);
+    }
+
+    private readonly struct BgRg10Transfer : IPackedRgb422Transfer<Rgba16UNorm>
+    {
+        public static int BytesPerBlock => 8;
+
+        public static void DecodeBlock(ReadOnlySpan<byte> block, out Rgba16UNorm first, out Rgba16UNorm second) =>
+            DecodeBgRg16(block, unusedLowBits: 6, out first, out second);
+
+        public static void EncodeBlock(Rgba16UNorm first, Rgba16UNorm second, Span<byte> block) =>
+            EncodeBgRg16(first, second, block, unusedLowBits: 6);
+    }
+
+    private readonly struct GbGr12Transfer : IPackedRgb422Transfer<Rgba16UNorm>
+    {
+        public static int BytesPerBlock => 8;
+
+        public static void DecodeBlock(ReadOnlySpan<byte> block, out Rgba16UNorm first, out Rgba16UNorm second) =>
+            DecodeGbGr16(block, unusedLowBits: 4, out first, out second);
+
+        public static void EncodeBlock(Rgba16UNorm first, Rgba16UNorm second, Span<byte> block) =>
+            EncodeGbGr16(first, second, block, unusedLowBits: 4);
+    }
+
+    private readonly struct BgRg12Transfer : IPackedRgb422Transfer<Rgba16UNorm>
+    {
+        public static int BytesPerBlock => 8;
+
+        public static void DecodeBlock(ReadOnlySpan<byte> block, out Rgba16UNorm first, out Rgba16UNorm second) =>
+            DecodeBgRg16(block, unusedLowBits: 4, out first, out second);
+
+        public static void EncodeBlock(Rgba16UNorm first, Rgba16UNorm second, Span<byte> block) =>
+            EncodeBgRg16(first, second, block, unusedLowBits: 4);
+    }
+
+    private readonly struct GbGr16Transfer : IPackedRgb422Transfer<Rgba16UNorm>
+    {
+        public static int BytesPerBlock => 8;
+
+        public static void DecodeBlock(ReadOnlySpan<byte> block, out Rgba16UNorm first, out Rgba16UNorm second) =>
+            DecodeGbGr16(block, unusedLowBits: 0, out first, out second);
+
+        public static void EncodeBlock(Rgba16UNorm first, Rgba16UNorm second, Span<byte> block) =>
+            EncodeGbGr16(first, second, block, unusedLowBits: 0);
+    }
+
+    private readonly struct BgRg16Transfer : IPackedRgb422Transfer<Rgba16UNorm>
+    {
+        public static int BytesPerBlock => 8;
+
+        public static void DecodeBlock(ReadOnlySpan<byte> block, out Rgba16UNorm first, out Rgba16UNorm second) =>
+            DecodeBgRg16(block, unusedLowBits: 0, out first, out second);
+
+        public static void EncodeBlock(Rgba16UNorm first, Rgba16UNorm second, Span<byte> block) =>
+            EncodeBgRg16(first, second, block, unusedLowBits: 0);
+    }
+
+    private static void DecodeGbGr8(ReadOnlySpan<byte> block, out Rgba8UNorm first, out Rgba8UNorm second)
+    {
+        var green0 = block[0];
+        var blue = block[1];
+        var green1 = block[2];
+        var red = block[3];
         first = new Rgba8UNorm(red, green0, blue);
         second = new Rgba8UNorm(red, green1, blue);
     }
 
-    private void DecodeBlock16(ReadOnlySpan<byte> block, out Rgba16UNorm first, out Rgba16UNorm second)
+    private static void DecodeBgRg8(ReadOnlySpan<byte> block, out Rgba8UNorm first, out Rgba8UNorm second)
     {
-        var c0 = DecodeUInt16Component(block, 0);
-        var c1 = DecodeUInt16Component(block, 1);
-        var c2 = DecodeUInt16Component(block, 2);
-        var c3 = DecodeUInt16Component(block, 3);
+        var blue = block[0];
+        var green0 = block[1];
+        var red = block[2];
+        var green1 = block[3];
+        first = new Rgba8UNorm(red, green0, blue);
+        second = new Rgba8UNorm(red, green1, blue);
+    }
 
-        ushort red;
-        ushort green0;
-        ushort green1;
-        ushort blue;
-        switch (_plan.Layout)
-        {
-            case PackedRgb422Layout.GbGr:
-                green0 = c0;
-                blue = c1;
-                green1 = c2;
-                red = c3;
-                break;
-            case PackedRgb422Layout.BgRg:
-                blue = c0;
-                green0 = c1;
-                red = c2;
-                green1 = c3;
-                break;
-            default:
-                throw new ArgumentOutOfRangeException(nameof(_plan));
-        }
+    private static void EncodeGbGr8(Rgba8UNorm first, Rgba8UNorm second, Span<byte> block)
+    {
+        block[0] = first.Green;
+        block[1] = AverageUNorm8(first.Blue, second.Blue);
+        block[2] = second.Green;
+        block[3] = AverageUNorm8(first.Red, second.Red);
+    }
 
+    private static void EncodeBgRg8(Rgba8UNorm first, Rgba8UNorm second, Span<byte> block)
+    {
+        block[0] = AverageUNorm8(first.Blue, second.Blue);
+        block[1] = first.Green;
+        block[2] = AverageUNorm8(first.Red, second.Red);
+        block[3] = second.Green;
+    }
+
+    private static void DecodeGbGr16(ReadOnlySpan<byte> block, int unusedLowBits, out Rgba16UNorm first, out Rgba16UNorm second)
+    {
+        var green0 = DecodeUInt16Component(block, 0, unusedLowBits);
+        var blue = DecodeUInt16Component(block, 1, unusedLowBits);
+        var green1 = DecodeUInt16Component(block, 2, unusedLowBits);
+        var red = DecodeUInt16Component(block, 3, unusedLowBits);
         first = new Rgba16UNorm(red, green0, blue);
         second = new Rgba16UNorm(red, green1, blue);
     }
 
-    private void EncodeBlock8(Rgba8UNorm first, Rgba8UNorm second, Span<byte> block)
+    private static void DecodeBgRg16(ReadOnlySpan<byte> block, int unusedLowBits, out Rgba16UNorm first, out Rgba16UNorm second)
     {
-        var red = AverageUNorm8(first.Red, second.Red);
-        var blue = AverageUNorm8(first.Blue, second.Blue);
-
-        switch (_plan.Layout)
-        {
-            case PackedRgb422Layout.RgBg:
-                block[0] = red;
-                block[1] = first.Green;
-                block[2] = blue;
-                block[3] = second.Green;
-                break;
-            case PackedRgb422Layout.GrGb:
-                block[0] = first.Green;
-                block[1] = red;
-                block[2] = second.Green;
-                block[3] = blue;
-                break;
-            case PackedRgb422Layout.GbGr:
-                block[0] = first.Green;
-                block[1] = blue;
-                block[2] = second.Green;
-                block[3] = red;
-                break;
-            case PackedRgb422Layout.BgRg:
-                block[0] = blue;
-                block[1] = first.Green;
-                block[2] = red;
-                block[3] = second.Green;
-                break;
-            default:
-                throw new ArgumentOutOfRangeException(nameof(_plan));
-        }
+        var blue = DecodeUInt16Component(block, 0, unusedLowBits);
+        var green0 = DecodeUInt16Component(block, 1, unusedLowBits);
+        var red = DecodeUInt16Component(block, 2, unusedLowBits);
+        var green1 = DecodeUInt16Component(block, 3, unusedLowBits);
+        first = new Rgba16UNorm(red, green0, blue);
+        second = new Rgba16UNorm(red, green1, blue);
     }
 
-    private void EncodeBlock16(Rgba16UNorm first, Rgba16UNorm second, Span<byte> block)
+    private static void EncodeGbGr16(Rgba16UNorm first, Rgba16UNorm second, Span<byte> block, int unusedLowBits)
     {
-        var red = AverageUNorm16(first.Red, second.Red);
-        var blue = AverageUNorm16(first.Blue, second.Blue);
+        EncodeUInt16Component(block, 0, first.Green, unusedLowBits);
+        EncodeUInt16Component(block, 1, AverageUNorm16(first.Blue, second.Blue), unusedLowBits);
+        EncodeUInt16Component(block, 2, second.Green, unusedLowBits);
+        EncodeUInt16Component(block, 3, AverageUNorm16(first.Red, second.Red), unusedLowBits);
+    }
 
-        switch (_plan.Layout)
-        {
-            case PackedRgb422Layout.GbGr:
-                EncodeUInt16Component(block, 0, first.Green);
-                EncodeUInt16Component(block, 1, blue);
-                EncodeUInt16Component(block, 2, second.Green);
-                EncodeUInt16Component(block, 3, red);
-                break;
-            case PackedRgb422Layout.BgRg:
-                EncodeUInt16Component(block, 0, blue);
-                EncodeUInt16Component(block, 1, first.Green);
-                EncodeUInt16Component(block, 2, red);
-                EncodeUInt16Component(block, 3, second.Green);
-                break;
-            default:
-                throw new ArgumentOutOfRangeException(nameof(_plan));
-        }
+    private static void EncodeBgRg16(Rgba16UNorm first, Rgba16UNorm second, Span<byte> block, int unusedLowBits)
+    {
+        EncodeUInt16Component(block, 0, AverageUNorm16(first.Blue, second.Blue), unusedLowBits);
+        EncodeUInt16Component(block, 1, first.Green, unusedLowBits);
+        EncodeUInt16Component(block, 2, AverageUNorm16(first.Red, second.Red), unusedLowBits);
+        EncodeUInt16Component(block, 3, second.Green, unusedLowBits);
     }
 
     private void ValidateSourceLength(int width, int height, ReadOnlySpan<byte> source, int rowPitch)
@@ -285,28 +480,28 @@ public sealed class PackedRgb422TextureCoder : IPitchTextureCoder
     private static void WriteUInt16(Span<byte> block, int component, ushort value) =>
         BinaryPrimitives.WriteUInt16LittleEndian(block.Slice(component * sizeof(ushort), sizeof(ushort)), value);
 
-    private ushort DecodeUInt16Component(ReadOnlySpan<byte> block, int component)
+    private static ushort DecodeUInt16Component(ReadOnlySpan<byte> block, int component, int unusedLowBits)
     {
         var value = ReadUInt16(block, component);
-        if (_plan.UnusedLowBits == 0)
+        if (unusedLowBits == 0)
         {
             return value;
         }
 
-        var bits = 16 - _plan.UnusedLowBits;
-        var componentValue = (uint)value >> _plan.UnusedLowBits;
-        return (ushort)((componentValue << _plan.UnusedLowBits) | (componentValue >> (bits - _plan.UnusedLowBits)));
+        var bits = 16 - unusedLowBits;
+        var componentValue = (uint)value >> unusedLowBits;
+        return (ushort)((componentValue << unusedLowBits) | (componentValue >> (bits - unusedLowBits)));
     }
 
-    private void EncodeUInt16Component(Span<byte> block, int component, ushort value)
+    private static void EncodeUInt16Component(Span<byte> block, int component, ushort value, int unusedLowBits)
     {
-        if (_plan.UnusedLowBits == 0)
+        if (unusedLowBits == 0)
         {
             WriteUInt16(block, component, value);
             return;
         }
 
-        var packed = (ushort)(((uint)value >> _plan.UnusedLowBits) << _plan.UnusedLowBits);
+        var packed = (ushort)(((uint)value >> unusedLowBits) << unusedLowBits);
         WriteUInt16(block, component, packed);
     }
 
@@ -318,75 +513,86 @@ public sealed class PackedRgb422TextureCoder : IPitchTextureCoder
         RgbaColorConversions.FloatToUNorm16(
             (RgbaColorConversions.UNorm16ToFloat(first) + RgbaColorConversions.UNorm16ToFloat(second)) * 0.5f);
 
-    private static PackedRgb422Plan GetPlan(TextureFormat format)
+    private static bool TryGetTransfer(TextureFormat format, out PackedRgb422Transfer transfer)
     {
         if (format == TextureFormats.R8G8B8G8_422UNorm)
         {
-            return new PackedRgb422Plan(PackedRgb422Layout.RgBg, 8, format.BytesPerBlock);
+            transfer = PackedRgb422Transfer.RgBg8;
+            return true;
         }
 
         if (format == TextureFormats.G8R8G8B8_422UNorm)
         {
-            return new PackedRgb422Plan(PackedRgb422Layout.GrGb, 8, format.BytesPerBlock);
+            transfer = PackedRgb422Transfer.GrGb8;
+            return true;
         }
 
         if (format == TextureFormats.G8B8G8R8_422UNorm)
         {
-            return new PackedRgb422Plan(PackedRgb422Layout.GbGr, 8, format.BytesPerBlock);
+            transfer = PackedRgb422Transfer.GbGr8;
+            return true;
         }
 
         if (format == TextureFormats.B8G8R8G8_422UNorm)
         {
-            return new PackedRgb422Plan(PackedRgb422Layout.BgRg, 8, format.BytesPerBlock);
+            transfer = PackedRgb422Transfer.BgRg8;
+            return true;
         }
 
         if (format == TextureFormats.G10X6B10X6G10X6R10X6_422UNorm)
         {
-            return new PackedRgb422Plan(PackedRgb422Layout.GbGr, 10, format.BytesPerBlock, 6);
+            transfer = PackedRgb422Transfer.GbGr10;
+            return true;
         }
 
         if (format == TextureFormats.B10X6G10X6R10X6G10X6_422UNorm)
         {
-            return new PackedRgb422Plan(PackedRgb422Layout.BgRg, 10, format.BytesPerBlock, 6);
+            transfer = PackedRgb422Transfer.BgRg10;
+            return true;
         }
 
         if (format == TextureFormats.G12X4B12X4G12X4R12X4_422UNorm)
         {
-            return new PackedRgb422Plan(PackedRgb422Layout.GbGr, 12, format.BytesPerBlock, 4);
+            transfer = PackedRgb422Transfer.GbGr12;
+            return true;
         }
 
         if (format == TextureFormats.B12X4G12X4R12X4G12X4_422UNorm)
         {
-            return new PackedRgb422Plan(PackedRgb422Layout.BgRg, 12, format.BytesPerBlock, 4);
+            transfer = PackedRgb422Transfer.BgRg12;
+            return true;
         }
 
         if (format == TextureFormats.G16B16G16R16_422UNorm)
         {
-            return new PackedRgb422Plan(PackedRgb422Layout.GbGr, 16, format.BytesPerBlock);
+            transfer = PackedRgb422Transfer.GbGr16;
+            return true;
         }
 
         if (format == TextureFormats.B16G16R16G16_422UNorm)
         {
-            return new PackedRgb422Plan(PackedRgb422Layout.BgRg, 16, format.BytesPerBlock);
+            transfer = PackedRgb422Transfer.BgRg16;
+            return true;
         }
 
-        throw CreateUnsupportedFormatException(format);
+        transfer = default;
+        return false;
     }
 
     private static NotSupportedException CreateUnsupportedFormatException(TextureFormat format) =>
         new($"Packed RGB 4:2:2 texture coder does not support texture format '{format.Name}'.");
 
-    private readonly record struct PackedRgb422Plan(
-        PackedRgb422Layout Layout,
-        int BitsPerComponent,
-        int BytesPerBlock,
-        int UnusedLowBits = 0);
-
-    private enum PackedRgb422Layout
+    private enum PackedRgb422Transfer
     {
-        RgBg,
-        GrGb,
-        GbGr,
-        BgRg
+        RgBg8,
+        GrGb8,
+        GbGr8,
+        BgRg8,
+        GbGr10,
+        BgRg10,
+        GbGr12,
+        BgRg12,
+        GbGr16,
+        BgRg16
     }
 }

@@ -83,23 +83,7 @@ public sealed class DepthStencilTextureCoder : IPitchTextureCoder
         ValidateDepthFormat();
         ValidateTexelSpan(depth, width, height, nameof(depth));
         ValidateDestinationLength(width, height, destination, rowPitch);
-
-        var bytesPerTexel = Format.BytesPerBlock;
-        var resolvedRowPitch = ResolveRowPitch(width, rowPitch);
-        var sourceIndex = 0;
-        var rowOffset = 0;
-        for (var y = 0; y < height; y++)
-        {
-            var texelOffset = rowOffset;
-            for (var x = 0; x < width; x++)
-            {
-                EncodeDepthTexel(depth[sourceIndex], destination.Slice(texelOffset, bytesPerTexel));
-                sourceIndex++;
-                texelOffset = checked(texelOffset + bytesPerTexel);
-            }
-
-            rowOffset = checked(rowOffset + resolvedRowPitch);
-        }
+        EncodeDepthByTransfer(depth, width, height, destination, ResolveRowPitch(width, rowPitch));
     }
 
     public void DecodeDepth(
@@ -112,23 +96,7 @@ public sealed class DepthStencilTextureCoder : IPitchTextureCoder
         ValidateDepthFormat();
         ValidateSourceLength(width, height, source, rowPitch);
         ValidateTexelSpan(depth, width, height, nameof(depth));
-
-        var bytesPerTexel = Format.BytesPerBlock;
-        var resolvedRowPitch = ResolveRowPitch(width, rowPitch);
-        var destinationIndex = 0;
-        var rowOffset = 0;
-        for (var y = 0; y < height; y++)
-        {
-            var texelOffset = rowOffset;
-            for (var x = 0; x < width; x++)
-            {
-                depth[destinationIndex] = DecodeDepthTexel(source.Slice(texelOffset, bytesPerTexel));
-                destinationIndex++;
-                texelOffset = checked(texelOffset + bytesPerTexel);
-            }
-
-            rowOffset = checked(rowOffset + resolvedRowPitch);
-        }
+        DecodeDepthByTransfer(width, height, source, depth, ResolveRowPitch(width, rowPitch));
     }
 
     public void EncodeStencil(
@@ -142,28 +110,7 @@ public sealed class DepthStencilTextureCoder : IPitchTextureCoder
         ValidateTexelSpan(stencil, width, height, nameof(stencil));
         ValidateDestinationLength(width, height, destination, rowPitch);
 
-        if (_transfer is DepthStencilTransfer.StencilIndex1 or DepthStencilTransfer.StencilIndex4)
-        {
-            EncodePackedStencil(stencil, width, height, destination, ResolveRowPitch(width, rowPitch));
-            return;
-        }
-
-        var bytesPerTexel = Format.BytesPerBlock;
-        var resolvedRowPitch = ResolveRowPitch(width, rowPitch);
-        var sourceIndex = 0;
-        var rowOffset = 0;
-        for (var y = 0; y < height; y++)
-        {
-            var texelOffset = rowOffset;
-            for (var x = 0; x < width; x++)
-            {
-                EncodeStencilTexel(stencil[sourceIndex], destination.Slice(texelOffset, bytesPerTexel));
-                sourceIndex++;
-                texelOffset = checked(texelOffset + bytesPerTexel);
-            }
-
-            rowOffset = checked(rowOffset + resolvedRowPitch);
-        }
+        EncodeStencilByTransfer(stencil, width, height, destination, ResolveRowPitch(width, rowPitch));
     }
 
     public void DecodeStencil(
@@ -177,28 +124,7 @@ public sealed class DepthStencilTextureCoder : IPitchTextureCoder
         ValidateSourceLength(width, height, source, rowPitch);
         ValidateTexelSpan(stencil, width, height, nameof(stencil));
 
-        if (_transfer is DepthStencilTransfer.StencilIndex1 or DepthStencilTransfer.StencilIndex4)
-        {
-            DecodePackedStencil(width, height, source, stencil, ResolveRowPitch(width, rowPitch));
-            return;
-        }
-
-        var bytesPerTexel = Format.BytesPerBlock;
-        var resolvedRowPitch = ResolveRowPitch(width, rowPitch);
-        var destinationIndex = 0;
-        var rowOffset = 0;
-        for (var y = 0; y < height; y++)
-        {
-            var texelOffset = rowOffset;
-            for (var x = 0; x < width; x++)
-            {
-                stencil[destinationIndex] = DecodeStencilTexel(source.Slice(texelOffset, bytesPerTexel));
-                destinationIndex++;
-                texelOffset = checked(texelOffset + bytesPerTexel);
-            }
-
-            rowOffset = checked(rowOffset + resolvedRowPitch);
-        }
+        DecodeStencilByTransfer(width, height, source, stencil, ResolveRowPitch(width, rowPitch));
     }
 
     public void EncodeDepthStencil(
@@ -213,23 +139,7 @@ public sealed class DepthStencilTextureCoder : IPitchTextureCoder
         ValidateTexelSpan(depth, width, height, nameof(depth));
         ValidateTexelSpan(stencil, width, height, nameof(stencil));
         ValidateDestinationLength(width, height, destination, rowPitch);
-
-        var bytesPerTexel = Format.BytesPerBlock;
-        var resolvedRowPitch = ResolveRowPitch(width, rowPitch);
-        var sourceIndex = 0;
-        var rowOffset = 0;
-        for (var y = 0; y < height; y++)
-        {
-            var texelOffset = rowOffset;
-            for (var x = 0; x < width; x++)
-            {
-                EncodeDepthStencilTexel(depth[sourceIndex], stencil[sourceIndex], destination.Slice(texelOffset, bytesPerTexel));
-                sourceIndex++;
-                texelOffset = checked(texelOffset + bytesPerTexel);
-            }
-
-            rowOffset = checked(rowOffset + resolvedRowPitch);
-        }
+        EncodeDepthStencilByTransfer(depth, stencil, width, height, destination, ResolveRowPitch(width, rowPitch));
     }
 
     public void DecodeDepthStencil(
@@ -244,9 +154,181 @@ public sealed class DepthStencilTextureCoder : IPitchTextureCoder
         ValidateSourceLength(width, height, source, rowPitch);
         ValidateTexelSpan(depth, width, height, nameof(depth));
         ValidateTexelSpan(stencil, width, height, nameof(stencil));
+        DecodeDepthStencilByTransfer(width, height, source, depth, stencil, ResolveRowPitch(width, rowPitch));
+    }
 
-        var bytesPerTexel = Format.BytesPerBlock;
-        var resolvedRowPitch = ResolveRowPitch(width, rowPitch);
+    private void EncodeDepthByTransfer(ReadOnlySpan<float> depth, int width, int height, Span<byte> destination, int rowPitch)
+    {
+        switch (_transfer)
+        {
+            case DepthStencilTransfer.DepthComponent8:
+                EncodeDepth<DepthComponent8Transfer>(depth, width, height, destination, rowPitch);
+                return;
+            case DepthStencilTransfer.DepthComponent16:
+                EncodeDepth<DepthComponent16Transfer>(depth, width, height, destination, rowPitch);
+                return;
+            case DepthStencilTransfer.DepthComponent24:
+                EncodeDepth<DepthComponent24Transfer>(depth, width, height, destination, rowPitch);
+                return;
+            case DepthStencilTransfer.Depth24X8:
+                EncodeDepth<Depth24X8Transfer>(depth, width, height, destination, rowPitch);
+                return;
+            case DepthStencilTransfer.DepthComponent32:
+                EncodeDepth<DepthComponent32Transfer>(depth, width, height, destination, rowPitch);
+                return;
+            case DepthStencilTransfer.DepthComponent32Float:
+                EncodeDepth<DepthComponent32FloatTransfer>(depth, width, height, destination, rowPitch);
+                return;
+            default:
+                throw CreateUnsupportedFormatException(Format);
+        }
+    }
+
+    private void DecodeDepthByTransfer(int width, int height, ReadOnlySpan<byte> source, Span<float> depth, int rowPitch)
+    {
+        switch (_transfer)
+        {
+            case DepthStencilTransfer.DepthComponent8:
+                DecodeDepth<DepthComponent8Transfer>(width, height, source, depth, rowPitch);
+                return;
+            case DepthStencilTransfer.DepthComponent16:
+                DecodeDepth<DepthComponent16Transfer>(width, height, source, depth, rowPitch);
+                return;
+            case DepthStencilTransfer.DepthComponent24:
+                DecodeDepth<DepthComponent24Transfer>(width, height, source, depth, rowPitch);
+                return;
+            case DepthStencilTransfer.Depth24X8:
+                DecodeDepth<Depth24X8Transfer>(width, height, source, depth, rowPitch);
+                return;
+            case DepthStencilTransfer.DepthComponent32:
+                DecodeDepth<DepthComponent32Transfer>(width, height, source, depth, rowPitch);
+                return;
+            case DepthStencilTransfer.DepthComponent32Float:
+                DecodeDepth<DepthComponent32FloatTransfer>(width, height, source, depth, rowPitch);
+                return;
+            default:
+                throw CreateUnsupportedFormatException(Format);
+        }
+    }
+
+    private void EncodeStencilByTransfer(ReadOnlySpan<uint> stencil, int width, int height, Span<byte> destination, int rowPitch)
+    {
+        switch (_transfer)
+        {
+            case DepthStencilTransfer.StencilIndex1:
+                EncodePackedStencil<StencilIndex1DirectTransfer>(stencil, width, height, destination, rowPitch);
+                return;
+            case DepthStencilTransfer.StencilIndex4:
+                EncodePackedStencil<StencilIndex4DirectTransfer>(stencil, width, height, destination, rowPitch);
+                return;
+            case DepthStencilTransfer.StencilIndex8:
+                EncodeStencil<StencilIndex8DirectTransfer>(stencil, width, height, destination, rowPitch);
+                return;
+            case DepthStencilTransfer.StencilIndex16:
+                EncodeStencil<StencilIndex16DirectTransfer>(stencil, width, height, destination, rowPitch);
+                return;
+            case DepthStencilTransfer.X32Stencil8:
+                EncodeStencil<X32Stencil8DirectTransfer>(stencil, width, height, destination, rowPitch);
+                return;
+            case DepthStencilTransfer.X24Stencil8:
+                EncodeStencil<X24Stencil8DirectTransfer>(stencil, width, height, destination, rowPitch);
+                return;
+            default:
+                throw CreateUnsupportedFormatException(Format);
+        }
+    }
+
+    private void DecodeStencilByTransfer(int width, int height, ReadOnlySpan<byte> source, Span<uint> stencil, int rowPitch)
+    {
+        switch (_transfer)
+        {
+            case DepthStencilTransfer.StencilIndex1:
+                DecodePackedStencil<StencilIndex1DirectTransfer>(width, height, source, stencil, rowPitch);
+                return;
+            case DepthStencilTransfer.StencilIndex4:
+                DecodePackedStencil<StencilIndex4DirectTransfer>(width, height, source, stencil, rowPitch);
+                return;
+            case DepthStencilTransfer.StencilIndex8:
+                DecodeStencil<StencilIndex8DirectTransfer>(width, height, source, stencil, rowPitch);
+                return;
+            case DepthStencilTransfer.StencilIndex16:
+                DecodeStencil<StencilIndex16DirectTransfer>(width, height, source, stencil, rowPitch);
+                return;
+            case DepthStencilTransfer.X32Stencil8:
+                DecodeStencil<X32Stencil8DirectTransfer>(width, height, source, stencil, rowPitch);
+                return;
+            case DepthStencilTransfer.X24Stencil8:
+                DecodeStencil<X24Stencil8DirectTransfer>(width, height, source, stencil, rowPitch);
+                return;
+            default:
+                throw CreateUnsupportedFormatException(Format);
+        }
+    }
+
+    private void EncodeDepthStencilByTransfer(ReadOnlySpan<float> depth, ReadOnlySpan<uint> stencil, int width, int height, Span<byte> destination, int rowPitch)
+    {
+        switch (_transfer)
+        {
+            case DepthStencilTransfer.Depth16Stencil8:
+                EncodeDepthStencil<Depth16Stencil8DirectTransfer>(depth, stencil, width, height, destination, rowPitch);
+                return;
+            case DepthStencilTransfer.Depth24Stencil8:
+                EncodeDepthStencil<Depth24Stencil8DirectTransfer>(depth, stencil, width, height, destination, rowPitch);
+                return;
+            case DepthStencilTransfer.Depth32Stencil8:
+                EncodeDepthStencil<Depth32Stencil8DirectTransfer>(depth, stencil, width, height, destination, rowPitch);
+                return;
+            case DepthStencilTransfer.Depth32FloatStencil8:
+                EncodeDepthStencil<Depth32FloatStencil8DirectTransfer>(depth, stencil, width, height, destination, rowPitch);
+                return;
+            default:
+                throw CreateUnsupportedFormatException(Format);
+        }
+    }
+
+    private void DecodeDepthStencilByTransfer(int width, int height, ReadOnlySpan<byte> source, Span<float> depth, Span<uint> stencil, int rowPitch)
+    {
+        switch (_transfer)
+        {
+            case DepthStencilTransfer.Depth16Stencil8:
+                DecodeDepthStencil<Depth16Stencil8DirectTransfer>(width, height, source, depth, stencil, rowPitch);
+                return;
+            case DepthStencilTransfer.Depth24Stencil8:
+                DecodeDepthStencil<Depth24Stencil8DirectTransfer>(width, height, source, depth, stencil, rowPitch);
+                return;
+            case DepthStencilTransfer.Depth32Stencil8:
+                DecodeDepthStencil<Depth32Stencil8DirectTransfer>(width, height, source, depth, stencil, rowPitch);
+                return;
+            case DepthStencilTransfer.Depth32FloatStencil8:
+                DecodeDepthStencil<Depth32FloatStencil8DirectTransfer>(width, height, source, depth, stencil, rowPitch);
+                return;
+            default:
+                throw CreateUnsupportedFormatException(Format);
+        }
+    }
+
+    private static void EncodeDepth<TTransfer>(ReadOnlySpan<float> depth, int width, int height, Span<byte> destination, int rowPitch)
+        where TTransfer : IDepthStencilPixelTransfer
+    {
+        var sourceIndex = 0;
+        var rowOffset = 0;
+        for (var y = 0; y < height; y++)
+        {
+            var texelOffset = rowOffset;
+            for (var x = 0; x < width; x++)
+            {
+                TTransfer.Encode(new Rgba32Float(depth[sourceIndex], 0f, 0f), destination.Slice(texelOffset, TTransfer.BytesPerTexel));
+                sourceIndex++;
+                texelOffset = checked(texelOffset + TTransfer.BytesPerTexel);
+            }
+
+            rowOffset = checked(rowOffset + rowPitch);
+        }
+    }
+
+    private static void DecodeDepth<TTransfer>(int width, int height, ReadOnlySpan<byte> source, Span<float> depth, int rowPitch)
+        where TTransfer : IDepthStencilPixelTransfer
+    {
         var destinationIndex = 0;
         var rowOffset = 0;
         for (var y = 0; y < height; y++)
@@ -254,14 +336,314 @@ public sealed class DepthStencilTextureCoder : IPitchTextureCoder
             var texelOffset = rowOffset;
             for (var x = 0; x < width; x++)
             {
-                DecodeDepthStencilTexel(source.Slice(texelOffset, bytesPerTexel), out depth[destinationIndex], out stencil[destinationIndex]);
+                depth[destinationIndex] = TTransfer.Decode(source.Slice(texelOffset, TTransfer.BytesPerTexel)).Red;
                 destinationIndex++;
-                texelOffset = checked(texelOffset + bytesPerTexel);
+                texelOffset = checked(texelOffset + TTransfer.BytesPerTexel);
             }
 
-            rowOffset = checked(rowOffset + resolvedRowPitch);
+            rowOffset = checked(rowOffset + rowPitch);
         }
     }
+
+    private static void EncodeStencil<TTransfer>(ReadOnlySpan<uint> stencil, int width, int height, Span<byte> destination, int rowPitch)
+        where TTransfer : IStencilDirectTransfer
+    {
+        var sourceIndex = 0;
+        var rowOffset = 0;
+        for (var y = 0; y < height; y++)
+        {
+            var texelOffset = rowOffset;
+            for (var x = 0; x < width; x++)
+            {
+                TTransfer.Encode(stencil[sourceIndex], destination.Slice(texelOffset, TTransfer.BytesPerTexel));
+                sourceIndex++;
+                texelOffset = checked(texelOffset + TTransfer.BytesPerTexel);
+            }
+
+            rowOffset = checked(rowOffset + rowPitch);
+        }
+    }
+
+    private static void DecodeStencil<TTransfer>(int width, int height, ReadOnlySpan<byte> source, Span<uint> stencil, int rowPitch)
+        where TTransfer : IStencilDirectTransfer
+    {
+        var destinationIndex = 0;
+        var rowOffset = 0;
+        for (var y = 0; y < height; y++)
+        {
+            var texelOffset = rowOffset;
+            for (var x = 0; x < width; x++)
+            {
+                stencil[destinationIndex] = TTransfer.Decode(source.Slice(texelOffset, TTransfer.BytesPerTexel));
+                destinationIndex++;
+                texelOffset = checked(texelOffset + TTransfer.BytesPerTexel);
+            }
+
+            rowOffset = checked(rowOffset + rowPitch);
+        }
+    }
+
+    private static void EncodeDepthStencil<TTransfer>(ReadOnlySpan<float> depth, ReadOnlySpan<uint> stencil, int width, int height, Span<byte> destination, int rowPitch)
+        where TTransfer : IDepthStencilDirectTransfer
+    {
+        var sourceIndex = 0;
+        var rowOffset = 0;
+        for (var y = 0; y < height; y++)
+        {
+            var texelOffset = rowOffset;
+            for (var x = 0; x < width; x++)
+            {
+                TTransfer.Encode(depth[sourceIndex], stencil[sourceIndex], destination.Slice(texelOffset, TTransfer.BytesPerTexel));
+                sourceIndex++;
+                texelOffset = checked(texelOffset + TTransfer.BytesPerTexel);
+            }
+
+            rowOffset = checked(rowOffset + rowPitch);
+        }
+    }
+
+    private static void DecodeDepthStencil<TTransfer>(int width, int height, ReadOnlySpan<byte> source, Span<float> depth, Span<uint> stencil, int rowPitch)
+        where TTransfer : IDepthStencilDirectTransfer
+    {
+        var destinationIndex = 0;
+        var rowOffset = 0;
+        for (var y = 0; y < height; y++)
+        {
+            var texelOffset = rowOffset;
+            for (var x = 0; x < width; x++)
+            {
+                TTransfer.Decode(source.Slice(texelOffset, TTransfer.BytesPerTexel), out depth[destinationIndex], out stencil[destinationIndex]);
+                destinationIndex++;
+                texelOffset = checked(texelOffset + TTransfer.BytesPerTexel);
+            }
+
+            rowOffset = checked(rowOffset + rowPitch);
+        }
+    }
+
+    private static void EncodePackedStencil<TTransfer>(ReadOnlySpan<uint> stencil, int width, int height, Span<byte> destination, int rowPitch)
+        where TTransfer : IPackedStencilDirectTransfer
+    {
+        var rowByteCount = GetPackedStencilRowByteCount<TTransfer>(width);
+        var sourceIndex = 0;
+        var rowOffset = 0;
+        for (var y = 0; y < height; y++)
+        {
+            var destinationRow = destination.Slice(rowOffset, rowByteCount);
+            destinationRow.Clear();
+
+            for (var x = 0; x < width; x++)
+            {
+                TTransfer.Encode(destinationRow, x, stencil[sourceIndex]);
+                sourceIndex++;
+            }
+
+            rowOffset = checked(rowOffset + rowPitch);
+        }
+    }
+
+    private static void DecodePackedStencil<TTransfer>(int width, int height, ReadOnlySpan<byte> source, Span<uint> stencil, int rowPitch)
+        where TTransfer : IPackedStencilDirectTransfer
+    {
+        var rowByteCount = GetPackedStencilRowByteCount<TTransfer>(width);
+        var destinationIndex = 0;
+        var rowOffset = 0;
+        for (var y = 0; y < height; y++)
+        {
+            var sourceRow = source.Slice(rowOffset, rowByteCount);
+            for (var x = 0; x < width; x++)
+            {
+                stencil[destinationIndex] = TTransfer.Decode(sourceRow, x);
+                destinationIndex++;
+            }
+
+            rowOffset = checked(rowOffset + rowPitch);
+        }
+    }
+
+    private interface IStencilDirectTransfer
+    {
+        static abstract int BytesPerTexel { get; }
+
+        static abstract uint Decode(ReadOnlySpan<byte> source);
+
+        static abstract void Encode(uint stencil, Span<byte> destination);
+    }
+
+    private interface IPackedStencilDirectTransfer
+    {
+        static abstract int Bits { get; }
+
+        static abstract uint Decode(ReadOnlySpan<byte> row, int x);
+
+        static abstract void Encode(Span<byte> row, int x, uint stencil);
+    }
+
+    private interface IDepthStencilDirectTransfer
+    {
+        static abstract int BytesPerTexel { get; }
+
+        static abstract void Decode(ReadOnlySpan<byte> source, out float depth, out uint stencil);
+
+        static abstract void Encode(float depth, uint stencil, Span<byte> destination);
+    }
+
+    private readonly struct StencilIndex1DirectTransfer : IPackedStencilDirectTransfer
+    {
+        public static int Bits => 1;
+
+        public static uint Decode(ReadOnlySpan<byte> row, int x) =>
+            ReadBit(row, x) ? 1u : 0u;
+
+        public static void Encode(Span<byte> row, int x, uint stencil)
+        {
+            if (stencil != 0)
+            {
+                SetBit(row, x);
+            }
+        }
+    }
+
+    private readonly struct StencilIndex4DirectTransfer : IPackedStencilDirectTransfer
+    {
+        public static int Bits => 4;
+
+        public static uint Decode(ReadOnlySpan<byte> row, int x) =>
+            ReadNibble(row, x);
+
+        public static void Encode(Span<byte> row, int x, uint stencil) =>
+            WriteNibble(row, x, (byte)Math.Min(stencil, 0xfu));
+    }
+
+    private readonly struct StencilIndex8DirectTransfer : IStencilDirectTransfer
+    {
+        public static int BytesPerTexel => 1;
+
+        public static uint Decode(ReadOnlySpan<byte> source) =>
+            DecodeStencilTexel(8, source);
+
+        public static void Encode(uint stencil, Span<byte> destination) =>
+            EncodeStencilTexel(8, stencil, destination);
+    }
+
+    private readonly struct StencilIndex16DirectTransfer : IStencilDirectTransfer
+    {
+        public static int BytesPerTexel => 2;
+
+        public static uint Decode(ReadOnlySpan<byte> source) =>
+            DecodeStencilTexel(16, source);
+
+        public static void Encode(uint stencil, Span<byte> destination) =>
+            EncodeStencilTexel(16, stencil, destination);
+    }
+
+    private readonly struct X32Stencil8DirectTransfer : IStencilDirectTransfer
+    {
+        public static int BytesPerTexel => 8;
+
+        public static uint Decode(ReadOnlySpan<byte> source) =>
+            source[4];
+
+        public static void Encode(uint stencil, Span<byte> destination)
+        {
+            destination.Clear();
+            destination[4] = (byte)Math.Min(stencil, 0xffu);
+        }
+    }
+
+    private readonly struct X24Stencil8DirectTransfer : IStencilDirectTransfer
+    {
+        public static int BytesPerTexel => 4;
+
+        public static uint Decode(ReadOnlySpan<byte> source) =>
+            source[0];
+
+        public static void Encode(uint stencil, Span<byte> destination)
+        {
+            destination.Clear();
+            destination[0] = (byte)Math.Min(stencil, 0xffu);
+        }
+    }
+
+    private readonly struct Depth16Stencil8DirectTransfer : IDepthStencilDirectTransfer
+    {
+        public static int BytesPerTexel => 3;
+
+        public static void Decode(ReadOnlySpan<byte> source, out float depth, out uint stencil)
+        {
+            var packed = ReadUnsignedLittleEndian(source);
+            depth = UNormToFloat(packed >> 8, 16);
+            stencil = packed & 0xffu;
+        }
+
+        public static void Encode(float depth, uint stencil, Span<byte> destination)
+        {
+            var packed = (FloatToUNorm(depth, 16) << 8) | Math.Min(stencil, 0xffu);
+            WriteUnsignedLittleEndian(destination, packed);
+        }
+    }
+
+    private readonly struct Depth24Stencil8DirectTransfer : IDepthStencilDirectTransfer
+    {
+        public static int BytesPerTexel => 4;
+
+        public static void Decode(ReadOnlySpan<byte> source, out float depth, out uint stencil)
+        {
+            var packed = BinaryPrimitives.ReadUInt32LittleEndian(source);
+            depth = UNormToFloat(packed >> 8, 24);
+            stencil = packed & 0xffu;
+        }
+
+        public static void Encode(float depth, uint stencil, Span<byte> destination)
+        {
+            var packed = (FloatToUNorm(depth, 24) << 8) | Math.Min(stencil, 0xffu);
+            BinaryPrimitives.WriteUInt32LittleEndian(destination, packed);
+        }
+    }
+
+    private readonly struct Depth32Stencil8DirectTransfer : IDepthStencilDirectTransfer
+    {
+        public static int BytesPerTexel => 5;
+
+        public static void Decode(ReadOnlySpan<byte> source, out float depth, out uint stencil)
+        {
+            var packed = ReadUnsignedLongLittleEndian(source);
+            depth = UNormToFloat((uint)(packed >> 8), 32);
+            stencil = (uint)(packed & 0xffu);
+        }
+
+        public static void Encode(float depth, uint stencil, Span<byte> destination)
+        {
+            var packed = ((ulong)FloatToUNorm(depth, 32) << 8) | Math.Min(stencil, 0xffu);
+            WriteUnsignedLongLittleEndian(destination, packed);
+        }
+    }
+
+    private readonly struct Depth32FloatStencil8DirectTransfer : IDepthStencilDirectTransfer
+    {
+        public static int BytesPerTexel => 8;
+
+        public static void Decode(ReadOnlySpan<byte> source, out float depth, out uint stencil)
+        {
+            depth = BitConverter.Int32BitsToSingle(BinaryPrimitives.ReadInt32LittleEndian(source));
+            stencil = BinaryPrimitives.ReadUInt32LittleEndian(source[4..]) & 0xffu;
+        }
+
+        public static void Encode(float depth, uint stencil, Span<byte> destination)
+        {
+            BinaryPrimitives.WriteInt32LittleEndian(destination, BitConverter.SingleToInt32Bits(depth));
+            BinaryPrimitives.WriteUInt32LittleEndian(destination[4..], Math.Min(stencil, 0xffu));
+        }
+    }
+
+    private static int GetPackedStencilRowByteCount<TTransfer>(int width)
+        where TTransfer : IPackedStencilDirectTransfer =>
+        TTransfer.Bits switch
+        {
+            1 => (width + 7) / 8,
+            4 => (width + 1) / 2,
+            _ => throw new InvalidOperationException($"Unsupported packed stencil size {TTransfer.Bits}.")
+        };
 
     private void DecodeTexels<TPixel>(ReadOnlySpan<byte> source, ImageView<TPixel> destination, int rowPitch)
         where TPixel : unmanaged, IPixel<TPixel>
@@ -604,7 +986,40 @@ public sealed class DepthStencilTextureCoder : IPitchTextureCoder
     private void DecodePackedStencil<TPixel>(ReadOnlySpan<byte> source, ImageView<TPixel> destination, int rowPitch)
         where TPixel : unmanaged, IPixel<TPixel>
     {
-        var rowByteCount = GetDefaultPitch(destination.Width);
+        switch (_transfer)
+        {
+            case DepthStencilTransfer.StencilIndex1:
+                DecodePackedStencil<TPixel, StencilIndex1DirectTransfer>(source, destination, rowPitch);
+                return;
+            case DepthStencilTransfer.StencilIndex4:
+                DecodePackedStencil<TPixel, StencilIndex4DirectTransfer>(source, destination, rowPitch);
+                return;
+            default:
+                throw CreateUnsupportedFormatException(Format);
+        }
+    }
+
+    private void EncodePackedStencil<TPixel>(ImageView<TPixel> source, Span<byte> destination, int rowPitch)
+        where TPixel : unmanaged, IPixel<TPixel>
+    {
+        switch (_transfer)
+        {
+            case DepthStencilTransfer.StencilIndex1:
+                EncodePackedStencil<TPixel, StencilIndex1DirectTransfer>(source, destination, rowPitch);
+                return;
+            case DepthStencilTransfer.StencilIndex4:
+                EncodePackedStencil<TPixel, StencilIndex4DirectTransfer>(source, destination, rowPitch);
+                return;
+            default:
+                throw CreateUnsupportedFormatException(Format);
+        }
+    }
+
+    private static void DecodePackedStencil<TPixel, TTransfer>(ReadOnlySpan<byte> source, ImageView<TPixel> destination, int rowPitch)
+        where TPixel : unmanaged, IPixel<TPixel>
+        where TTransfer : IPackedStencilDirectTransfer
+    {
+        var rowByteCount = GetPackedStencilRowByteCount<TTransfer>(destination.Width);
         var rowOffset = 0;
         for (var y = 0; y < destination.Height; y++)
         {
@@ -612,18 +1027,19 @@ public sealed class DepthStencilTextureCoder : IPitchTextureCoder
             var destinationRow = destination.GetRowSpan(y);
             for (var x = 0; x < destination.Width; x++)
             {
-                var stencil = DecodePackedStencilTexel(sourceRow, x);
-                destinationRow[x] = TPixel.FromRgba32Float(new Rgba32Float(UNormToFloat(stencil, Format.RedBits), 0f, 0f));
+                var stencil = TTransfer.Decode(sourceRow, x);
+                destinationRow[x] = TPixel.FromRgba32Float(new Rgba32Float(UNormToFloat(stencil, TTransfer.Bits), 0f, 0f));
             }
 
             rowOffset = checked(rowOffset + rowPitch);
         }
     }
 
-    private void EncodePackedStencil<TPixel>(ImageView<TPixel> source, Span<byte> destination, int rowPitch)
+    private static void EncodePackedStencil<TPixel, TTransfer>(ImageView<TPixel> source, Span<byte> destination, int rowPitch)
         where TPixel : unmanaged, IPixel<TPixel>
+        where TTransfer : IPackedStencilDirectTransfer
     {
-        var rowByteCount = GetDefaultPitch(source.Width);
+        var rowByteCount = GetPackedStencilRowByteCount<TTransfer>(source.Width);
         var rowOffset = 0;
         for (var y = 0; y < source.Height; y++)
         {
@@ -633,201 +1049,19 @@ public sealed class DepthStencilTextureCoder : IPitchTextureCoder
             var sourceRow = source.GetRowSpan(y);
             for (var x = 0; x < source.Width; x++)
             {
-                var stencil = FloatToUNorm(TPixel.ToRgba32Float(sourceRow[x]).Red, Format.RedBits);
-                EncodePackedStencilTexel(destinationRow, x, stencil);
+                var stencil = FloatToUNorm(TPixel.ToRgba32Float(sourceRow[x]).Red, TTransfer.Bits);
+                TTransfer.Encode(destinationRow, x, stencil);
             }
 
             rowOffset = checked(rowOffset + rowPitch);
         }
     }
-
-    private void EncodePackedStencil(ReadOnlySpan<uint> stencil, int width, int height, Span<byte> destination, int rowPitch)
-    {
-        var rowByteCount = GetDefaultPitch(width);
-        var sourceIndex = 0;
-        var rowOffset = 0;
-        for (var y = 0; y < height; y++)
-        {
-            var destinationRow = destination.Slice(rowOffset, rowByteCount);
-            destinationRow.Clear();
-
-            for (var x = 0; x < width; x++)
-            {
-                EncodePackedStencilTexel(destinationRow, x, stencil[sourceIndex]);
-                sourceIndex++;
-            }
-
-            rowOffset = checked(rowOffset + rowPitch);
-        }
-    }
-
-    private void DecodePackedStencil(int width, int height, ReadOnlySpan<byte> source, Span<uint> stencil, int rowPitch)
-    {
-        var rowByteCount = GetDefaultPitch(width);
-        var destinationIndex = 0;
-        var rowOffset = 0;
-        for (var y = 0; y < height; y++)
-        {
-            var sourceRow = source.Slice(rowOffset, rowByteCount);
-            for (var x = 0; x < width; x++)
-            {
-                stencil[destinationIndex] = DecodePackedStencilTexel(sourceRow, x);
-                destinationIndex++;
-            }
-
-            rowOffset = checked(rowOffset + rowPitch);
-        }
-    }
-
-    private void EncodeDepthTexel(float depth, Span<byte> destination)
-    {
-        if (_transfer == DepthStencilTransfer.DepthComponent32Float)
-        {
-            BinaryPrimitives.WriteInt32LittleEndian(destination, BitConverter.SingleToInt32Bits(depth));
-            return;
-        }
-
-        WriteUnsignedLittleEndian(destination, FloatToUNorm(depth, Format.RedBits));
-    }
-
-    private float DecodeDepthTexel(ReadOnlySpan<byte> source)
-    {
-        if (_transfer == DepthStencilTransfer.DepthComponent32Float)
-        {
-            return BitConverter.Int32BitsToSingle(BinaryPrimitives.ReadInt32LittleEndian(source));
-        }
-
-        return UNormToFloat(ReadUnsignedLittleEndian(source), Format.RedBits);
-    }
-
-    private void EncodeStencilTexel(uint stencil, Span<byte> destination)
-    {
-        if (_transfer == DepthStencilTransfer.X32Stencil8)
-        {
-            destination.Clear();
-            destination[4] = (byte)Math.Min(stencil, 0xffu);
-            return;
-        }
-
-        if (_transfer == DepthStencilTransfer.X24Stencil8)
-        {
-            destination.Clear();
-            destination[0] = (byte)Math.Min(stencil, 0xffu);
-            return;
-        }
-
-        EncodeStencilTexel(Format.RedBits, stencil, destination);
-    }
-
-    private uint DecodeStencilTexel(ReadOnlySpan<byte> source) =>
-        _transfer switch
-        {
-            DepthStencilTransfer.X32Stencil8 => source[4],
-            DepthStencilTransfer.X24Stencil8 => source[0],
-            _ => DecodeStencilTexel(Format.RedBits, source)
-        };
 
     private static void EncodeStencilTexel(int bits, uint stencil, Span<byte> destination) =>
         WriteUnsignedLittleEndian(destination, Math.Min(stencil, GetMaxUInt(bits)));
 
     private static uint DecodeStencilTexel(int bits, ReadOnlySpan<byte> source) =>
         ReadUnsignedLittleEndian(source) & GetMaxUInt(bits);
-
-    private void EncodeDepthStencilTexel(float depth, uint stencil, Span<byte> destination)
-    {
-        if (_transfer == DepthStencilTransfer.Depth16Stencil8)
-        {
-            var packed = (FloatToUNorm(depth, 16) << 8) | Math.Min(stencil, 0xffu);
-            WriteUnsignedLittleEndian(destination, packed);
-            return;
-        }
-
-        if (_transfer == DepthStencilTransfer.Depth24Stencil8)
-        {
-            var packed = (FloatToUNorm(depth, 24) << 8) | Math.Min(stencil, 0xffu);
-            BinaryPrimitives.WriteUInt32LittleEndian(destination, packed);
-            return;
-        }
-
-        if (_transfer == DepthStencilTransfer.Depth32Stencil8)
-        {
-            var packed = ((ulong)FloatToUNorm(depth, 32) << 8) | Math.Min(stencil, 0xffu);
-            WriteUnsignedLongLittleEndian(destination, packed);
-            return;
-        }
-
-        if (_transfer == DepthStencilTransfer.Depth32FloatStencil8)
-        {
-            BinaryPrimitives.WriteInt32LittleEndian(destination, BitConverter.SingleToInt32Bits(depth));
-            BinaryPrimitives.WriteUInt32LittleEndian(destination[4..], Math.Min(stencil, 0xffu));
-            return;
-        }
-
-        throw CreateUnsupportedFormatException(Format);
-    }
-
-    private void DecodeDepthStencilTexel(ReadOnlySpan<byte> source, out float depth, out uint stencil)
-    {
-        if (_transfer == DepthStencilTransfer.Depth16Stencil8)
-        {
-            var packed = ReadUnsignedLittleEndian(source);
-            depth = UNormToFloat(packed >> 8, 16);
-            stencil = packed & 0xffu;
-            return;
-        }
-
-        if (_transfer == DepthStencilTransfer.Depth24Stencil8)
-        {
-            var packed = BinaryPrimitives.ReadUInt32LittleEndian(source);
-            depth = UNormToFloat(packed >> 8, 24);
-            stencil = packed & 0xffu;
-            return;
-        }
-
-        if (_transfer == DepthStencilTransfer.Depth32Stencil8)
-        {
-            var packed = ReadUnsignedLongLittleEndian(source);
-            depth = UNormToFloat((uint)(packed >> 8), 32);
-            stencil = (uint)(packed & 0xffu);
-            return;
-        }
-
-        if (_transfer == DepthStencilTransfer.Depth32FloatStencil8)
-        {
-            depth = BitConverter.Int32BitsToSingle(BinaryPrimitives.ReadInt32LittleEndian(source));
-            stencil = BinaryPrimitives.ReadUInt32LittleEndian(source[4..]) & 0xffu;
-            return;
-        }
-
-        throw CreateUnsupportedFormatException(Format);
-    }
-
-    private uint DecodePackedStencilTexel(ReadOnlySpan<byte> row, int x) =>
-        _transfer switch
-        {
-            DepthStencilTransfer.StencilIndex1 => ReadBit(row, x) ? 1u : 0u,
-            DepthStencilTransfer.StencilIndex4 => ReadNibble(row, x),
-            _ => throw CreateUnsupportedFormatException(Format)
-        };
-
-    private void EncodePackedStencilTexel(Span<byte> row, int x, uint stencil)
-    {
-        switch (_transfer)
-        {
-            case DepthStencilTransfer.StencilIndex1:
-                if (stencil != 0)
-                {
-                    SetBit(row, x);
-                }
-
-                return;
-            case DepthStencilTransfer.StencilIndex4:
-                WriteNibble(row, x, (byte)Math.Min(stencil, 0xfu));
-                return;
-            default:
-                throw CreateUnsupportedFormatException(Format);
-        }
-    }
 
     private static bool ReadBit(ReadOnlySpan<byte> row, int x) =>
         (row[x >> 3] & (1 << (7 - (x & 7)))) != 0;

@@ -46,8 +46,71 @@ public sealed class XrTextureCoder : IPitchTextureCoder
         where TPixel : unmanaged, IPixel<TPixel>
     {
         ValidateSourceLength(destination.Width, destination.Height, source, rowPitch);
+        DecodeByTransfer(source, destination, rowPitch);
+    }
 
-        var bytesPerTexel = Format.BytesPerBlock;
+    public void Encode<TPixel>(ImageView<TPixel> source, Span<byte> destination, int rowPitch)
+        where TPixel : unmanaged, IPixel<TPixel>
+    {
+        ValidateDestinationLength(source.Width, source.Height, destination, rowPitch);
+        EncodeByTransfer(source, destination, rowPitch);
+    }
+
+    private void DecodeByTransfer<TPixel>(ReadOnlySpan<byte> source, ImageView<TPixel> destination, int rowPitch)
+        where TPixel : unmanaged, IPixel<TPixel>
+    {
+        switch (_transfer)
+        {
+            case XrTransfer.Bgr10XR:
+                Decode<TPixel, Bgr10XRTransfer>(source, destination, rowPitch);
+                return;
+            case XrTransfer.Bgr10XRSrgb:
+                Decode<TPixel, Bgr10XRSrgbTransfer>(source, destination, rowPitch);
+                return;
+            case XrTransfer.Rgb10XRA2UNorm:
+                Decode<TPixel, Rgb10XRA2UNormTransfer>(source, destination, rowPitch);
+                return;
+            case XrTransfer.Bgra10XR:
+                Decode<TPixel, Bgra10XRTransfer>(source, destination, rowPitch);
+                return;
+            case XrTransfer.Bgra10XRSrgb:
+                Decode<TPixel, Bgra10XRSrgbTransfer>(source, destination, rowPitch);
+                return;
+            default:
+                throw CreateUnsupportedFormatException(Format);
+        }
+    }
+
+    private void EncodeByTransfer<TPixel>(ImageView<TPixel> source, Span<byte> destination, int rowPitch)
+        where TPixel : unmanaged, IPixel<TPixel>
+    {
+        switch (_transfer)
+        {
+            case XrTransfer.Bgr10XR:
+                Encode<TPixel, Bgr10XRTransfer>(source, destination, rowPitch);
+                return;
+            case XrTransfer.Bgr10XRSrgb:
+                Encode<TPixel, Bgr10XRSrgbTransfer>(source, destination, rowPitch);
+                return;
+            case XrTransfer.Rgb10XRA2UNorm:
+                Encode<TPixel, Rgb10XRA2UNormTransfer>(source, destination, rowPitch);
+                return;
+            case XrTransfer.Bgra10XR:
+                Encode<TPixel, Bgra10XRTransfer>(source, destination, rowPitch);
+                return;
+            case XrTransfer.Bgra10XRSrgb:
+                Encode<TPixel, Bgra10XRSrgbTransfer>(source, destination, rowPitch);
+                return;
+            default:
+                throw CreateUnsupportedFormatException(Format);
+        }
+    }
+
+    private void Decode<TPixel, TTransfer>(ReadOnlySpan<byte> source, ImageView<TPixel> destination, int rowPitch)
+        where TPixel : unmanaged, IPixel<TPixel>
+        where TTransfer : IXrTransfer
+    {
+        var bytesPerTexel = TTransfer.BytesPerTexel;
         var rowOffset = 0;
         for (var y = 0; y < destination.Height; y++)
         {
@@ -55,8 +118,7 @@ public sealed class XrTextureCoder : IPitchTextureCoder
             var texelOffset = rowOffset;
             for (var x = 0; x < destination.Width; x++)
             {
-                var value = DecodeTexel(source.Slice(texelOffset, bytesPerTexel));
-                destinationRow[x] = TPixel.FromRgba32Float(value);
+                destinationRow[x] = TPixel.FromRgba32Float(TTransfer.Decode(source.Slice(texelOffset, bytesPerTexel)));
                 texelOffset = checked(texelOffset + bytesPerTexel);
             }
 
@@ -64,12 +126,11 @@ public sealed class XrTextureCoder : IPitchTextureCoder
         }
     }
 
-    public void Encode<TPixel>(ImageView<TPixel> source, Span<byte> destination, int rowPitch)
+    private void Encode<TPixel, TTransfer>(ImageView<TPixel> source, Span<byte> destination, int rowPitch)
         where TPixel : unmanaged, IPixel<TPixel>
+        where TTransfer : IXrTransfer
     {
-        ValidateDestinationLength(source.Width, source.Height, destination, rowPitch);
-
-        var bytesPerTexel = Format.BytesPerBlock;
+        var bytesPerTexel = TTransfer.BytesPerTexel;
         var rowOffset = 0;
         for (var y = 0; y < source.Height; y++)
         {
@@ -77,7 +138,7 @@ public sealed class XrTextureCoder : IPitchTextureCoder
             var texelOffset = rowOffset;
             for (var x = 0; x < source.Width; x++)
             {
-                EncodeTexel(TPixel.ToRgba32Float(sourceRow[x]), destination.Slice(texelOffset, bytesPerTexel));
+                TTransfer.Encode(TPixel.ToRgba32Float(sourceRow[x]), destination.Slice(texelOffset, bytesPerTexel));
                 texelOffset = checked(texelOffset + bytesPerTexel);
             }
 
@@ -85,39 +146,68 @@ public sealed class XrTextureCoder : IPitchTextureCoder
         }
     }
 
-    private Rgba32Float DecodeTexel(ReadOnlySpan<byte> source) =>
-        _transfer switch
-        {
-            XrTransfer.Bgr10XR => DecodeBgr10(source, isSrgb: false),
-            XrTransfer.Bgr10XRSrgb => DecodeBgr10(source, isSrgb: true),
-            XrTransfer.Rgb10XRA2UNorm => DecodeRgb10A2(source),
-            XrTransfer.Bgra10XR => DecodeBgra10(source, isSrgb: false),
-            XrTransfer.Bgra10XRSrgb => DecodeBgra10(source, isSrgb: true),
-            _ => throw CreateUnsupportedFormatException(Format)
-        };
-
-    private void EncodeTexel(Rgba32Float value, Span<byte> destination)
+    private interface IXrTransfer
     {
-        switch (_transfer)
-        {
-            case XrTransfer.Bgr10XR:
-                EncodeBgr10(value, destination, isSrgb: false);
-                return;
-            case XrTransfer.Bgr10XRSrgb:
-                EncodeBgr10(value, destination, isSrgb: true);
-                return;
-            case XrTransfer.Rgb10XRA2UNorm:
-                EncodeRgb10A2(value, destination);
-                return;
-            case XrTransfer.Bgra10XR:
-                EncodeBgra10(value, destination, isSrgb: false);
-                return;
-            case XrTransfer.Bgra10XRSrgb:
-                EncodeBgra10(value, destination, isSrgb: true);
-                return;
-            default:
-                throw CreateUnsupportedFormatException(Format);
-        }
+        static abstract int BytesPerTexel { get; }
+
+        static abstract Rgba32Float Decode(ReadOnlySpan<byte> source);
+
+        static abstract void Encode(Rgba32Float value, Span<byte> destination);
+    }
+
+    private readonly struct Bgr10XRTransfer : IXrTransfer
+    {
+        public static int BytesPerTexel => sizeof(uint);
+
+        public static Rgba32Float Decode(ReadOnlySpan<byte> source) =>
+            DecodeBgr10(source, isSrgb: false);
+
+        public static void Encode(Rgba32Float value, Span<byte> destination) =>
+            EncodeBgr10(value, destination, isSrgb: false);
+    }
+
+    private readonly struct Bgr10XRSrgbTransfer : IXrTransfer
+    {
+        public static int BytesPerTexel => sizeof(uint);
+
+        public static Rgba32Float Decode(ReadOnlySpan<byte> source) =>
+            DecodeBgr10(source, isSrgb: true);
+
+        public static void Encode(Rgba32Float value, Span<byte> destination) =>
+            EncodeBgr10(value, destination, isSrgb: true);
+    }
+
+    private readonly struct Rgb10XRA2UNormTransfer : IXrTransfer
+    {
+        public static int BytesPerTexel => sizeof(uint);
+
+        public static Rgba32Float Decode(ReadOnlySpan<byte> source) =>
+            DecodeRgb10A2(source);
+
+        public static void Encode(Rgba32Float value, Span<byte> destination) =>
+            EncodeRgb10A2(value, destination);
+    }
+
+    private readonly struct Bgra10XRTransfer : IXrTransfer
+    {
+        public static int BytesPerTexel => 4 * sizeof(ushort);
+
+        public static Rgba32Float Decode(ReadOnlySpan<byte> source) =>
+            DecodeBgra10(source, isSrgb: false);
+
+        public static void Encode(Rgba32Float value, Span<byte> destination) =>
+            EncodeBgra10(value, destination, isSrgb: false);
+    }
+
+    private readonly struct Bgra10XRSrgbTransfer : IXrTransfer
+    {
+        public static int BytesPerTexel => 4 * sizeof(ushort);
+
+        public static Rgba32Float Decode(ReadOnlySpan<byte> source) =>
+            DecodeBgra10(source, isSrgb: true);
+
+        public static void Encode(Rgba32Float value, Span<byte> destination) =>
+            EncodeBgra10(value, destination, isSrgb: true);
     }
 
     private static Rgba32Float DecodeBgr10(ReadOnlySpan<byte> source, bool isSrgb)

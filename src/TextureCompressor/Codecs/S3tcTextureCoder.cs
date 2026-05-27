@@ -11,18 +11,17 @@ public sealed class S3tcTextureCoder : IPitchTextureCoder
     private const int TexelsPerBlock = BlockSize * BlockSize;
     private const byte AlphaCutoff = 128;
 
-    private readonly DxtFormat _dxtFormat;
-    private readonly bool _isSrgb;
+    private readonly S3tcTransfer _transfer;
 
     public S3tcTextureCoder(TextureFormat format)
     {
-        if (!TryGetDxtFormat(format, out _dxtFormat))
+        if (!TryGetDxtFormat(format, out var dxtFormat))
         {
             throw CreateUnsupportedFormatException(format);
         }
 
         Format = format;
-        _isSrgb = format.ValueKind == TextureValueKind.Srgb;
+        _transfer = GetTransfer(dxtFormat, format.ValueKind == TextureValueKind.Srgb);
     }
 
     public TextureFormat Format { get; }
@@ -48,10 +47,102 @@ public sealed class S3tcTextureCoder : IPitchTextureCoder
         where TPixel : unmanaged, IPixel<TPixel>
     {
         ValidateSourceLength(destination.Width, destination.Height, source, rowPitch);
+        DecodeByTransfer(source, destination, rowPitch);
+    }
 
+    public void Encode<TPixel>(ImageView<TPixel> source, Span<byte> destination, int rowPitch)
+        where TPixel : unmanaged, IPixel<TPixel>
+    {
+        ValidateDestinationLength(source.Width, source.Height, destination, rowPitch);
+        EncodeByTransfer(source, destination, rowPitch);
+    }
+
+    private void DecodeByTransfer<TPixel>(ReadOnlySpan<byte> source, ImageView<TPixel> destination, int rowPitch)
+        where TPixel : unmanaged, IPixel<TPixel>
+    {
+        switch (_transfer)
+        {
+            case S3tcTransfer.Dxt1Rgb:
+                Decode<TPixel, Dxt1RgbTransfer>(source, destination, rowPitch);
+                return;
+            case S3tcTransfer.Dxt1RgbSrgb:
+                Decode<TPixel, Dxt1RgbSrgbTransfer>(source, destination, rowPitch);
+                return;
+            case S3tcTransfer.Dxt1Rgba:
+                Decode<TPixel, Dxt1RgbaTransfer>(source, destination, rowPitch);
+                return;
+            case S3tcTransfer.Dxt1RgbaSrgb:
+                Decode<TPixel, Dxt1RgbaSrgbTransfer>(source, destination, rowPitch);
+                return;
+            case S3tcTransfer.Dxt2Rgba:
+                Decode<TPixel, Dxt2RgbaTransfer>(source, destination, rowPitch);
+                return;
+            case S3tcTransfer.Dxt3Rgba:
+                Decode<TPixel, Dxt3RgbaTransfer>(source, destination, rowPitch);
+                return;
+            case S3tcTransfer.Dxt3RgbaSrgb:
+                Decode<TPixel, Dxt3RgbaSrgbTransfer>(source, destination, rowPitch);
+                return;
+            case S3tcTransfer.Dxt4Rgba:
+                Decode<TPixel, Dxt4RgbaTransfer>(source, destination, rowPitch);
+                return;
+            case S3tcTransfer.Dxt5Rgba:
+                Decode<TPixel, Dxt5RgbaTransfer>(source, destination, rowPitch);
+                return;
+            case S3tcTransfer.Dxt5RgbaSrgb:
+                Decode<TPixel, Dxt5RgbaSrgbTransfer>(source, destination, rowPitch);
+                return;
+            default:
+                throw CreateUnsupportedFormatException(Format);
+        }
+    }
+
+    private void EncodeByTransfer<TPixel>(ImageView<TPixel> source, Span<byte> destination, int rowPitch)
+        where TPixel : unmanaged, IPixel<TPixel>
+    {
+        switch (_transfer)
+        {
+            case S3tcTransfer.Dxt1Rgb:
+                Encode<TPixel, Dxt1RgbTransfer>(source, destination, rowPitch);
+                return;
+            case S3tcTransfer.Dxt1RgbSrgb:
+                Encode<TPixel, Dxt1RgbSrgbTransfer>(source, destination, rowPitch);
+                return;
+            case S3tcTransfer.Dxt1Rgba:
+                Encode<TPixel, Dxt1RgbaTransfer>(source, destination, rowPitch);
+                return;
+            case S3tcTransfer.Dxt1RgbaSrgb:
+                Encode<TPixel, Dxt1RgbaSrgbTransfer>(source, destination, rowPitch);
+                return;
+            case S3tcTransfer.Dxt2Rgba:
+                Encode<TPixel, Dxt2RgbaTransfer>(source, destination, rowPitch);
+                return;
+            case S3tcTransfer.Dxt3Rgba:
+                Encode<TPixel, Dxt3RgbaTransfer>(source, destination, rowPitch);
+                return;
+            case S3tcTransfer.Dxt3RgbaSrgb:
+                Encode<TPixel, Dxt3RgbaSrgbTransfer>(source, destination, rowPitch);
+                return;
+            case S3tcTransfer.Dxt4Rgba:
+                Encode<TPixel, Dxt4RgbaTransfer>(source, destination, rowPitch);
+                return;
+            case S3tcTransfer.Dxt5Rgba:
+                Encode<TPixel, Dxt5RgbaTransfer>(source, destination, rowPitch);
+                return;
+            case S3tcTransfer.Dxt5RgbaSrgb:
+                Encode<TPixel, Dxt5RgbaSrgbTransfer>(source, destination, rowPitch);
+                return;
+            default:
+                throw CreateUnsupportedFormatException(Format);
+        }
+    }
+
+    private static void Decode<TPixel, TTransfer>(ReadOnlySpan<byte> source, ImageView<TPixel> destination, int rowPitch)
+        where TPixel : unmanaged, IPixel<TPixel>
+        where TTransfer : IS3tcTransfer
+    {
         var blockCountX = GetBlockCount(destination.Width);
         var blockCountY = GetBlockCount(destination.Height);
-        var bytesPerBlock = Format.BytesPerBlock;
         Span<Rgba8UNorm> block = stackalloc Rgba8UNorm[TexelsPerBlock];
 
         var rowOffset = 0;
@@ -60,23 +151,21 @@ public sealed class S3tcTextureCoder : IPitchTextureCoder
             var blockOffset = rowOffset;
             for (var blockX = 0; blockX < blockCountX; blockX++)
             {
-                DecodeBlock(source.Slice(blockOffset, bytesPerBlock), block);
+                TTransfer.DecodeBlock(source.Slice(blockOffset, TTransfer.BytesPerBlock), block);
                 StoreBlock(block, blockX, blockY, destination);
-                blockOffset = checked(blockOffset + bytesPerBlock);
+                blockOffset = checked(blockOffset + TTransfer.BytesPerBlock);
             }
 
             rowOffset = checked(rowOffset + rowPitch);
         }
     }
 
-    public void Encode<TPixel>(ImageView<TPixel> source, Span<byte> destination, int rowPitch)
+    private static void Encode<TPixel, TTransfer>(ImageView<TPixel> source, Span<byte> destination, int rowPitch)
         where TPixel : unmanaged, IPixel<TPixel>
+        where TTransfer : IS3tcTransfer
     {
-        ValidateDestinationLength(source.Width, source.Height, destination, rowPitch);
-
         var blockCountX = GetBlockCount(source.Width);
         var blockCountY = GetBlockCount(source.Height);
-        var bytesPerBlock = Format.BytesPerBlock;
         Span<Rgba8UNorm> block = stackalloc Rgba8UNorm[TexelsPerBlock];
 
         var rowOffset = 0;
@@ -86,98 +175,190 @@ public sealed class S3tcTextureCoder : IPitchTextureCoder
             for (var blockX = 0; blockX < blockCountX; blockX++)
             {
                 LoadBlock(source, blockX, blockY, block);
-                EncodeBlock(block, destination.Slice(blockOffset, bytesPerBlock));
-                blockOffset = checked(blockOffset + bytesPerBlock);
+                TTransfer.EncodeBlock(block, destination.Slice(blockOffset, TTransfer.BytesPerBlock));
+                blockOffset = checked(blockOffset + TTransfer.BytesPerBlock);
             }
 
             rowOffset = checked(rowOffset + rowPitch);
         }
     }
 
-    private void DecodeBlock(ReadOnlySpan<byte> source, Span<Rgba8UNorm> destination)
+    private interface IS3tcTransfer
     {
-        switch (_dxtFormat)
+        static abstract int BytesPerBlock { get; }
+
+        static abstract void DecodeBlock(ReadOnlySpan<byte> source, Span<Rgba8UNorm> destination);
+
+        static abstract void EncodeBlock(ReadOnlySpan<Rgba8UNorm> source, Span<byte> destination);
+    }
+
+    private readonly struct Dxt1RgbTransfer : IS3tcTransfer
+    {
+        public static int BytesPerBlock => 8;
+
+        public static void DecodeBlock(ReadOnlySpan<byte> source, Span<Rgba8UNorm> destination) =>
+            DecodeColorBlock(source, Dxt1ColorMode.Rgb, destination);
+
+        public static void EncodeBlock(ReadOnlySpan<Rgba8UNorm> source, Span<byte> destination) =>
+            EncodeColorBlock(source, Dxt1ColorMode.Rgb, destination);
+    }
+
+    private readonly struct Dxt1RgbSrgbTransfer : IS3tcTransfer
+    {
+        public static int BytesPerBlock => 8;
+
+        public static void DecodeBlock(ReadOnlySpan<byte> source, Span<Rgba8UNorm> destination)
         {
-            case DxtFormat.Dxt1Rgb:
-                DecodeColorBlock(source, Dxt1ColorMode.Rgb, destination);
-                break;
-            case DxtFormat.Dxt1Rgba:
-                DecodeColorBlock(source, Dxt1ColorMode.Rgba, destination);
-                break;
-            case DxtFormat.Dxt2Rgba:
-                DecodeColorBlock(source[8..], Dxt1ColorMode.FourColor, destination);
-                DecodeExplicitAlphaBlock(source[..8], destination);
-                RecoverPremultipliedAlpha(destination);
-                break;
-            case DxtFormat.Dxt3Rgba:
-                DecodeColorBlock(source[8..], Dxt1ColorMode.FourColor, destination);
-                DecodeExplicitAlphaBlock(source[..8], destination);
-                break;
-            case DxtFormat.Dxt4Rgba:
-                DecodeColorBlock(source[8..], Dxt1ColorMode.FourColor, destination);
-                DecodeInterpolatedAlphaBlock(source[..8], destination);
-                RecoverPremultipliedAlpha(destination);
-                break;
-            case DxtFormat.Dxt5Rgba:
-                DecodeColorBlock(source[8..], Dxt1ColorMode.FourColor, destination);
-                DecodeInterpolatedAlphaBlock(source[..8], destination);
-                break;
-            default:
-                throw CreateUnsupportedFormatException(Format);
+            DecodeColorBlock(source, Dxt1ColorMode.Rgb, destination);
+            DecodeSrgbColors(destination);
         }
 
-        if (_isSrgb)
+        public static void EncodeBlock(ReadOnlySpan<Rgba8UNorm> source, Span<byte> destination) =>
+            EncodeSrgbColorBlock(source, Dxt1ColorMode.Rgb, destination);
+    }
+
+    private readonly struct Dxt1RgbaTransfer : IS3tcTransfer
+    {
+        public static int BytesPerBlock => 8;
+
+        public static void DecodeBlock(ReadOnlySpan<byte> source, Span<Rgba8UNorm> destination) =>
+            DecodeColorBlock(source, Dxt1ColorMode.Rgba, destination);
+
+        public static void EncodeBlock(ReadOnlySpan<Rgba8UNorm> source, Span<byte> destination) =>
+            EncodeColorBlock(source, Dxt1ColorMode.Rgba, destination);
+    }
+
+    private readonly struct Dxt1RgbaSrgbTransfer : IS3tcTransfer
+    {
+        public static int BytesPerBlock => 8;
+
+        public static void DecodeBlock(ReadOnlySpan<byte> source, Span<Rgba8UNorm> destination)
         {
+            DecodeColorBlock(source, Dxt1ColorMode.Rgba, destination);
             DecodeSrgbColors(destination);
+        }
+
+        public static void EncodeBlock(ReadOnlySpan<Rgba8UNorm> source, Span<byte> destination) =>
+            EncodeSrgbColorBlock(source, Dxt1ColorMode.Rgba, destination);
+    }
+
+    private readonly struct Dxt2RgbaTransfer : IS3tcTransfer
+    {
+        public static int BytesPerBlock => 16;
+
+        public static void DecodeBlock(ReadOnlySpan<byte> source, Span<Rgba8UNorm> destination)
+        {
+            DecodeColorBlock(source[8..], Dxt1ColorMode.FourColor, destination);
+            DecodeExplicitAlphaBlock(source[..8], destination);
+            RecoverPremultipliedAlpha(destination);
+        }
+
+        public static void EncodeBlock(ReadOnlySpan<Rgba8UNorm> source, Span<byte> destination)
+        {
+            Span<Rgba8UNorm> premultipliedBlock = stackalloc Rgba8UNorm[TexelsPerBlock];
+            PremultiplyAlpha(source, premultipliedBlock);
+            EncodeExplicitAlphaBlock(source, destination[..8]);
+            EncodeColorBlock(premultipliedBlock, Dxt1ColorMode.FourColor, destination[8..]);
         }
     }
 
-    private void EncodeBlock(ReadOnlySpan<Rgba8UNorm> source, Span<byte> destination)
+    private readonly struct Dxt3RgbaTransfer : IS3tcTransfer
     {
-        if (_isSrgb)
+        public static int BytesPerBlock => 16;
+
+        public static void DecodeBlock(ReadOnlySpan<byte> source, Span<Rgba8UNorm> destination)
+        {
+            DecodeColorBlock(source[8..], Dxt1ColorMode.FourColor, destination);
+            DecodeExplicitAlphaBlock(source[..8], destination);
+        }
+
+        public static void EncodeBlock(ReadOnlySpan<Rgba8UNorm> source, Span<byte> destination)
+        {
+            EncodeExplicitAlphaBlock(source, destination[..8]);
+            EncodeColorBlock(source, Dxt1ColorMode.FourColor, destination[8..]);
+        }
+    }
+
+    private readonly struct Dxt3RgbaSrgbTransfer : IS3tcTransfer
+    {
+        public static int BytesPerBlock => 16;
+
+        public static void DecodeBlock(ReadOnlySpan<byte> source, Span<Rgba8UNorm> destination)
+        {
+            Dxt3RgbaTransfer.DecodeBlock(source, destination);
+            DecodeSrgbColors(destination);
+        }
+
+        public static void EncodeBlock(ReadOnlySpan<Rgba8UNorm> source, Span<byte> destination)
         {
             Span<Rgba8UNorm> srgbBlock = stackalloc Rgba8UNorm[TexelsPerBlock];
             EncodeSrgbColors(source, srgbBlock);
-            EncodeBlockCore(srgbBlock, destination);
-            return;
+            EncodeExplicitAlphaBlock(source, destination[..8]);
+            EncodeColorBlock(srgbBlock, Dxt1ColorMode.FourColor, destination[8..]);
         }
-
-        EncodeBlockCore(source, destination);
     }
 
-    private void EncodeBlockCore(ReadOnlySpan<Rgba8UNorm> source, Span<byte> destination)
+    private readonly struct Dxt4RgbaTransfer : IS3tcTransfer
     {
-        switch (_dxtFormat)
+        public static int BytesPerBlock => 16;
+
+        public static void DecodeBlock(ReadOnlySpan<byte> source, Span<Rgba8UNorm> destination)
         {
-            case DxtFormat.Dxt1Rgb:
-                EncodeColorBlock(source, Dxt1ColorMode.Rgb, destination);
-                return;
-            case DxtFormat.Dxt1Rgba:
-                EncodeColorBlock(source, Dxt1ColorMode.Rgba, destination);
-                return;
-            case DxtFormat.Dxt2Rgba:
-                Span<Rgba8UNorm> dxt2Block = stackalloc Rgba8UNorm[TexelsPerBlock];
-                PremultiplyAlpha(source, dxt2Block);
-                EncodeExplicitAlphaBlock(source, destination[..8]);
-                EncodeColorBlock(dxt2Block, Dxt1ColorMode.FourColor, destination[8..]);
-                return;
-            case DxtFormat.Dxt3Rgba:
-                EncodeExplicitAlphaBlock(source, destination[..8]);
-                EncodeColorBlock(source, Dxt1ColorMode.FourColor, destination[8..]);
-                return;
-            case DxtFormat.Dxt4Rgba:
-                Span<Rgba8UNorm> dxt4Block = stackalloc Rgba8UNorm[TexelsPerBlock];
-                PremultiplyAlpha(source, dxt4Block);
-                EncodeInterpolatedAlphaBlock(source, destination[..8]);
-                EncodeColorBlock(dxt4Block, Dxt1ColorMode.FourColor, destination[8..]);
-                return;
-            case DxtFormat.Dxt5Rgba:
-                EncodeInterpolatedAlphaBlock(source, destination[..8]);
-                EncodeColorBlock(source, Dxt1ColorMode.FourColor, destination[8..]);
-                return;
-            default:
-                throw CreateUnsupportedFormatException(Format);
+            DecodeColorBlock(source[8..], Dxt1ColorMode.FourColor, destination);
+            DecodeInterpolatedAlphaBlock(source[..8], destination);
+            RecoverPremultipliedAlpha(destination);
         }
+
+        public static void EncodeBlock(ReadOnlySpan<Rgba8UNorm> source, Span<byte> destination)
+        {
+            Span<Rgba8UNorm> premultipliedBlock = stackalloc Rgba8UNorm[TexelsPerBlock];
+            PremultiplyAlpha(source, premultipliedBlock);
+            EncodeInterpolatedAlphaBlock(source, destination[..8]);
+            EncodeColorBlock(premultipliedBlock, Dxt1ColorMode.FourColor, destination[8..]);
+        }
+    }
+
+    private readonly struct Dxt5RgbaTransfer : IS3tcTransfer
+    {
+        public static int BytesPerBlock => 16;
+
+        public static void DecodeBlock(ReadOnlySpan<byte> source, Span<Rgba8UNorm> destination)
+        {
+            DecodeColorBlock(source[8..], Dxt1ColorMode.FourColor, destination);
+            DecodeInterpolatedAlphaBlock(source[..8], destination);
+        }
+
+        public static void EncodeBlock(ReadOnlySpan<Rgba8UNorm> source, Span<byte> destination)
+        {
+            EncodeInterpolatedAlphaBlock(source, destination[..8]);
+            EncodeColorBlock(source, Dxt1ColorMode.FourColor, destination[8..]);
+        }
+    }
+
+    private readonly struct Dxt5RgbaSrgbTransfer : IS3tcTransfer
+    {
+        public static int BytesPerBlock => 16;
+
+        public static void DecodeBlock(ReadOnlySpan<byte> source, Span<Rgba8UNorm> destination)
+        {
+            Dxt5RgbaTransfer.DecodeBlock(source, destination);
+            DecodeSrgbColors(destination);
+        }
+
+        public static void EncodeBlock(ReadOnlySpan<Rgba8UNorm> source, Span<byte> destination)
+        {
+            Span<Rgba8UNorm> srgbBlock = stackalloc Rgba8UNorm[TexelsPerBlock];
+            EncodeSrgbColors(source, srgbBlock);
+            EncodeInterpolatedAlphaBlock(source, destination[..8]);
+            EncodeColorBlock(srgbBlock, Dxt1ColorMode.FourColor, destination[8..]);
+        }
+    }
+
+    private static void EncodeSrgbColorBlock(ReadOnlySpan<Rgba8UNorm> source, Dxt1ColorMode colorMode, Span<byte> destination)
+    {
+        Span<Rgba8UNorm> srgbBlock = stackalloc Rgba8UNorm[TexelsPerBlock];
+        EncodeSrgbColors(source, srgbBlock);
+        EncodeColorBlock(srgbBlock, colorMode, destination);
     }
 
     private static void DecodeColorBlock(
@@ -628,6 +809,18 @@ public sealed class S3tcTextureCoder : IPitchTextureCoder
 
     private static int GetBlockCount(int size) => (size + BlockSize - 1) / BlockSize;
 
+    private static S3tcTransfer GetTransfer(DxtFormat format, bool isSrgb) =>
+        format switch
+        {
+            DxtFormat.Dxt1Rgb => isSrgb ? S3tcTransfer.Dxt1RgbSrgb : S3tcTransfer.Dxt1Rgb,
+            DxtFormat.Dxt1Rgba => isSrgb ? S3tcTransfer.Dxt1RgbaSrgb : S3tcTransfer.Dxt1Rgba,
+            DxtFormat.Dxt2Rgba => S3tcTransfer.Dxt2Rgba,
+            DxtFormat.Dxt3Rgba => isSrgb ? S3tcTransfer.Dxt3RgbaSrgb : S3tcTransfer.Dxt3Rgba,
+            DxtFormat.Dxt4Rgba => S3tcTransfer.Dxt4Rgba,
+            DxtFormat.Dxt5Rgba => isSrgb ? S3tcTransfer.Dxt5RgbaSrgb : S3tcTransfer.Dxt5Rgba,
+            _ => throw new ArgumentOutOfRangeException(nameof(format))
+        };
+
     private static bool TryGetDxtFormat(TextureFormat format, out DxtFormat dxtFormat)
     {
         if (format == TextureFormats.Bc1Rgb
@@ -686,6 +879,20 @@ public sealed class S3tcTextureCoder : IPitchTextureCoder
         new($"S3TC texture coder does not support texture format '{format.Name}'.");
 
     private readonly record struct Rgb24(byte Red, byte Green, byte Blue);
+
+    private enum S3tcTransfer
+    {
+        Dxt1Rgb,
+        Dxt1RgbSrgb,
+        Dxt1Rgba,
+        Dxt1RgbaSrgb,
+        Dxt2Rgba,
+        Dxt3Rgba,
+        Dxt3RgbaSrgb,
+        Dxt4Rgba,
+        Dxt5Rgba,
+        Dxt5RgbaSrgb
+    }
 
     private enum DxtFormat
     {

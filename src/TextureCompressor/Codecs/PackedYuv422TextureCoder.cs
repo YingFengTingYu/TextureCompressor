@@ -7,12 +7,11 @@ namespace TextureCompressor.Codecs;
 
 public sealed class PackedYuv422TextureCoder : IPitchTextureCoder
 {
-    private readonly PackedYuv422Layout _layout;
-    private readonly bool _is8BitPacked;
+    private readonly PackedYuv422Transfer _transfer;
 
     public PackedYuv422TextureCoder(TextureFormat format)
     {
-        if (!TryGetLayout(format, out _layout, out _is8BitPacked))
+        if (!TryGetTransfer(format, out _transfer))
         {
             throw CreateUnsupportedFormatException(format);
         }
@@ -22,12 +21,12 @@ public sealed class PackedYuv422TextureCoder : IPitchTextureCoder
 
     public TextureFormat Format { get; }
 
-    public static bool IsSupported(TextureFormat format) => TryGetLayout(format, out _, out _);
+    public static bool IsSupported(TextureFormat format) => TryGetTransfer(format, out _);
 
     public int GetDefaultPitch(int width)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(width);
-        return _is8BitPacked
+        return Is8BitPacked(_transfer)
             ? Format.GetRowByteCount(width)
             : GetHighBitRowByteCount(width);
     }
@@ -35,7 +34,7 @@ public sealed class PackedYuv422TextureCoder : IPitchTextureCoder
     public int GetEncodedByteCount(int width, int height, int rowPitch)
     {
         ValidateDimensions(width, height);
-        if (_is8BitPacked)
+        if (Is8BitPacked(_transfer))
         {
             ValidatePacked8BitWidth(width);
         }
@@ -53,114 +52,116 @@ public sealed class PackedYuv422TextureCoder : IPitchTextureCoder
         where TPixel : unmanaged, IPixel<TPixel>
     {
         ValidateSourceLength(destination.Width, destination.Height, source, rowPitch);
-        if (_is8BitPacked)
-        {
-            Decode8Bit(source, destination, rowPitch);
-            return;
-        }
-
-        DecodeHighBit(source, destination, rowPitch);
+        DecodeByTransfer(source, destination, rowPitch);
     }
 
     public void Encode<TPixel>(ImageView<TPixel> source, Span<byte> destination, int rowPitch)
         where TPixel : unmanaged, IPixel<TPixel>
     {
         ValidateDestinationLength(source.Width, source.Height, destination, rowPitch);
-        if (_is8BitPacked)
-        {
-            Encode8Bit(source, destination, rowPitch);
-            return;
-        }
-
-        EncodeHighBit(source, destination, rowPitch);
+        EncodeByTransfer(source, destination, rowPitch);
     }
 
-    private void Decode8Bit<TPixel>(ReadOnlySpan<byte> source, ImageView<TPixel> destination, int rowPitch)
+    private void DecodeByTransfer<TPixel>(ReadOnlySpan<byte> source, ImageView<TPixel> destination, int rowPitch)
         where TPixel : unmanaged, IPixel<TPixel>
     {
-        var blocksPerRow = destination.Width / 2;
-        var rowOffset = 0;
-        for (var y = 0; y < destination.Height; y++)
+        switch (_transfer)
         {
-            var destinationRow = destination.GetRowSpan(y);
-            var blockOffset = rowOffset;
-            var pixelX = 0;
-            for (var blockX = 0; blockX < blocksPerRow; blockX++)
-            {
-                var block = source.Slice(blockOffset, 4);
-                byte y0;
-                byte y1;
-                byte u;
-                byte v;
-                if (_layout.UFirst)
-                {
-                    u = block[0];
-                    y0 = block[1];
-                    v = block[2];
-                    y1 = block[3];
-                }
-                else
-                {
-                    y0 = block[0];
-                    u = block[1];
-                    y1 = block[2];
-                    v = block[3];
-                }
-
-                destinationRow[pixelX] = TPixel.FromRgba32Float(YuvToRgba32Float(y0, u, v, bitsPerSample: 8));
-                destinationRow[pixelX + 1] = TPixel.FromRgba32Float(YuvToRgba32Float(y1, u, v, bitsPerSample: 8));
-                blockOffset = checked(blockOffset + 4);
-                pixelX += 2;
-            }
-
-            rowOffset = checked(rowOffset + rowPitch);
+            case PackedYuv422Transfer.Uyvy8:
+                Decode<TPixel, Uyvy8Transfer>(source, destination, rowPitch);
+                return;
+            case PackedYuv422Transfer.Yuyv8:
+                Decode<TPixel, Yuyv8Transfer>(source, destination, rowPitch);
+                return;
+            case PackedYuv422Transfer.Yuyv16:
+                Decode<TPixel, Yuyv16Transfer>(source, destination, rowPitch);
+                return;
+            case PackedYuv422Transfer.Uyvy16:
+                Decode<TPixel, Uyvy16Transfer>(source, destination, rowPitch);
+                return;
+            case PackedYuv422Transfer.Yuyv10Msb:
+                Decode<TPixel, Yuyv10MsbTransfer>(source, destination, rowPitch);
+                return;
+            case PackedYuv422Transfer.Yuyv10Lsb:
+                Decode<TPixel, Yuyv10LsbTransfer>(source, destination, rowPitch);
+                return;
+            case PackedYuv422Transfer.Uyvy10Msb:
+                Decode<TPixel, Uyvy10MsbTransfer>(source, destination, rowPitch);
+                return;
+            case PackedYuv422Transfer.Uyvy10Lsb:
+                Decode<TPixel, Uyvy10LsbTransfer>(source, destination, rowPitch);
+                return;
+            case PackedYuv422Transfer.Yuyv12Msb:
+                Decode<TPixel, Yuyv12MsbTransfer>(source, destination, rowPitch);
+                return;
+            case PackedYuv422Transfer.Yuyv12Lsb:
+                Decode<TPixel, Yuyv12LsbTransfer>(source, destination, rowPitch);
+                return;
+            case PackedYuv422Transfer.Uyvy12Msb:
+                Decode<TPixel, Uyvy12MsbTransfer>(source, destination, rowPitch);
+                return;
+            case PackedYuv422Transfer.Uyvy12Lsb:
+                Decode<TPixel, Uyvy12LsbTransfer>(source, destination, rowPitch);
+                return;
+            default:
+                throw CreateUnsupportedFormatException(Format);
         }
     }
 
-    private void Encode8Bit<TPixel>(ImageView<TPixel> source, Span<byte> destination, int rowPitch)
+    private void EncodeByTransfer<TPixel>(ImageView<TPixel> source, Span<byte> destination, int rowPitch)
         where TPixel : unmanaged, IPixel<TPixel>
     {
-        var blocksPerRow = source.Width / 2;
-        var rowOffset = 0;
-        for (var y = 0; y < source.Height; y++)
+        switch (_transfer)
         {
-            var sourceRow = source.GetRowSpan(y);
-            var blockOffset = rowOffset;
-            var pixelX = 0;
-            for (var blockX = 0; blockX < blocksPerRow; blockX++)
-            {
-                RgbaToYuv(TPixel.ToRgba32Float(sourceRow[pixelX]), out var y0, out var u0, out var v0);
-                RgbaToYuv(TPixel.ToRgba32Float(sourceRow[pixelX + 1]), out var y1, out var u1, out var v1);
-                var u = ChromaToYuvSample((u0 + u1) * 0.5f, bitsPerSample: 8);
-                var v = ChromaToYuvSample((v0 + v1) * 0.5f, bitsPerSample: 8);
-                var block = destination.Slice(blockOffset, 4);
-                if (_layout.UFirst)
-                {
-                    block[0] = (byte)u;
-                    block[1] = (byte)UnitToYuvSample(y0, bitsPerSample: 8);
-                    block[2] = (byte)v;
-                    block[3] = (byte)UnitToYuvSample(y1, bitsPerSample: 8);
-                }
-                else
-                {
-                    block[0] = (byte)UnitToYuvSample(y0, bitsPerSample: 8);
-                    block[1] = (byte)u;
-                    block[2] = (byte)UnitToYuvSample(y1, bitsPerSample: 8);
-                    block[3] = (byte)v;
-                }
-
-                blockOffset = checked(blockOffset + 4);
-                pixelX += 2;
-            }
-
-            rowOffset = checked(rowOffset + rowPitch);
+            case PackedYuv422Transfer.Uyvy8:
+                Encode<TPixel, Uyvy8Transfer>(source, destination, rowPitch);
+                return;
+            case PackedYuv422Transfer.Yuyv8:
+                Encode<TPixel, Yuyv8Transfer>(source, destination, rowPitch);
+                return;
+            case PackedYuv422Transfer.Yuyv16:
+                Encode<TPixel, Yuyv16Transfer>(source, destination, rowPitch);
+                return;
+            case PackedYuv422Transfer.Uyvy16:
+                Encode<TPixel, Uyvy16Transfer>(source, destination, rowPitch);
+                return;
+            case PackedYuv422Transfer.Yuyv10Msb:
+                Encode<TPixel, Yuyv10MsbTransfer>(source, destination, rowPitch);
+                return;
+            case PackedYuv422Transfer.Yuyv10Lsb:
+                Encode<TPixel, Yuyv10LsbTransfer>(source, destination, rowPitch);
+                return;
+            case PackedYuv422Transfer.Uyvy10Msb:
+                Encode<TPixel, Uyvy10MsbTransfer>(source, destination, rowPitch);
+                return;
+            case PackedYuv422Transfer.Uyvy10Lsb:
+                Encode<TPixel, Uyvy10LsbTransfer>(source, destination, rowPitch);
+                return;
+            case PackedYuv422Transfer.Yuyv12Msb:
+                Encode<TPixel, Yuyv12MsbTransfer>(source, destination, rowPitch);
+                return;
+            case PackedYuv422Transfer.Yuyv12Lsb:
+                Encode<TPixel, Yuyv12LsbTransfer>(source, destination, rowPitch);
+                return;
+            case PackedYuv422Transfer.Uyvy12Msb:
+                Encode<TPixel, Uyvy12MsbTransfer>(source, destination, rowPitch);
+                return;
+            case PackedYuv422Transfer.Uyvy12Lsb:
+                Encode<TPixel, Uyvy12LsbTransfer>(source, destination, rowPitch);
+                return;
+            default:
+                throw CreateUnsupportedFormatException(Format);
         }
     }
 
-    private void DecodeHighBit<TPixel>(ReadOnlySpan<byte> source, ImageView<TPixel> destination, int rowPitch)
+    private static void Decode<TPixel, TTransfer>(ReadOnlySpan<byte> source, ImageView<TPixel> destination, int rowPitch)
         where TPixel : unmanaged, IPixel<TPixel>
+        where TTransfer : IPackedYuv422Transfer
     {
-        var blockCountX = (destination.Width + 1) / 2;
+        var blockCountX = TTransfer.RequiresEvenWidth
+            ? destination.Width / 2
+            : (destination.Width + 1) / 2;
+        var bytesPerSample = TTransfer.BytesPerBlock / 4;
         var rowOffset = 0;
         for (var y = 0; y < destination.Height; y++)
         {
@@ -173,28 +174,28 @@ public sealed class PackedYuv422TextureCoder : IPitchTextureCoder
                 uint y1;
                 uint u;
                 uint v;
-                if (_layout.UFirst)
+                if (TTransfer.UFirst)
                 {
-                    u = ReadYuvSample(source[blockOffset..], _layout.BitsPerSample, _layout.MsbAligned);
-                    y0 = ReadYuvSample(source[(blockOffset + 2)..], _layout.BitsPerSample, _layout.MsbAligned);
-                    v = ReadYuvSample(source[(blockOffset + 4)..], _layout.BitsPerSample, _layout.MsbAligned);
-                    y1 = ReadYuvSample(source[(blockOffset + 6)..], _layout.BitsPerSample, _layout.MsbAligned);
+                    u = ReadYuvSample<TTransfer>(source[blockOffset..]);
+                    y0 = ReadYuvSample<TTransfer>(source[(blockOffset + bytesPerSample)..]);
+                    v = ReadYuvSample<TTransfer>(source[(blockOffset + (2 * bytesPerSample))..]);
+                    y1 = ReadYuvSample<TTransfer>(source[(blockOffset + (3 * bytesPerSample))..]);
                 }
                 else
                 {
-                    y0 = ReadYuvSample(source[blockOffset..], _layout.BitsPerSample, _layout.MsbAligned);
-                    u = ReadYuvSample(source[(blockOffset + 2)..], _layout.BitsPerSample, _layout.MsbAligned);
-                    y1 = ReadYuvSample(source[(blockOffset + 4)..], _layout.BitsPerSample, _layout.MsbAligned);
-                    v = ReadYuvSample(source[(blockOffset + 6)..], _layout.BitsPerSample, _layout.MsbAligned);
+                    y0 = ReadYuvSample<TTransfer>(source[blockOffset..]);
+                    u = ReadYuvSample<TTransfer>(source[(blockOffset + bytesPerSample)..]);
+                    y1 = ReadYuvSample<TTransfer>(source[(blockOffset + (2 * bytesPerSample))..]);
+                    v = ReadYuvSample<TTransfer>(source[(blockOffset + (3 * bytesPerSample))..]);
                 }
 
-                destinationRow[pixelX] = TPixel.FromRgba32Float(YuvToRgba32Float(y0, u, v, _layout.BitsPerSample));
+                destinationRow[pixelX] = TPixel.FromRgba32Float(YuvToRgba32Float(y0, u, v, TTransfer.BitsPerSample));
                 if (pixelX + 1 < destination.Width)
                 {
-                    destinationRow[pixelX + 1] = TPixel.FromRgba32Float(YuvToRgba32Float(y1, u, v, _layout.BitsPerSample));
+                    destinationRow[pixelX + 1] = TPixel.FromRgba32Float(YuvToRgba32Float(y1, u, v, TTransfer.BitsPerSample));
                 }
 
-                blockOffset = checked(blockOffset + 8);
+                blockOffset = checked(blockOffset + TTransfer.BytesPerBlock);
                 pixelX += 2;
             }
 
@@ -202,10 +203,14 @@ public sealed class PackedYuv422TextureCoder : IPitchTextureCoder
         }
     }
 
-    private void EncodeHighBit<TPixel>(ImageView<TPixel> source, Span<byte> destination, int rowPitch)
+    private static void Encode<TPixel, TTransfer>(ImageView<TPixel> source, Span<byte> destination, int rowPitch)
         where TPixel : unmanaged, IPixel<TPixel>
+        where TTransfer : IPackedYuv422Transfer
     {
-        var blockCountX = (source.Width + 1) / 2;
+        var blockCountX = TTransfer.RequiresEvenWidth
+            ? source.Width / 2
+            : (source.Width + 1) / 2;
+        var bytesPerSample = TTransfer.BytesPerBlock / 4;
         var rowOffset = 0;
         for (var y = 0; y < source.Height; y++)
         {
@@ -218,30 +223,151 @@ public sealed class PackedYuv422TextureCoder : IPitchTextureCoder
                 var second = pixelX + 1 < source.Width ? TPixel.ToRgba32Float(sourceRow[pixelX + 1]) : first;
                 RgbaToYuv(first, out var y0, out var u0, out var v0);
                 RgbaToYuv(second, out var y1, out var u1, out var v1);
-                var u = ChromaToYuvSample((u0 + u1) * 0.5f, _layout.BitsPerSample);
-                var v = ChromaToYuvSample((v0 + v1) * 0.5f, _layout.BitsPerSample);
-                var block = destination.Slice(blockOffset, 8);
-                if (_layout.UFirst)
+                var u = ChromaToYuvSample((u0 + u1) * 0.5f, TTransfer.BitsPerSample);
+                var v = ChromaToYuvSample((v0 + v1) * 0.5f, TTransfer.BitsPerSample);
+                var block = destination.Slice(blockOffset, TTransfer.BytesPerBlock);
+                if (TTransfer.UFirst)
                 {
-                    WriteYuvSample(block, u, _layout.BitsPerSample, _layout.MsbAligned);
-                    WriteYuvSample(block[2..], UnitToYuvSample(y0, _layout.BitsPerSample), _layout.BitsPerSample, _layout.MsbAligned);
-                    WriteYuvSample(block[4..], v, _layout.BitsPerSample, _layout.MsbAligned);
-                    WriteYuvSample(block[6..], UnitToYuvSample(y1, _layout.BitsPerSample), _layout.BitsPerSample, _layout.MsbAligned);
+                    WriteYuvSample<TTransfer>(block, u);
+                    WriteYuvSample<TTransfer>(block[bytesPerSample..], UnitToYuvSample(y0, TTransfer.BitsPerSample));
+                    WriteYuvSample<TTransfer>(block[(2 * bytesPerSample)..], v);
+                    WriteYuvSample<TTransfer>(block[(3 * bytesPerSample)..], UnitToYuvSample(y1, TTransfer.BitsPerSample));
                 }
                 else
                 {
-                    WriteYuvSample(block, UnitToYuvSample(y0, _layout.BitsPerSample), _layout.BitsPerSample, _layout.MsbAligned);
-                    WriteYuvSample(block[2..], u, _layout.BitsPerSample, _layout.MsbAligned);
-                    WriteYuvSample(block[4..], UnitToYuvSample(y1, _layout.BitsPerSample), _layout.BitsPerSample, _layout.MsbAligned);
-                    WriteYuvSample(block[6..], v, _layout.BitsPerSample, _layout.MsbAligned);
+                    WriteYuvSample<TTransfer>(block, UnitToYuvSample(y0, TTransfer.BitsPerSample));
+                    WriteYuvSample<TTransfer>(block[bytesPerSample..], u);
+                    WriteYuvSample<TTransfer>(block[(2 * bytesPerSample)..], UnitToYuvSample(y1, TTransfer.BitsPerSample));
+                    WriteYuvSample<TTransfer>(block[(3 * bytesPerSample)..], v);
                 }
 
-                blockOffset = checked(blockOffset + 8);
+                blockOffset = checked(blockOffset + TTransfer.BytesPerBlock);
                 pixelX += 2;
             }
 
             rowOffset = checked(rowOffset + rowPitch);
         }
+    }
+
+    private interface IPackedYuv422Transfer
+    {
+        static abstract int BitsPerSample { get; }
+
+        static abstract bool UFirst { get; }
+
+        static abstract bool MsbAligned { get; }
+
+        static abstract bool RequiresEvenWidth { get; }
+
+        static abstract int BytesPerBlock { get; }
+    }
+
+    private readonly struct Uyvy8Transfer : IPackedYuv422Transfer
+    {
+        public static int BitsPerSample => 8;
+        public static bool UFirst => true;
+        public static bool MsbAligned => false;
+        public static bool RequiresEvenWidth => true;
+        public static int BytesPerBlock => 4;
+    }
+
+    private readonly struct Yuyv8Transfer : IPackedYuv422Transfer
+    {
+        public static int BitsPerSample => 8;
+        public static bool UFirst => false;
+        public static bool MsbAligned => false;
+        public static bool RequiresEvenWidth => true;
+        public static int BytesPerBlock => 4;
+    }
+
+    private readonly struct Yuyv16Transfer : IPackedYuv422Transfer
+    {
+        public static int BitsPerSample => 16;
+        public static bool UFirst => false;
+        public static bool MsbAligned => false;
+        public static bool RequiresEvenWidth => false;
+        public static int BytesPerBlock => 8;
+    }
+
+    private readonly struct Uyvy16Transfer : IPackedYuv422Transfer
+    {
+        public static int BitsPerSample => 16;
+        public static bool UFirst => true;
+        public static bool MsbAligned => false;
+        public static bool RequiresEvenWidth => false;
+        public static int BytesPerBlock => 8;
+    }
+
+    private readonly struct Yuyv10MsbTransfer : IPackedYuv422Transfer
+    {
+        public static int BitsPerSample => 10;
+        public static bool UFirst => false;
+        public static bool MsbAligned => true;
+        public static bool RequiresEvenWidth => false;
+        public static int BytesPerBlock => 8;
+    }
+
+    private readonly struct Yuyv10LsbTransfer : IPackedYuv422Transfer
+    {
+        public static int BitsPerSample => 10;
+        public static bool UFirst => false;
+        public static bool MsbAligned => false;
+        public static bool RequiresEvenWidth => false;
+        public static int BytesPerBlock => 8;
+    }
+
+    private readonly struct Uyvy10MsbTransfer : IPackedYuv422Transfer
+    {
+        public static int BitsPerSample => 10;
+        public static bool UFirst => true;
+        public static bool MsbAligned => true;
+        public static bool RequiresEvenWidth => false;
+        public static int BytesPerBlock => 8;
+    }
+
+    private readonly struct Uyvy10LsbTransfer : IPackedYuv422Transfer
+    {
+        public static int BitsPerSample => 10;
+        public static bool UFirst => true;
+        public static bool MsbAligned => false;
+        public static bool RequiresEvenWidth => false;
+        public static int BytesPerBlock => 8;
+    }
+
+    private readonly struct Yuyv12MsbTransfer : IPackedYuv422Transfer
+    {
+        public static int BitsPerSample => 12;
+        public static bool UFirst => false;
+        public static bool MsbAligned => true;
+        public static bool RequiresEvenWidth => false;
+        public static int BytesPerBlock => 8;
+    }
+
+    private readonly struct Yuyv12LsbTransfer : IPackedYuv422Transfer
+    {
+        public static int BitsPerSample => 12;
+        public static bool UFirst => false;
+        public static bool MsbAligned => false;
+        public static bool RequiresEvenWidth => false;
+        public static int BytesPerBlock => 8;
+    }
+
+    private readonly struct Uyvy12MsbTransfer : IPackedYuv422Transfer
+    {
+        public static int BitsPerSample => 12;
+        public static bool UFirst => true;
+        public static bool MsbAligned => true;
+        public static bool RequiresEvenWidth => false;
+        public static int BytesPerBlock => 8;
+    }
+
+    private readonly struct Uyvy12LsbTransfer : IPackedYuv422Transfer
+    {
+        public static int BitsPerSample => 12;
+        public static bool UFirst => true;
+        public static bool MsbAligned => false;
+        public static bool RequiresEvenWidth => false;
+        public static int BytesPerBlock => 8;
     }
 
     private void ValidateSourceLength(int width, int height, ReadOnlySpan<byte> source, int rowPitch)
@@ -262,57 +388,61 @@ public sealed class PackedYuv422TextureCoder : IPitchTextureCoder
         }
     }
 
-    private static bool TryGetLayout(TextureFormat format, out PackedYuv422Layout layout, out bool is8BitPacked)
+    private static bool TryGetTransfer(TextureFormat format, out PackedYuv422Transfer transfer)
     {
-        if (format == TextureFormats.Uyvy422UNorm) { layout = new PackedYuv422Layout(8, UFirst: true, MsbAligned: false); is8BitPacked = true; return true; }
-        if (format == TextureFormats.Yuy2UNorm) { layout = new PackedYuv422Layout(8, UFirst: false, MsbAligned: false); is8BitPacked = true; return true; }
-        if (format == TextureFormats.Yuyv16_422UNorm) { layout = new PackedYuv422Layout(16, UFirst: false, MsbAligned: false); is8BitPacked = false; return true; }
-        if (format == TextureFormats.Uyvy16_422UNorm) { layout = new PackedYuv422Layout(16, UFirst: true, MsbAligned: false); is8BitPacked = false; return true; }
-        if (format == TextureFormats.Yuyv10Msb422UNorm) { layout = new PackedYuv422Layout(10, UFirst: false, MsbAligned: true); is8BitPacked = false; return true; }
-        if (format == TextureFormats.Yuyv10Lsb422UNorm) { layout = new PackedYuv422Layout(10, UFirst: false, MsbAligned: false); is8BitPacked = false; return true; }
-        if (format == TextureFormats.Uyvy10Msb422UNorm) { layout = new PackedYuv422Layout(10, UFirst: true, MsbAligned: true); is8BitPacked = false; return true; }
-        if (format == TextureFormats.Uyvy10Lsb422UNorm) { layout = new PackedYuv422Layout(10, UFirst: true, MsbAligned: false); is8BitPacked = false; return true; }
-        if (format == TextureFormats.Yuyv12Msb422UNorm) { layout = new PackedYuv422Layout(12, UFirst: false, MsbAligned: true); is8BitPacked = false; return true; }
-        if (format == TextureFormats.Yuyv12Lsb422UNorm) { layout = new PackedYuv422Layout(12, UFirst: false, MsbAligned: false); is8BitPacked = false; return true; }
-        if (format == TextureFormats.Uyvy12Msb422UNorm) { layout = new PackedYuv422Layout(12, UFirst: true, MsbAligned: true); is8BitPacked = false; return true; }
-        if (format == TextureFormats.Uyvy12Lsb422UNorm) { layout = new PackedYuv422Layout(12, UFirst: true, MsbAligned: false); is8BitPacked = false; return true; }
+        if (format == TextureFormats.Uyvy422UNorm) { transfer = PackedYuv422Transfer.Uyvy8; return true; }
+        if (format == TextureFormats.Yuy2UNorm) { transfer = PackedYuv422Transfer.Yuyv8; return true; }
+        if (format == TextureFormats.Yuyv16_422UNorm) { transfer = PackedYuv422Transfer.Yuyv16; return true; }
+        if (format == TextureFormats.Uyvy16_422UNorm) { transfer = PackedYuv422Transfer.Uyvy16; return true; }
+        if (format == TextureFormats.Yuyv10Msb422UNorm) { transfer = PackedYuv422Transfer.Yuyv10Msb; return true; }
+        if (format == TextureFormats.Yuyv10Lsb422UNorm) { transfer = PackedYuv422Transfer.Yuyv10Lsb; return true; }
+        if (format == TextureFormats.Uyvy10Msb422UNorm) { transfer = PackedYuv422Transfer.Uyvy10Msb; return true; }
+        if (format == TextureFormats.Uyvy10Lsb422UNorm) { transfer = PackedYuv422Transfer.Uyvy10Lsb; return true; }
+        if (format == TextureFormats.Yuyv12Msb422UNorm) { transfer = PackedYuv422Transfer.Yuyv12Msb; return true; }
+        if (format == TextureFormats.Yuyv12Lsb422UNorm) { transfer = PackedYuv422Transfer.Yuyv12Lsb; return true; }
+        if (format == TextureFormats.Uyvy12Msb422UNorm) { transfer = PackedYuv422Transfer.Uyvy12Msb; return true; }
+        if (format == TextureFormats.Uyvy12Lsb422UNorm) { transfer = PackedYuv422Transfer.Uyvy12Lsb; return true; }
 
-        layout = default;
-        is8BitPacked = false;
+        transfer = default;
         return false;
     }
 
-    private static uint ReadYuvSample(ReadOnlySpan<byte> source, int bitsPerSample, bool msbAligned)
+    private static bool Is8BitPacked(PackedYuv422Transfer transfer) =>
+        transfer is PackedYuv422Transfer.Uyvy8 or PackedYuv422Transfer.Yuyv8;
+
+    private static uint ReadYuvSample<TTransfer>(ReadOnlySpan<byte> source)
+        where TTransfer : IPackedYuv422Transfer
     {
-        if (bitsPerSample <= 8)
+        if (TTransfer.BitsPerSample <= 8)
         {
             return source[0];
         }
 
         var sample = BinaryPrimitives.ReadUInt16LittleEndian(source);
-        return bitsPerSample switch
+        return TTransfer.BitsPerSample switch
         {
-            10 => msbAligned ? (uint)(sample >> 6) : (uint)(sample & 0x03ff),
-            12 => msbAligned ? (uint)(sample >> 4) : (uint)(sample & 0x0fff),
+            10 => TTransfer.MsbAligned ? (uint)(sample >> 6) : (uint)(sample & 0x03ff),
+            12 => TTransfer.MsbAligned ? (uint)(sample >> 4) : (uint)(sample & 0x0fff),
             16 => sample,
-            _ => throw new InvalidOperationException($"Unsupported YUV sample size {bitsPerSample}.")
+            _ => throw new InvalidOperationException($"Unsupported YUV sample size {TTransfer.BitsPerSample}.")
         };
     }
 
-    private static void WriteYuvSample(Span<byte> destination, uint sample, int bitsPerSample, bool msbAligned)
+    private static void WriteYuvSample<TTransfer>(Span<byte> destination, uint sample)
+        where TTransfer : IPackedYuv422Transfer
     {
-        if (bitsPerSample <= 8)
+        if (TTransfer.BitsPerSample <= 8)
         {
             destination[0] = (byte)sample;
             return;
         }
 
-        var value = bitsPerSample switch
+        var value = TTransfer.BitsPerSample switch
         {
-            10 => msbAligned ? sample << 6 : sample,
-            12 => msbAligned ? sample << 4 : sample,
+            10 => TTransfer.MsbAligned ? sample << 6 : sample,
+            12 => TTransfer.MsbAligned ? sample << 4 : sample,
             16 => sample,
-            _ => throw new InvalidOperationException($"Unsupported YUV sample size {bitsPerSample}.")
+            _ => throw new InvalidOperationException($"Unsupported YUV sample size {TTransfer.BitsPerSample}.")
         };
         BinaryPrimitives.WriteUInt16LittleEndian(destination, checked((ushort)value));
     }
@@ -404,5 +534,20 @@ public sealed class PackedYuv422TextureCoder : IPitchTextureCoder
     private static NotSupportedException CreateUnsupportedFormatException(TextureFormat format) =>
         new($"Packed YUV 4:2:2 texture coder does not support texture format '{format.Name}'.");
 
-    private readonly record struct PackedYuv422Layout(int BitsPerSample, bool UFirst, bool MsbAligned);
+    private enum PackedYuv422Transfer
+    {
+        Uyvy8,
+        Yuyv8,
+        Yuyv16,
+        Uyvy16,
+        Yuyv10Msb,
+        Yuyv10Lsb,
+        Uyvy10Msb,
+        Uyvy10Lsb,
+        Yuyv12Msb,
+        Yuyv12Lsb,
+        Uyvy12Msb,
+        Uyvy12Lsb
+    }
+
 }

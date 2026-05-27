@@ -43,22 +43,206 @@ public sealed class PlanarYuvTextureCoder : IPitchTextureCoder
         where TPixel : unmanaged, IPixel<TPixel>
     {
         ValidateSourceLength(destination.Width, destination.Height, source, rowPitch);
-        var bytesPerSample = GetBytesPerSample(_layout.BitsPerSample);
+        DecodeBySample(source, destination);
+    }
+
+    public void Encode<TPixel>(ImageView<TPixel> source, Span<byte> destination, int rowPitch)
+        where TPixel : unmanaged, IPixel<TPixel>
+    {
+        ValidateDestinationLength(source.Width, source.Height, destination, rowPitch);
+        EncodeBySample(source, destination);
+    }
+
+    private void DecodeBySample<TPixel>(ReadOnlySpan<byte> source, ImageView<TPixel> destination)
+        where TPixel : unmanaged, IPixel<TPixel>
+    {
+        switch (_layout.BitsPerSample)
+        {
+            case 8:
+                DecodeByLayout<TPixel, Sample8Transfer>(source, destination);
+                return;
+            case 10 when _layout.MsbAligned:
+                DecodeByLayout<TPixel, Sample10MsbTransfer>(source, destination);
+                return;
+            case 10:
+                DecodeByLayout<TPixel, Sample10LsbTransfer>(source, destination);
+                return;
+            case 12 when _layout.MsbAligned:
+                DecodeByLayout<TPixel, Sample12MsbTransfer>(source, destination);
+                return;
+            case 12:
+                DecodeByLayout<TPixel, Sample12LsbTransfer>(source, destination);
+                return;
+            case 14 when _layout.MsbAligned:
+                DecodeByLayout<TPixel, Sample14MsbTransfer>(source, destination);
+                return;
+            case 16:
+                DecodeByLayout<TPixel, Sample16Transfer>(source, destination);
+                return;
+            default:
+                throw CreateUnsupportedFormatException(Format);
+        }
+    }
+
+    private void EncodeBySample<TPixel>(ImageView<TPixel> source, Span<byte> destination)
+        where TPixel : unmanaged, IPixel<TPixel>
+    {
+        switch (_layout.BitsPerSample)
+        {
+            case 8:
+                EncodeByLayout<TPixel, Sample8Transfer>(source, destination);
+                return;
+            case 10 when _layout.MsbAligned:
+                EncodeByLayout<TPixel, Sample10MsbTransfer>(source, destination);
+                return;
+            case 10:
+                EncodeByLayout<TPixel, Sample10LsbTransfer>(source, destination);
+                return;
+            case 12 when _layout.MsbAligned:
+                EncodeByLayout<TPixel, Sample12MsbTransfer>(source, destination);
+                return;
+            case 12:
+                EncodeByLayout<TPixel, Sample12LsbTransfer>(source, destination);
+                return;
+            case 14 when _layout.MsbAligned:
+                EncodeByLayout<TPixel, Sample14MsbTransfer>(source, destination);
+                return;
+            case 16:
+                EncodeByLayout<TPixel, Sample16Transfer>(source, destination);
+                return;
+            default:
+                throw CreateUnsupportedFormatException(Format);
+        }
+    }
+
+    private void DecodeByLayout<TPixel, TSample>(ReadOnlySpan<byte> source, ImageView<TPixel> destination)
+        where TPixel : unmanaged, IPixel<TPixel>
+        where TSample : IPlanarYuvSampleTransfer
+    {
+        if (_layout.Biplanar)
+        {
+            if (_layout.VFirst)
+            {
+                DecodeBySubsample<TPixel, TSample, BiplanarTransfer, VuTransfer>(source, destination);
+            }
+            else
+            {
+                DecodeBySubsample<TPixel, TSample, BiplanarTransfer, UvTransfer>(source, destination);
+            }
+
+            return;
+        }
+
+        if (_layout.VFirst)
+        {
+            DecodeBySubsample<TPixel, TSample, ThreePlaneTransfer, VuTransfer>(source, destination);
+        }
+        else
+        {
+            DecodeBySubsample<TPixel, TSample, ThreePlaneTransfer, UvTransfer>(source, destination);
+        }
+    }
+
+    private void EncodeByLayout<TPixel, TSample>(ImageView<TPixel> source, Span<byte> destination)
+        where TPixel : unmanaged, IPixel<TPixel>
+        where TSample : IPlanarYuvSampleTransfer
+    {
+        if (_layout.Biplanar)
+        {
+            if (_layout.VFirst)
+            {
+                EncodeBySubsample<TPixel, TSample, BiplanarTransfer, VuTransfer>(source, destination);
+            }
+            else
+            {
+                EncodeBySubsample<TPixel, TSample, BiplanarTransfer, UvTransfer>(source, destination);
+            }
+
+            return;
+        }
+
+        if (_layout.VFirst)
+        {
+            EncodeBySubsample<TPixel, TSample, ThreePlaneTransfer, VuTransfer>(source, destination);
+        }
+        else
+        {
+            EncodeBySubsample<TPixel, TSample, ThreePlaneTransfer, UvTransfer>(source, destination);
+        }
+    }
+
+    private void DecodeBySubsample<TPixel, TSample, TPlane, TOrder>(ReadOnlySpan<byte> source, ImageView<TPixel> destination)
+        where TPixel : unmanaged, IPixel<TPixel>
+        where TSample : IPlanarYuvSampleTransfer
+        where TPlane : IPlanarYuvPlaneTransfer
+        where TOrder : IPlanarYuvOrderTransfer
+    {
+        switch ((_layout.ChromaSubsampleX, _layout.ChromaSubsampleY))
+        {
+            case (1, 1):
+                Decode<TPixel, TSample, TPlane, TOrder, Subsample444Transfer>(source, destination);
+                return;
+            case (2, 1):
+                Decode<TPixel, TSample, TPlane, TOrder, Subsample422Transfer>(source, destination);
+                return;
+            case (2, 2):
+                Decode<TPixel, TSample, TPlane, TOrder, Subsample420Transfer>(source, destination);
+                return;
+            case (1, 2):
+                Decode<TPixel, TSample, TPlane, TOrder, Subsample412Transfer>(source, destination);
+                return;
+            default:
+                throw CreateUnsupportedFormatException(Format);
+        }
+    }
+
+    private void EncodeBySubsample<TPixel, TSample, TPlane, TOrder>(ImageView<TPixel> source, Span<byte> destination)
+        where TPixel : unmanaged, IPixel<TPixel>
+        where TSample : IPlanarYuvSampleTransfer
+        where TPlane : IPlanarYuvPlaneTransfer
+        where TOrder : IPlanarYuvOrderTransfer
+    {
+        switch ((_layout.ChromaSubsampleX, _layout.ChromaSubsampleY))
+        {
+            case (1, 1):
+                Encode<TPixel, TSample, TPlane, TOrder, Subsample444Transfer>(source, destination);
+                return;
+            case (2, 1):
+                Encode<TPixel, TSample, TPlane, TOrder, Subsample422Transfer>(source, destination);
+                return;
+            case (2, 2):
+                Encode<TPixel, TSample, TPlane, TOrder, Subsample420Transfer>(source, destination);
+                return;
+            case (1, 2):
+                Encode<TPixel, TSample, TPlane, TOrder, Subsample412Transfer>(source, destination);
+                return;
+            default:
+                throw CreateUnsupportedFormatException(Format);
+        }
+    }
+
+    private static void Decode<TPixel, TSample, TPlane, TOrder, TSubsample>(ReadOnlySpan<byte> source, ImageView<TPixel> destination)
+        where TPixel : unmanaged, IPixel<TPixel>
+        where TSample : IPlanarYuvSampleTransfer
+        where TPlane : IPlanarYuvPlaneTransfer
+        where TOrder : IPlanarYuvOrderTransfer
+        where TSubsample : IPlanarYuvSubsampleTransfer
+    {
         var lumaSampleCount = checked(destination.Width * destination.Height);
-        var lumaByteCount = checked(lumaSampleCount * bytesPerSample);
-        var chromaWidth = checked((destination.Width + _layout.ChromaSubsampleX - 1) / _layout.ChromaSubsampleX);
-        var chromaHeight = checked((destination.Height + _layout.ChromaSubsampleY - 1) / _layout.ChromaSubsampleY);
+        var lumaByteCount = checked(lumaSampleCount * TSample.BytesPerSample);
+        var chromaWidth = checked((destination.Width + TSubsample.X - 1) / TSubsample.X);
+        var chromaHeight = checked((destination.Height + TSubsample.Y - 1) / TSubsample.Y);
         var chromaSampleCount = checked(chromaWidth * chromaHeight);
-        var chromaPlaneByteCount = checked(chromaSampleCount * bytesPerSample);
+        var chromaPlaneByteCount = checked(chromaSampleCount * TSample.BytesPerSample);
 
         var luma = source[..lumaByteCount];
         var chroma = source[lumaByteCount..];
         ReadOnlySpan<byte> firstChromaPlane;
         ReadOnlySpan<byte> secondChromaPlane;
-        if (_layout.Biplanar)
+        if (TPlane.Biplanar)
         {
             firstChromaPlane = chroma;
-            secondChromaPlane = chroma[bytesPerSample..];
+            secondChromaPlane = chroma[TSample.BytesPerSample..];
         }
         else
         {
@@ -67,44 +251,46 @@ public sealed class PlanarYuvTextureCoder : IPitchTextureCoder
         }
 
         var lumaRowOffset = 0;
-        var lumaRowByteCount = checked(destination.Width * bytesPerSample);
+        var lumaRowByteCount = checked(destination.Width * TSample.BytesPerSample);
         for (var y = 0; y < destination.Height; y++)
         {
             var destinationRow = destination.GetRowSpan(y);
-            var chromaY = y / _layout.ChromaSubsampleY;
+            var chromaY = y / TSubsample.Y;
             var chromaRowIndex = chromaY * chromaWidth;
             var lumaOffset = lumaRowOffset;
             for (var x = 0; x < destination.Width; x++)
             {
-                var chromaX = x / _layout.ChromaSubsampleX;
+                var chromaX = x / TSubsample.X;
                 var chromaIndex = chromaRowIndex + chromaX;
-                var firstChromaIndex = _layout.Biplanar
-                    ? chromaIndex * 2 * bytesPerSample
-                    : chromaIndex * bytesPerSample;
-                var first = ReadYuvSample(firstChromaPlane[firstChromaIndex..], _layout.BitsPerSample, _layout.MsbAligned);
-                var second = ReadYuvSample(secondChromaPlane[firstChromaIndex..], _layout.BitsPerSample, _layout.MsbAligned);
-                var u = _layout.VFirst ? second : first;
-                var v = _layout.VFirst ? first : second;
-                var ySample = ReadYuvSample(luma[lumaOffset..], _layout.BitsPerSample, _layout.MsbAligned);
-                destinationRow[x] = TPixel.FromRgba32Float(YuvToRgba32Float(ySample, u, v, _layout.BitsPerSample));
-                lumaOffset = checked(lumaOffset + bytesPerSample);
+                var firstChromaIndex = TPlane.Biplanar
+                    ? chromaIndex * 2 * TSample.BytesPerSample
+                    : chromaIndex * TSample.BytesPerSample;
+                var first = TSample.Read(firstChromaPlane[firstChromaIndex..]);
+                var second = TSample.Read(secondChromaPlane[firstChromaIndex..]);
+                var u = TOrder.VFirst ? second : first;
+                var v = TOrder.VFirst ? first : second;
+                var ySample = TSample.Read(luma[lumaOffset..]);
+                destinationRow[x] = TPixel.FromRgba32Float(YuvToRgba32Float(ySample, u, v, TSample.BitsPerSample));
+                lumaOffset = checked(lumaOffset + TSample.BytesPerSample);
             }
 
             lumaRowOffset = checked(lumaRowOffset + lumaRowByteCount);
         }
     }
 
-    public void Encode<TPixel>(ImageView<TPixel> source, Span<byte> destination, int rowPitch)
+    private static void Encode<TPixel, TSample, TPlane, TOrder, TSubsample>(ImageView<TPixel> source, Span<byte> destination)
         where TPixel : unmanaged, IPixel<TPixel>
+        where TSample : IPlanarYuvSampleTransfer
+        where TPlane : IPlanarYuvPlaneTransfer
+        where TOrder : IPlanarYuvOrderTransfer
+        where TSubsample : IPlanarYuvSubsampleTransfer
     {
-        ValidateDestinationLength(source.Width, source.Height, destination, rowPitch);
-        var bytesPerSample = GetBytesPerSample(_layout.BitsPerSample);
         var texelCount = checked(source.Width * source.Height);
-        var lumaByteCount = checked(texelCount * bytesPerSample);
-        var chromaWidth = checked((source.Width + _layout.ChromaSubsampleX - 1) / _layout.ChromaSubsampleX);
-        var chromaHeight = checked((source.Height + _layout.ChromaSubsampleY - 1) / _layout.ChromaSubsampleY);
+        var lumaByteCount = checked(texelCount * TSample.BytesPerSample);
+        var chromaWidth = checked((source.Width + TSubsample.X - 1) / TSubsample.X);
+        var chromaHeight = checked((source.Height + TSubsample.Y - 1) / TSubsample.Y);
         var chromaSampleCount = checked(chromaWidth * chromaHeight);
-        var chromaPlaneByteCount = checked(chromaSampleCount * bytesPerSample);
+        var chromaPlaneByteCount = checked(chromaSampleCount * TSample.BytesPerSample);
 
         var lumaOffset = 0;
         for (var y = 0; y < source.Height; y++)
@@ -113,23 +299,23 @@ public sealed class PlanarYuvTextureCoder : IPitchTextureCoder
             for (var x = 0; x < source.Width; x++)
             {
                 RgbaToYuv(TPixel.ToRgba32Float(sourceRow[x]), out var yValue, out _, out _);
-                WriteYuvSample(destination[lumaOffset..], UnitToYuvSample(yValue, _layout.BitsPerSample), _layout.BitsPerSample, _layout.MsbAligned);
-                lumaOffset = checked(lumaOffset + bytesPerSample);
+                TSample.Write(destination[lumaOffset..], UnitToYuvSample(yValue, TSample.BitsPerSample));
+                lumaOffset = checked(lumaOffset + TSample.BytesPerSample);
             }
         }
 
         var chroma = destination[lumaByteCount..];
-        var firstChromaPlane = _layout.Biplanar ? chroma : chroma[..chromaPlaneByteCount];
-        var secondChromaPlane = _layout.Biplanar ? chroma[bytesPerSample..] : chroma.Slice(chromaPlaneByteCount, chromaPlaneByteCount);
+        var firstChromaPlane = TPlane.Biplanar ? chroma : chroma[..chromaPlaneByteCount];
+        var secondChromaPlane = TPlane.Biplanar ? chroma[TSample.BytesPerSample..] : chroma.Slice(chromaPlaneByteCount, chromaPlaneByteCount);
         for (var chromaY = 0; chromaY < chromaHeight; chromaY++)
         {
-            var sourceY = chromaY * _layout.ChromaSubsampleY;
-            var sourceHeight = Math.Min(_layout.ChromaSubsampleY, source.Height - sourceY);
+            var sourceY = chromaY * TSubsample.Y;
+            var sourceHeight = Math.Min(TSubsample.Y, source.Height - sourceY);
             var chromaRowIndex = chromaY * chromaWidth;
             for (var chromaX = 0; chromaX < chromaWidth; chromaX++)
             {
-                var sourceX = chromaX * _layout.ChromaSubsampleX;
-                var sourceWidth = Math.Min(_layout.ChromaSubsampleX, source.Width - sourceX);
+                var sourceX = chromaX * TSubsample.X;
+                var sourceWidth = Math.Min(TSubsample.X, source.Width - sourceX);
                 var uTotal = 0f;
                 var vTotal = 0f;
                 var sampleCount = 0;
@@ -145,20 +331,168 @@ public sealed class PlanarYuvTextureCoder : IPitchTextureCoder
                     }
                 }
 
-                var first = _layout.VFirst
-                    ? ChromaToYuvSample(vTotal / sampleCount, _layout.BitsPerSample)
-                    : ChromaToYuvSample(uTotal / sampleCount, _layout.BitsPerSample);
-                var second = _layout.VFirst
-                    ? ChromaToYuvSample(uTotal / sampleCount, _layout.BitsPerSample)
-                    : ChromaToYuvSample(vTotal / sampleCount, _layout.BitsPerSample);
+                var first = TOrder.VFirst
+                    ? ChromaToYuvSample(vTotal / sampleCount, TSample.BitsPerSample)
+                    : ChromaToYuvSample(uTotal / sampleCount, TSample.BitsPerSample);
+                var second = TOrder.VFirst
+                    ? ChromaToYuvSample(uTotal / sampleCount, TSample.BitsPerSample)
+                    : ChromaToYuvSample(vTotal / sampleCount, TSample.BitsPerSample);
                 var chromaIndex = chromaRowIndex + chromaX;
-                var firstChromaIndex = _layout.Biplanar
-                    ? chromaIndex * 2 * bytesPerSample
-                    : chromaIndex * bytesPerSample;
-                WriteYuvSample(firstChromaPlane[firstChromaIndex..], first, _layout.BitsPerSample, _layout.MsbAligned);
-                WriteYuvSample(secondChromaPlane[firstChromaIndex..], second, _layout.BitsPerSample, _layout.MsbAligned);
+                var firstChromaIndex = TPlane.Biplanar
+                    ? chromaIndex * 2 * TSample.BytesPerSample
+                    : chromaIndex * TSample.BytesPerSample;
+                TSample.Write(firstChromaPlane[firstChromaIndex..], first);
+                TSample.Write(secondChromaPlane[firstChromaIndex..], second);
             }
         }
+    }
+
+    private interface IPlanarYuvSampleTransfer
+    {
+        static abstract int BitsPerSample { get; }
+
+        static abstract int BytesPerSample { get; }
+
+        static abstract uint Read(ReadOnlySpan<byte> source);
+
+        static abstract void Write(Span<byte> destination, uint sample);
+    }
+
+    private interface IPlanarYuvPlaneTransfer
+    {
+        static abstract bool Biplanar { get; }
+    }
+
+    private interface IPlanarYuvOrderTransfer
+    {
+        static abstract bool VFirst { get; }
+    }
+
+    private interface IPlanarYuvSubsampleTransfer
+    {
+        static abstract int X { get; }
+
+        static abstract int Y { get; }
+    }
+
+    private readonly struct Sample8Transfer : IPlanarYuvSampleTransfer
+    {
+        public static int BitsPerSample => 8;
+        public static int BytesPerSample => 1;
+
+        public static uint Read(ReadOnlySpan<byte> source) => source[0];
+
+        public static void Write(Span<byte> destination, uint sample) => destination[0] = (byte)sample;
+    }
+
+    private readonly struct Sample10MsbTransfer : IPlanarYuvSampleTransfer
+    {
+        public static int BitsPerSample => 10;
+        public static int BytesPerSample => 2;
+
+        public static uint Read(ReadOnlySpan<byte> source) => (uint)BinaryPrimitives.ReadUInt16LittleEndian(source) >> 6;
+
+        public static void Write(Span<byte> destination, uint sample) =>
+            BinaryPrimitives.WriteUInt16LittleEndian(destination, checked((ushort)(sample << 6)));
+    }
+
+    private readonly struct Sample10LsbTransfer : IPlanarYuvSampleTransfer
+    {
+        public static int BitsPerSample => 10;
+        public static int BytesPerSample => 2;
+
+        public static uint Read(ReadOnlySpan<byte> source) => (uint)BinaryPrimitives.ReadUInt16LittleEndian(source) & 0x03ff;
+
+        public static void Write(Span<byte> destination, uint sample) =>
+            BinaryPrimitives.WriteUInt16LittleEndian(destination, checked((ushort)sample));
+    }
+
+    private readonly struct Sample12MsbTransfer : IPlanarYuvSampleTransfer
+    {
+        public static int BitsPerSample => 12;
+        public static int BytesPerSample => 2;
+
+        public static uint Read(ReadOnlySpan<byte> source) => (uint)BinaryPrimitives.ReadUInt16LittleEndian(source) >> 4;
+
+        public static void Write(Span<byte> destination, uint sample) =>
+            BinaryPrimitives.WriteUInt16LittleEndian(destination, checked((ushort)(sample << 4)));
+    }
+
+    private readonly struct Sample12LsbTransfer : IPlanarYuvSampleTransfer
+    {
+        public static int BitsPerSample => 12;
+        public static int BytesPerSample => 2;
+
+        public static uint Read(ReadOnlySpan<byte> source) => (uint)BinaryPrimitives.ReadUInt16LittleEndian(source) & 0x0fff;
+
+        public static void Write(Span<byte> destination, uint sample) =>
+            BinaryPrimitives.WriteUInt16LittleEndian(destination, checked((ushort)sample));
+    }
+
+    private readonly struct Sample14MsbTransfer : IPlanarYuvSampleTransfer
+    {
+        public static int BitsPerSample => 14;
+        public static int BytesPerSample => 2;
+
+        public static uint Read(ReadOnlySpan<byte> source) => (uint)BinaryPrimitives.ReadUInt16LittleEndian(source) >> 2;
+
+        public static void Write(Span<byte> destination, uint sample) =>
+            BinaryPrimitives.WriteUInt16LittleEndian(destination, checked((ushort)(sample << 2)));
+    }
+
+    private readonly struct Sample16Transfer : IPlanarYuvSampleTransfer
+    {
+        public static int BitsPerSample => 16;
+        public static int BytesPerSample => 2;
+
+        public static uint Read(ReadOnlySpan<byte> source) => BinaryPrimitives.ReadUInt16LittleEndian(source);
+
+        public static void Write(Span<byte> destination, uint sample) =>
+            BinaryPrimitives.WriteUInt16LittleEndian(destination, checked((ushort)sample));
+    }
+
+    private readonly struct ThreePlaneTransfer : IPlanarYuvPlaneTransfer
+    {
+        public static bool Biplanar => false;
+    }
+
+    private readonly struct BiplanarTransfer : IPlanarYuvPlaneTransfer
+    {
+        public static bool Biplanar => true;
+    }
+
+    private readonly struct UvTransfer : IPlanarYuvOrderTransfer
+    {
+        public static bool VFirst => false;
+    }
+
+    private readonly struct VuTransfer : IPlanarYuvOrderTransfer
+    {
+        public static bool VFirst => true;
+    }
+
+    private readonly struct Subsample444Transfer : IPlanarYuvSubsampleTransfer
+    {
+        public static int X => 1;
+        public static int Y => 1;
+    }
+
+    private readonly struct Subsample422Transfer : IPlanarYuvSubsampleTransfer
+    {
+        public static int X => 2;
+        public static int Y => 1;
+    }
+
+    private readonly struct Subsample420Transfer : IPlanarYuvSubsampleTransfer
+    {
+        public static int X => 2;
+        public static int Y => 2;
+    }
+
+    private readonly struct Subsample412Transfer : IPlanarYuvSubsampleTransfer
+    {
+        public static int X => 1;
+        public static int Y => 2;
     }
 
     private void ValidateSourceLength(int width, int height, ReadOnlySpan<byte> source, int rowPitch)
@@ -251,43 +585,6 @@ public sealed class PlanarYuvTextureCoder : IPitchTextureCoder
 
         layout = default;
         return false;
-    }
-
-    private static uint ReadYuvSample(ReadOnlySpan<byte> source, int bitsPerSample, bool msbAligned)
-    {
-        if (bitsPerSample <= 8)
-        {
-            return source[0];
-        }
-
-        var sample = BinaryPrimitives.ReadUInt16LittleEndian(source);
-        return bitsPerSample switch
-        {
-            10 => msbAligned ? (uint)(sample >> 6) : (uint)(sample & 0x03ff),
-            12 => msbAligned ? (uint)(sample >> 4) : (uint)(sample & 0x0fff),
-            14 => msbAligned ? (uint)(sample >> 2) : (uint)(sample & 0x3fff),
-            16 => sample,
-            _ => throw new InvalidOperationException($"Unsupported YUV sample size {bitsPerSample}.")
-        };
-    }
-
-    private static void WriteYuvSample(Span<byte> destination, uint sample, int bitsPerSample, bool msbAligned)
-    {
-        if (bitsPerSample <= 8)
-        {
-            destination[0] = (byte)sample;
-            return;
-        }
-
-        var value = bitsPerSample switch
-        {
-            10 => msbAligned ? sample << 6 : sample,
-            12 => msbAligned ? sample << 4 : sample,
-            14 => msbAligned ? sample << 2 : sample,
-            16 => sample,
-            _ => throw new InvalidOperationException($"Unsupported YUV sample size {bitsPerSample}.")
-        };
-        BinaryPrimitives.WriteUInt16LittleEndian(destination, checked((ushort)value));
     }
 
     private static Rgba32Float YuvToRgba32Float(uint ySample, uint uSample, uint vSample, int bitsPerSample)
