@@ -1,5 +1,3 @@
-using TextureCompressor.Formats;
-
 namespace TextureCompressor.Colors;
 
 public struct Rgba8UNorm(byte red, byte green, byte blue, byte alpha = 255)
@@ -9,8 +7,6 @@ public struct Rgba8UNorm(byte red, byte green, byte blue, byte alpha = 255)
     public byte Green = green;
     public byte Blue = blue;
     public byte Alpha = alpha;
-
-    public static TextureFormat Format => TextureFormats.Rgba8UNorm;
 
     public static Rgba8UNorm ToRgba8UNorm(Rgba8UNorm value)
     {

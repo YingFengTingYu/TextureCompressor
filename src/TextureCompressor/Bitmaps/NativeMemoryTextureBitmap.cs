@@ -1,6 +1,5 @@
 using System.Runtime.InteropServices;
 using TextureCompressor.Colors;
-using TextureCompressor.Formats;
 using TextureCompressor.Images;
 
 namespace TextureCompressor.Bitmaps;
@@ -51,8 +50,6 @@ public sealed unsafe class NativeMemoryTextureBitmap<TPixel> : IBitmap<TPixel>, 
     public int Height { get; }
 
     public nuint Alignment { get; }
-
-    public TextureFormat Format => TPixel.Format;
 
     public TPixel* PixelPointer
     {

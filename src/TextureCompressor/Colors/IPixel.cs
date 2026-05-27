@@ -1,12 +1,8 @@
-using TextureCompressor.Formats;
-
 namespace TextureCompressor.Colors;
 
 public interface IPixel<TSelf>
     where TSelf : unmanaged, IPixel<TSelf>
 {
-    static abstract TextureFormat Format { get; }
-
     static virtual Rgba8UNorm ToRgba8UNorm(TSelf value) => throw CreateUnsupportedConversionException(nameof(ToRgba8UNorm));
 
     static virtual TSelf FromRgba8UNorm(Rgba8UNorm value) => throw CreateUnsupportedConversionException(nameof(FromRgba8UNorm));

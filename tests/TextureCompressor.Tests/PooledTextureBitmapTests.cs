@@ -1,7 +1,6 @@
 using System.Buffers;
 using TextureCompressor.Bitmaps;
 using TextureCompressor.Colors;
-using TextureCompressor.Formats;
 
 namespace TextureCompressor.Tests;
 
@@ -22,7 +21,6 @@ public sealed class PooledTextureBitmapTests
 
         Assert.Equal(4, pool.RentedMinimumLength);
         Assert.Same(pool.RentedArray, bitmap.RentedArray);
-        Assert.Equal(TextureFormats.Rgba8UNorm, bitmap.Format);
         Assert.Equal(new Rgba8UNorm(20, 21, 22), bitmap.AsView()[1, 1]);
 
         bitmap.Dispose();

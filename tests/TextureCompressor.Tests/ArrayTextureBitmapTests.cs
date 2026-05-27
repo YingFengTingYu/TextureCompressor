@@ -1,13 +1,12 @@
 using TextureCompressor.Bitmaps;
 using TextureCompressor.Colors;
-using TextureCompressor.Formats;
 
 namespace TextureCompressor.Tests;
 
 public sealed class ArrayTextureBitmapTests
 {
     [Fact]
-    public void ConstructorInitializesDimensionsFormatAndPixels()
+    public void ConstructorInitializesDimensionsAndPixels()
     {
         var pixels = new[]
         {
@@ -21,7 +20,6 @@ public sealed class ArrayTextureBitmapTests
 
         Assert.Equal(2, bitmap.Width);
         Assert.Equal(2, bitmap.Height);
-        Assert.Equal(TextureFormats.Rgba8UNorm, bitmap.Format);
         Assert.Same(pixels, bitmap.Pixels);
         Assert.Equal(4, bitmap.Pixels.Length);
         Assert.Equal(4, bitmap.PixelSpan.Length);
@@ -82,7 +80,6 @@ public sealed class ArrayTextureBitmapTests
 
         bitmap.PixelSpan[3] = new Rgba8UNorm(20, 21, 22);
 
-        Assert.Equal(TextureFormats.Rgba8UNorm, bitmap.Format);
         Assert.Equal(new Rgba8UNorm(20, 21, 22), bitmap.AsView()[1, 1]);
     }
 }

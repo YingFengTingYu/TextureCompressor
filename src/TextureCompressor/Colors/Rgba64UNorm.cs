@@ -1,5 +1,3 @@
-using TextureCompressor.Formats;
-
 namespace TextureCompressor.Colors;
 
 public struct Rgba64UNorm(ulong red, ulong green, ulong blue, ulong alpha = ulong.MaxValue)
@@ -9,8 +7,6 @@ public struct Rgba64UNorm(ulong red, ulong green, ulong blue, ulong alpha = ulon
     public ulong Green = green;
     public ulong Blue = blue;
     public ulong Alpha = alpha;
-
-    public static TextureFormat Format => TextureFormats.Rgba64UInt;
 
     public static Rgba8UNorm ToRgba8UNorm(Rgba64UNorm value)
     {

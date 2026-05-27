@@ -1,5 +1,3 @@
-using TextureCompressor.Formats;
-
 namespace TextureCompressor.Colors;
 
 public struct Rgba8SNorm(sbyte red, sbyte green, sbyte blue, sbyte alpha = sbyte.MaxValue)
@@ -9,8 +7,6 @@ public struct Rgba8SNorm(sbyte red, sbyte green, sbyte blue, sbyte alpha = sbyte
     public sbyte Green = green;
     public sbyte Blue = blue;
     public sbyte Alpha = alpha;
-
-    public static TextureFormat Format => TextureFormats.Rgba8SNorm;
 
     public static Rgba8UNorm ToRgba8UNorm(Rgba8SNorm value)
     {

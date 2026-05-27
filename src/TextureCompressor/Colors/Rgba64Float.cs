@@ -1,5 +1,3 @@
-using TextureCompressor.Formats;
-
 namespace TextureCompressor.Colors;
 
 public struct Rgba64Float(double red, double green, double blue, double alpha = 1d)
@@ -9,8 +7,6 @@ public struct Rgba64Float(double red, double green, double blue, double alpha = 
     public double Green = green;
     public double Blue = blue;
     public double Alpha = alpha;
-
-    public static TextureFormat Format => TextureFormats.Rgba64Float;
 
     public static Rgba8UNorm ToRgba8UNorm(Rgba64Float value)
     {

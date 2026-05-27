@@ -1,6 +1,5 @@
 using TextureCompressor.Bitmaps;
 using TextureCompressor.Colors;
-using TextureCompressor.Formats;
 
 namespace TextureCompressor.Tests;
 
@@ -15,7 +14,6 @@ public sealed class NativeMemoryTextureBitmapTests
 
         Assert.Equal(2, bitmap.Width);
         Assert.Equal(2, bitmap.Height);
-        Assert.Equal(TextureFormats.Rgba8UNorm, bitmap.Format);
         Assert.Equal(4096u, bitmap.Alignment);
         Assert.Equal(0, bitmap.Pointer.ToInt64() & 4095);
         Assert.Equal(4, bitmap.PixelSpan.Length);

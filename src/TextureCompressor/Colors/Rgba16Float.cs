@@ -1,5 +1,3 @@
-using TextureCompressor.Formats;
-
 namespace TextureCompressor.Colors;
 
 public struct Rgba16Float
@@ -27,8 +25,6 @@ public struct Rgba16Float
         : this((Half)red, (Half)green, (Half)blue, (Half)alpha)
     {
     }
-
-    public static TextureFormat Format => TextureFormats.Rgba16Float;
 
     public static Rgba8UNorm ToRgba8UNorm(Rgba16Float value)
     {

@@ -1,6 +1,5 @@
 using System.Buffers;
 using TextureCompressor.Colors;
-using TextureCompressor.Formats;
 using TextureCompressor.Images;
 
 namespace TextureCompressor.Bitmaps;
@@ -78,8 +77,6 @@ public sealed class PooledTextureBitmap<TPixel> : IBitmap<TPixel>, IDisposable
     public int Width { get; }
 
     public int Height { get; }
-
-    public TextureFormat Format => TPixel.Format;
 
     public TPixel[]? RentedArray
     {

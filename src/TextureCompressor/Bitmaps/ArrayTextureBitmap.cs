@@ -1,5 +1,4 @@
 using TextureCompressor.Colors;
-using TextureCompressor.Formats;
 using TextureCompressor.Images;
 
 namespace TextureCompressor.Bitmaps;
@@ -44,8 +43,6 @@ public sealed class ArrayTextureBitmap<TPixel> : IBitmap<TPixel>
     public int Width { get; }
 
     public int Height { get; }
-
-    public TextureFormat Format => TPixel.Format;
 
     public TPixel[] Pixels { get; }
 

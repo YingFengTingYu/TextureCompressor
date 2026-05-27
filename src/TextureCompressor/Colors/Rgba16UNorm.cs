@@ -1,5 +1,3 @@
-using TextureCompressor.Formats;
-
 namespace TextureCompressor.Colors;
 
 public struct Rgba16UNorm(ushort red, ushort green, ushort blue, ushort alpha = ushort.MaxValue)
@@ -9,8 +7,6 @@ public struct Rgba16UNorm(ushort red, ushort green, ushort blue, ushort alpha = 
     public ushort Green = green;
     public ushort Blue = blue;
     public ushort Alpha = alpha;
-
-    public static TextureFormat Format => TextureFormats.Rgba16UNorm;
 
     public static Rgba8UNorm ToRgba8UNorm(Rgba16UNorm value)
     {
