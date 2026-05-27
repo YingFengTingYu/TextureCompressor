@@ -129,8 +129,12 @@ public sealed class TextureFormatTests
         { TextureFormats.R8, "R8_UNORM", TextureFormatKind.Uncompressed, TextureComponents.R, 1, 8, 1 },
         { TextureFormats.Rg8, "RG8_UNORM", TextureFormatKind.Uncompressed, TextureComponents.Rg, 2, 16, 2 },
         { TextureFormats.Rgb8, "RGB8_UNORM", TextureFormatKind.Uncompressed, TextureComponents.Rgb, 3, 24, 3 },
+        { TextureFormats.Bgr565UNorm, "BGR565_UNORM", TextureFormatKind.Uncompressed, TextureComponents.Bgr, 3, 16, 2 },
         { TextureFormats.Rgba8UNorm, "RGBA8_UNORM", TextureFormatKind.Uncompressed, TextureComponents.Rgba, 4, 32, 4 },
+        { TextureFormats.Argb4UNorm, "ARGB4_UNORM", TextureFormatKind.Uncompressed, TextureComponents.Argb, 4, 16, 2 },
+        { TextureFormats.Abgr4UNorm, "ABGR4_UNORM", TextureFormatKind.Uncompressed, TextureComponents.Abgr, 4, 16, 2 },
         { TextureFormats.Bgra8, "BGRA8_UNORM", TextureFormatKind.Uncompressed, TextureComponents.Bgra, 4, 32, 4 },
+        { TextureFormats.Luminance4Alpha4UNorm, "LUMINANCE4_ALPHA4_UNORM", TextureFormatKind.Uncompressed, TextureComponents.LuminanceAlpha, 2, 8, 1 },
         { TextureFormats.Bc1, "BC1_UNORM", TextureFormatKind.BlockCompressed, TextureComponents.Rgba, 4, 64, 8 }
     };
 }

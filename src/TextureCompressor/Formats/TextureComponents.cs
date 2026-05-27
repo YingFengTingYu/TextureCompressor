@@ -6,8 +6,12 @@ public enum TextureComponents
     Rg,
     Rgb,
     Rgba,
+    Bgr,
     Bgra,
+    Argb,
+    Abgr,
     Alpha,
     Luminance,
+    LuminanceAlpha,
     Intensity
 }

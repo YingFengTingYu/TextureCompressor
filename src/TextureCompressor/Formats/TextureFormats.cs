@@ -21,6 +21,9 @@ public static class TextureFormats
     public static readonly TextureFormat Alpha8SNorm =
         TextureFormat.Uncompressed("ALPHA8_SNORM", TextureComponents.Alpha, TextureValueKind.SNorm, 0, alphaBits: 8);
 
+    public static readonly TextureFormat Alpha12UNorm =
+        TextureFormat.Uncompressed("ALPHA12_UNORM", TextureComponents.Alpha, TextureValueKind.UNorm, 0, alphaBits: 12);
+
     public static readonly TextureFormat Alpha16UNorm =
         TextureFormat.Uncompressed("ALPHA16_UNORM", TextureComponents.Alpha, TextureValueKind.UNorm, 0, alphaBits: 16);
 
@@ -55,6 +58,9 @@ public static class TextureFormats
     public static readonly TextureFormat Luminance8UNorm =
         TextureFormat.Uncompressed("LUMINANCE8_UNORM", TextureComponents.Luminance, TextureValueKind.UNorm, 8);
 
+    public static readonly TextureFormat Luminance12UNorm =
+        TextureFormat.Uncompressed("LUMINANCE12_UNORM", TextureComponents.Luminance, TextureValueKind.UNorm, 12);
+
     public static readonly TextureFormat Luminance16UNorm =
         TextureFormat.Uncompressed("LUMINANCE16_UNORM", TextureComponents.Luminance, TextureValueKind.UNorm, 16);
 
@@ -69,6 +75,18 @@ public static class TextureFormats
 
     public static readonly TextureFormat Luminance32Float =
         TextureFormat.Uncompressed("LUMINANCE32_FLOAT", TextureComponents.Luminance, TextureValueKind.Float, 32);
+
+    public static readonly TextureFormat Luminance4Alpha4UNorm =
+        TextureFormat.Uncompressed("LUMINANCE4_ALPHA4_UNORM", TextureComponents.LuminanceAlpha, TextureValueKind.UNorm, 4, alphaBits: 4);
+
+    public static readonly TextureFormat Luminance6Alpha2UNorm =
+        TextureFormat.Uncompressed("LUMINANCE6_ALPHA2_UNORM", TextureComponents.LuminanceAlpha, TextureValueKind.UNorm, 6, alphaBits: 2);
+
+    public static readonly TextureFormat Luminance12Alpha4UNorm =
+        TextureFormat.Uncompressed("LUMINANCE12_ALPHA4_UNORM", TextureComponents.LuminanceAlpha, TextureValueKind.UNorm, 12, alphaBits: 4);
+
+    public static readonly TextureFormat Luminance12Alpha12UNorm =
+        TextureFormat.Uncompressed("LUMINANCE12_ALPHA12_UNORM", TextureComponents.LuminanceAlpha, TextureValueKind.UNorm, 12, alphaBits: 12);
 
     public static readonly TextureFormat Intensity4UNorm = new(
         "INTENSITY4_UNORM",
@@ -88,6 +106,9 @@ public static class TextureFormats
 
     public static readonly TextureFormat Intensity8SNorm =
         TextureFormat.Uncompressed("INTENSITY8_SNORM", TextureComponents.Intensity, TextureValueKind.SNorm, 8);
+
+    public static readonly TextureFormat Intensity12UNorm =
+        TextureFormat.Uncompressed("INTENSITY12_UNORM", TextureComponents.Intensity, TextureValueKind.UNorm, 12);
 
     public static readonly TextureFormat Intensity16UNorm =
         TextureFormat.Uncompressed("INTENSITY16_UNORM", TextureComponents.Intensity, TextureValueKind.UNorm, 16);
@@ -134,6 +155,9 @@ public static class TextureFormats
     public static readonly TextureFormat Rg8 =
         TextureFormat.Uncompressed("RG8_UNORM", TextureComponents.Rg, TextureValueKind.UNorm, 8, 8);
 
+    public static readonly TextureFormat Rg4UNorm =
+        TextureFormat.Uncompressed("RG4_UNORM", TextureComponents.Rg, TextureValueKind.UNorm, 4, 4);
+
     public static readonly TextureFormat Rg8SNorm =
         TextureFormat.Uncompressed("RG8_SNORM", TextureComponents.Rg, TextureValueKind.SNorm, 8, 8);
 
@@ -179,23 +203,89 @@ public static class TextureFormats
     public static readonly TextureFormat Rgb32Float =
         TextureFormat.Uncompressed("RGB32_FLOAT", TextureComponents.Rgb, TextureValueKind.Float, 32, 32, 32);
 
+    public static readonly TextureFormat R3G3B2UNorm =
+        TextureFormat.Uncompressed("R3_G3_B2_UNORM", TextureComponents.Rgb, TextureValueKind.UNorm, 3, 3, 2);
+
+    public static readonly TextureFormat R3G3B2RevUNorm =
+        TextureFormat.Uncompressed("R3_G3_B2_REV_UNORM", TextureComponents.Rgb, TextureValueKind.UNorm, 3, 3, 2);
+
+    public static readonly TextureFormat Rgb4UNorm =
+        TextureFormat.Uncompressed("RGB4_UNORM", TextureComponents.Rgb, TextureValueKind.UNorm, 4, 4, 4);
+
+    public static readonly TextureFormat Rgb5UNorm =
+        TextureFormat.Uncompressed("RGB5_UNORM", TextureComponents.Rgb, TextureValueKind.UNorm, 5, 5, 5);
+
     public static readonly TextureFormat Rgb565UNorm =
         TextureFormat.Uncompressed("RGB565_UNORM", TextureComponents.Rgb, TextureValueKind.UNorm, 5, 6, 5);
+
+    public static readonly TextureFormat Rgb565RevUNorm =
+        TextureFormat.Uncompressed("RGB565_REV_UNORM", TextureComponents.Rgb, TextureValueKind.UNorm, 5, 6, 5);
+
+    public static readonly TextureFormat Rgb10UNorm =
+        TextureFormat.Uncompressed("RGB10_UNORM", TextureComponents.Rgb, TextureValueKind.UNorm, 10, 10, 10);
+
+    public static readonly TextureFormat Rgb12UNorm =
+        TextureFormat.Uncompressed("RGB12_UNORM", TextureComponents.Rgb, TextureValueKind.UNorm, 12, 12, 12);
+
+    public static readonly TextureFormat Bgr565UNorm =
+        TextureFormat.Uncompressed("BGR565_UNORM", TextureComponents.Bgr, TextureValueKind.UNorm, 5, 6, 5);
+
+    public static readonly TextureFormat Bgr565RevUNorm =
+        TextureFormat.Uncompressed("BGR565_REV_UNORM", TextureComponents.Bgr, TextureValueKind.UNorm, 5, 6, 5);
+
+    public static readonly TextureFormat Rgba2UNorm =
+        TextureFormat.Uncompressed("RGBA2_UNORM", TextureComponents.Rgba, TextureValueKind.UNorm, 2, 2, 2, 2);
 
     public static readonly TextureFormat Rgba4UNorm =
         TextureFormat.Uncompressed("RGBA4_UNORM", TextureComponents.Rgba, TextureValueKind.UNorm, 4, 4, 4, 4);
 
+    public static readonly TextureFormat Rgba4RevUNorm =
+        TextureFormat.Uncompressed("RGBA4_REV_UNORM", TextureComponents.Rgba, TextureValueKind.UNorm, 4, 4, 4, 4);
+
+    public static readonly TextureFormat Argb4UNorm =
+        TextureFormat.Uncompressed("ARGB4_UNORM", TextureComponents.Argb, TextureValueKind.UNorm, 4, 4, 4, 4);
+
+    public static readonly TextureFormat Argb4RevUNorm =
+        TextureFormat.Uncompressed("ARGB4_REV_UNORM", TextureComponents.Argb, TextureValueKind.UNorm, 4, 4, 4, 4);
+
+    public static readonly TextureFormat Abgr4UNorm =
+        TextureFormat.Uncompressed("ABGR4_UNORM", TextureComponents.Abgr, TextureValueKind.UNorm, 4, 4, 4, 4);
+
+    public static readonly TextureFormat Abgr4RevUNorm =
+        TextureFormat.Uncompressed("ABGR4_REV_UNORM", TextureComponents.Abgr, TextureValueKind.UNorm, 4, 4, 4, 4);
+
     public static readonly TextureFormat Rgb5A1UNorm =
         TextureFormat.Uncompressed("RGB5_A1_UNORM", TextureComponents.Rgba, TextureValueKind.UNorm, 5, 5, 5, 1);
 
+    public static readonly TextureFormat Rgb5A1RevUNorm =
+        TextureFormat.Uncompressed("RGB5_A1_REV_UNORM", TextureComponents.Rgba, TextureValueKind.UNorm, 5, 5, 5, 1);
+
+    public static readonly TextureFormat A1Rgb5UNorm =
+        TextureFormat.Uncompressed("A1_RGB5_UNORM", TextureComponents.Argb, TextureValueKind.UNorm, 5, 5, 5, 1);
+
+    public static readonly TextureFormat A1Rgb5RevUNorm =
+        TextureFormat.Uncompressed("A1_RGB5_REV_UNORM", TextureComponents.Argb, TextureValueKind.UNorm, 5, 5, 5, 1);
+
+    public static readonly TextureFormat A1Bgr5UNorm =
+        TextureFormat.Uncompressed("A1_BGR5_UNORM", TextureComponents.Abgr, TextureValueKind.UNorm, 5, 5, 5, 1);
+
+    public static readonly TextureFormat A1Bgr5RevUNorm =
+        TextureFormat.Uncompressed("A1_BGR5_REV_UNORM", TextureComponents.Abgr, TextureValueKind.UNorm, 5, 5, 5, 1);
+
     public static readonly TextureFormat Rgb10A2UNorm =
         TextureFormat.Uncompressed("RGB10_A2_UNORM", TextureComponents.Rgba, TextureValueKind.UNorm, 10, 10, 10, 2);
+
+    public static readonly TextureFormat Rgb10A2RevUNorm =
+        TextureFormat.Uncompressed("RGB10_A2_REV_UNORM", TextureComponents.Rgba, TextureValueKind.UNorm, 10, 10, 10, 2);
 
     public static readonly TextureFormat Rgb10A2UInt =
         TextureFormat.Uncompressed("RGB10_A2_UINT", TextureComponents.Rgba, TextureValueKind.UInt, 10, 10, 10, 2);
 
     public static readonly TextureFormat Rgb10A2RevUInt =
         TextureFormat.Uncompressed("RGB10_A2_REV_UINT", TextureComponents.Rgba, TextureValueKind.UInt, 10, 10, 10, 2);
+
+    public static readonly TextureFormat Rgba12UNorm =
+        TextureFormat.Uncompressed("RGBA12_UNORM", TextureComponents.Rgba, TextureValueKind.UNorm, 12, 12, 12, 12);
 
     public static readonly TextureFormat Rgba8UNorm =
         TextureFormat.Uncompressed("RGBA8_UNORM", TextureComponents.Rgba, TextureValueKind.UNorm, 8, 8, 8, 8);
@@ -263,6 +353,18 @@ public static class TextureFormats
 
     public static readonly TextureFormat Bgra4UNorm =
         TextureFormat.Uncompressed("BGRA4_UNORM", TextureComponents.Bgra, TextureValueKind.UNorm, 4, 4, 4, 4);
+
+    public static readonly TextureFormat Bgra4RevUNorm =
+        TextureFormat.Uncompressed("BGRA4_REV_UNORM", TextureComponents.Bgra, TextureValueKind.UNorm, 4, 4, 4, 4);
+
+    public static readonly TextureFormat Bgr5A1UNorm =
+        TextureFormat.Uncompressed("BGR5_A1_UNORM", TextureComponents.Bgra, TextureValueKind.UNorm, 5, 5, 5, 1);
+
+    public static readonly TextureFormat Bgr5A1RevUNorm =
+        TextureFormat.Uncompressed("BGR5_A1_REV_UNORM", TextureComponents.Bgra, TextureValueKind.UNorm, 5, 5, 5, 1);
+
+    public static readonly TextureFormat Bgr10A2RevUNorm =
+        TextureFormat.Uncompressed("BGR10_A2_REV_UNORM", TextureComponents.Bgra, TextureValueKind.UNorm, 10, 10, 10, 2);
 
     public static readonly TextureFormat Bgr10A2RevUInt =
         TextureFormat.Uncompressed("BGR10_A2_REV_UINT", TextureComponents.Bgra, TextureValueKind.UInt, 10, 10, 10, 2);

@@ -5,18 +5,23 @@ using TextureCompressor.Images;
 
 namespace TextureCompressor.Codecs;
 
-public sealed class PackedUNormTextureCoder(TextureFormat format) : IPitchTextureCoder
+public sealed class PackedUNormTextureCoder : IPitchTextureCoder
 {
-    private readonly PackedUNormPlan _plan = CreatePlan(format);
+    private readonly PackedUNormTransfer _transfer;
 
-    public TextureFormat Format { get; } = format;
+    public PackedUNormTextureCoder(TextureFormat format)
+    {
+        if (!TryGetTransfer(format, out _transfer))
+        {
+            throw CreateUnsupportedFormatException(format);
+        }
 
-    public static bool IsSupported(TextureFormat format) =>
-        format == TextureFormats.Rgb565UNorm
-        || format == TextureFormats.Rgba4UNorm
-        || format == TextureFormats.Rgb5A1UNorm
-        || format == TextureFormats.Rgb10A2UNorm
-        || format == TextureFormats.Bgra4UNorm;
+        Format = format;
+    }
+
+    public TextureFormat Format { get; }
+
+    public static bool IsSupported(TextureFormat format) => TryGetTransfer(format, out _);
 
     public int GetDefaultPitch(int width) => Format.GetRowByteCount(width);
 
@@ -37,41 +42,272 @@ public sealed class PackedUNormTextureCoder(TextureFormat format) : IPitchTextur
         where TPixel : unmanaged, IPixel<TPixel>
     {
         ValidateSourceLength(destination.Width, destination.Height, source, rowPitch);
-        if (_plan.MaxComponentBits <= 8)
-        {
-            Decode<TPixel, Rgba8UNorm, Rgba8UNormTransfer>(source, destination, rowPitch);
-            return;
-        }
-
-        Decode<TPixel, Rgba16UNorm, Rgba16UNormTransfer>(source, destination, rowPitch);
+        DecodeByTransfer(source, destination, rowPitch);
     }
 
     public void Encode<TPixel>(ImageView<TPixel> source, Span<byte> destination, int rowPitch)
         where TPixel : unmanaged, IPixel<TPixel>
     {
         ValidateDestinationLength(source.Width, source.Height, destination, rowPitch);
-        if (_plan.MaxComponentBits <= 8)
-        {
-            Encode<TPixel, Rgba8UNorm, Rgba8UNormTransfer>(source, destination, rowPitch);
-            return;
-        }
-
-        Encode<TPixel, Rgba16UNorm, Rgba16UNormTransfer>(source, destination, rowPitch);
+        EncodeByTransfer(source, destination, rowPitch);
     }
 
-    private interface IUNormTransfer<TCarrier>
+    private void DecodeByTransfer<TPixel>(ReadOnlySpan<byte> source, ImageView<TPixel> destination, int rowPitch)
+        where TPixel : unmanaged, IPixel<TPixel>
     {
-        static abstract ulong MaxValue { get; }
+        switch (_transfer)
+        {
+            case PackedUNormTransfer.Alpha12:
+                Decode<TPixel, Rgba16UNorm, Rgba16UNormTransfer, Alpha12UNormTransfer>(source, destination, rowPitch);
+                return;
+            case PackedUNormTransfer.Luminance12:
+                Decode<TPixel, Rgba16UNorm, Rgba16UNormTransfer, Luminance12UNormTransfer>(source, destination, rowPitch);
+                return;
+            case PackedUNormTransfer.Luminance4Alpha4:
+                Decode<TPixel, Rgba8UNorm, Rgba8UNormTransfer, Luminance4Alpha4UNormTransfer>(source, destination, rowPitch);
+                return;
+            case PackedUNormTransfer.Luminance6Alpha2:
+                Decode<TPixel, Rgba8UNorm, Rgba8UNormTransfer, Luminance6Alpha2UNormTransfer>(source, destination, rowPitch);
+                return;
+            case PackedUNormTransfer.Luminance12Alpha4:
+                Decode<TPixel, Rgba16UNorm, Rgba16UNormTransfer, Luminance12Alpha4UNormTransfer>(source, destination, rowPitch);
+                return;
+            case PackedUNormTransfer.Luminance12Alpha12:
+                Decode<TPixel, Rgba16UNorm, Rgba16UNormTransfer, Luminance12Alpha12UNormTransfer>(source, destination, rowPitch);
+                return;
+            case PackedUNormTransfer.Intensity12:
+                Decode<TPixel, Rgba16UNorm, Rgba16UNormTransfer, Intensity12UNormTransfer>(source, destination, rowPitch);
+                return;
+            case PackedUNormTransfer.Rg4:
+                Decode<TPixel, Rgba8UNorm, Rgba8UNormTransfer, Rg4UNormTransfer>(source, destination, rowPitch);
+                return;
+            case PackedUNormTransfer.R3G3B2:
+                Decode<TPixel, Rgba8UNorm, Rgba8UNormTransfer, R3G3B2UNormTransfer>(source, destination, rowPitch);
+                return;
+            case PackedUNormTransfer.R3G3B2Rev:
+                Decode<TPixel, Rgba8UNorm, Rgba8UNormTransfer, R3G3B2RevUNormTransfer>(source, destination, rowPitch);
+                return;
+            case PackedUNormTransfer.Rgb4:
+                Decode<TPixel, Rgba8UNorm, Rgba8UNormTransfer, Rgb4UNormTransfer>(source, destination, rowPitch);
+                return;
+            case PackedUNormTransfer.Rgb5:
+                Decode<TPixel, Rgba8UNorm, Rgba8UNormTransfer, Rgb5UNormTransfer>(source, destination, rowPitch);
+                return;
+            case PackedUNormTransfer.Rgb565:
+                Decode<TPixel, Rgba8UNorm, Rgba8UNormTransfer, Rgb565UNormTransfer>(source, destination, rowPitch);
+                return;
+            case PackedUNormTransfer.Rgb565Rev:
+                Decode<TPixel, Rgba8UNorm, Rgba8UNormTransfer, Rgb565RevUNormTransfer>(source, destination, rowPitch);
+                return;
+            case PackedUNormTransfer.Bgr565:
+                Decode<TPixel, Rgba8UNorm, Rgba8UNormTransfer, Bgr565UNormTransfer>(source, destination, rowPitch);
+                return;
+            case PackedUNormTransfer.Bgr565Rev:
+                Decode<TPixel, Rgba8UNorm, Rgba8UNormTransfer, Bgr565RevUNormTransfer>(source, destination, rowPitch);
+                return;
+            case PackedUNormTransfer.Rgb10:
+                Decode<TPixel, Rgba16UNorm, Rgba16UNormTransfer, Rgb10UNormTransfer>(source, destination, rowPitch);
+                return;
+            case PackedUNormTransfer.Rgb12:
+                Decode<TPixel, Rgba16UNorm, Rgba16UNormTransfer, Rgb12UNormTransfer>(source, destination, rowPitch);
+                return;
+            case PackedUNormTransfer.Rgba2:
+                Decode<TPixel, Rgba8UNorm, Rgba8UNormTransfer, Rgba2UNormTransfer>(source, destination, rowPitch);
+                return;
+            case PackedUNormTransfer.Rgba4:
+                Decode<TPixel, Rgba8UNorm, Rgba8UNormTransfer, Rgba4UNormTransfer>(source, destination, rowPitch);
+                return;
+            case PackedUNormTransfer.Rgba4Rev:
+                Decode<TPixel, Rgba8UNorm, Rgba8UNormTransfer, Rgba4RevUNormTransfer>(source, destination, rowPitch);
+                return;
+            case PackedUNormTransfer.Argb4:
+                Decode<TPixel, Rgba8UNorm, Rgba8UNormTransfer, Argb4UNormTransfer>(source, destination, rowPitch);
+                return;
+            case PackedUNormTransfer.Argb4Rev:
+                Decode<TPixel, Rgba8UNorm, Rgba8UNormTransfer, Argb4RevUNormTransfer>(source, destination, rowPitch);
+                return;
+            case PackedUNormTransfer.Abgr4:
+                Decode<TPixel, Rgba8UNorm, Rgba8UNormTransfer, Abgr4UNormTransfer>(source, destination, rowPitch);
+                return;
+            case PackedUNormTransfer.Abgr4Rev:
+                Decode<TPixel, Rgba8UNorm, Rgba8UNormTransfer, Abgr4RevUNormTransfer>(source, destination, rowPitch);
+                return;
+            case PackedUNormTransfer.Rgb5A1:
+                Decode<TPixel, Rgba8UNorm, Rgba8UNormTransfer, Rgb5A1UNormTransfer>(source, destination, rowPitch);
+                return;
+            case PackedUNormTransfer.Rgb5A1Rev:
+                Decode<TPixel, Rgba8UNorm, Rgba8UNormTransfer, Rgb5A1RevUNormTransfer>(source, destination, rowPitch);
+                return;
+            case PackedUNormTransfer.A1Rgb5:
+                Decode<TPixel, Rgba8UNorm, Rgba8UNormTransfer, A1Rgb5UNormTransfer>(source, destination, rowPitch);
+                return;
+            case PackedUNormTransfer.A1Rgb5Rev:
+                Decode<TPixel, Rgba8UNorm, Rgba8UNormTransfer, A1Rgb5RevUNormTransfer>(source, destination, rowPitch);
+                return;
+            case PackedUNormTransfer.A1Bgr5:
+                Decode<TPixel, Rgba8UNorm, Rgba8UNormTransfer, A1Bgr5UNormTransfer>(source, destination, rowPitch);
+                return;
+            case PackedUNormTransfer.A1Bgr5Rev:
+                Decode<TPixel, Rgba8UNorm, Rgba8UNormTransfer, A1Bgr5RevUNormTransfer>(source, destination, rowPitch);
+                return;
+            case PackedUNormTransfer.Rgb10A2:
+                Decode<TPixel, Rgba16UNorm, Rgba16UNormTransfer, Rgb10A2UNormTransfer>(source, destination, rowPitch);
+                return;
+            case PackedUNormTransfer.Rgb10A2Rev:
+                Decode<TPixel, Rgba16UNorm, Rgba16UNormTransfer, Rgb10A2RevUNormTransfer>(source, destination, rowPitch);
+                return;
+            case PackedUNormTransfer.Bgr10A2Rev:
+                Decode<TPixel, Rgba16UNorm, Rgba16UNormTransfer, Bgr10A2RevUNormTransfer>(source, destination, rowPitch);
+                return;
+            case PackedUNormTransfer.Rgba12:
+                Decode<TPixel, Rgba16UNorm, Rgba16UNormTransfer, Rgba12UNormTransfer>(source, destination, rowPitch);
+                return;
+            case PackedUNormTransfer.Bgra4:
+                Decode<TPixel, Rgba8UNorm, Rgba8UNormTransfer, Bgra4UNormTransfer>(source, destination, rowPitch);
+                return;
+            case PackedUNormTransfer.Bgra4Rev:
+                Decode<TPixel, Rgba8UNorm, Rgba8UNormTransfer, Bgra4RevUNormTransfer>(source, destination, rowPitch);
+                return;
+            case PackedUNormTransfer.Bgr5A1:
+                Decode<TPixel, Rgba8UNorm, Rgba8UNormTransfer, Bgr5A1UNormTransfer>(source, destination, rowPitch);
+                return;
+            case PackedUNormTransfer.Bgr5A1Rev:
+                Decode<TPixel, Rgba8UNorm, Rgba8UNormTransfer, Bgr5A1RevUNormTransfer>(source, destination, rowPitch);
+                return;
+            default:
+                throw CreateUnsupportedFormatException(Format);
+        }
+    }
 
-        static abstract TCarrier FromValues(ulong red, ulong green, ulong blue, ulong alpha);
+    private void EncodeByTransfer<TPixel>(ImageView<TPixel> source, Span<byte> destination, int rowPitch)
+        where TPixel : unmanaged, IPixel<TPixel>
+    {
+        switch (_transfer)
+        {
+            case PackedUNormTransfer.Alpha12:
+                Encode<TPixel, Rgba16UNorm, Rgba16UNormTransfer, Alpha12UNormTransfer>(source, destination, rowPitch);
+                return;
+            case PackedUNormTransfer.Luminance12:
+                Encode<TPixel, Rgba16UNorm, Rgba16UNormTransfer, Luminance12UNormTransfer>(source, destination, rowPitch);
+                return;
+            case PackedUNormTransfer.Luminance4Alpha4:
+                Encode<TPixel, Rgba8UNorm, Rgba8UNormTransfer, Luminance4Alpha4UNormTransfer>(source, destination, rowPitch);
+                return;
+            case PackedUNormTransfer.Luminance6Alpha2:
+                Encode<TPixel, Rgba8UNorm, Rgba8UNormTransfer, Luminance6Alpha2UNormTransfer>(source, destination, rowPitch);
+                return;
+            case PackedUNormTransfer.Luminance12Alpha4:
+                Encode<TPixel, Rgba16UNorm, Rgba16UNormTransfer, Luminance12Alpha4UNormTransfer>(source, destination, rowPitch);
+                return;
+            case PackedUNormTransfer.Luminance12Alpha12:
+                Encode<TPixel, Rgba16UNorm, Rgba16UNormTransfer, Luminance12Alpha12UNormTransfer>(source, destination, rowPitch);
+                return;
+            case PackedUNormTransfer.Intensity12:
+                Encode<TPixel, Rgba16UNorm, Rgba16UNormTransfer, Intensity12UNormTransfer>(source, destination, rowPitch);
+                return;
+            case PackedUNormTransfer.Rg4:
+                Encode<TPixel, Rgba8UNorm, Rgba8UNormTransfer, Rg4UNormTransfer>(source, destination, rowPitch);
+                return;
+            case PackedUNormTransfer.R3G3B2:
+                Encode<TPixel, Rgba8UNorm, Rgba8UNormTransfer, R3G3B2UNormTransfer>(source, destination, rowPitch);
+                return;
+            case PackedUNormTransfer.R3G3B2Rev:
+                Encode<TPixel, Rgba8UNorm, Rgba8UNormTransfer, R3G3B2RevUNormTransfer>(source, destination, rowPitch);
+                return;
+            case PackedUNormTransfer.Rgb4:
+                Encode<TPixel, Rgba8UNorm, Rgba8UNormTransfer, Rgb4UNormTransfer>(source, destination, rowPitch);
+                return;
+            case PackedUNormTransfer.Rgb5:
+                Encode<TPixel, Rgba8UNorm, Rgba8UNormTransfer, Rgb5UNormTransfer>(source, destination, rowPitch);
+                return;
+            case PackedUNormTransfer.Rgb565:
+                Encode<TPixel, Rgba8UNorm, Rgba8UNormTransfer, Rgb565UNormTransfer>(source, destination, rowPitch);
+                return;
+            case PackedUNormTransfer.Rgb565Rev:
+                Encode<TPixel, Rgba8UNorm, Rgba8UNormTransfer, Rgb565RevUNormTransfer>(source, destination, rowPitch);
+                return;
+            case PackedUNormTransfer.Bgr565:
+                Encode<TPixel, Rgba8UNorm, Rgba8UNormTransfer, Bgr565UNormTransfer>(source, destination, rowPitch);
+                return;
+            case PackedUNormTransfer.Bgr565Rev:
+                Encode<TPixel, Rgba8UNorm, Rgba8UNormTransfer, Bgr565RevUNormTransfer>(source, destination, rowPitch);
+                return;
+            case PackedUNormTransfer.Rgb10:
+                Encode<TPixel, Rgba16UNorm, Rgba16UNormTransfer, Rgb10UNormTransfer>(source, destination, rowPitch);
+                return;
+            case PackedUNormTransfer.Rgb12:
+                Encode<TPixel, Rgba16UNorm, Rgba16UNormTransfer, Rgb12UNormTransfer>(source, destination, rowPitch);
+                return;
+            case PackedUNormTransfer.Rgba2:
+                Encode<TPixel, Rgba8UNorm, Rgba8UNormTransfer, Rgba2UNormTransfer>(source, destination, rowPitch);
+                return;
+            case PackedUNormTransfer.Rgba4:
+                Encode<TPixel, Rgba8UNorm, Rgba8UNormTransfer, Rgba4UNormTransfer>(source, destination, rowPitch);
+                return;
+            case PackedUNormTransfer.Rgba4Rev:
+                Encode<TPixel, Rgba8UNorm, Rgba8UNormTransfer, Rgba4RevUNormTransfer>(source, destination, rowPitch);
+                return;
+            case PackedUNormTransfer.Argb4:
+                Encode<TPixel, Rgba8UNorm, Rgba8UNormTransfer, Argb4UNormTransfer>(source, destination, rowPitch);
+                return;
+            case PackedUNormTransfer.Argb4Rev:
+                Encode<TPixel, Rgba8UNorm, Rgba8UNormTransfer, Argb4RevUNormTransfer>(source, destination, rowPitch);
+                return;
+            case PackedUNormTransfer.Abgr4:
+                Encode<TPixel, Rgba8UNorm, Rgba8UNormTransfer, Abgr4UNormTransfer>(source, destination, rowPitch);
+                return;
+            case PackedUNormTransfer.Abgr4Rev:
+                Encode<TPixel, Rgba8UNorm, Rgba8UNormTransfer, Abgr4RevUNormTransfer>(source, destination, rowPitch);
+                return;
+            case PackedUNormTransfer.Rgb5A1:
+                Encode<TPixel, Rgba8UNorm, Rgba8UNormTransfer, Rgb5A1UNormTransfer>(source, destination, rowPitch);
+                return;
+            case PackedUNormTransfer.Rgb5A1Rev:
+                Encode<TPixel, Rgba8UNorm, Rgba8UNormTransfer, Rgb5A1RevUNormTransfer>(source, destination, rowPitch);
+                return;
+            case PackedUNormTransfer.A1Rgb5:
+                Encode<TPixel, Rgba8UNorm, Rgba8UNormTransfer, A1Rgb5UNormTransfer>(source, destination, rowPitch);
+                return;
+            case PackedUNormTransfer.A1Rgb5Rev:
+                Encode<TPixel, Rgba8UNorm, Rgba8UNormTransfer, A1Rgb5RevUNormTransfer>(source, destination, rowPitch);
+                return;
+            case PackedUNormTransfer.A1Bgr5:
+                Encode<TPixel, Rgba8UNorm, Rgba8UNormTransfer, A1Bgr5UNormTransfer>(source, destination, rowPitch);
+                return;
+            case PackedUNormTransfer.A1Bgr5Rev:
+                Encode<TPixel, Rgba8UNorm, Rgba8UNormTransfer, A1Bgr5RevUNormTransfer>(source, destination, rowPitch);
+                return;
+            case PackedUNormTransfer.Rgb10A2:
+                Encode<TPixel, Rgba16UNorm, Rgba16UNormTransfer, Rgb10A2UNormTransfer>(source, destination, rowPitch);
+                return;
+            case PackedUNormTransfer.Rgb10A2Rev:
+                Encode<TPixel, Rgba16UNorm, Rgba16UNormTransfer, Rgb10A2RevUNormTransfer>(source, destination, rowPitch);
+                return;
+            case PackedUNormTransfer.Bgr10A2Rev:
+                Encode<TPixel, Rgba16UNorm, Rgba16UNormTransfer, Bgr10A2RevUNormTransfer>(source, destination, rowPitch);
+                return;
+            case PackedUNormTransfer.Rgba12:
+                Encode<TPixel, Rgba16UNorm, Rgba16UNormTransfer, Rgba12UNormTransfer>(source, destination, rowPitch);
+                return;
+            case PackedUNormTransfer.Bgra4:
+                Encode<TPixel, Rgba8UNorm, Rgba8UNormTransfer, Bgra4UNormTransfer>(source, destination, rowPitch);
+                return;
+            case PackedUNormTransfer.Bgra4Rev:
+                Encode<TPixel, Rgba8UNorm, Rgba8UNormTransfer, Bgra4RevUNormTransfer>(source, destination, rowPitch);
+                return;
+            case PackedUNormTransfer.Bgr5A1:
+                Encode<TPixel, Rgba8UNorm, Rgba8UNormTransfer, Bgr5A1UNormTransfer>(source, destination, rowPitch);
+                return;
+            case PackedUNormTransfer.Bgr5A1Rev:
+                Encode<TPixel, Rgba8UNorm, Rgba8UNormTransfer, Bgr5A1RevUNormTransfer>(source, destination, rowPitch);
+                return;
+            default:
+                throw CreateUnsupportedFormatException(Format);
+        }
+    }
 
-        static abstract void ToValues(
-            TCarrier source,
-            out ulong red,
-            out ulong green,
-            out ulong blue,
-            out ulong alpha);
-
+    private interface IUNormCarrierTransfer<TCarrier>
+    {
         static abstract TPixel FromCarrier<TPixel>(TCarrier value)
             where TPixel : unmanaged, IPixel<TPixel>;
 
@@ -79,26 +315,17 @@ public sealed class PackedUNormTextureCoder(TextureFormat format) : IPitchTextur
             where TPixel : unmanaged, IPixel<TPixel>;
     }
 
-    private readonly struct Rgba8UNormTransfer : IUNormTransfer<Rgba8UNorm>
+    private interface IPackedUNormTransfer<TCarrier>
     {
-        public static ulong MaxValue => byte.MaxValue;
+        static abstract int BytesPerTexel { get; }
 
-        public static Rgba8UNorm FromValues(ulong red, ulong green, ulong blue, ulong alpha) =>
-            new((byte)red, (byte)green, (byte)blue, (byte)alpha);
+        static abstract TCarrier Decode(ReadOnlySpan<byte> texel);
 
-        public static void ToValues(
-            Rgba8UNorm source,
-            out ulong red,
-            out ulong green,
-            out ulong blue,
-            out ulong alpha)
-        {
-            red = source.Red;
-            green = source.Green;
-            blue = source.Blue;
-            alpha = source.Alpha;
-        }
+        static abstract void Encode(TCarrier value, Span<byte> texel);
+    }
 
+    private readonly struct Rgba8UNormTransfer : IUNormCarrierTransfer<Rgba8UNorm>
+    {
         public static TPixel FromCarrier<TPixel>(Rgba8UNorm value)
             where TPixel : unmanaged, IPixel<TPixel> =>
             TPixel.FromRgba8UNorm(value);
@@ -108,26 +335,8 @@ public sealed class PackedUNormTextureCoder(TextureFormat format) : IPitchTextur
             TPixel.ToRgba8UNorm(value);
     }
 
-    private readonly struct Rgba16UNormTransfer : IUNormTransfer<Rgba16UNorm>
+    private readonly struct Rgba16UNormTransfer : IUNormCarrierTransfer<Rgba16UNorm>
     {
-        public static ulong MaxValue => ushort.MaxValue;
-
-        public static Rgba16UNorm FromValues(ulong red, ulong green, ulong blue, ulong alpha) =>
-            new((ushort)red, (ushort)green, (ushort)blue, (ushort)alpha);
-
-        public static void ToValues(
-            Rgba16UNorm source,
-            out ulong red,
-            out ulong green,
-            out ulong blue,
-            out ulong alpha)
-        {
-            red = source.Red;
-            green = source.Green;
-            blue = source.Blue;
-            alpha = source.Alpha;
-        }
-
         public static TPixel FromCarrier<TPixel>(Rgba16UNorm value)
             where TPixel : unmanaged, IPixel<TPixel> =>
             TPixel.FromRgba16UNorm(value);
@@ -137,13 +346,15 @@ public sealed class PackedUNormTextureCoder(TextureFormat format) : IPitchTextur
             TPixel.ToRgba16UNorm(value);
     }
 
-    private void Decode<TPixel, TCarrier, TTransfer>(
+    private void Decode<TPixel, TCarrier, TCarrierTransfer, TTransfer>(
         ReadOnlySpan<byte> source,
         ImageView<TPixel> destination,
         int rowPitch)
         where TPixel : unmanaged, IPixel<TPixel>
-        where TTransfer : IUNormTransfer<TCarrier>
+        where TCarrierTransfer : IUNormCarrierTransfer<TCarrier>
+        where TTransfer : IPackedUNormTransfer<TCarrier>
     {
+        var bytesPerTexel = TTransfer.BytesPerTexel;
         var rowOffset = 0;
         for (var y = 0; y < destination.Height; y++)
         {
@@ -151,22 +362,24 @@ public sealed class PackedUNormTextureCoder(TextureFormat format) : IPitchTextur
             var texelOffset = rowOffset;
             for (var x = 0; x < destination.Width; x++)
             {
-                var carrier = DecodePackedComponents<TCarrier, TTransfer>(source.Slice(texelOffset, _plan.BytesPerTexel));
-                destinationRow[x] = TTransfer.FromCarrier<TPixel>(carrier);
-                texelOffset = checked(texelOffset + _plan.BytesPerTexel);
+                var carrier = TTransfer.Decode(source.Slice(texelOffset, bytesPerTexel));
+                destinationRow[x] = TCarrierTransfer.FromCarrier<TPixel>(carrier);
+                texelOffset += bytesPerTexel;
             }
 
-            rowOffset = checked(rowOffset + rowPitch);
+            rowOffset += rowPitch;
         }
     }
 
-    private void Encode<TPixel, TCarrier, TTransfer>(
+    private void Encode<TPixel, TCarrier, TCarrierTransfer, TTransfer>(
         ImageView<TPixel> source,
         Span<byte> destination,
         int rowPitch)
         where TPixel : unmanaged, IPixel<TPixel>
-        where TTransfer : IUNormTransfer<TCarrier>
+        where TCarrierTransfer : IUNormCarrierTransfer<TCarrier>
+        where TTransfer : IPackedUNormTransfer<TCarrier>
     {
+        var bytesPerTexel = TTransfer.BytesPerTexel;
         var rowOffset = 0;
         for (var y = 0; y < source.Height; y++)
         {
@@ -174,144 +387,1056 @@ public sealed class PackedUNormTextureCoder(TextureFormat format) : IPitchTextur
             var texelOffset = rowOffset;
             for (var x = 0; x < source.Width; x++)
             {
-                EncodePackedComponents<TCarrier, TTransfer>(
-                    TTransfer.ToCarrier(sourceRow[x]),
-                    destination.Slice(texelOffset, _plan.BytesPerTexel));
-                texelOffset = checked(texelOffset + _plan.BytesPerTexel);
+                TTransfer.Encode(
+                    TCarrierTransfer.ToCarrier(sourceRow[x]),
+                    destination.Slice(texelOffset, bytesPerTexel));
+                texelOffset += bytesPerTexel;
             }
 
-            rowOffset = checked(rowOffset + rowPitch);
+            rowOffset += rowPitch;
         }
     }
 
-    private TCarrier DecodePackedComponents<TCarrier, TTransfer>(ReadOnlySpan<byte> texel)
-        where TTransfer : IUNormTransfer<TCarrier>
+    private readonly struct Alpha12UNormTransfer : IPackedUNormTransfer<Rgba16UNorm>
     {
-        var destinationMax = TTransfer.MaxValue;
-        ulong red = 0;
-        ulong green = 0;
-        ulong blue = 0;
-        var alpha = destinationMax;
-        var packed = ReadPackedUIntLittleEndian(texel);
+        public static int BytesPerTexel => 2;
 
-        foreach (var component in _plan.Components)
+        public static Rgba16UNorm Decode(ReadOnlySpan<byte> texel)
         {
-            var value = ScaleUnsigned((packed >> component.Shift) & component.Mask, component.Mask, destinationMax);
-            SetComponentValue(component.ChannelIndex, value, ref red, ref green, ref blue, ref alpha);
+            var alpha = (uint)BinaryPrimitives.ReadUInt16LittleEndian(texel) & 0x0fffu;
+            return new Rgba16UNorm(0, 0, 0, (ushort)((alpha << 4) | (alpha >> 8)));
         }
 
-        return TTransfer.FromValues(red, green, blue, alpha);
+        public static void Encode(Rgba16UNorm value, Span<byte> texel) =>
+            BinaryPrimitives.WriteUInt16LittleEndian(texel, (ushort)((uint)value.Alpha >> 4));
     }
 
-    private void EncodePackedComponents<TCarrier, TTransfer>(TCarrier carrier, Span<byte> texel)
-        where TTransfer : IUNormTransfer<TCarrier>
+    private readonly struct Luminance12UNormTransfer : IPackedUNormTransfer<Rgba16UNorm>
     {
-        TTransfer.ToValues(carrier, out var red, out var green, out var blue, out var alpha);
+        public static int BytesPerTexel => 2;
 
-        var sourceMax = TTransfer.MaxValue;
-        ulong packed = 0;
-
-        foreach (var component in _plan.Components)
+        public static Rgba16UNorm Decode(ReadOnlySpan<byte> texel)
         {
-            var value = ScaleUnsigned(
-                GetComponentValue(component.ChannelIndex, red, green, blue, alpha),
-                sourceMax,
-                component.Mask);
-            packed |= value << component.Shift;
+            var luminance12 = (uint)BinaryPrimitives.ReadUInt16LittleEndian(texel) & 0x0fffu;
+            var value = (ushort)((luminance12 << 4) | (luminance12 >> 8));
+            return new Rgba16UNorm(value, value, value);
         }
 
-        WritePackedUIntLittleEndian(texel, packed);
+        public static void Encode(Rgba16UNorm value, Span<byte> texel) =>
+            BinaryPrimitives.WriteUInt16LittleEndian(texel, (ushort)((uint)value.Red >> 4));
     }
 
-    private readonly record struct PackedUNormPlan(
-        int BytesPerTexel,
-        int MaxComponentBits,
-        PackedComponentPlan[] Components);
-
-    private readonly record struct PackedComponentPlan(
-        int ChannelIndex,
-        int Shift,
-        ulong Mask);
-
-    private static PackedUNormPlan CreatePlan(TextureFormat format)
+    private readonly struct Luminance4Alpha4UNormTransfer : IPackedUNormTransfer<Rgba8UNorm>
     {
-        if (!IsSupported(format))
+        public static int BytesPerTexel => 1;
+
+        public static Rgba8UNorm Decode(ReadOnlySpan<byte> texel)
         {
-            throw CreateUnsupportedFormatException(format);
+            var packed = texel[0];
+            var luminance4 = (uint)packed >> 4;
+            var alpha4 = (uint)packed & 0x0fu;
+            var luminance = (byte)((luminance4 << 4) | luminance4);
+            return new Rgba8UNorm(
+                luminance,
+                luminance,
+                luminance,
+                (byte)((alpha4 << 4) | alpha4));
         }
 
-        var components = new PackedComponentPlan[format.ChannelCount];
-        var shift = format.BitsPerBlock;
-        var maxBits = 0;
-        for (var storageComponent = 0; storageComponent < components.Length; storageComponent++)
+        public static void Encode(Rgba8UNorm value, Span<byte> texel)
         {
-            var channelIndex = GetStorageChannelIndex(format.Components, storageComponent);
-            var bits = GetComponentBits(format, channelIndex);
-            shift -= bits;
-            components[storageComponent] = new PackedComponentPlan(channelIndex, shift, GetUnsignedMax(bits));
-            maxBits = Math.Max(maxBits, bits);
-        }
-
-        return new PackedUNormPlan(format.BytesPerBlock, maxBits, components);
-    }
-
-    private static int GetComponentBits(TextureFormat format, int component) => component switch
-    {
-        0 => format.RedBits,
-        1 => format.GreenBits,
-        2 => format.BlueBits,
-        3 => format.AlphaBits,
-        _ => throw new ArgumentOutOfRangeException(nameof(component))
-    };
-
-    private static int GetStorageChannelIndex(TextureComponents components, int storageComponent) => components switch
-    {
-        TextureComponents.Bgra => storageComponent switch
-        {
-            0 => 2,
-            1 => 1,
-            2 => 0,
-            3 => 3,
-            _ => throw new ArgumentOutOfRangeException(nameof(storageComponent))
-        },
-        _ => storageComponent
-    };
-
-    private static void SetComponentValue(
-        int component,
-        ulong value,
-        ref ulong red,
-        ref ulong green,
-        ref ulong blue,
-        ref ulong alpha)
-    {
-        switch (component)
-        {
-            case 0:
-                red = value;
-                return;
-            case 1:
-                green = value;
-                return;
-            case 2:
-                blue = value;
-                return;
-            case 3:
-                alpha = value;
-                return;
-            default:
-                throw new ArgumentOutOfRangeException(nameof(component));
+            var luminance = (uint)value.Red >> 4;
+            var alpha = (uint)value.Alpha >> 4;
+            texel[0] = (byte)((luminance << 4) | alpha);
         }
     }
 
-    private static ulong GetComponentValue(int component, ulong red, ulong green, ulong blue, ulong alpha) => component switch
+    private readonly struct Luminance6Alpha2UNormTransfer : IPackedUNormTransfer<Rgba8UNorm>
     {
-        0 => red,
-        1 => green,
-        2 => blue,
-        3 => alpha,
-        _ => throw new ArgumentOutOfRangeException(nameof(component))
-    };
+        public static int BytesPerTexel => 1;
+
+        public static Rgba8UNorm Decode(ReadOnlySpan<byte> texel)
+        {
+            var packed = texel[0];
+            var luminance6 = (uint)packed >> 2;
+            var alpha2 = (uint)packed & 0x03u;
+            var luminance = (byte)((luminance6 << 2) | (luminance6 >> 4));
+            return new Rgba8UNorm(
+                luminance,
+                luminance,
+                luminance,
+                (byte)((alpha2 << 6) | (alpha2 << 4) | (alpha2 << 2) | alpha2));
+        }
+
+        public static void Encode(Rgba8UNorm value, Span<byte> texel)
+        {
+            var luminance = (uint)value.Red >> 2;
+            var alpha = (uint)value.Alpha >> 6;
+            texel[0] = (byte)((luminance << 2) | alpha);
+        }
+    }
+
+    private readonly struct Luminance12Alpha4UNormTransfer : IPackedUNormTransfer<Rgba16UNorm>
+    {
+        public static int BytesPerTexel => 2;
+
+        public static Rgba16UNorm Decode(ReadOnlySpan<byte> texel)
+        {
+            var packed = BinaryPrimitives.ReadUInt16LittleEndian(texel);
+            var luminance12 = (uint)packed >> 4;
+            var alpha4 = (uint)packed & 0x000fu;
+            var luminance = (ushort)((luminance12 << 4) | (luminance12 >> 8));
+            return new Rgba16UNorm(
+                luminance,
+                luminance,
+                luminance,
+                (ushort)((alpha4 << 12) | (alpha4 << 8) | (alpha4 << 4) | alpha4));
+        }
+
+        public static void Encode(Rgba16UNorm value, Span<byte> texel)
+        {
+            var luminance = (uint)value.Red >> 4;
+            var alpha = (uint)value.Alpha >> 12;
+            var packed = (ushort)((luminance << 4) | alpha);
+            BinaryPrimitives.WriteUInt16LittleEndian(texel, packed);
+        }
+    }
+
+    private readonly struct Luminance12Alpha12UNormTransfer : IPackedUNormTransfer<Rgba16UNorm>
+    {
+        public static int BytesPerTexel => 3;
+
+        public static Rgba16UNorm Decode(ReadOnlySpan<byte> texel)
+        {
+            var packed = (uint)BinaryPrimitives.ReadUInt16LittleEndian(texel)
+                | ((uint)texel[2] << 16);
+            var luminance12 = (packed >> 12) & 0x0fffu;
+            var alpha12 = packed & 0x0fffu;
+            var luminance = (ushort)((luminance12 << 4) | (luminance12 >> 8));
+            return new Rgba16UNorm(
+                luminance,
+                luminance,
+                luminance,
+                (ushort)((alpha12 << 4) | (alpha12 >> 8)));
+        }
+
+        public static void Encode(Rgba16UNorm value, Span<byte> texel)
+        {
+            var luminance = (uint)value.Red >> 4;
+            var alpha = (uint)value.Alpha >> 4;
+            var packed = (luminance << 12) | alpha;
+            BinaryPrimitives.WriteUInt16LittleEndian(texel, (ushort)packed);
+            texel[2] = (byte)(packed >> 16);
+        }
+    }
+
+    private readonly struct Intensity12UNormTransfer : IPackedUNormTransfer<Rgba16UNorm>
+    {
+        public static int BytesPerTexel => 2;
+
+        public static Rgba16UNorm Decode(ReadOnlySpan<byte> texel)
+        {
+            var intensity12 = (uint)BinaryPrimitives.ReadUInt16LittleEndian(texel) & 0x0fffu;
+            var value = (ushort)((intensity12 << 4) | (intensity12 >> 8));
+            return new Rgba16UNorm(value, value, value, value);
+        }
+
+        public static void Encode(Rgba16UNorm value, Span<byte> texel) =>
+            BinaryPrimitives.WriteUInt16LittleEndian(texel, (ushort)((uint)value.Red >> 4));
+    }
+
+    private readonly struct Rg4UNormTransfer : IPackedUNormTransfer<Rgba8UNorm>
+    {
+        public static int BytesPerTexel => 1;
+
+        public static Rgba8UNorm Decode(ReadOnlySpan<byte> texel)
+        {
+            var packed = texel[0];
+            var red4 = (uint)packed >> 4;
+            var green4 = (uint)packed & 0x0fu;
+            return new Rgba8UNorm(
+                (byte)((red4 << 4) | red4),
+                (byte)((green4 << 4) | green4),
+                0);
+        }
+
+        public static void Encode(Rgba8UNorm value, Span<byte> texel)
+        {
+            var red = (uint)value.Red >> 4;
+            var green = (uint)value.Green >> 4;
+            texel[0] = (byte)((red << 4) | green);
+        }
+    }
+
+    private readonly struct R3G3B2UNormTransfer : IPackedUNormTransfer<Rgba8UNorm>
+    {
+        public static int BytesPerTexel => 1;
+
+        public static Rgba8UNorm Decode(ReadOnlySpan<byte> texel)
+        {
+            var packed = texel[0];
+            var red3 = (uint)packed >> 5;
+            var green3 = ((uint)packed >> 2) & 0x07u;
+            var blue2 = (uint)packed & 0x03u;
+            return new Rgba8UNorm(
+                (byte)((red3 << 5) | (red3 << 2) | (red3 >> 1)),
+                (byte)((green3 << 5) | (green3 << 2) | (green3 >> 1)),
+                (byte)((blue2 << 6) | (blue2 << 4) | (blue2 << 2) | blue2));
+        }
+
+        public static void Encode(Rgba8UNorm value, Span<byte> texel)
+        {
+            var red = (uint)value.Red >> 5;
+            var green = (uint)value.Green >> 5;
+            var blue = (uint)value.Blue >> 6;
+            texel[0] = (byte)((red << 5) | (green << 2) | blue);
+        }
+    }
+
+    private readonly struct R3G3B2RevUNormTransfer : IPackedUNormTransfer<Rgba8UNorm>
+    {
+        public static int BytesPerTexel => 1;
+
+        public static Rgba8UNorm Decode(ReadOnlySpan<byte> texel)
+        {
+            var packed = texel[0];
+            var red3 = (uint)packed & 0x07u;
+            var green3 = ((uint)packed >> 3) & 0x07u;
+            var blue2 = (uint)packed >> 6;
+            return new Rgba8UNorm(
+                (byte)((red3 << 5) | (red3 << 2) | (red3 >> 1)),
+                (byte)((green3 << 5) | (green3 << 2) | (green3 >> 1)),
+                (byte)((blue2 << 6) | (blue2 << 4) | (blue2 << 2) | blue2));
+        }
+
+        public static void Encode(Rgba8UNorm value, Span<byte> texel)
+        {
+            var red = (uint)value.Red >> 5;
+            var green = (uint)value.Green >> 5;
+            var blue = (uint)value.Blue >> 6;
+            texel[0] = (byte)(red | (green << 3) | (blue << 6));
+        }
+    }
+
+    private readonly struct Rgb4UNormTransfer : IPackedUNormTransfer<Rgba8UNorm>
+    {
+        public static int BytesPerTexel => 2;
+
+        public static Rgba8UNorm Decode(ReadOnlySpan<byte> texel)
+        {
+            var packed = BinaryPrimitives.ReadUInt16LittleEndian(texel);
+            var red4 = ((uint)packed >> 8) & 0x0fu;
+            var green4 = ((uint)packed >> 4) & 0x0fu;
+            var blue4 = (uint)packed & 0x0fu;
+            return new Rgba8UNorm(
+                (byte)((red4 << 4) | red4),
+                (byte)((green4 << 4) | green4),
+                (byte)((blue4 << 4) | blue4));
+        }
+
+        public static void Encode(Rgba8UNorm value, Span<byte> texel)
+        {
+            var red = (uint)value.Red >> 4;
+            var green = (uint)value.Green >> 4;
+            var blue = (uint)value.Blue >> 4;
+            var packed = (ushort)((red << 8) | (green << 4) | blue);
+            BinaryPrimitives.WriteUInt16LittleEndian(texel, packed);
+        }
+    }
+
+    private readonly struct Rgb5UNormTransfer : IPackedUNormTransfer<Rgba8UNorm>
+    {
+        public static int BytesPerTexel => 2;
+
+        public static Rgba8UNorm Decode(ReadOnlySpan<byte> texel)
+        {
+            var packed = BinaryPrimitives.ReadUInt16LittleEndian(texel);
+            var red5 = ((uint)packed >> 10) & 0x1fu;
+            var green5 = ((uint)packed >> 5) & 0x1fu;
+            var blue5 = (uint)packed & 0x1fu;
+            return new Rgba8UNorm(
+                (byte)((red5 << 3) | (red5 >> 2)),
+                (byte)((green5 << 3) | (green5 >> 2)),
+                (byte)((blue5 << 3) | (blue5 >> 2)));
+        }
+
+        public static void Encode(Rgba8UNorm value, Span<byte> texel)
+        {
+            var red = (uint)value.Red >> 3;
+            var green = (uint)value.Green >> 3;
+            var blue = (uint)value.Blue >> 3;
+            var packed = (ushort)((red << 10) | (green << 5) | blue);
+            BinaryPrimitives.WriteUInt16LittleEndian(texel, packed);
+        }
+    }
+
+    private readonly struct Rgb565UNormTransfer : IPackedUNormTransfer<Rgba8UNorm>
+    {
+        public static int BytesPerTexel => 2;
+
+        public static Rgba8UNorm Decode(ReadOnlySpan<byte> texel)
+        {
+            var packed = BinaryPrimitives.ReadUInt16LittleEndian(texel);
+            var red5 = ((uint)packed >> 11) & 0x1fu;
+            var green6 = ((uint)packed >> 5) & 0x3fu;
+            var blue5 = (uint)packed & 0x1fu;
+            return new Rgba8UNorm(
+                (byte)((red5 << 3) | (red5 >> 2)),
+                (byte)((green6 << 2) | (green6 >> 4)),
+                (byte)((blue5 << 3) | (blue5 >> 2)));
+        }
+
+        public static void Encode(Rgba8UNorm value, Span<byte> texel)
+        {
+            var red = (uint)value.Red >> 3;
+            var green = (uint)value.Green >> 2;
+            var blue = (uint)value.Blue >> 3;
+            var packed = (ushort)((red << 11) | (green << 5) | blue);
+            BinaryPrimitives.WriteUInt16LittleEndian(texel, packed);
+        }
+    }
+
+    private readonly struct Rgb565RevUNormTransfer : IPackedUNormTransfer<Rgba8UNorm>
+    {
+        public static int BytesPerTexel => 2;
+
+        public static Rgba8UNorm Decode(ReadOnlySpan<byte> texel)
+        {
+            var packed = BinaryPrimitives.ReadUInt16LittleEndian(texel);
+            var red5 = (uint)packed & 0x1fu;
+            var green6 = ((uint)packed >> 5) & 0x3fu;
+            var blue5 = (uint)packed >> 11;
+            return new Rgba8UNorm(
+                (byte)((red5 << 3) | (red5 >> 2)),
+                (byte)((green6 << 2) | (green6 >> 4)),
+                (byte)((blue5 << 3) | (blue5 >> 2)));
+        }
+
+        public static void Encode(Rgba8UNorm value, Span<byte> texel)
+        {
+            var red = (uint)value.Red >> 3;
+            var green = (uint)value.Green >> 2;
+            var blue = (uint)value.Blue >> 3;
+            var packed = (ushort)(red | (green << 5) | (blue << 11));
+            BinaryPrimitives.WriteUInt16LittleEndian(texel, packed);
+        }
+    }
+
+    private readonly struct Bgr565UNormTransfer : IPackedUNormTransfer<Rgba8UNorm>
+    {
+        public static int BytesPerTexel => 2;
+
+        public static Rgba8UNorm Decode(ReadOnlySpan<byte> texel)
+        {
+            var packed = BinaryPrimitives.ReadUInt16LittleEndian(texel);
+            var red5 = (uint)packed & 0x1fu;
+            var green6 = ((uint)packed >> 5) & 0x3fu;
+            var blue5 = (uint)packed >> 11;
+            return new Rgba8UNorm(
+                (byte)((red5 << 3) | (red5 >> 2)),
+                (byte)((green6 << 2) | (green6 >> 4)),
+                (byte)((blue5 << 3) | (blue5 >> 2)));
+        }
+
+        public static void Encode(Rgba8UNorm value, Span<byte> texel)
+        {
+            var red = (uint)value.Red >> 3;
+            var green = (uint)value.Green >> 2;
+            var blue = (uint)value.Blue >> 3;
+            var packed = (ushort)(red | (green << 5) | (blue << 11));
+            BinaryPrimitives.WriteUInt16LittleEndian(texel, packed);
+        }
+    }
+
+    private readonly struct Bgr565RevUNormTransfer : IPackedUNormTransfer<Rgba8UNorm>
+    {
+        public static int BytesPerTexel => 2;
+
+        public static Rgba8UNorm Decode(ReadOnlySpan<byte> texel)
+        {
+            var packed = BinaryPrimitives.ReadUInt16LittleEndian(texel);
+            var red5 = ((uint)packed >> 11) & 0x1fu;
+            var green6 = ((uint)packed >> 5) & 0x3fu;
+            var blue5 = (uint)packed & 0x1fu;
+            return new Rgba8UNorm(
+                (byte)((red5 << 3) | (red5 >> 2)),
+                (byte)((green6 << 2) | (green6 >> 4)),
+                (byte)((blue5 << 3) | (blue5 >> 2)));
+        }
+
+        public static void Encode(Rgba8UNorm value, Span<byte> texel)
+        {
+            var red = (uint)value.Red >> 3;
+            var green = (uint)value.Green >> 2;
+            var blue = (uint)value.Blue >> 3;
+            var packed = (ushort)((red << 11) | (green << 5) | blue);
+            BinaryPrimitives.WriteUInt16LittleEndian(texel, packed);
+        }
+    }
+
+    private readonly struct Rgb10UNormTransfer : IPackedUNormTransfer<Rgba16UNorm>
+    {
+        public static int BytesPerTexel => 4;
+
+        public static Rgba16UNorm Decode(ReadOnlySpan<byte> texel)
+        {
+            var packed = BinaryPrimitives.ReadUInt32LittleEndian(texel);
+            var red10 = (packed >> 20) & 0x03ffu;
+            var green10 = (packed >> 10) & 0x03ffu;
+            var blue10 = packed & 0x03ffu;
+            return new Rgba16UNorm(
+                (ushort)((red10 << 6) | (red10 >> 4)),
+                (ushort)((green10 << 6) | (green10 >> 4)),
+                (ushort)((blue10 << 6) | (blue10 >> 4)));
+        }
+
+        public static void Encode(Rgba16UNorm value, Span<byte> texel)
+        {
+            var red = (uint)value.Red >> 6;
+            var green = (uint)value.Green >> 6;
+            var blue = (uint)value.Blue >> 6;
+            var packed = (red << 20) | (green << 10) | blue;
+            BinaryPrimitives.WriteUInt32LittleEndian(texel, packed);
+        }
+    }
+
+    private readonly struct Rgb12UNormTransfer : IPackedUNormTransfer<Rgba16UNorm>
+    {
+        public static int BytesPerTexel => 5;
+
+        public static Rgba16UNorm Decode(ReadOnlySpan<byte> texel)
+        {
+            var packed = (ulong)BinaryPrimitives.ReadUInt32LittleEndian(texel)
+                | ((ulong)texel[4] << 32);
+            var red12 = (uint)((packed >> 24) & 0x0ffful);
+            var green12 = (uint)((packed >> 12) & 0x0ffful);
+            var blue12 = (uint)packed & 0x0fffu;
+            return new Rgba16UNorm(
+                (ushort)((red12 << 4) | (red12 >> 8)),
+                (ushort)((green12 << 4) | (green12 >> 8)),
+                (ushort)((blue12 << 4) | (blue12 >> 8)));
+        }
+
+        public static void Encode(Rgba16UNorm value, Span<byte> texel)
+        {
+            var red = (ulong)((uint)value.Red >> 4);
+            var green = (ulong)((uint)value.Green >> 4);
+            var blue = (uint)value.Blue >> 4;
+            var packed = (red << 24) | (green << 12) | blue;
+            BinaryPrimitives.WriteUInt32LittleEndian(texel, (uint)packed);
+            texel[4] = (byte)(packed >> 32);
+        }
+    }
+
+    private readonly struct Rgba2UNormTransfer : IPackedUNormTransfer<Rgba8UNorm>
+    {
+        public static int BytesPerTexel => 1;
+
+        public static Rgba8UNorm Decode(ReadOnlySpan<byte> texel)
+        {
+            var packed = texel[0];
+            var red2 = (uint)packed >> 6;
+            var green2 = ((uint)packed >> 4) & 0x03u;
+            var blue2 = ((uint)packed >> 2) & 0x03u;
+            var alpha2 = (uint)packed & 0x03u;
+            return new Rgba8UNorm(
+                (byte)((red2 << 6) | (red2 << 4) | (red2 << 2) | red2),
+                (byte)((green2 << 6) | (green2 << 4) | (green2 << 2) | green2),
+                (byte)((blue2 << 6) | (blue2 << 4) | (blue2 << 2) | blue2),
+                (byte)((alpha2 << 6) | (alpha2 << 4) | (alpha2 << 2) | alpha2));
+        }
+
+        public static void Encode(Rgba8UNorm value, Span<byte> texel)
+        {
+            var red = (uint)value.Red >> 6;
+            var green = (uint)value.Green >> 6;
+            var blue = (uint)value.Blue >> 6;
+            var alpha = (uint)value.Alpha >> 6;
+            texel[0] = (byte)((red << 6) | (green << 4) | (blue << 2) | alpha);
+        }
+    }
+
+    private readonly struct Rgba4UNormTransfer : IPackedUNormTransfer<Rgba8UNorm>
+    {
+        public static int BytesPerTexel => 2;
+
+        public static Rgba8UNorm Decode(ReadOnlySpan<byte> texel)
+        {
+            var packed = BinaryPrimitives.ReadUInt16LittleEndian(texel);
+            var red4 = (uint)packed >> 12;
+            var green4 = ((uint)packed >> 8) & 0x0fu;
+            var blue4 = ((uint)packed >> 4) & 0x0fu;
+            var alpha4 = (uint)packed & 0x0fu;
+            return new Rgba8UNorm(
+                (byte)((red4 << 4) | red4),
+                (byte)((green4 << 4) | green4),
+                (byte)((blue4 << 4) | blue4),
+                (byte)((alpha4 << 4) | alpha4));
+        }
+
+        public static void Encode(Rgba8UNorm value, Span<byte> texel)
+        {
+            var red = (uint)value.Red >> 4;
+            var green = (uint)value.Green >> 4;
+            var blue = (uint)value.Blue >> 4;
+            var alpha = (uint)value.Alpha >> 4;
+            var packed = (ushort)((red << 12) | (green << 8) | (blue << 4) | alpha);
+            BinaryPrimitives.WriteUInt16LittleEndian(texel, packed);
+        }
+    }
+
+    private readonly struct Rgba4RevUNormTransfer : IPackedUNormTransfer<Rgba8UNorm>
+    {
+        public static int BytesPerTexel => 2;
+
+        public static Rgba8UNorm Decode(ReadOnlySpan<byte> texel)
+        {
+            var packed = BinaryPrimitives.ReadUInt16LittleEndian(texel);
+            var red4 = (uint)packed & 0x0fu;
+            var green4 = ((uint)packed >> 4) & 0x0fu;
+            var blue4 = ((uint)packed >> 8) & 0x0fu;
+            var alpha4 = (uint)packed >> 12;
+            return new Rgba8UNorm(
+                (byte)((red4 << 4) | red4),
+                (byte)((green4 << 4) | green4),
+                (byte)((blue4 << 4) | blue4),
+                (byte)((alpha4 << 4) | alpha4));
+        }
+
+        public static void Encode(Rgba8UNorm value, Span<byte> texel)
+        {
+            var red = (uint)value.Red >> 4;
+            var green = (uint)value.Green >> 4;
+            var blue = (uint)value.Blue >> 4;
+            var alpha = (uint)value.Alpha >> 4;
+            var packed = (ushort)(red | (green << 4) | (blue << 8) | (alpha << 12));
+            BinaryPrimitives.WriteUInt16LittleEndian(texel, packed);
+        }
+    }
+
+    private readonly struct Argb4UNormTransfer : IPackedUNormTransfer<Rgba8UNorm>
+    {
+        public static int BytesPerTexel => 2;
+
+        public static Rgba8UNorm Decode(ReadOnlySpan<byte> texel)
+        {
+            var packed = BinaryPrimitives.ReadUInt16LittleEndian(texel);
+            var red4 = ((uint)packed >> 8) & 0x0fu;
+            var green4 = ((uint)packed >> 4) & 0x0fu;
+            var blue4 = (uint)packed & 0x0fu;
+            var alpha4 = (uint)packed >> 12;
+            return new Rgba8UNorm(
+                (byte)((red4 << 4) | red4),
+                (byte)((green4 << 4) | green4),
+                (byte)((blue4 << 4) | blue4),
+                (byte)((alpha4 << 4) | alpha4));
+        }
+
+        public static void Encode(Rgba8UNorm value, Span<byte> texel)
+        {
+            var red = (uint)value.Red >> 4;
+            var green = (uint)value.Green >> 4;
+            var blue = (uint)value.Blue >> 4;
+            var alpha = (uint)value.Alpha >> 4;
+            var packed = (ushort)((red << 8) | (green << 4) | blue | (alpha << 12));
+            BinaryPrimitives.WriteUInt16LittleEndian(texel, packed);
+        }
+    }
+
+    private readonly struct Argb4RevUNormTransfer : IPackedUNormTransfer<Rgba8UNorm>
+    {
+        public static int BytesPerTexel => 2;
+
+        public static Rgba8UNorm Decode(ReadOnlySpan<byte> texel)
+        {
+            var packed = BinaryPrimitives.ReadUInt16LittleEndian(texel);
+            var red4 = ((uint)packed >> 4) & 0x0fu;
+            var green4 = ((uint)packed >> 8) & 0x0fu;
+            var blue4 = (uint)packed >> 12;
+            var alpha4 = (uint)packed & 0x0fu;
+            return new Rgba8UNorm(
+                (byte)((red4 << 4) | red4),
+                (byte)((green4 << 4) | green4),
+                (byte)((blue4 << 4) | blue4),
+                (byte)((alpha4 << 4) | alpha4));
+        }
+
+        public static void Encode(Rgba8UNorm value, Span<byte> texel)
+        {
+            var red = (uint)value.Red >> 4;
+            var green = (uint)value.Green >> 4;
+            var blue = (uint)value.Blue >> 4;
+            var alpha = (uint)value.Alpha >> 4;
+            var packed = (ushort)((red << 4) | (green << 8) | (blue << 12) | alpha);
+            BinaryPrimitives.WriteUInt16LittleEndian(texel, packed);
+        }
+    }
+
+    private readonly struct Abgr4UNormTransfer : IPackedUNormTransfer<Rgba8UNorm>
+    {
+        public static int BytesPerTexel => 2;
+
+        public static Rgba8UNorm Decode(ReadOnlySpan<byte> texel)
+        {
+            var packed = BinaryPrimitives.ReadUInt16LittleEndian(texel);
+            var red4 = (uint)packed & 0x0fu;
+            var green4 = ((uint)packed >> 4) & 0x0fu;
+            var blue4 = ((uint)packed >> 8) & 0x0fu;
+            var alpha4 = (uint)packed >> 12;
+            return new Rgba8UNorm(
+                (byte)((red4 << 4) | red4),
+                (byte)((green4 << 4) | green4),
+                (byte)((blue4 << 4) | blue4),
+                (byte)((alpha4 << 4) | alpha4));
+        }
+
+        public static void Encode(Rgba8UNorm value, Span<byte> texel)
+        {
+            var red = (uint)value.Red >> 4;
+            var green = (uint)value.Green >> 4;
+            var blue = (uint)value.Blue >> 4;
+            var alpha = (uint)value.Alpha >> 4;
+            var packed = (ushort)(red | (green << 4) | (blue << 8) | (alpha << 12));
+            BinaryPrimitives.WriteUInt16LittleEndian(texel, packed);
+        }
+    }
+
+    private readonly struct Abgr4RevUNormTransfer : IPackedUNormTransfer<Rgba8UNorm>
+    {
+        public static int BytesPerTexel => 2;
+
+        public static Rgba8UNorm Decode(ReadOnlySpan<byte> texel)
+        {
+            var packed = BinaryPrimitives.ReadUInt16LittleEndian(texel);
+            var red4 = (uint)packed >> 12;
+            var green4 = ((uint)packed >> 8) & 0x0fu;
+            var blue4 = ((uint)packed >> 4) & 0x0fu;
+            var alpha4 = (uint)packed & 0x0fu;
+            return new Rgba8UNorm(
+                (byte)((red4 << 4) | red4),
+                (byte)((green4 << 4) | green4),
+                (byte)((blue4 << 4) | blue4),
+                (byte)((alpha4 << 4) | alpha4));
+        }
+
+        public static void Encode(Rgba8UNorm value, Span<byte> texel)
+        {
+            var red = (uint)value.Red >> 4;
+            var green = (uint)value.Green >> 4;
+            var blue = (uint)value.Blue >> 4;
+            var alpha = (uint)value.Alpha >> 4;
+            var packed = (ushort)((red << 12) | (green << 8) | (blue << 4) | alpha);
+            BinaryPrimitives.WriteUInt16LittleEndian(texel, packed);
+        }
+    }
+
+    private readonly struct Rgb5A1UNormTransfer : IPackedUNormTransfer<Rgba8UNorm>
+    {
+        public static int BytesPerTexel => 2;
+
+        public static Rgba8UNorm Decode(ReadOnlySpan<byte> texel)
+        {
+            var packed = BinaryPrimitives.ReadUInt16LittleEndian(texel);
+            var red5 = (uint)packed >> 11;
+            var green5 = ((uint)packed >> 6) & 0x1fu;
+            var blue5 = ((uint)packed >> 1) & 0x1fu;
+            var alpha1 = (uint)packed & 0x0001u;
+            return new Rgba8UNorm(
+                (byte)((red5 << 3) | (red5 >> 2)),
+                (byte)((green5 << 3) | (green5 >> 2)),
+                (byte)((blue5 << 3) | (blue5 >> 2)),
+                (byte)((alpha1 << 8) - alpha1));
+        }
+
+        public static void Encode(Rgba8UNorm value, Span<byte> texel)
+        {
+            var red = (uint)value.Red >> 3;
+            var green = (uint)value.Green >> 3;
+            var blue = (uint)value.Blue >> 3;
+            var alpha = (uint)value.Alpha >> 7;
+            var packed = (ushort)((red << 11) | (green << 6) | (blue << 1) | alpha);
+            BinaryPrimitives.WriteUInt16LittleEndian(texel, packed);
+        }
+    }
+
+    private readonly struct Rgb5A1RevUNormTransfer : IPackedUNormTransfer<Rgba8UNorm>
+    {
+        public static int BytesPerTexel => 2;
+
+        public static Rgba8UNorm Decode(ReadOnlySpan<byte> texel)
+        {
+            var packed = BinaryPrimitives.ReadUInt16LittleEndian(texel);
+            var red5 = (uint)packed & 0x1fu;
+            var green5 = ((uint)packed >> 5) & 0x1fu;
+            var blue5 = ((uint)packed >> 10) & 0x1fu;
+            var alpha1 = (uint)packed >> 15;
+            return new Rgba8UNorm(
+                (byte)((red5 << 3) | (red5 >> 2)),
+                (byte)((green5 << 3) | (green5 >> 2)),
+                (byte)((blue5 << 3) | (blue5 >> 2)),
+                (byte)((alpha1 << 8) - alpha1));
+        }
+
+        public static void Encode(Rgba8UNorm value, Span<byte> texel)
+        {
+            var red = (uint)value.Red >> 3;
+            var green = (uint)value.Green >> 3;
+            var blue = (uint)value.Blue >> 3;
+            var alpha = (uint)value.Alpha >> 7;
+            var packed = (ushort)(red | (green << 5) | (blue << 10) | (alpha << 15));
+            BinaryPrimitives.WriteUInt16LittleEndian(texel, packed);
+        }
+    }
+
+    private readonly struct A1Rgb5UNormTransfer : IPackedUNormTransfer<Rgba8UNorm>
+    {
+        public static int BytesPerTexel => 2;
+
+        public static Rgba8UNorm Decode(ReadOnlySpan<byte> texel)
+        {
+            var packed = BinaryPrimitives.ReadUInt16LittleEndian(texel);
+            var red5 = ((uint)packed >> 10) & 0x1fu;
+            var green5 = ((uint)packed >> 5) & 0x1fu;
+            var blue5 = (uint)packed & 0x1fu;
+            var alpha1 = (uint)packed >> 15;
+            return new Rgba8UNorm(
+                (byte)((red5 << 3) | (red5 >> 2)),
+                (byte)((green5 << 3) | (green5 >> 2)),
+                (byte)((blue5 << 3) | (blue5 >> 2)),
+                (byte)((alpha1 << 8) - alpha1));
+        }
+
+        public static void Encode(Rgba8UNorm value, Span<byte> texel)
+        {
+            var red = (uint)value.Red >> 3;
+            var green = (uint)value.Green >> 3;
+            var blue = (uint)value.Blue >> 3;
+            var alpha = (uint)value.Alpha >> 7;
+            var packed = (ushort)((red << 10) | (green << 5) | blue | (alpha << 15));
+            BinaryPrimitives.WriteUInt16LittleEndian(texel, packed);
+        }
+    }
+
+    private readonly struct A1Rgb5RevUNormTransfer : IPackedUNormTransfer<Rgba8UNorm>
+    {
+        public static int BytesPerTexel => 2;
+
+        public static Rgba8UNorm Decode(ReadOnlySpan<byte> texel)
+        {
+            var packed = BinaryPrimitives.ReadUInt16LittleEndian(texel);
+            var red5 = ((uint)packed >> 1) & 0x1fu;
+            var green5 = ((uint)packed >> 6) & 0x1fu;
+            var blue5 = (uint)packed >> 11;
+            var alpha1 = (uint)packed & 0x0001u;
+            return new Rgba8UNorm(
+                (byte)((red5 << 3) | (red5 >> 2)),
+                (byte)((green5 << 3) | (green5 >> 2)),
+                (byte)((blue5 << 3) | (blue5 >> 2)),
+                (byte)((alpha1 << 8) - alpha1));
+        }
+
+        public static void Encode(Rgba8UNorm value, Span<byte> texel)
+        {
+            var red = (uint)value.Red >> 3;
+            var green = (uint)value.Green >> 3;
+            var blue = (uint)value.Blue >> 3;
+            var alpha = (uint)value.Alpha >> 7;
+            var packed = (ushort)((red << 1) | (green << 6) | (blue << 11) | alpha);
+            BinaryPrimitives.WriteUInt16LittleEndian(texel, packed);
+        }
+    }
+
+    private readonly struct A1Bgr5UNormTransfer : IPackedUNormTransfer<Rgba8UNorm>
+    {
+        public static int BytesPerTexel => 2;
+
+        public static Rgba8UNorm Decode(ReadOnlySpan<byte> texel)
+        {
+            var packed = BinaryPrimitives.ReadUInt16LittleEndian(texel);
+            var red5 = (uint)packed & 0x1fu;
+            var green5 = ((uint)packed >> 5) & 0x1fu;
+            var blue5 = ((uint)packed >> 10) & 0x1fu;
+            var alpha1 = (uint)packed >> 15;
+            return new Rgba8UNorm(
+                (byte)((red5 << 3) | (red5 >> 2)),
+                (byte)((green5 << 3) | (green5 >> 2)),
+                (byte)((blue5 << 3) | (blue5 >> 2)),
+                (byte)((alpha1 << 8) - alpha1));
+        }
+
+        public static void Encode(Rgba8UNorm value, Span<byte> texel)
+        {
+            var red = (uint)value.Red >> 3;
+            var green = (uint)value.Green >> 3;
+            var blue = (uint)value.Blue >> 3;
+            var alpha = (uint)value.Alpha >> 7;
+            var packed = (ushort)(red | (green << 5) | (blue << 10) | (alpha << 15));
+            BinaryPrimitives.WriteUInt16LittleEndian(texel, packed);
+        }
+    }
+
+    private readonly struct A1Bgr5RevUNormTransfer : IPackedUNormTransfer<Rgba8UNorm>
+    {
+        public static int BytesPerTexel => 2;
+
+        public static Rgba8UNorm Decode(ReadOnlySpan<byte> texel)
+        {
+            var packed = BinaryPrimitives.ReadUInt16LittleEndian(texel);
+            var red5 = (uint)packed >> 11;
+            var green5 = ((uint)packed >> 6) & 0x1fu;
+            var blue5 = ((uint)packed >> 1) & 0x1fu;
+            var alpha1 = (uint)packed & 0x0001u;
+            return new Rgba8UNorm(
+                (byte)((red5 << 3) | (red5 >> 2)),
+                (byte)((green5 << 3) | (green5 >> 2)),
+                (byte)((blue5 << 3) | (blue5 >> 2)),
+                (byte)((alpha1 << 8) - alpha1));
+        }
+
+        public static void Encode(Rgba8UNorm value, Span<byte> texel)
+        {
+            var red = (uint)value.Red >> 3;
+            var green = (uint)value.Green >> 3;
+            var blue = (uint)value.Blue >> 3;
+            var alpha = (uint)value.Alpha >> 7;
+            var packed = (ushort)((red << 11) | (green << 6) | (blue << 1) | alpha);
+            BinaryPrimitives.WriteUInt16LittleEndian(texel, packed);
+        }
+    }
+
+    private readonly struct Rgb10A2UNormTransfer : IPackedUNormTransfer<Rgba16UNorm>
+    {
+        public static int BytesPerTexel => 4;
+
+        public static Rgba16UNorm Decode(ReadOnlySpan<byte> texel)
+        {
+            var packed = BinaryPrimitives.ReadUInt32LittleEndian(texel);
+            var red10 = (packed >> 22) & 0x03ffu;
+            var green10 = (packed >> 12) & 0x03ffu;
+            var blue10 = (packed >> 2) & 0x03ffu;
+            var alpha2 = packed & 0x0003u;
+            return new Rgba16UNorm(
+                (ushort)((red10 << 6) | (red10 >> 4)),
+                (ushort)((green10 << 6) | (green10 >> 4)),
+                (ushort)((blue10 << 6) | (blue10 >> 4)),
+                (ushort)((alpha2 << 14) | (alpha2 << 12) | (alpha2 << 10) | (alpha2 << 8) | (alpha2 << 6) | (alpha2 << 4) | (alpha2 << 2) | alpha2));
+        }
+
+        public static void Encode(Rgba16UNorm value, Span<byte> texel)
+        {
+            var red = (uint)value.Red >> 6;
+            var green = (uint)value.Green >> 6;
+            var blue = (uint)value.Blue >> 6;
+            var alpha = (uint)value.Alpha >> 14;
+            var packed = (red << 22) | (green << 12) | (blue << 2) | alpha;
+            BinaryPrimitives.WriteUInt32LittleEndian(texel, packed);
+        }
+    }
+
+    private readonly struct Rgb10A2RevUNormTransfer : IPackedUNormTransfer<Rgba16UNorm>
+    {
+        public static int BytesPerTexel => 4;
+
+        public static Rgba16UNorm Decode(ReadOnlySpan<byte> texel)
+        {
+            var packed = BinaryPrimitives.ReadUInt32LittleEndian(texel);
+            var red10 = packed & 0x03ffu;
+            var green10 = (packed >> 10) & 0x03ffu;
+            var blue10 = (packed >> 20) & 0x03ffu;
+            var alpha2 = packed >> 30;
+            return new Rgba16UNorm(
+                (ushort)((red10 << 6) | (red10 >> 4)),
+                (ushort)((green10 << 6) | (green10 >> 4)),
+                (ushort)((blue10 << 6) | (blue10 >> 4)),
+                (ushort)((alpha2 << 14) | (alpha2 << 12) | (alpha2 << 10) | (alpha2 << 8) | (alpha2 << 6) | (alpha2 << 4) | (alpha2 << 2) | alpha2));
+        }
+
+        public static void Encode(Rgba16UNorm value, Span<byte> texel)
+        {
+            var red = (uint)value.Red >> 6;
+            var green = (uint)value.Green >> 6;
+            var blue = (uint)value.Blue >> 6;
+            var alpha = (uint)value.Alpha >> 14;
+            var packed = red | (green << 10) | (blue << 20) | (alpha << 30);
+            BinaryPrimitives.WriteUInt32LittleEndian(texel, packed);
+        }
+    }
+
+    private readonly struct Bgr10A2RevUNormTransfer : IPackedUNormTransfer<Rgba16UNorm>
+    {
+        public static int BytesPerTexel => 4;
+
+        public static Rgba16UNorm Decode(ReadOnlySpan<byte> texel)
+        {
+            var packed = BinaryPrimitives.ReadUInt32LittleEndian(texel);
+            var red10 = (packed >> 20) & 0x03ffu;
+            var green10 = (packed >> 10) & 0x03ffu;
+            var blue10 = packed & 0x03ffu;
+            var alpha2 = packed >> 30;
+            return new Rgba16UNorm(
+                (ushort)((red10 << 6) | (red10 >> 4)),
+                (ushort)((green10 << 6) | (green10 >> 4)),
+                (ushort)((blue10 << 6) | (blue10 >> 4)),
+                (ushort)((alpha2 << 14) | (alpha2 << 12) | (alpha2 << 10) | (alpha2 << 8) | (alpha2 << 6) | (alpha2 << 4) | (alpha2 << 2) | alpha2));
+        }
+
+        public static void Encode(Rgba16UNorm value, Span<byte> texel)
+        {
+            var red = (uint)value.Red >> 6;
+            var green = (uint)value.Green >> 6;
+            var blue = (uint)value.Blue >> 6;
+            var alpha = (uint)value.Alpha >> 14;
+            var packed = (red << 20) | (green << 10) | blue | (alpha << 30);
+            BinaryPrimitives.WriteUInt32LittleEndian(texel, packed);
+        }
+    }
+
+    private readonly struct Rgba12UNormTransfer : IPackedUNormTransfer<Rgba16UNorm>
+    {
+        public static int BytesPerTexel => 6;
+
+        public static Rgba16UNorm Decode(ReadOnlySpan<byte> texel)
+        {
+            var packed = (ulong)BinaryPrimitives.ReadUInt32LittleEndian(texel)
+                | ((ulong)BinaryPrimitives.ReadUInt16LittleEndian(texel[4..]) << 32);
+            var red12 = (uint)((packed >> 36) & 0x0ffful);
+            var green12 = (uint)((packed >> 24) & 0x0ffful);
+            var blue12 = (uint)((packed >> 12) & 0x0ffful);
+            var alpha12 = (uint)packed & 0x0fffu;
+            return new Rgba16UNorm(
+                (ushort)((red12 << 4) | (red12 >> 8)),
+                (ushort)((green12 << 4) | (green12 >> 8)),
+                (ushort)((blue12 << 4) | (blue12 >> 8)),
+                (ushort)((alpha12 << 4) | (alpha12 >> 8)));
+        }
+
+        public static void Encode(Rgba16UNorm value, Span<byte> texel)
+        {
+            var red = (ulong)((uint)value.Red >> 4);
+            var green = (ulong)((uint)value.Green >> 4);
+            var blue = (ulong)((uint)value.Blue >> 4);
+            var alpha = (uint)value.Alpha >> 4;
+            var packed = (red << 36) | (green << 24) | (blue << 12) | alpha;
+            BinaryPrimitives.WriteUInt32LittleEndian(texel, (uint)packed);
+            BinaryPrimitives.WriteUInt16LittleEndian(texel[4..], (ushort)(packed >> 32));
+        }
+    }
+
+    private readonly struct Bgra4UNormTransfer : IPackedUNormTransfer<Rgba8UNorm>
+    {
+        public static int BytesPerTexel => 2;
+
+        public static Rgba8UNorm Decode(ReadOnlySpan<byte> texel)
+        {
+            var packed = BinaryPrimitives.ReadUInt16LittleEndian(texel);
+            var red4 = ((uint)packed >> 4) & 0x0fu;
+            var green4 = ((uint)packed >> 8) & 0x0fu;
+            var blue4 = (uint)packed >> 12;
+            var alpha4 = (uint)packed & 0x0fu;
+            return new Rgba8UNorm(
+                (byte)((red4 << 4) | red4),
+                (byte)((green4 << 4) | green4),
+                (byte)((blue4 << 4) | blue4),
+                (byte)((alpha4 << 4) | alpha4));
+        }
+
+        public static void Encode(Rgba8UNorm value, Span<byte> texel)
+        {
+            var red = (uint)value.Red >> 4;
+            var green = (uint)value.Green >> 4;
+            var blue = (uint)value.Blue >> 4;
+            var alpha = (uint)value.Alpha >> 4;
+            var packed = (ushort)((red << 4) | (green << 8) | (blue << 12) | alpha);
+            BinaryPrimitives.WriteUInt16LittleEndian(texel, packed);
+        }
+    }
+
+    private readonly struct Bgra4RevUNormTransfer : IPackedUNormTransfer<Rgba8UNorm>
+    {
+        public static int BytesPerTexel => 2;
+
+        public static Rgba8UNorm Decode(ReadOnlySpan<byte> texel)
+        {
+            var packed = BinaryPrimitives.ReadUInt16LittleEndian(texel);
+            var red4 = ((uint)packed >> 8) & 0x0fu;
+            var green4 = ((uint)packed >> 4) & 0x0fu;
+            var blue4 = (uint)packed & 0x0fu;
+            var alpha4 = (uint)packed >> 12;
+            return new Rgba8UNorm(
+                (byte)((red4 << 4) | red4),
+                (byte)((green4 << 4) | green4),
+                (byte)((blue4 << 4) | blue4),
+                (byte)((alpha4 << 4) | alpha4));
+        }
+
+        public static void Encode(Rgba8UNorm value, Span<byte> texel)
+        {
+            var red = (uint)value.Red >> 4;
+            var green = (uint)value.Green >> 4;
+            var blue = (uint)value.Blue >> 4;
+            var alpha = (uint)value.Alpha >> 4;
+            var packed = (ushort)((red << 8) | (green << 4) | blue | (alpha << 12));
+            BinaryPrimitives.WriteUInt16LittleEndian(texel, packed);
+        }
+    }
+
+    private readonly struct Bgr5A1UNormTransfer : IPackedUNormTransfer<Rgba8UNorm>
+    {
+        public static int BytesPerTexel => 2;
+
+        public static Rgba8UNorm Decode(ReadOnlySpan<byte> texel)
+        {
+            var packed = BinaryPrimitives.ReadUInt16LittleEndian(texel);
+            var red5 = ((uint)packed >> 1) & 0x1fu;
+            var green5 = ((uint)packed >> 6) & 0x1fu;
+            var blue5 = (uint)packed >> 11;
+            var alpha1 = (uint)packed & 0x0001u;
+            return new Rgba8UNorm(
+                (byte)((red5 << 3) | (red5 >> 2)),
+                (byte)((green5 << 3) | (green5 >> 2)),
+                (byte)((blue5 << 3) | (blue5 >> 2)),
+                (byte)((alpha1 << 8) - alpha1));
+        }
+
+        public static void Encode(Rgba8UNorm value, Span<byte> texel)
+        {
+            var red = (uint)value.Red >> 3;
+            var green = (uint)value.Green >> 3;
+            var blue = (uint)value.Blue >> 3;
+            var alpha = (uint)value.Alpha >> 7;
+            var packed = (ushort)((red << 1) | (green << 6) | (blue << 11) | alpha);
+            BinaryPrimitives.WriteUInt16LittleEndian(texel, packed);
+        }
+    }
+
+    private readonly struct Bgr5A1RevUNormTransfer : IPackedUNormTransfer<Rgba8UNorm>
+    {
+        public static int BytesPerTexel => 2;
+
+        public static Rgba8UNorm Decode(ReadOnlySpan<byte> texel)
+        {
+            var packed = BinaryPrimitives.ReadUInt16LittleEndian(texel);
+            var red5 = ((uint)packed >> 10) & 0x1fu;
+            var green5 = ((uint)packed >> 5) & 0x1fu;
+            var blue5 = (uint)packed & 0x1fu;
+            var alpha1 = (uint)packed >> 15;
+            return new Rgba8UNorm(
+                (byte)((red5 << 3) | (red5 >> 2)),
+                (byte)((green5 << 3) | (green5 >> 2)),
+                (byte)((blue5 << 3) | (blue5 >> 2)),
+                (byte)((alpha1 << 8) - alpha1));
+        }
+
+        public static void Encode(Rgba8UNorm value, Span<byte> texel)
+        {
+            var red = (uint)value.Red >> 3;
+            var green = (uint)value.Green >> 3;
+            var blue = (uint)value.Blue >> 3;
+            var alpha = (uint)value.Alpha >> 7;
+            var packed = (ushort)((red << 10) | (green << 5) | blue | (alpha << 15));
+            BinaryPrimitives.WriteUInt16LittleEndian(texel, packed);
+        }
+    }
 
     private void ValidateSourceLength(int width, int height, ReadOnlySpan<byte> source, int rowPitch)
     {
@@ -331,68 +1456,289 @@ public sealed class PackedUNormTextureCoder(TextureFormat format) : IPitchTextur
         }
     }
 
-    private static ulong GetUnsignedMax(int bits) => (1UL << bits) - 1UL;
-
-    private static ulong ScaleUnsigned(ulong value, ulong sourceMax, ulong destinationMax)
+    private static bool TryGetTransfer(TextureFormat format, out PackedUNormTransfer transfer)
     {
-        if (sourceMax == destinationMax)
+        if (format == TextureFormats.Alpha12UNorm)
         {
-            return value;
+            transfer = PackedUNormTransfer.Alpha12;
+            return true;
         }
 
-        return ((value * destinationMax) + (sourceMax / 2UL)) / sourceMax;
-    }
-
-    private static ulong ReadPackedUIntLittleEndian(ReadOnlySpan<byte> source) => source.Length switch
-    {
-        1 => source[0],
-        2 => BinaryPrimitives.ReadUInt16LittleEndian(source),
-        4 => BinaryPrimitives.ReadUInt32LittleEndian(source),
-        8 => BinaryPrimitives.ReadUInt64LittleEndian(source),
-        _ => ReadPackedUIntLittleEndianSlow(source)
-    };
-
-    private static ulong ReadPackedUIntLittleEndianSlow(ReadOnlySpan<byte> source)
-    {
-        ulong value = 0;
-        for (var i = 0; i < source.Length; i++)
+        if (format == TextureFormats.Luminance12UNorm)
         {
-            value |= (ulong)source[i] << (i << 3);
+            transfer = PackedUNormTransfer.Luminance12;
+            return true;
         }
 
-        return value;
-    }
-
-    private static void WritePackedUIntLittleEndian(Span<byte> destination, ulong value)
-    {
-        switch (destination.Length)
+        if (format == TextureFormats.Luminance4Alpha4UNorm)
         {
-            case 1:
-                destination[0] = (byte)value;
-                return;
-            case 2:
-                BinaryPrimitives.WriteUInt16LittleEndian(destination, (ushort)value);
-                return;
-            case 4:
-                BinaryPrimitives.WriteUInt32LittleEndian(destination, (uint)value);
-                return;
-            case 8:
-                BinaryPrimitives.WriteUInt64LittleEndian(destination, value);
-                return;
-            default:
-                WritePackedUIntLittleEndianSlow(destination, value);
-                return;
+            transfer = PackedUNormTransfer.Luminance4Alpha4;
+            return true;
         }
-    }
 
-    private static void WritePackedUIntLittleEndianSlow(Span<byte> destination, ulong value)
-    {
-        for (var i = 0; i < destination.Length; i++)
+        if (format == TextureFormats.Luminance6Alpha2UNorm)
         {
-            destination[i] = (byte)(value >> (i << 3));
+            transfer = PackedUNormTransfer.Luminance6Alpha2;
+            return true;
         }
+
+        if (format == TextureFormats.Luminance12Alpha4UNorm)
+        {
+            transfer = PackedUNormTransfer.Luminance12Alpha4;
+            return true;
+        }
+
+        if (format == TextureFormats.Luminance12Alpha12UNorm)
+        {
+            transfer = PackedUNormTransfer.Luminance12Alpha12;
+            return true;
+        }
+
+        if (format == TextureFormats.Intensity12UNorm)
+        {
+            transfer = PackedUNormTransfer.Intensity12;
+            return true;
+        }
+
+        if (format == TextureFormats.Rg4UNorm)
+        {
+            transfer = PackedUNormTransfer.Rg4;
+            return true;
+        }
+
+        if (format == TextureFormats.R3G3B2UNorm)
+        {
+            transfer = PackedUNormTransfer.R3G3B2;
+            return true;
+        }
+
+        if (format == TextureFormats.R3G3B2RevUNorm)
+        {
+            transfer = PackedUNormTransfer.R3G3B2Rev;
+            return true;
+        }
+
+        if (format == TextureFormats.Rgb4UNorm)
+        {
+            transfer = PackedUNormTransfer.Rgb4;
+            return true;
+        }
+
+        if (format == TextureFormats.Rgb5UNorm)
+        {
+            transfer = PackedUNormTransfer.Rgb5;
+            return true;
+        }
+
+        if (format == TextureFormats.Rgb565UNorm)
+        {
+            transfer = PackedUNormTransfer.Rgb565;
+            return true;
+        }
+
+        if (format == TextureFormats.Rgb565RevUNorm)
+        {
+            transfer = PackedUNormTransfer.Rgb565Rev;
+            return true;
+        }
+
+        if (format == TextureFormats.Bgr565UNorm)
+        {
+            transfer = PackedUNormTransfer.Bgr565;
+            return true;
+        }
+
+        if (format == TextureFormats.Bgr565RevUNorm)
+        {
+            transfer = PackedUNormTransfer.Bgr565Rev;
+            return true;
+        }
+
+        if (format == TextureFormats.Rgb10UNorm)
+        {
+            transfer = PackedUNormTransfer.Rgb10;
+            return true;
+        }
+
+        if (format == TextureFormats.Rgb12UNorm)
+        {
+            transfer = PackedUNormTransfer.Rgb12;
+            return true;
+        }
+
+        if (format == TextureFormats.Rgba2UNorm)
+        {
+            transfer = PackedUNormTransfer.Rgba2;
+            return true;
+        }
+
+        if (format == TextureFormats.Rgba4UNorm)
+        {
+            transfer = PackedUNormTransfer.Rgba4;
+            return true;
+        }
+
+        if (format == TextureFormats.Rgba4RevUNorm)
+        {
+            transfer = PackedUNormTransfer.Rgba4Rev;
+            return true;
+        }
+
+        if (format == TextureFormats.Argb4UNorm)
+        {
+            transfer = PackedUNormTransfer.Argb4;
+            return true;
+        }
+
+        if (format == TextureFormats.Argb4RevUNorm)
+        {
+            transfer = PackedUNormTransfer.Argb4Rev;
+            return true;
+        }
+
+        if (format == TextureFormats.Abgr4UNorm)
+        {
+            transfer = PackedUNormTransfer.Abgr4;
+            return true;
+        }
+
+        if (format == TextureFormats.Abgr4RevUNorm)
+        {
+            transfer = PackedUNormTransfer.Abgr4Rev;
+            return true;
+        }
+
+        if (format == TextureFormats.Rgb5A1UNorm)
+        {
+            transfer = PackedUNormTransfer.Rgb5A1;
+            return true;
+        }
+
+        if (format == TextureFormats.Rgb5A1RevUNorm)
+        {
+            transfer = PackedUNormTransfer.Rgb5A1Rev;
+            return true;
+        }
+
+        if (format == TextureFormats.A1Rgb5UNorm)
+        {
+            transfer = PackedUNormTransfer.A1Rgb5;
+            return true;
+        }
+
+        if (format == TextureFormats.A1Rgb5RevUNorm)
+        {
+            transfer = PackedUNormTransfer.A1Rgb5Rev;
+            return true;
+        }
+
+        if (format == TextureFormats.A1Bgr5UNorm)
+        {
+            transfer = PackedUNormTransfer.A1Bgr5;
+            return true;
+        }
+
+        if (format == TextureFormats.A1Bgr5RevUNorm)
+        {
+            transfer = PackedUNormTransfer.A1Bgr5Rev;
+            return true;
+        }
+
+        if (format == TextureFormats.Rgb10A2UNorm)
+        {
+            transfer = PackedUNormTransfer.Rgb10A2;
+            return true;
+        }
+
+        if (format == TextureFormats.Rgb10A2RevUNorm)
+        {
+            transfer = PackedUNormTransfer.Rgb10A2Rev;
+            return true;
+        }
+
+        if (format == TextureFormats.Bgr10A2RevUNorm)
+        {
+            transfer = PackedUNormTransfer.Bgr10A2Rev;
+            return true;
+        }
+
+        if (format == TextureFormats.Rgba12UNorm)
+        {
+            transfer = PackedUNormTransfer.Rgba12;
+            return true;
+        }
+
+        if (format == TextureFormats.Bgra4UNorm)
+        {
+            transfer = PackedUNormTransfer.Bgra4;
+            return true;
+        }
+
+        if (format == TextureFormats.Bgra4RevUNorm)
+        {
+            transfer = PackedUNormTransfer.Bgra4Rev;
+            return true;
+        }
+
+        if (format == TextureFormats.Bgr5A1UNorm)
+        {
+            transfer = PackedUNormTransfer.Bgr5A1;
+            return true;
+        }
+
+        if (format == TextureFormats.Bgr5A1RevUNorm)
+        {
+            transfer = PackedUNormTransfer.Bgr5A1Rev;
+            return true;
+        }
+
+        transfer = default;
+        return false;
     }
 
     private static NotSupportedException CreateUnsupportedFormatException(TextureFormat format) =>
         new($"Packed UNorm texture codec does not support texture format '{format.Name}'.");
+
+    private enum PackedUNormTransfer
+    {
+        Alpha12,
+        Luminance12,
+        Luminance4Alpha4,
+        Luminance6Alpha2,
+        Luminance12Alpha4,
+        Luminance12Alpha12,
+        Intensity12,
+        Rg4,
+        R3G3B2,
+        R3G3B2Rev,
+        Rgb4,
+        Rgb5,
+        Rgb565,
+        Rgb565Rev,
+        Bgr565,
+        Bgr565Rev,
+        Rgb10,
+        Rgb12,
+        Rgba2,
+        Rgba4,
+        Rgba4Rev,
+        Argb4,
+        Argb4Rev,
+        Abgr4,
+        Abgr4Rev,
+        Rgb5A1,
+        Rgb5A1Rev,
+        A1Rgb5,
+        A1Rgb5Rev,
+        A1Bgr5,
+        A1Bgr5Rev,
+        Rgb10A2,
+        Rgb10A2Rev,
+        Bgr10A2Rev,
+        Rgba12,
+        Bgra4,
+        Bgra4Rev,
+        Bgr5A1,
+        Bgr5A1Rev
+    }
 }
