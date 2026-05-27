@@ -147,4 +147,58 @@ public struct Rgba32UNorm(uint red, uint green, uint blue, uint alpha = uint.Max
             RgbaColorConversions.FloatToUNorm32(value.Blue),
             RgbaColorConversions.FloatToUNorm32(value.Alpha));
     }
+
+    public static Rgba64UNorm ToRgba64UNorm(Rgba32UNorm value)
+    {
+        return new Rgba64UNorm(
+            RgbaColorConversions.ToUInt64(value.Red),
+            RgbaColorConversions.ToUInt64(value.Green),
+            RgbaColorConversions.ToUInt64(value.Blue),
+            RgbaColorConversions.ToUInt64(value.Alpha));
+    }
+
+    public static Rgba32UNorm FromRgba64UNorm(Rgba64UNorm value)
+    {
+        return new Rgba32UNorm(
+            RgbaColorConversions.ToUNorm32(value.Red),
+            RgbaColorConversions.ToUNorm32(value.Green),
+            RgbaColorConversions.ToUNorm32(value.Blue),
+            RgbaColorConversions.ToUNorm32(value.Alpha));
+    }
+
+    public static Rgba64SNorm ToRgba64SNorm(Rgba32UNorm value)
+    {
+        return new Rgba64SNorm(
+            RgbaColorConversions.ToSInt64(value.Red),
+            RgbaColorConversions.ToSInt64(value.Green),
+            RgbaColorConversions.ToSInt64(value.Blue),
+            RgbaColorConversions.ToSInt64(value.Alpha));
+    }
+
+    public static Rgba32UNorm FromRgba64SNorm(Rgba64SNorm value)
+    {
+        return new Rgba32UNorm(
+            RgbaColorConversions.ToUNorm32(value.Red),
+            RgbaColorConversions.ToUNorm32(value.Green),
+            RgbaColorConversions.ToUNorm32(value.Blue),
+            RgbaColorConversions.ToUNorm32(value.Alpha));
+    }
+
+    public static Rgba64Float ToRgba64Float(Rgba32UNorm value)
+    {
+        return new Rgba64Float(
+            RgbaColorConversions.ToDouble(value.Red),
+            RgbaColorConversions.ToDouble(value.Green),
+            RgbaColorConversions.ToDouble(value.Blue),
+            RgbaColorConversions.ToDouble(value.Alpha));
+    }
+
+    public static Rgba32UNorm FromRgba64Float(Rgba64Float value)
+    {
+        return new Rgba32UNorm(
+            RgbaColorConversions.ToUNorm32(value.Red),
+            RgbaColorConversions.ToUNorm32(value.Green),
+            RgbaColorConversions.ToUNorm32(value.Blue),
+            RgbaColorConversions.ToUNorm32(value.Alpha));
+    }
 }

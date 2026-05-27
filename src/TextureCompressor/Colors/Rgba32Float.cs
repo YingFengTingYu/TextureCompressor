@@ -147,4 +147,58 @@ public struct Rgba32Float(float red, float green, float blue, float alpha = 1f)
     {
         return value;
     }
+
+    public static Rgba64UNorm ToRgba64UNorm(Rgba32Float value)
+    {
+        return new Rgba64UNorm(
+            RgbaColorConversions.ToUInt64(value.Red),
+            RgbaColorConversions.ToUInt64(value.Green),
+            RgbaColorConversions.ToUInt64(value.Blue),
+            RgbaColorConversions.ToUInt64(value.Alpha));
+    }
+
+    public static Rgba32Float FromRgba64UNorm(Rgba64UNorm value)
+    {
+        return new Rgba32Float(
+            RgbaColorConversions.ToFloat(value.Red),
+            RgbaColorConversions.ToFloat(value.Green),
+            RgbaColorConversions.ToFloat(value.Blue),
+            RgbaColorConversions.ToFloat(value.Alpha));
+    }
+
+    public static Rgba64SNorm ToRgba64SNorm(Rgba32Float value)
+    {
+        return new Rgba64SNorm(
+            RgbaColorConversions.ToSInt64(value.Red),
+            RgbaColorConversions.ToSInt64(value.Green),
+            RgbaColorConversions.ToSInt64(value.Blue),
+            RgbaColorConversions.ToSInt64(value.Alpha));
+    }
+
+    public static Rgba32Float FromRgba64SNorm(Rgba64SNorm value)
+    {
+        return new Rgba32Float(
+            RgbaColorConversions.ToFloat(value.Red),
+            RgbaColorConversions.ToFloat(value.Green),
+            RgbaColorConversions.ToFloat(value.Blue),
+            RgbaColorConversions.ToFloat(value.Alpha));
+    }
+
+    public static Rgba64Float ToRgba64Float(Rgba32Float value)
+    {
+        return new Rgba64Float(
+            RgbaColorConversions.ToDouble(value.Red),
+            RgbaColorConversions.ToDouble(value.Green),
+            RgbaColorConversions.ToDouble(value.Blue),
+            RgbaColorConversions.ToDouble(value.Alpha));
+    }
+
+    public static Rgba32Float FromRgba64Float(Rgba64Float value)
+    {
+        return new Rgba32Float(
+            RgbaColorConversions.ToFloat(value.Red),
+            RgbaColorConversions.ToFloat(value.Green),
+            RgbaColorConversions.ToFloat(value.Blue),
+            RgbaColorConversions.ToFloat(value.Alpha));
+    }
 }

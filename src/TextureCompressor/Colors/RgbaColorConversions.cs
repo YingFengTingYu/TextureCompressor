@@ -14,9 +14,15 @@ internal static class RgbaColorConversions
 
     public static byte ToUNorm8(int value) => (byte)ScaleSignedToUnsigned(value, int.MaxValue, byte.MaxValue);
 
+    public static byte ToUNorm8(ulong value) => (byte)ScaleUnsignedWide(value, ulong.MaxValue, byte.MaxValue);
+
+    public static byte ToUNorm8(long value) => (byte)ScaleSignedToUnsignedWide(value, long.MaxValue, byte.MaxValue);
+
     public static byte ToUNorm8(Half value) => FloatToUNorm8((float)value);
 
     public static byte ToUNorm8(float value) => FloatToUNorm8(value);
+
+    public static byte ToUNorm8(double value) => FloatToUNorm8((float)value);
 
     public static sbyte ToSNorm8(byte value) => (sbyte)ScaleUnsigned(value, byte.MaxValue, (ulong)sbyte.MaxValue);
 
@@ -30,9 +36,15 @@ internal static class RgbaColorConversions
 
     public static sbyte ToSNorm8(int value) => (sbyte)ScaleSigned(value, int.MaxValue, sbyte.MaxValue);
 
+    public static sbyte ToSNorm8(ulong value) => (sbyte)ScaleUnsignedWide(value, ulong.MaxValue, (ulong)sbyte.MaxValue);
+
+    public static sbyte ToSNorm8(long value) => (sbyte)ScaleSignedWide(value, long.MaxValue, sbyte.MaxValue);
+
     public static sbyte ToSNorm8(Half value) => FloatToSNorm8((float)value);
 
     public static sbyte ToSNorm8(float value) => FloatToSNorm8(value);
+
+    public static sbyte ToSNorm8(double value) => FloatToSNorm8((float)value);
 
     public static ushort ToUNorm16(byte value) => (ushort)ScaleUnsigned(value, byte.MaxValue, ushort.MaxValue);
 
@@ -46,9 +58,15 @@ internal static class RgbaColorConversions
 
     public static ushort ToUNorm16(int value) => (ushort)ScaleSignedToUnsigned(value, int.MaxValue, ushort.MaxValue);
 
+    public static ushort ToUNorm16(ulong value) => (ushort)ScaleUnsignedWide(value, ulong.MaxValue, ushort.MaxValue);
+
+    public static ushort ToUNorm16(long value) => (ushort)ScaleSignedToUnsignedWide(value, long.MaxValue, ushort.MaxValue);
+
     public static ushort ToUNorm16(Half value) => FloatToUNorm16((float)value);
 
     public static ushort ToUNorm16(float value) => FloatToUNorm16(value);
+
+    public static ushort ToUNorm16(double value) => FloatToUNorm16((float)value);
 
     public static short ToSNorm16(byte value) => (short)ScaleUnsigned(value, byte.MaxValue, (ulong)short.MaxValue);
 
@@ -62,9 +80,15 @@ internal static class RgbaColorConversions
 
     public static short ToSNorm16(int value) => (short)ScaleSigned(value, int.MaxValue, short.MaxValue);
 
+    public static short ToSNorm16(ulong value) => (short)ScaleUnsignedWide(value, ulong.MaxValue, (ulong)short.MaxValue);
+
+    public static short ToSNorm16(long value) => (short)ScaleSignedWide(value, long.MaxValue, short.MaxValue);
+
     public static short ToSNorm16(Half value) => FloatToSNorm16((float)value);
 
     public static short ToSNorm16(float value) => FloatToSNorm16(value);
+
+    public static short ToSNorm16(double value) => FloatToSNorm16((float)value);
 
     public static uint ToUNorm32(byte value) => (uint)ScaleUnsigned(value, byte.MaxValue, uint.MaxValue);
 
@@ -78,9 +102,15 @@ internal static class RgbaColorConversions
 
     public static uint ToUNorm32(int value) => (uint)ScaleSignedToUnsigned(value, int.MaxValue, uint.MaxValue);
 
+    public static uint ToUNorm32(ulong value) => (uint)ScaleUnsignedWide(value, ulong.MaxValue, uint.MaxValue);
+
+    public static uint ToUNorm32(long value) => (uint)ScaleSignedToUnsignedWide(value, long.MaxValue, uint.MaxValue);
+
     public static uint ToUNorm32(Half value) => FloatToUNorm32((float)value);
 
     public static uint ToUNorm32(float value) => FloatToUNorm32(value);
+
+    public static uint ToUNorm32(double value) => FloatToUNorm32((float)value);
 
     public static int ToSNorm32(byte value) => (int)ScaleUnsigned(value, byte.MaxValue, int.MaxValue);
 
@@ -94,9 +124,59 @@ internal static class RgbaColorConversions
 
     public static int ToSNorm32(int value) => value;
 
+    public static int ToSNorm32(ulong value) => (int)ScaleUnsignedWide(value, ulong.MaxValue, int.MaxValue);
+
+    public static int ToSNorm32(long value) => (int)ScaleSignedWide(value, long.MaxValue, int.MaxValue);
+
     public static int ToSNorm32(Half value) => FloatToSNorm32((float)value);
 
     public static int ToSNorm32(float value) => FloatToSNorm32(value);
+
+    public static int ToSNorm32(double value) => FloatToSNorm32((float)value);
+
+    public static ulong ToUInt64(byte value) => ScaleUnsignedWide(value, byte.MaxValue, ulong.MaxValue);
+
+    public static ulong ToUInt64(sbyte value) => ScaleSignedToUnsignedWide(value, sbyte.MaxValue, ulong.MaxValue);
+
+    public static ulong ToUInt64(ushort value) => ScaleUnsignedWide(value, ushort.MaxValue, ulong.MaxValue);
+
+    public static ulong ToUInt64(short value) => ScaleSignedToUnsignedWide(value, short.MaxValue, ulong.MaxValue);
+
+    public static ulong ToUInt64(uint value) => ScaleUnsignedWide(value, uint.MaxValue, ulong.MaxValue);
+
+    public static ulong ToUInt64(int value) => ScaleSignedToUnsignedWide(value, int.MaxValue, ulong.MaxValue);
+
+    public static ulong ToUInt64(ulong value) => value;
+
+    public static ulong ToUInt64(long value) => ScaleSignedToUnsignedWide(value, long.MaxValue, ulong.MaxValue);
+
+    public static ulong ToUInt64(Half value) => FloatToUInt64((double)value);
+
+    public static ulong ToUInt64(float value) => FloatToUInt64(value);
+
+    public static ulong ToUInt64(double value) => FloatToUInt64(value);
+
+    public static long ToSInt64(byte value) => (long)ScaleUnsignedWide(value, byte.MaxValue, (ulong)long.MaxValue);
+
+    public static long ToSInt64(sbyte value) => ScaleSignedWide(value, sbyte.MaxValue, long.MaxValue);
+
+    public static long ToSInt64(ushort value) => (long)ScaleUnsignedWide(value, ushort.MaxValue, (ulong)long.MaxValue);
+
+    public static long ToSInt64(short value) => ScaleSignedWide(value, short.MaxValue, long.MaxValue);
+
+    public static long ToSInt64(uint value) => (long)ScaleUnsignedWide(value, uint.MaxValue, (ulong)long.MaxValue);
+
+    public static long ToSInt64(int value) => ScaleSignedWide(value, int.MaxValue, long.MaxValue);
+
+    public static long ToSInt64(ulong value) => (long)ScaleUnsignedWide(value, ulong.MaxValue, (ulong)long.MaxValue);
+
+    public static long ToSInt64(long value) => value;
+
+    public static long ToSInt64(Half value) => FloatToSInt64((double)value);
+
+    public static long ToSInt64(float value) => FloatToSInt64(value);
+
+    public static long ToSInt64(double value) => FloatToSInt64(value);
 
     public static Half ToHalf(byte value) => (Half)UNorm8ToFloat(value);
 
@@ -110,9 +190,15 @@ internal static class RgbaColorConversions
 
     public static Half ToHalf(int value) => (Half)SNorm32ToFloat(value);
 
+    public static Half ToHalf(ulong value) => (Half)UNorm64ToDouble(value);
+
+    public static Half ToHalf(long value) => (Half)SNorm64ToDouble(value);
+
     public static Half ToHalf(Half value) => value;
 
     public static Half ToHalf(float value) => (Half)value;
+
+    public static Half ToHalf(double value) => (Half)value;
 
     public static float ToFloat(byte value) => UNorm8ToFloat(value);
 
@@ -126,9 +212,37 @@ internal static class RgbaColorConversions
 
     public static float ToFloat(int value) => SNorm32ToFloat(value);
 
+    public static float ToFloat(ulong value) => (float)UNorm64ToDouble(value);
+
+    public static float ToFloat(long value) => (float)SNorm64ToDouble(value);
+
     public static float ToFloat(Half value) => (float)value;
 
     public static float ToFloat(float value) => value;
+
+    public static float ToFloat(double value) => (float)value;
+
+    public static double ToDouble(byte value) => UNorm8ToFloat(value);
+
+    public static double ToDouble(sbyte value) => SNorm8ToFloat(value);
+
+    public static double ToDouble(ushort value) => UNorm16ToFloat(value);
+
+    public static double ToDouble(short value) => SNorm16ToFloat(value);
+
+    public static double ToDouble(uint value) => UNorm32ToFloat(value);
+
+    public static double ToDouble(int value) => SNorm32ToFloat(value);
+
+    public static double ToDouble(ulong value) => UNorm64ToDouble(value);
+
+    public static double ToDouble(long value) => SNorm64ToDouble(value);
+
+    public static double ToDouble(Half value) => (double)value;
+
+    public static double ToDouble(float value) => value;
+
+    public static double ToDouble(double value) => value;
 
     public static byte FloatToUNorm8(float value)
     {
@@ -144,6 +258,12 @@ internal static class RgbaColorConversions
     {
         var rounded = Math.Round(SaturateDouble(value) * uint.MaxValue);
         return rounded >= uint.MaxValue ? uint.MaxValue : (uint)rounded;
+    }
+
+    public static ulong FloatToUInt64(double value)
+    {
+        var rounded = Math.Round(SaturateDouble(value) * ulong.MaxValue);
+        return rounded >= ulong.MaxValue ? ulong.MaxValue : (ulong)rounded;
     }
 
     public static sbyte FloatToSNorm8(float value)
@@ -173,6 +293,23 @@ internal static class RgbaColorConversions
         return (int)rounded;
     }
 
+    public static long FloatToSInt64(double value)
+    {
+        var rounded = Math.Round(ClampSignedDouble(value) * long.MaxValue);
+
+        if (rounded <= -long.MaxValue)
+        {
+            return -long.MaxValue;
+        }
+
+        if (rounded >= long.MaxValue)
+        {
+            return long.MaxValue;
+        }
+
+        return (long)rounded;
+    }
+
     public static float UNorm8ToFloat(byte value)
     {
         return value / (float)byte.MaxValue;
@@ -188,6 +325,11 @@ internal static class RgbaColorConversions
         return (float)(value / (double)uint.MaxValue);
     }
 
+    public static double UNorm64ToDouble(ulong value)
+    {
+        return value / (double)ulong.MaxValue;
+    }
+
     public static float SNorm8ToFloat(sbyte value)
     {
         return MathF.Max(value / (float)sbyte.MaxValue, -1f);
@@ -201,6 +343,11 @@ internal static class RgbaColorConversions
     public static float SNorm32ToFloat(int value)
     {
         return MathF.Max((float)(value / (double)int.MaxValue), -1f);
+    }
+
+    public static double SNorm64ToDouble(long value)
+    {
+        return Math.Max(value / (double)long.MaxValue, -1d);
     }
 
     public static float Srgb8ToLinearFloat(byte value)
@@ -240,6 +387,16 @@ internal static class RgbaColorConversions
         return Math.Clamp((double)value, 0d, 1d);
     }
 
+    private static double SaturateDouble(double value)
+    {
+        if (double.IsNaN(value))
+        {
+            return 0d;
+        }
+
+        return Math.Clamp(value, 0d, 1d);
+    }
+
     private static float ClampSigned(float value)
     {
         if (float.IsNaN(value))
@@ -258,6 +415,16 @@ internal static class RgbaColorConversions
         }
 
         return Math.Clamp((double)value, -1d, 1d);
+    }
+
+    private static double ClampSignedDouble(double value)
+    {
+        if (double.IsNaN(value))
+        {
+            return 0d;
+        }
+
+        return Math.Clamp(value, -1d, 1d);
     }
 
     private static ulong ScaleUnsigned(ulong value, ulong sourceMax, ulong targetMax)
@@ -299,6 +466,58 @@ internal static class RgbaColorConversions
 
         var magnitude = value < 0 ? (ulong)-value : (ulong)value;
         var scaled = (long)ScaleUnsigned(magnitude, (ulong)sourceMax, (ulong)targetMax);
+        return value < 0 ? -scaled : scaled;
+    }
+
+    private static ulong ScaleUnsignedWide(ulong value, ulong sourceMax, ulong targetMax)
+    {
+        if (sourceMax == targetMax)
+        {
+            return value;
+        }
+
+        if (value == 0)
+        {
+            return 0;
+        }
+
+        if (value >= sourceMax)
+        {
+            return targetMax;
+        }
+
+        return (ulong)((((UInt128)value * targetMax) + (sourceMax / 2)) / sourceMax);
+    }
+
+    private static ulong ScaleSignedToUnsignedWide(long value, long sourceMax, ulong targetMax)
+    {
+        if (value <= 0)
+        {
+            return 0;
+        }
+
+        if (value >= sourceMax)
+        {
+            return targetMax;
+        }
+
+        return ScaleUnsignedWide((ulong)value, (ulong)sourceMax, targetMax);
+    }
+
+    private static long ScaleSignedWide(long value, long sourceMax, long targetMax)
+    {
+        if (value <= -sourceMax)
+        {
+            return -targetMax;
+        }
+
+        if (value >= sourceMax)
+        {
+            return targetMax;
+        }
+
+        var magnitude = value < 0 ? (ulong)-value : (ulong)value;
+        var scaled = (long)ScaleUnsignedWide(magnitude, (ulong)sourceMax, (ulong)targetMax);
         return value < 0 ? -scaled : scaled;
     }
 }

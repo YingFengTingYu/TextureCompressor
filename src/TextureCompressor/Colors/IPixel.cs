@@ -39,6 +39,18 @@ public interface IPixel<TSelf>
 
     static virtual TSelf FromRgba32Float(Rgba32Float value) => throw CreateUnsupportedConversionException(nameof(FromRgba32Float));
 
+    static virtual Rgba64UNorm ToRgba64UNorm(TSelf value) => throw CreateUnsupportedConversionException(nameof(ToRgba64UNorm));
+
+    static virtual TSelf FromRgba64UNorm(Rgba64UNorm value) => throw CreateUnsupportedConversionException(nameof(FromRgba64UNorm));
+
+    static virtual Rgba64SNorm ToRgba64SNorm(TSelf value) => throw CreateUnsupportedConversionException(nameof(ToRgba64SNorm));
+
+    static virtual TSelf FromRgba64SNorm(Rgba64SNorm value) => throw CreateUnsupportedConversionException(nameof(FromRgba64SNorm));
+
+    static virtual Rgba64Float ToRgba64Float(TSelf value) => throw CreateUnsupportedConversionException(nameof(ToRgba64Float));
+
+    static virtual TSelf FromRgba64Float(Rgba64Float value) => throw CreateUnsupportedConversionException(nameof(FromRgba64Float));
+
     private static NotSupportedException CreateUnsupportedConversionException(string methodName) =>
         new($"Pixel type '{typeof(TSelf).Name}' does not support conversion '{methodName}'.");
 }

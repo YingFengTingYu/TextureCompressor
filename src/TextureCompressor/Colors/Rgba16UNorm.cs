@@ -147,4 +147,58 @@ public struct Rgba16UNorm(ushort red, ushort green, ushort blue, ushort alpha = 
             RgbaColorConversions.FloatToUNorm16(value.Blue),
             RgbaColorConversions.FloatToUNorm16(value.Alpha));
     }
+
+    public static Rgba64UNorm ToRgba64UNorm(Rgba16UNorm value)
+    {
+        return new Rgba64UNorm(
+            RgbaColorConversions.ToUInt64(value.Red),
+            RgbaColorConversions.ToUInt64(value.Green),
+            RgbaColorConversions.ToUInt64(value.Blue),
+            RgbaColorConversions.ToUInt64(value.Alpha));
+    }
+
+    public static Rgba16UNorm FromRgba64UNorm(Rgba64UNorm value)
+    {
+        return new Rgba16UNorm(
+            RgbaColorConversions.ToUNorm16(value.Red),
+            RgbaColorConversions.ToUNorm16(value.Green),
+            RgbaColorConversions.ToUNorm16(value.Blue),
+            RgbaColorConversions.ToUNorm16(value.Alpha));
+    }
+
+    public static Rgba64SNorm ToRgba64SNorm(Rgba16UNorm value)
+    {
+        return new Rgba64SNorm(
+            RgbaColorConversions.ToSInt64(value.Red),
+            RgbaColorConversions.ToSInt64(value.Green),
+            RgbaColorConversions.ToSInt64(value.Blue),
+            RgbaColorConversions.ToSInt64(value.Alpha));
+    }
+
+    public static Rgba16UNorm FromRgba64SNorm(Rgba64SNorm value)
+    {
+        return new Rgba16UNorm(
+            RgbaColorConversions.ToUNorm16(value.Red),
+            RgbaColorConversions.ToUNorm16(value.Green),
+            RgbaColorConversions.ToUNorm16(value.Blue),
+            RgbaColorConversions.ToUNorm16(value.Alpha));
+    }
+
+    public static Rgba64Float ToRgba64Float(Rgba16UNorm value)
+    {
+        return new Rgba64Float(
+            RgbaColorConversions.ToDouble(value.Red),
+            RgbaColorConversions.ToDouble(value.Green),
+            RgbaColorConversions.ToDouble(value.Blue),
+            RgbaColorConversions.ToDouble(value.Alpha));
+    }
+
+    public static Rgba16UNorm FromRgba64Float(Rgba64Float value)
+    {
+        return new Rgba16UNorm(
+            RgbaColorConversions.ToUNorm16(value.Red),
+            RgbaColorConversions.ToUNorm16(value.Green),
+            RgbaColorConversions.ToUNorm16(value.Blue),
+            RgbaColorConversions.ToUNorm16(value.Alpha));
+    }
 }
