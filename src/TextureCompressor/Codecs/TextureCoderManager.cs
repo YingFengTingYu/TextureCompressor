@@ -151,6 +151,12 @@ public sealed class TextureCoderManager
             return true;
         }
 
+        if (PalettedTextureCoder.IsSupported(format))
+        {
+            coder = new PalettedTextureCoder(format);
+            return true;
+        }
+
         if (SequentialUncompressedTextureCoder.IsSupported(format))
         {
             coder = new SequentialUncompressedTextureCoder(format);

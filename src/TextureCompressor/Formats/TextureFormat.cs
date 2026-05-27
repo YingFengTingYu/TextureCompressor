@@ -12,6 +12,7 @@ public readonly record struct TextureFormat(
     int BlockWidth,
     int BlockHeight,
     int BitsPerBlock,
+    int HeaderByteCount = 0,
     int BlockDepth = 1,
     bool IsVariableSize = false)
 {
@@ -54,7 +55,7 @@ public readonly record struct TextureFormat(
         ValidateHeight(height);
 
         var blockCountY = (height + BlockHeight - 1L) / BlockHeight;
-        return checked(rowByteCount * blockCountY);
+        return checked(HeaderByteCount + (rowByteCount * blockCountY));
     }
 
     public static TextureFormat Uncompressed(
@@ -76,6 +77,41 @@ public readonly record struct TextureFormat(
             1,
             1,
             checked(redBits + greenBits + blueBits + alphaBits));
+
+    public static TextureFormat Paletted(
+        string name,
+        TextureComponents components,
+        TextureValueKind valueKind,
+        int redBits,
+        int greenBits,
+        int blueBits,
+        int alphaBits,
+        int indexBits,
+        int paletteEntryCount,
+        int paletteEntryByteCount)
+    {
+        if (indexBits is not (4 or 8))
+        {
+            throw new ArgumentOutOfRangeException(nameof(indexBits), "Paletted formats currently support 4-bit or 8-bit indices.");
+        }
+
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(paletteEntryCount);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(paletteEntryByteCount);
+
+        return new(
+            name,
+            TextureFormatKind.Paletted,
+            components,
+            valueKind,
+            redBits,
+            greenBits,
+            blueBits,
+            alphaBits,
+            8 / indexBits,
+            1,
+            8,
+            checked(paletteEntryCount * paletteEntryByteCount));
+    }
 
     public static TextureFormat BlockCompressed(
         string name,
@@ -102,7 +138,7 @@ public readonly record struct TextureFormat(
 
     private void ValidateLayout()
     {
-        if (BlockWidth <= 0 || BlockHeight <= 0 || BlockDepth <= 0 || BitsPerBlock <= 0)
+        if (BlockWidth <= 0 || BlockHeight <= 0 || BlockDepth <= 0 || BitsPerBlock <= 0 || HeaderByteCount < 0)
         {
             throw new InvalidOperationException("Texture format block dimensions and bit count must be positive.");
         }
