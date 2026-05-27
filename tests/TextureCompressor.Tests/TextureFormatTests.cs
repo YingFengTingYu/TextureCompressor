@@ -267,6 +267,40 @@ public sealed class TextureFormatTests
         Assert.Equal(2, TextureFormats.StencilIndex4.GetRowByteCount(3));
     }
 
+    [Theory]
+    [MemberData(nameof(XrFormats))]
+    public void XrFormatMetadataIsStable(
+        TextureFormat format,
+        string name,
+        TextureComponents components,
+        TextureValueKind valueKind,
+        int channelCount,
+        int bitsPerBlock,
+        int bytesPerBlock)
+    {
+        Assert.Equal(name, format.Name);
+        Assert.Equal(TextureFormatKind.Uncompressed, format.Kind);
+        Assert.Equal(components, format.Components);
+        Assert.Equal(valueKind, format.ValueKind);
+        Assert.Equal(channelCount, format.ChannelCount);
+        Assert.Equal(bitsPerBlock, format.BitsPerBlock);
+        Assert.Equal(bytesPerBlock, format.BytesPerBlock);
+    }
+
+    [Theory]
+    [MemberData(nameof(XStencilFormats))]
+    public void XStencilFormatsDescribeStencilViews(TextureFormat format, string name, int bitsPerBlock, int bytesPerBlock)
+    {
+        Assert.Equal(name, format.Name);
+        Assert.Equal(TextureFormatKind.Uncompressed, format.Kind);
+        Assert.Equal(TextureComponents.Stencil, format.Components);
+        Assert.Equal(TextureValueKind.UInt, format.ValueKind);
+        Assert.Equal(1, format.ChannelCount);
+        Assert.Equal(8, format.RedBits);
+        Assert.Equal(bitsPerBlock, format.BitsPerBlock);
+        Assert.Equal(bytesPerBlock, format.BytesPerBlock);
+    }
+
     public static TheoryData<TextureFormat, string, TextureFormatKind, TextureComponents, int, int, int> MvpFormats() => new()
     {
         { TextureFormats.R8, "R8_UNORM", TextureFormatKind.Uncompressed, TextureComponents.R, 1, 8, 1 },
@@ -329,6 +363,20 @@ public sealed class TextureFormatTests
         { TextureFormats.R12X4UNorm, "R12X4_UNORM_PACK16", TextureComponents.R, TextureValueKind.UNorm, 16, 2 },
         { TextureFormats.R12X4G12X4UNorm, "R12X4G12X4_UNORM_2PACK16", TextureComponents.Rg, TextureValueKind.UNorm, 32, 4 },
         { TextureFormats.R12X4G12X4B12X4A12X4UNorm, "R12X4G12X4B12X4A12X4_UNORM_4PACK16", TextureComponents.Rgba, TextureValueKind.UNorm, 64, 8 }
+    };
+
+    public static TheoryData<TextureFormat, string, TextureComponents, TextureValueKind, int, int, int> XrFormats() => new()
+    {
+        { TextureFormats.Bgr10XR, "BGR10_XR", TextureComponents.Bgr, TextureValueKind.XR, 3, 32, 4 },
+        { TextureFormats.Bgr10XRSrgb, "BGR10_XR_SRGB", TextureComponents.Bgr, TextureValueKind.XRSrgb, 3, 32, 4 },
+        { TextureFormats.Bgra10XR, "BGRA10_XR", TextureComponents.Bgra, TextureValueKind.XR, 4, 64, 8 },
+        { TextureFormats.Bgra10XRSrgb, "BGRA10_XR_SRGB", TextureComponents.Bgra, TextureValueKind.XRSrgb, 4, 64, 8 }
+    };
+
+    public static TheoryData<TextureFormat, string, int, int> XStencilFormats() => new()
+    {
+        { TextureFormats.X32Stencil8, "X32_STENCIL8", 64, 8 },
+        { TextureFormats.X24Stencil8, "X24_STENCIL8", 32, 4 }
     };
 
     public static TheoryData<TextureFormat, string, int, int> PackedYuv422Formats() => new()

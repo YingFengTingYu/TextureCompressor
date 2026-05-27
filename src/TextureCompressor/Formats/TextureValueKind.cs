@@ -8,5 +8,7 @@ public enum TextureValueKind
     SInt,
     Float,
     Srgb,
+    XR,
+    XRSrgb,
     DepthStencil
 }

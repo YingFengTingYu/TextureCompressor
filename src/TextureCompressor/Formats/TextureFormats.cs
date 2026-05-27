@@ -990,6 +990,12 @@ public static class TextureFormats
         1,
         32);
 
+    public static readonly TextureFormat Bgr10XR =
+        Xr("BGR10_XR", TextureComponents.Bgr, TextureValueKind.XR, 10, 10, 10, 0, 32);
+
+    public static readonly TextureFormat Bgr10XRSrgb =
+        Xr("BGR10_XR_SRGB", TextureComponents.Bgr, TextureValueKind.XRSrgb, 10, 10, 10, 0, 32);
+
     public static readonly TextureFormat Bgra8 =
         TextureFormat.Uncompressed("BGRA8_UNORM", TextureComponents.Bgra, TextureValueKind.UNorm, 8, 8, 8, 8);
 
@@ -1040,6 +1046,12 @@ public static class TextureFormats
 
     public static readonly TextureFormat Bgra32Float =
         TextureFormat.Uncompressed("BGRA32_FLOAT", TextureComponents.Bgra, TextureValueKind.Float, 32, 32, 32, 32);
+
+    public static readonly TextureFormat Bgra10XR =
+        Xr("BGRA10_XR", TextureComponents.Bgra, TextureValueKind.XR, 10, 10, 10, 10, 64);
+
+    public static readonly TextureFormat Bgra10XRSrgb =
+        Xr("BGRA10_XR_SRGB", TextureComponents.Bgra, TextureValueKind.XRSrgb, 10, 10, 10, 10, 64);
 
     public static readonly TextureFormat Bgra4UNorm =
         TextureFormat.Uncompressed("BGRA4_UNORM", TextureComponents.Bgra, TextureValueKind.UNorm, 4, 4, 4, 4);
@@ -1135,6 +1147,12 @@ public static class TextureFormats
 
     public static readonly TextureFormat StencilIndex16 =
         TextureFormat.Uncompressed("STENCIL_INDEX16", TextureComponents.Stencil, TextureValueKind.UInt, 16);
+
+    public static readonly TextureFormat X32Stencil8 =
+        StencilView("X32_STENCIL8", 8, 64);
+
+    public static readonly TextureFormat X24Stencil8 =
+        StencilView("X24_STENCIL8", 8, 32);
 
     public static readonly TextureFormat Depth16Stencil8 =
         DepthStencil("DEPTH16_STENCIL8", 16, 8, 24);
@@ -1461,6 +1479,40 @@ public static class TextureFormats
         blockWidth,
         1,
         bitsPerBlock);
+
+    private static TextureFormat StencilView(string name, int stencilBits, int bitsPerBlock) => new(
+        name,
+        TextureFormatKind.Uncompressed,
+        TextureComponents.Stencil,
+        TextureValueKind.UInt,
+        stencilBits,
+        0,
+        0,
+        0,
+        1,
+        1,
+        bitsPerBlock);
+
+    private static TextureFormat Xr(
+        string name,
+        TextureComponents components,
+        TextureValueKind valueKind,
+        int redBits,
+        int greenBits,
+        int blueBits,
+        int alphaBits,
+        int bitsPerBlock) => new(
+            name,
+            TextureFormatKind.Uncompressed,
+            components,
+            valueKind,
+            redBits,
+            greenBits,
+            blueBits,
+            alphaBits,
+            1,
+            1,
+            bitsPerBlock);
 
     private static TextureFormat DepthStencil(string name, int depthBits, int stencilBits, int bitsPerBlock) => new(
         name,

@@ -121,6 +121,12 @@ public sealed class TextureCoderManager
             return true;
         }
 
+        if (XrTextureCoder.IsSupported(format))
+        {
+            coder = new XrTextureCoder(format);
+            return true;
+        }
+
         if (DepthStencilTextureCoder.IsSupported(format))
         {
             coder = new DepthStencilTextureCoder(format);

@@ -157,7 +157,7 @@ public sealed class DepthStencilTextureCoder : IPitchTextureCoder
             var texelOffset = rowOffset;
             for (var x = 0; x < width; x++)
             {
-                EncodeStencilTexel(Format.RedBits, stencil[sourceIndex], destination.Slice(texelOffset, bytesPerTexel));
+                EncodeStencilTexel(stencil[sourceIndex], destination.Slice(texelOffset, bytesPerTexel));
                 sourceIndex++;
                 texelOffset = checked(texelOffset + bytesPerTexel);
             }
@@ -192,7 +192,7 @@ public sealed class DepthStencilTextureCoder : IPitchTextureCoder
             var texelOffset = rowOffset;
             for (var x = 0; x < width; x++)
             {
-                stencil[destinationIndex] = DecodeStencilTexel(Format.RedBits, source.Slice(texelOffset, bytesPerTexel));
+                stencil[destinationIndex] = DecodeStencilTexel(source.Slice(texelOffset, bytesPerTexel));
                 destinationIndex++;
                 texelOffset = checked(texelOffset + bytesPerTexel);
             }
@@ -292,6 +292,12 @@ public sealed class DepthStencilTextureCoder : IPitchTextureCoder
             case DepthStencilTransfer.StencilIndex16:
                 DecodeTexels<TPixel, StencilIndex16Transfer>(source, destination, rowPitch);
                 return;
+            case DepthStencilTransfer.X32Stencil8:
+                DecodeTexels<TPixel, X32Stencil8Transfer>(source, destination, rowPitch);
+                return;
+            case DepthStencilTransfer.X24Stencil8:
+                DecodeTexels<TPixel, X24Stencil8Transfer>(source, destination, rowPitch);
+                return;
             case DepthStencilTransfer.Depth16Stencil8:
                 DecodeTexels<TPixel, Depth16Stencil8Transfer>(source, destination, rowPitch);
                 return;
@@ -337,6 +343,12 @@ public sealed class DepthStencilTextureCoder : IPitchTextureCoder
                 return;
             case DepthStencilTransfer.StencilIndex16:
                 EncodeTexels<TPixel, StencilIndex16Transfer>(source, destination, rowPitch);
+                return;
+            case DepthStencilTransfer.X32Stencil8:
+                EncodeTexels<TPixel, X32Stencil8Transfer>(source, destination, rowPitch);
+                return;
+            case DepthStencilTransfer.X24Stencil8:
+                EncodeTexels<TPixel, X24Stencil8Transfer>(source, destination, rowPitch);
                 return;
             case DepthStencilTransfer.Depth16Stencil8:
                 EncodeTexels<TPixel, Depth16Stencil8Transfer>(source, destination, rowPitch);
@@ -490,6 +502,34 @@ public sealed class DepthStencilTextureCoder : IPitchTextureCoder
 
         public static void Encode(Rgba32Float source, Span<byte> destination) =>
             EncodeStencilTexel(16, FloatToUNorm(source.Red, 16), destination);
+    }
+
+    private readonly struct X32Stencil8Transfer : IDepthStencilPixelTransfer
+    {
+        public static int BytesPerTexel => 8;
+
+        public static Rgba32Float Decode(ReadOnlySpan<byte> source) =>
+            new(UNormToFloat(source[4], 8), 0f, 0f);
+
+        public static void Encode(Rgba32Float source, Span<byte> destination)
+        {
+            destination.Clear();
+            destination[4] = (byte)FloatToUNorm(source.Red, 8);
+        }
+    }
+
+    private readonly struct X24Stencil8Transfer : IDepthStencilPixelTransfer
+    {
+        public static int BytesPerTexel => 4;
+
+        public static Rgba32Float Decode(ReadOnlySpan<byte> source) =>
+            new(UNormToFloat(source[0], 8), 0f, 0f);
+
+        public static void Encode(Rgba32Float source, Span<byte> destination)
+        {
+            destination.Clear();
+            destination[0] = (byte)FloatToUNorm(source.Red, 8);
+        }
     }
 
     private readonly struct Depth16Stencil8Transfer : IDepthStencilPixelTransfer
@@ -659,6 +699,33 @@ public sealed class DepthStencilTextureCoder : IPitchTextureCoder
 
         return UNormToFloat(ReadUnsignedLittleEndian(source), Format.RedBits);
     }
+
+    private void EncodeStencilTexel(uint stencil, Span<byte> destination)
+    {
+        if (_transfer == DepthStencilTransfer.X32Stencil8)
+        {
+            destination.Clear();
+            destination[4] = (byte)Math.Min(stencil, 0xffu);
+            return;
+        }
+
+        if (_transfer == DepthStencilTransfer.X24Stencil8)
+        {
+            destination.Clear();
+            destination[0] = (byte)Math.Min(stencil, 0xffu);
+            return;
+        }
+
+        EncodeStencilTexel(Format.RedBits, stencil, destination);
+    }
+
+    private uint DecodeStencilTexel(ReadOnlySpan<byte> source) =>
+        _transfer switch
+        {
+            DepthStencilTransfer.X32Stencil8 => source[4],
+            DepthStencilTransfer.X24Stencil8 => source[0],
+            _ => DecodeStencilTexel(Format.RedBits, source)
+        };
 
     private static void EncodeStencilTexel(int bits, uint stencil, Span<byte> destination) =>
         WriteUnsignedLittleEndian(destination, Math.Min(stencil, GetMaxUInt(bits)));
@@ -1000,6 +1067,18 @@ public sealed class DepthStencilTextureCoder : IPitchTextureCoder
             return true;
         }
 
+        if (format == TextureFormats.X32Stencil8)
+        {
+            transfer = DepthStencilTransfer.X32Stencil8;
+            return true;
+        }
+
+        if (format == TextureFormats.X24Stencil8)
+        {
+            transfer = DepthStencilTransfer.X24Stencil8;
+            return true;
+        }
+
         if (format == TextureFormats.Depth16Stencil8)
         {
             transfer = DepthStencilTransfer.Depth16Stencil8;
@@ -1043,6 +1122,8 @@ public sealed class DepthStencilTextureCoder : IPitchTextureCoder
         StencilIndex4,
         StencilIndex8,
         StencilIndex16,
+        X32Stencil8,
+        X24Stencil8,
         Depth16Stencil8,
         Depth24Stencil8,
         Depth32Stencil8,
