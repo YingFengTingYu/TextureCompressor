@@ -76,6 +76,15 @@ public sealed class TextureFormatTests
     }
 
     [Theory]
+    [InlineData(1, 1)]
+    [InlineData(8, 1)]
+    [InlineData(9, 2)]
+    public void Bw1RowByteCountRoundsEachRowToWholeBytes(int width, int expected)
+    {
+        Assert.Equal(expected, TextureFormats.Bw1BppUNorm.GetRowByteCount(width));
+    }
+
+    [Theory]
     [InlineData(1, 8)]
     [InlineData(4, 8)]
     [InlineData(5, 16)]

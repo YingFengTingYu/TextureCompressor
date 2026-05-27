@@ -15,13 +15,10 @@ public sealed class BitPackedUNormTextureCoder(TextureFormat format) : IPitchTex
     public static bool IsSupported(TextureFormat format) =>
         format == TextureFormats.Alpha4UNorm
         || format == TextureFormats.Luminance4UNorm
-        || format == TextureFormats.Intensity4UNorm;
+        || format == TextureFormats.Intensity4UNorm
+        || format == TextureFormats.Bw1BppUNorm;
 
-    public int GetDefaultPitch(int width)
-    {
-        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(width);
-        return checked((width + 1) / 2);
-    }
+    public int GetDefaultPitch(int width) => Format.GetRowByteCount(width);
 
     public int GetEncodedByteCount(int width, int height, int rowPitch)
     {
@@ -67,24 +64,46 @@ public sealed class BitPackedUNormTextureCoder(TextureFormat format) : IPitchTex
             var sourceRow = source.GetRowSpan(y);
             for (var x = 0; x < source.Width; x++)
             {
-                EncodeTexel(TPixel.ToRgba8UNorm(sourceRow[x]), destinationRow, x);
+                EncodeTexel(sourceRow[x], destinationRow, x);
             }
         }
     }
 
     private Rgba8UNorm DecodeTexel(ReadOnlySpan<byte> row, int x)
     {
-        var value = ExpandNibble(ReadNibble(row, x));
+        if (_transfer == BitPackedUNormTransfer.Bw1)
+        {
+            var bitValue = ReadBit(row, x) ? byte.MaxValue : byte.MinValue;
+            return new Rgba8UNorm(bitValue, bitValue, bitValue);
+        }
+
+        var nibbleValue = ExpandNibble(ReadNibble(row, x));
         return _transfer switch
         {
-            BitPackedUNormTransfer.Alpha => new Rgba8UNorm(0, 0, 0, value),
-            BitPackedUNormTransfer.Luminance => new Rgba8UNorm(value, value, value),
-            BitPackedUNormTransfer.Intensity => new Rgba8UNorm(value, value, value, value),
+            BitPackedUNormTransfer.Alpha => new Rgba8UNorm(0, 0, 0, nibbleValue),
+            BitPackedUNormTransfer.Luminance => new Rgba8UNorm(nibbleValue, nibbleValue, nibbleValue),
+            BitPackedUNormTransfer.Intensity => new Rgba8UNorm(nibbleValue, nibbleValue, nibbleValue, nibbleValue),
             _ => throw CreateUnsupportedFormatException(Format)
         };
     }
 
-    private void EncodeTexel(Rgba8UNorm source, Span<byte> row, int x)
+    private void EncodeTexel<TPixel>(TPixel source, Span<byte> row, int x)
+        where TPixel : unmanaged, IPixel<TPixel>
+    {
+        if (_transfer == BitPackedUNormTransfer.Bw1)
+        {
+            if (TPixel.ToRgba32Float(source).Red >= 0.5f)
+            {
+                SetBit(row, x);
+            }
+
+            return;
+        }
+
+        EncodeNibbleTexel(TPixel.ToRgba8UNorm(source), row, x);
+    }
+
+    private void EncodeNibbleTexel(Rgba8UNorm source, Span<byte> row, int x)
     {
         // Single-channel luminance/intensity formats use red as their scalar carrier.
         var value = _transfer == BitPackedUNormTransfer.Alpha
@@ -93,6 +112,12 @@ public sealed class BitPackedUNormTextureCoder(TextureFormat format) : IPitchTex
 
         WriteNibble(row, x, (byte)(value >> 4));
     }
+
+    private static bool ReadBit(ReadOnlySpan<byte> row, int x) =>
+        (row[x >> 3] & (1 << (7 - (x & 7)))) != 0;
+
+    private static void SetBit(Span<byte> row, int x) =>
+        row[x >> 3] |= (byte)(1 << (7 - (x & 7)));
 
     private static byte ReadNibble(ReadOnlySpan<byte> row, int x)
     {
@@ -153,6 +178,11 @@ public sealed class BitPackedUNormTextureCoder(TextureFormat format) : IPitchTex
             return BitPackedUNormTransfer.Intensity;
         }
 
+        if (format == TextureFormats.Bw1BppUNorm)
+        {
+            return BitPackedUNormTransfer.Bw1;
+        }
+
         throw CreateUnsupportedFormatException(format);
     }
 
@@ -163,6 +193,7 @@ public sealed class BitPackedUNormTextureCoder(TextureFormat format) : IPitchTex
     {
         Alpha,
         Luminance,
-        Intensity
+        Intensity,
+        Bw1
     }
 }

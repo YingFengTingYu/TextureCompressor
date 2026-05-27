@@ -57,6 +57,15 @@ public sealed class TextureCoderManagerTests
         Assert.IsType<BitPackedUNormTextureCoder>(coder);
     }
 
+    [Fact]
+    public void GlobalManagerFindsBw1BitPackedUNormCoder()
+    {
+        var coder = TextureCoderManager.Global.GetCoder(TextureFormats.Bw1BppUNorm);
+
+        Assert.True(BitPackedUNormTextureCoder.IsSupported(TextureFormats.Bw1BppUNorm));
+        Assert.IsType<BitPackedUNormTextureCoder>(coder);
+    }
+
     [Theory]
     [MemberData(nameof(FirstBatchSequentialFormats))]
     public void GlobalManagerFindsFirstBatchSequentialUncompressedCoders(TextureFormat format)
@@ -901,6 +910,53 @@ public sealed class TextureCoderManagerTests
         Assert.Equal([0x2d], encoded);
         AssertIntensity(decoded.Pixels[0], 2);
         AssertIntensity(decoded.Pixels[1], 13);
+    }
+
+    [Fact]
+    public void EncodeAndDecodeBw1UsesRedAndHonorsRowPitchPadding()
+    {
+        var source = new ArrayTextureBitmap<Rgba32Float>(
+            9,
+            2,
+            [
+                new Rgba32Float(0f, 0f, 0f),
+                new Rgba32Float(1f, 1f, 1f),
+                new Rgba32Float(0f, 1f, 1f),
+                new Rgba32Float(1f, 0f, 0f),
+                new Rgba32Float(0.5f, 0f, 0f),
+                new Rgba32Float(0f, 0f, 1f),
+                new Rgba32Float(0.49f, 0.49f, 0.49f),
+                new Rgba32Float(0.5f, 0.5f, 0.5f),
+                new Rgba32Float(1f, 1f, 1f),
+                new Rgba32Float(1f, 1f, 1f),
+                new Rgba32Float(0f, 0f, 0f),
+                new Rgba32Float(1f, 1f, 1f),
+                new Rgba32Float(0f, 0f, 0f),
+                new Rgba32Float(1f, 1f, 1f),
+                new Rgba32Float(0f, 0f, 0f),
+                new Rgba32Float(1f, 1f, 1f),
+                new Rgba32Float(0f, 0f, 0f),
+                new Rgba32Float(0f, 0f, 0f)
+            ]);
+
+        var coder = Assert.IsType<BitPackedUNormTextureCoder>(TextureCoderManager.Global.GetCoder(TextureFormats.Bw1BppUNorm));
+        var rowPitch = coder.GetDefaultPitch(source.Width) + 1;
+        var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
+        Array.Fill<byte>(encoded, 0x7e);
+        coder.Encode(source.AsView(), encoded, rowPitch);
+
+        var decoded = new ArrayTextureBitmap<Rgba8UNorm>(9, 2);
+        coder.Decode(encoded, decoded.AsView(), rowPitch);
+
+        Assert.Equal(2, coder.GetDefaultPitch(source.Width));
+        Assert.Equal([0x59, 0x80, 0x7e, 0xaa, 0x00, 0x7e], encoded);
+        Assert.Equal(0, decoded.Pixels[0].Red);
+        Assert.Equal(255, decoded.Pixels[1].Red);
+        Assert.Equal(0, decoded.Pixels[2].Red);
+        Assert.Equal(255, decoded.Pixels[3].Red);
+        Assert.Equal(255, decoded.Pixels[8].Red);
+        Assert.Equal(255, decoded.Pixels[9].Red);
+        Assert.Equal(0, decoded.Pixels[17].Red);
     }
 
     [Fact]

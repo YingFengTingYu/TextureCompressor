@@ -467,6 +467,19 @@ public static class TextureFormats
         1,
         64);
 
+    public static readonly TextureFormat Bw1BppUNorm = new(
+        "BW1BPP_UNORM",
+        TextureFormatKind.Uncompressed,
+        TextureComponents.R,
+        TextureValueKind.UNorm,
+        1,
+        0,
+        0,
+        0,
+        8,
+        1,
+        8);
+
     public static readonly TextureFormat Bgr565UNorm =
         TextureFormat.Uncompressed("BGR565_UNORM", TextureComponents.Bgr, TextureValueKind.UNorm, 5, 6, 5);
 
