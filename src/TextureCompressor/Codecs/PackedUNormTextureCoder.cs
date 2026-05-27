@@ -129,6 +129,15 @@ public sealed class PackedUNormTextureCoder : IPitchTextureCoder
             case PackedUNormTransfer.Rgba12X4:
                 Decode<TPixel, Rgba16UNorm, Rgba16UNormTransfer, Rgba12X4UNormTransfer>(source, destination, rowPitch);
                 return;
+            case PackedUNormTransfer.R14X2:
+                Decode<TPixel, Rgba16UNorm, Rgba16UNormTransfer, R14X2UNormTransfer>(source, destination, rowPitch);
+                return;
+            case PackedUNormTransfer.Rg14X2:
+                Decode<TPixel, Rgba16UNorm, Rgba16UNormTransfer, Rg14X2UNormTransfer>(source, destination, rowPitch);
+                return;
+            case PackedUNormTransfer.Rgba14X2:
+                Decode<TPixel, Rgba16UNorm, Rgba16UNormTransfer, Rgba14X2UNormTransfer>(source, destination, rowPitch);
+                return;
             case PackedUNormTransfer.Rgba2:
                 Decode<TPixel, Rgba8UNorm, Rgba8UNormTransfer, Rgba2UNormTransfer>(source, destination, rowPitch);
                 return;
@@ -273,6 +282,15 @@ public sealed class PackedUNormTextureCoder : IPitchTextureCoder
                 return;
             case PackedUNormTransfer.Rgba12X4:
                 Encode<TPixel, Rgba16UNorm, Rgba16UNormTransfer, Rgba12X4UNormTransfer>(source, destination, rowPitch);
+                return;
+            case PackedUNormTransfer.R14X2:
+                Encode<TPixel, Rgba16UNorm, Rgba16UNormTransfer, R14X2UNormTransfer>(source, destination, rowPitch);
+                return;
+            case PackedUNormTransfer.Rg14X2:
+                Encode<TPixel, Rgba16UNorm, Rgba16UNormTransfer, Rg14X2UNormTransfer>(source, destination, rowPitch);
+                return;
+            case PackedUNormTransfer.Rgba14X2:
+                Encode<TPixel, Rgba16UNorm, Rgba16UNormTransfer, Rgba14X2UNormTransfer>(source, destination, rowPitch);
                 return;
             case PackedUNormTransfer.Rgba2:
                 Encode<TPixel, Rgba8UNorm, Rgba8UNormTransfer, Rgba2UNormTransfer>(source, destination, rowPitch);
@@ -953,6 +971,52 @@ public sealed class PackedUNormTextureCoder : IPitchTextureCoder
             EncodePaddedWord(value.Green, texel, 2, 12);
             EncodePaddedWord(value.Blue, texel, 4, 12);
             EncodePaddedWord(value.Alpha, texel, 6, 12);
+        }
+    }
+
+    private readonly struct R14X2UNormTransfer : IPackedUNormTransfer<Rgba16UNorm>
+    {
+        public static int BytesPerTexel => 2;
+
+        public static Rgba16UNorm Decode(ReadOnlySpan<byte> texel) =>
+            new(DecodePaddedWord(texel, 0, 14), 0, 0);
+
+        public static void Encode(Rgba16UNorm value, Span<byte> texel) =>
+            EncodePaddedWord(value.Red, texel, 0, 14);
+    }
+
+    private readonly struct Rg14X2UNormTransfer : IPackedUNormTransfer<Rgba16UNorm>
+    {
+        public static int BytesPerTexel => 4;
+
+        public static Rgba16UNorm Decode(ReadOnlySpan<byte> texel) => new(
+            DecodePaddedWord(texel, 0, 14),
+            DecodePaddedWord(texel, 2, 14),
+            0);
+
+        public static void Encode(Rgba16UNorm value, Span<byte> texel)
+        {
+            EncodePaddedWord(value.Red, texel, 0, 14);
+            EncodePaddedWord(value.Green, texel, 2, 14);
+        }
+    }
+
+    private readonly struct Rgba14X2UNormTransfer : IPackedUNormTransfer<Rgba16UNorm>
+    {
+        public static int BytesPerTexel => 8;
+
+        public static Rgba16UNorm Decode(ReadOnlySpan<byte> texel) => new(
+            DecodePaddedWord(texel, 0, 14),
+            DecodePaddedWord(texel, 2, 14),
+            DecodePaddedWord(texel, 4, 14),
+            DecodePaddedWord(texel, 6, 14));
+
+        public static void Encode(Rgba16UNorm value, Span<byte> texel)
+        {
+            EncodePaddedWord(value.Red, texel, 0, 14);
+            EncodePaddedWord(value.Green, texel, 2, 14);
+            EncodePaddedWord(value.Blue, texel, 4, 14);
+            EncodePaddedWord(value.Alpha, texel, 6, 14);
         }
     }
 
@@ -1750,6 +1814,24 @@ public sealed class PackedUNormTextureCoder : IPitchTextureCoder
             return true;
         }
 
+        if (format == TextureFormats.R14X2UNorm)
+        {
+            transfer = PackedUNormTransfer.R14X2;
+            return true;
+        }
+
+        if (format == TextureFormats.R14X2G14X2UNorm)
+        {
+            transfer = PackedUNormTransfer.Rg14X2;
+            return true;
+        }
+
+        if (format == TextureFormats.R14X2G14X2B14X2A14X2UNorm)
+        {
+            transfer = PackedUNormTransfer.Rgba14X2;
+            return true;
+        }
+
         if (format == TextureFormats.Rgba4UNorm)
         {
             transfer = PackedUNormTransfer.Rgba4;
@@ -1903,6 +1985,9 @@ public sealed class PackedUNormTextureCoder : IPitchTextureCoder
         R12X4,
         Rg12X4,
         Rgba12X4,
+        R14X2,
+        Rg14X2,
+        Rgba14X2,
         Rgba2,
         Rgba4,
         Rgba4Rev,

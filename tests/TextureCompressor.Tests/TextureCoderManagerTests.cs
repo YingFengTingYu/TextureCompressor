@@ -1316,6 +1316,35 @@ public sealed class TextureCoderManagerTests
     }
 
     [Fact]
+    public void EncodeAndDecodePlanarYuv14Msb2P420UsesInterleavedChroma()
+    {
+        var source = new ArrayTextureBitmap<Rgba16UNorm>(
+            2,
+            2,
+            [
+                new Rgba16UNorm(ushort.MaxValue, ushort.MaxValue, ushort.MaxValue),
+                new Rgba16UNorm(ushort.MaxValue, ushort.MaxValue, ushort.MaxValue),
+                new Rgba16UNorm(ushort.MaxValue, ushort.MaxValue, ushort.MaxValue),
+                new Rgba16UNorm(ushort.MaxValue, ushort.MaxValue, ushort.MaxValue)
+            ]);
+
+        var coder = Assert.IsType<PlanarYuvTextureCoder>(TextureCoderManager.Global.GetCoder(TextureFormats.Yuv14Msb2P420UNorm));
+        var rowPitch = coder.GetDefaultPitch(source.Width);
+        var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
+        coder.Encode(source.AsView(), encoded, rowPitch);
+
+        var decoded = new ArrayTextureBitmap<Rgba16UNorm>(2, 2);
+        coder.Decode(encoded, decoded.AsView(), rowPitch);
+
+        Assert.Equal(4, rowPitch);
+        Assert.Equal([0xfc, 0xff, 0xfc, 0xff, 0xfc, 0xff, 0xfc, 0xff, 0x00, 0x80, 0x00, 0x80], encoded);
+        Assert.Equal(source.Pixels[0], decoded.Pixels[0]);
+        Assert.Equal(source.Pixels[1], decoded.Pixels[1]);
+        Assert.Equal(source.Pixels[2], decoded.Pixels[2]);
+        Assert.Equal(source.Pixels[3], decoded.Pixels[3]);
+    }
+
+    [Fact]
     public void PlanarYuvRejectsRowPitchOverride()
     {
         var coder = Assert.IsType<PlanarYuvTextureCoder>(TextureCoderManager.Global.GetCoder(TextureFormats.Yuv3P420UNorm));
@@ -1767,6 +1796,46 @@ public sealed class TextureCoderManagerTests
         Assert.Equal(source.Pixels[0], decoded.Pixels[0]);
     }
 
+    [Fact]
+    public void EncodeAndDecodeRgba12X4UIntStoresComponentsInTopBits()
+    {
+        var source = new ArrayTextureBitmap<Rgba16UNorm>(
+            1,
+            1,
+            [new Rgba16UNorm(4095, 1, 2, 3)]);
+
+        var coder = Assert.IsType<PackedIntegerTextureCoder>(TextureCoderManager.Global.GetCoder(TextureFormats.R12X4G12X4B12X4A12X4UInt));
+        var rowPitch = coder.GetDefaultPitch(source.Width);
+        var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
+        coder.Encode(source.AsView(), encoded, rowPitch);
+
+        var decoded = new ArrayTextureBitmap<Rgba16UNorm>(1, 1);
+        coder.Decode(encoded, decoded.AsView(), rowPitch);
+
+        Assert.Equal([0xf0, 0xff, 0x10, 0x00, 0x20, 0x00, 0x30, 0x00], encoded);
+        Assert.Equal(source.Pixels[0], decoded.Pixels[0]);
+    }
+
+    [Fact]
+    public void EncodeAndDecodeRgba14X2UNormStoresComponentsInTopBits()
+    {
+        var source = new ArrayTextureBitmap<Rgba16UNorm>(
+            1,
+            1,
+            [new Rgba16UNorm(ushort.MaxValue, 0, 0, ushort.MaxValue)]);
+
+        var coder = Assert.IsType<PackedUNormTextureCoder>(TextureCoderManager.Global.GetCoder(TextureFormats.R14X2G14X2B14X2A14X2UNorm));
+        var rowPitch = coder.GetDefaultPitch(source.Width);
+        var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
+        coder.Encode(source.AsView(), encoded, rowPitch);
+
+        var decoded = new ArrayTextureBitmap<Rgba16UNorm>(1, 1);
+        coder.Decode(encoded, decoded.AsView(), rowPitch);
+
+        Assert.Equal([0xfc, 0xff, 0x00, 0x00, 0x00, 0x00, 0xfc, 0xff], encoded);
+        Assert.Equal(source.Pixels[0], decoded.Pixels[0]);
+    }
+
     private static Rgba8UNorm Nibble(int value) =>
         new((byte)(value * 17), 0, 0);
 
@@ -1822,6 +1891,9 @@ public sealed class TextureCoderManagerTests
         TextureFormats.R12X4UNorm,
         TextureFormats.R12X4G12X4UNorm,
         TextureFormats.R12X4G12X4B12X4A12X4UNorm,
+        TextureFormats.R14X2UNorm,
+        TextureFormats.R14X2G14X2UNorm,
+        TextureFormats.R14X2G14X2B14X2A14X2UNorm,
         TextureFormats.Rgba2UNorm,
         TextureFormats.Rgba4UNorm,
         TextureFormats.Rgba4RevUNorm,
@@ -1866,7 +1938,16 @@ public sealed class TextureCoderManagerTests
         TextureFormats.Rgb10A2RevUInt,
         TextureFormats.Bgr10A2RevUInt,
         TextureFormats.Rgb10A2RevSInt,
-        TextureFormats.Bgr10A2RevSInt
+        TextureFormats.Bgr10A2RevSInt,
+        TextureFormats.R10X6UInt,
+        TextureFormats.R10X6G10X6UInt,
+        TextureFormats.R10X6G10X6B10X6A10X6UInt,
+        TextureFormats.R12X4UInt,
+        TextureFormats.R12X4G12X4UInt,
+        TextureFormats.R12X4G12X4B12X4A12X4UInt,
+        TextureFormats.R14X2UInt,
+        TextureFormats.R14X2G14X2UInt,
+        TextureFormats.R14X2G14X2B14X2A14X2UInt
     };
 
     public static TheoryData<TextureFormat> RepresentativePlanarYuvFormats() => new()
@@ -1875,7 +1956,9 @@ public sealed class TextureCoderManagerTests
         TextureFormats.Yuv2P420UNorm,
         TextureFormats.Yvu10Lsb2P422UNorm,
         TextureFormats.Yuv12Msb2P444UNorm,
-        TextureFormats.Yuv16_2P444UNorm
+        TextureFormats.Yuv16_2P444UNorm,
+        TextureFormats.Yuv14Msb2P420UNorm,
+        TextureFormats.Yuv14Msb2P422UNorm
     };
 
     public static TheoryData<TextureFormat> DepthStencilFormats() => new()

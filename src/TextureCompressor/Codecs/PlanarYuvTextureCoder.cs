@@ -244,6 +244,8 @@ public sealed class PlanarYuvTextureCoder : IPitchTextureCoder
         if (format == TextureFormats.Yvu2P420UNorm) { layout = new PlanarYuvLayout(8, 2, 2, Biplanar: true, VFirst: true, MsbAligned: false); return true; }
         if (format == TextureFormats.Yvu10Msb2P420UNorm) { layout = new PlanarYuvLayout(10, 2, 2, Biplanar: true, VFirst: true, MsbAligned: true); return true; }
         if (format == TextureFormats.Yvu10Lsb2P420UNorm) { layout = new PlanarYuvLayout(10, 2, 2, Biplanar: true, VFirst: true, MsbAligned: false); return true; }
+        if (format == TextureFormats.Yuv14Msb2P420UNorm) { layout = new PlanarYuvLayout(14, 2, 2, Biplanar: true, VFirst: false, MsbAligned: true); return true; }
+        if (format == TextureFormats.Yuv14Msb2P422UNorm) { layout = new PlanarYuvLayout(14, 2, 1, Biplanar: true, VFirst: false, MsbAligned: true); return true; }
 
         layout = default;
         return false;
@@ -261,6 +263,7 @@ public sealed class PlanarYuvTextureCoder : IPitchTextureCoder
         {
             10 => msbAligned ? (uint)(sample >> 6) : (uint)(sample & 0x03ff),
             12 => msbAligned ? (uint)(sample >> 4) : (uint)(sample & 0x0fff),
+            14 => msbAligned ? (uint)(sample >> 2) : (uint)(sample & 0x3fff),
             16 => sample,
             _ => throw new InvalidOperationException($"Unsupported YUV sample size {bitsPerSample}.")
         };
@@ -278,6 +281,7 @@ public sealed class PlanarYuvTextureCoder : IPitchTextureCoder
         {
             10 => msbAligned ? sample << 6 : sample,
             12 => msbAligned ? sample << 4 : sample,
+            14 => msbAligned ? sample << 2 : sample,
             16 => sample,
             _ => throw new InvalidOperationException($"Unsupported YUV sample size {bitsPerSample}.")
         };

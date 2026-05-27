@@ -434,6 +434,42 @@ public static class TextureFormats
     public static readonly TextureFormat R12X4G12X4B12X4A12X4UNorm =
         PaddedWord("R12X4G12X4B12X4A12X4_UNORM_4PACK16", TextureComponents.Rgba, TextureValueKind.UNorm, 12, 12, 12, 12, 64);
 
+    public static readonly TextureFormat R10X6UInt =
+        PaddedWord("R10X6_UINT_PACK16", TextureComponents.R, TextureValueKind.UInt, 10, 0, 0, 0, 16);
+
+    public static readonly TextureFormat R10X6G10X6UInt =
+        PaddedWord("R10X6G10X6_UINT_2PACK16", TextureComponents.Rg, TextureValueKind.UInt, 10, 10, 0, 0, 32);
+
+    public static readonly TextureFormat R10X6G10X6B10X6A10X6UInt =
+        PaddedWord("R10X6G10X6B10X6A10X6_UINT_4PACK16", TextureComponents.Rgba, TextureValueKind.UInt, 10, 10, 10, 10, 64);
+
+    public static readonly TextureFormat R12X4UInt =
+        PaddedWord("R12X4_UINT_PACK16", TextureComponents.R, TextureValueKind.UInt, 12, 0, 0, 0, 16);
+
+    public static readonly TextureFormat R12X4G12X4UInt =
+        PaddedWord("R12X4G12X4_UINT_2PACK16", TextureComponents.Rg, TextureValueKind.UInt, 12, 12, 0, 0, 32);
+
+    public static readonly TextureFormat R12X4G12X4B12X4A12X4UInt =
+        PaddedWord("R12X4G12X4B12X4A12X4_UINT_4PACK16", TextureComponents.Rgba, TextureValueKind.UInt, 12, 12, 12, 12, 64);
+
+    public static readonly TextureFormat R14X2UInt =
+        PaddedWord("R14X2_UINT_PACK16", TextureComponents.R, TextureValueKind.UInt, 14, 0, 0, 0, 16);
+
+    public static readonly TextureFormat R14X2G14X2UInt =
+        PaddedWord("R14X2G14X2_UINT_2PACK16", TextureComponents.Rg, TextureValueKind.UInt, 14, 14, 0, 0, 32);
+
+    public static readonly TextureFormat R14X2G14X2B14X2A14X2UInt =
+        PaddedWord("R14X2G14X2B14X2A14X2_UINT_4PACK16", TextureComponents.Rgba, TextureValueKind.UInt, 14, 14, 14, 14, 64);
+
+    public static readonly TextureFormat R14X2UNorm =
+        PaddedWord("R14X2_UNORM_PACK16", TextureComponents.R, TextureValueKind.UNorm, 14, 0, 0, 0, 16);
+
+    public static readonly TextureFormat R14X2G14X2UNorm =
+        PaddedWord("R14X2G14X2_UNORM_2PACK16", TextureComponents.Rg, TextureValueKind.UNorm, 14, 14, 0, 0, 32);
+
+    public static readonly TextureFormat R14X2G14X2B14X2A14X2UNorm =
+        PaddedWord("R14X2G14X2B14X2A14X2_UNORM_4PACK16", TextureComponents.Rgba, TextureValueKind.UNorm, 14, 14, 14, 14, 64);
+
     public static readonly TextureFormat R8G8B8G8_422UNorm = new(
         "R8G8_B8G8_422_UNORM",
         TextureFormatKind.Uncompressed,
@@ -745,6 +781,12 @@ public static class TextureFormats
 
     public static readonly TextureFormat Yvu10Lsb2P420UNorm =
         PlanarYuv("YVU10LSB_2P_420_UNORM", 10);
+
+    public static readonly TextureFormat Yuv14Msb2P420UNorm =
+        PlanarYuv("YUV14MSB_2P_420_UNORM", 14);
+
+    public static readonly TextureFormat Yuv14Msb2P422UNorm =
+        PlanarYuv("YUV14MSB_2P_422_UNORM", 14);
 
     public static readonly TextureFormat Bgr565UNorm =
         TextureFormat.Uncompressed("BGR565_UNORM", TextureComponents.Bgr, TextureValueKind.UNorm, 5, 6, 5);
