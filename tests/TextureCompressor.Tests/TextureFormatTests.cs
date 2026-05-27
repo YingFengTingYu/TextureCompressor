@@ -151,6 +151,21 @@ public sealed class TextureFormatTests
         Assert.Equal(28, format.GetRowByteCount(7));
     }
 
+    [Theory]
+    [MemberData(nameof(PackedRgb422Formats))]
+    public void PackedRgb422FormatsDescribeTwoPixelBlocks(TextureFormat format, string name, int bitsPerBlock, int bytesPerBlock)
+    {
+        Assert.Equal(name, format.Name);
+        Assert.Equal(TextureFormatKind.Uncompressed, format.Kind);
+        Assert.Equal(TextureComponents.Rgb, format.Components);
+        Assert.Equal(TextureValueKind.UNorm, format.ValueKind);
+        Assert.Equal(2, format.BlockWidth);
+        Assert.Equal(1, format.BlockHeight);
+        Assert.Equal(bitsPerBlock, format.BitsPerBlock);
+        Assert.Equal(bytesPerBlock, format.BytesPerBlock);
+        Assert.Equal(bytesPerBlock * 3, format.GetRowByteCount(6));
+    }
+
     public static TheoryData<TextureFormat, string, TextureFormatKind, TextureComponents, int, int, int> MvpFormats() => new()
     {
         { TextureFormats.R8, "R8_UNORM", TextureFormatKind.Uncompressed, TextureComponents.R, 1, 8, 1 },
@@ -177,5 +192,15 @@ public sealed class TextureFormatTests
         { TextureFormats.Abgr8Srgb, "ABGR8_SRGB" },
         { TextureFormats.Bgra8Srgb, "BGRA8_SRGB" },
         { TextureFormats.Bgrx8Srgb, "BGRX8_SRGB" }
+    };
+
+    public static TheoryData<TextureFormat, string, int, int> PackedRgb422Formats() => new()
+    {
+        { TextureFormats.R8G8B8G8_422UNorm, "R8G8_B8G8_422_UNORM", 32, 4 },
+        { TextureFormats.G8R8G8B8_422UNorm, "G8R8_G8B8_422_UNORM", 32, 4 },
+        { TextureFormats.G8B8G8R8_422UNorm, "G8B8_G8R8_422_UNORM", 32, 4 },
+        { TextureFormats.B8G8R8G8_422UNorm, "B8G8_R8G8_422_UNORM", 32, 4 },
+        { TextureFormats.G16B16G16R16_422UNorm, "G16B16_G16R16_422_UNORM", 64, 8 },
+        { TextureFormats.B16G16R16G16_422UNorm, "B16G16_R16G16_422_UNORM", 64, 8 }
     };
 }

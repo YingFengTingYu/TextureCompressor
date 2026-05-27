@@ -389,6 +389,84 @@ public static class TextureFormats
     public static readonly TextureFormat Rgb12UNorm =
         TextureFormat.Uncompressed("RGB12_UNORM", TextureComponents.Rgb, TextureValueKind.UNorm, 12, 12, 12);
 
+    public static readonly TextureFormat R8G8B8G8_422UNorm = new(
+        "R8G8_B8G8_422_UNORM",
+        TextureFormatKind.Uncompressed,
+        TextureComponents.Rgb,
+        TextureValueKind.UNorm,
+        8,
+        8,
+        8,
+        0,
+        2,
+        1,
+        32);
+
+    public static readonly TextureFormat G8R8G8B8_422UNorm = new(
+        "G8R8_G8B8_422_UNORM",
+        TextureFormatKind.Uncompressed,
+        TextureComponents.Rgb,
+        TextureValueKind.UNorm,
+        8,
+        8,
+        8,
+        0,
+        2,
+        1,
+        32);
+
+    public static readonly TextureFormat G8B8G8R8_422UNorm = new(
+        "G8B8_G8R8_422_UNORM",
+        TextureFormatKind.Uncompressed,
+        TextureComponents.Rgb,
+        TextureValueKind.UNorm,
+        8,
+        8,
+        8,
+        0,
+        2,
+        1,
+        32);
+
+    public static readonly TextureFormat B8G8R8G8_422UNorm = new(
+        "B8G8_R8G8_422_UNORM",
+        TextureFormatKind.Uncompressed,
+        TextureComponents.Rgb,
+        TextureValueKind.UNorm,
+        8,
+        8,
+        8,
+        0,
+        2,
+        1,
+        32);
+
+    public static readonly TextureFormat G16B16G16R16_422UNorm = new(
+        "G16B16_G16R16_422_UNORM",
+        TextureFormatKind.Uncompressed,
+        TextureComponents.Rgb,
+        TextureValueKind.UNorm,
+        16,
+        16,
+        16,
+        0,
+        2,
+        1,
+        64);
+
+    public static readonly TextureFormat B16G16R16G16_422UNorm = new(
+        "B16G16_R16G16_422_UNORM",
+        TextureFormatKind.Uncompressed,
+        TextureComponents.Rgb,
+        TextureValueKind.UNorm,
+        16,
+        16,
+        16,
+        0,
+        2,
+        1,
+        64);
+
     public static readonly TextureFormat Bgr565UNorm =
         TextureFormat.Uncompressed("BGR565_UNORM", TextureComponents.Bgr, TextureValueKind.UNorm, 5, 6, 5);
 

@@ -115,6 +115,12 @@ public sealed class TextureCoderManager
             return true;
         }
 
+        if (PackedRgb422TextureCoder.IsSupported(format))
+        {
+            coder = new PackedRgb422TextureCoder(format);
+            return true;
+        }
+
         if (RgbmTextureCoder.IsSupported(format))
         {
             coder = new RgbmTextureCoder(format);
