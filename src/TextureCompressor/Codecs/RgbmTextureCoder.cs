@@ -48,19 +48,16 @@ public sealed class RgbmTextureCoder : IPitchTextureCoder
         where TPixel : unmanaged, IPixel<TPixel>
     {
         ValidateSourceLength(destination.Width, destination.Height, source, rowPitch);
-
-        var rowOffset = 0;
-        for (var y = 0; y < destination.Height; y++)
+        switch (_kind)
         {
-            var destinationRow = destination.GetRowSpan(y);
-            var texelOffset = rowOffset;
-            for (var x = 0; x < destination.Width; x++)
-            {
-                destinationRow[x] = TPixel.FromRgba32Float(DecodeTexel(source.Slice(texelOffset, BytesPerTexel)));
-                texelOffset = checked(texelOffset + BytesPerTexel);
-            }
-
-            rowOffset = checked(rowOffset + rowPitch);
+            case RgbmKind.Rgbm:
+                Decode<TPixel, RgbmTransfer>(source, destination, rowPitch);
+                return;
+            case RgbmKind.Rgbd:
+                Decode<TPixel, RgbdTransfer>(source, destination, rowPitch);
+                return;
+            default:
+                throw CreateUnsupportedFormatException(Format);
         }
     }
 
@@ -68,15 +65,31 @@ public sealed class RgbmTextureCoder : IPitchTextureCoder
         where TPixel : unmanaged, IPixel<TPixel>
     {
         ValidateDestinationLength(source.Width, source.Height, destination, rowPitch);
-
-        var rowOffset = 0;
-        for (var y = 0; y < source.Height; y++)
+        switch (_kind)
         {
-            var sourceRow = source.GetRowSpan(y);
+            case RgbmKind.Rgbm:
+                Encode<TPixel, RgbmTransfer>(source, destination, rowPitch);
+                return;
+            case RgbmKind.Rgbd:
+                Encode<TPixel, RgbdTransfer>(source, destination, rowPitch);
+                return;
+            default:
+                throw CreateUnsupportedFormatException(Format);
+        }
+    }
+
+    private void Decode<TPixel, TTransfer>(ReadOnlySpan<byte> source, ImageView<TPixel> destination, int rowPitch)
+        where TPixel : unmanaged, IPixel<TPixel>
+        where TTransfer : IRgbmTransfer
+    {
+        var rowOffset = 0;
+        for (var y = 0; y < destination.Height; y++)
+        {
+            var destinationRow = destination.GetRowSpan(y);
             var texelOffset = rowOffset;
-            for (var x = 0; x < source.Width; x++)
+            for (var x = 0; x < destination.Width; x++)
             {
-                EncodeTexel(TPixel.ToRgba32Float(sourceRow[x]), destination.Slice(texelOffset, BytesPerTexel));
+                destinationRow[x] = TPixel.FromRgba32Float(TTransfer.Decode(source.Slice(texelOffset, BytesPerTexel), MaxRange));
                 texelOffset = checked(texelOffset + BytesPerTexel);
             }
 
@@ -84,99 +97,120 @@ public sealed class RgbmTextureCoder : IPitchTextureCoder
         }
     }
 
-    private Rgba32Float DecodeTexel(ReadOnlySpan<byte> source)
+    private void Encode<TPixel, TTransfer>(ImageView<TPixel> source, Span<byte> destination, int rowPitch)
+        where TPixel : unmanaged, IPixel<TPixel>
+        where TTransfer : IRgbmTransfer
     {
-        var red = RgbaColorConversions.UNorm8ToFloat(source[0]);
-        var green = RgbaColorConversions.UNorm8ToFloat(source[1]);
-        var blue = RgbaColorConversions.UNorm8ToFloat(source[2]);
-
-        return _kind switch
+        var rowOffset = 0;
+        for (var y = 0; y < source.Height; y++)
         {
-            RgbmKind.Rgbm => DecodeRgbm(red, green, blue, source[3]),
-            RgbmKind.Rgbd => DecodeRgbd(red, green, blue, source[3]),
-            _ => throw CreateUnsupportedFormatException(Format)
-        };
+            var sourceRow = source.GetRowSpan(y);
+            var texelOffset = rowOffset;
+            for (var x = 0; x < source.Width; x++)
+            {
+                TTransfer.Encode(TPixel.ToRgba32Float(sourceRow[x]), MaxRange, destination.Slice(texelOffset, BytesPerTexel));
+                texelOffset = checked(texelOffset + BytesPerTexel);
+            }
+
+            rowOffset = checked(rowOffset + rowPitch);
+        }
     }
 
-    private Rgba32Float DecodeRgbm(float red, float green, float blue, byte alpha)
+    private interface IRgbmTransfer
     {
-        var multiplier = RgbaColorConversions.UNorm8ToFloat(alpha) * MaxRange;
-        return new Rgba32Float(red * multiplier, green * multiplier, blue * multiplier);
+        static abstract Rgba32Float Decode(ReadOnlySpan<byte> source, float maxRange);
+
+        static abstract void Encode(Rgba32Float source, float maxRange, Span<byte> destination);
     }
 
-    private Rgba32Float DecodeRgbd(float red, float green, float blue, byte divisor)
+    private readonly struct RgbmTransfer : IRgbmTransfer
     {
-        if (divisor == 0)
+        public static Rgba32Float Decode(ReadOnlySpan<byte> source, float maxRange)
         {
-            return new Rgba32Float(0f, 0f, 0f);
+            var multiplier = RgbaColorConversions.UNorm8ToFloat(source[3]) * maxRange;
+            return new Rgba32Float(
+                RgbaColorConversions.UNorm8ToFloat(source[0]) * multiplier,
+                RgbaColorConversions.UNorm8ToFloat(source[1]) * multiplier,
+                RgbaColorConversions.UNorm8ToFloat(source[2]) * multiplier);
         }
 
-        var scale = MaxRange / divisor;
-        return new Rgba32Float(red * scale, green * scale, blue * scale);
-    }
-
-    private void EncodeTexel(Rgba32Float source, Span<byte> destination)
-    {
-        var red = ClampToMaxRange(source.Red);
-        var green = ClampToMaxRange(source.Green);
-        var blue = ClampToMaxRange(source.Blue);
-        var maxComponent = MathF.Max(red, MathF.Max(green, blue));
-
-        switch (_kind)
+        public static void Encode(Rgba32Float source, float maxRange, Span<byte> destination)
         {
-            case RgbmKind.Rgbm:
-                EncodeRgbm(red, green, blue, maxComponent, destination);
+            GetClampedComponents(source, maxRange, out var red, out var green, out var blue, out var maxComponent);
+            if (maxComponent <= 0f)
+            {
+                destination.Clear();
                 return;
-            case RgbmKind.Rgbd:
-                EncodeRgbd(red, green, blue, maxComponent, destination);
+            }
+
+            var multiplier = MathF.Ceiling((maxComponent / maxRange) * byte.MaxValue) / byte.MaxValue;
+            multiplier = Math.Clamp(multiplier, 1f / byte.MaxValue, 1f);
+            destination[0] = RgbaColorConversions.FloatToUNorm8(red / (multiplier * maxRange));
+            destination[1] = RgbaColorConversions.FloatToUNorm8(green / (multiplier * maxRange));
+            destination[2] = RgbaColorConversions.FloatToUNorm8(blue / (multiplier * maxRange));
+            destination[3] = RgbaColorConversions.FloatToUNorm8(multiplier);
+        }
+    }
+
+    private readonly struct RgbdTransfer : IRgbmTransfer
+    {
+        public static Rgba32Float Decode(ReadOnlySpan<byte> source, float maxRange)
+        {
+            var divisor = source[3];
+            if (divisor == 0)
+            {
+                return new Rgba32Float(0f, 0f, 0f);
+            }
+
+            var scale = maxRange / divisor;
+            return new Rgba32Float(
+                RgbaColorConversions.UNorm8ToFloat(source[0]) * scale,
+                RgbaColorConversions.UNorm8ToFloat(source[1]) * scale,
+                RgbaColorConversions.UNorm8ToFloat(source[2]) * scale);
+        }
+
+        public static void Encode(Rgba32Float source, float maxRange, Span<byte> destination)
+        {
+            GetClampedComponents(source, maxRange, out var red, out var green, out var blue, out var maxComponent);
+            if (maxComponent <= 0f)
+            {
+                destination[0] = 0;
+                destination[1] = 0;
+                destination[2] = 0;
+                destination[3] = byte.MaxValue;
                 return;
-            default:
-                throw CreateUnsupportedFormatException(Format);
+            }
+
+            var divisor = (byte)Math.Clamp(MathF.Floor(maxRange / maxComponent), 1f, byte.MaxValue);
+            destination[0] = RgbaColorConversions.FloatToUNorm8((red * divisor) / maxRange);
+            destination[1] = RgbaColorConversions.FloatToUNorm8((green * divisor) / maxRange);
+            destination[2] = RgbaColorConversions.FloatToUNorm8((blue * divisor) / maxRange);
+            destination[3] = divisor;
         }
     }
 
-    private void EncodeRgbm(float red, float green, float blue, float maxComponent, Span<byte> destination)
+    private static void GetClampedComponents(
+        Rgba32Float source,
+        float maxRange,
+        out float red,
+        out float green,
+        out float blue,
+        out float maxComponent)
     {
-        if (maxComponent <= 0f)
-        {
-            destination.Clear();
-            return;
-        }
-
-        var multiplier = MathF.Ceiling((maxComponent / MaxRange) * byte.MaxValue) / byte.MaxValue;
-        multiplier = Math.Clamp(multiplier, 1f / byte.MaxValue, 1f);
-        destination[0] = RgbaColorConversions.FloatToUNorm8(red / (multiplier * MaxRange));
-        destination[1] = RgbaColorConversions.FloatToUNorm8(green / (multiplier * MaxRange));
-        destination[2] = RgbaColorConversions.FloatToUNorm8(blue / (multiplier * MaxRange));
-        destination[3] = RgbaColorConversions.FloatToUNorm8(multiplier);
+        red = ClampToMaxRange(source.Red, maxRange);
+        green = ClampToMaxRange(source.Green, maxRange);
+        blue = ClampToMaxRange(source.Blue, maxRange);
+        maxComponent = MathF.Max(red, MathF.Max(green, blue));
     }
 
-    private void EncodeRgbd(float red, float green, float blue, float maxComponent, Span<byte> destination)
-    {
-        if (maxComponent <= 0f)
-        {
-            destination[0] = 0;
-            destination[1] = 0;
-            destination[2] = 0;
-            destination[3] = byte.MaxValue;
-            return;
-        }
-
-        var divisor = (byte)Math.Clamp(MathF.Floor(MaxRange / maxComponent), 1f, byte.MaxValue);
-        destination[0] = RgbaColorConversions.FloatToUNorm8((red * divisor) / MaxRange);
-        destination[1] = RgbaColorConversions.FloatToUNorm8((green * divisor) / MaxRange);
-        destination[2] = RgbaColorConversions.FloatToUNorm8((blue * divisor) / MaxRange);
-        destination[3] = divisor;
-    }
-
-    private float ClampToMaxRange(float value)
+    private static float ClampToMaxRange(float value, float maxRange)
     {
         if (float.IsNaN(value) || value <= 0f)
         {
             return 0f;
         }
 
-        return MathF.Min(value, MaxRange);
+        return MathF.Min(value, maxRange);
     }
 
     private void ValidateSourceLength(int width, int height, ReadOnlySpan<byte> source, int rowPitch)

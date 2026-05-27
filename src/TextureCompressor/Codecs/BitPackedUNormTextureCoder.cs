@@ -37,16 +37,22 @@ public sealed class BitPackedUNormTextureCoder(TextureFormat format) : IPitchTex
         where TPixel : unmanaged, IPixel<TPixel>
     {
         ValidateSourceLength(destination.Width, destination.Height, source, rowPitch);
-
-        var rowByteCount = GetDefaultPitch(destination.Width);
-        for (var y = 0; y < destination.Height; y++)
+        switch (_transfer)
         {
-            var sourceRow = source.Slice(checked(y * rowPitch), rowByteCount);
-            var destinationRow = destination.GetRowSpan(y);
-            for (var x = 0; x < destination.Width; x++)
-            {
-                destinationRow[x] = TPixel.FromRgba8UNorm(DecodeTexel(sourceRow, x));
-            }
+            case BitPackedUNormTransfer.Alpha:
+                Decode<TPixel, Alpha4Transfer>(source, destination, rowPitch);
+                return;
+            case BitPackedUNormTransfer.Luminance:
+                Decode<TPixel, Luminance4Transfer>(source, destination, rowPitch);
+                return;
+            case BitPackedUNormTransfer.Intensity:
+                Decode<TPixel, Intensity4Transfer>(source, destination, rowPitch);
+                return;
+            case BitPackedUNormTransfer.Bw1:
+                Decode<TPixel, Bw1Transfer>(source, destination, rowPitch);
+                return;
+            default:
+                throw CreateUnsupportedFormatException(Format);
         }
     }
 
@@ -54,63 +60,125 @@ public sealed class BitPackedUNormTextureCoder(TextureFormat format) : IPitchTex
         where TPixel : unmanaged, IPixel<TPixel>
     {
         ValidateDestinationLength(source.Width, source.Height, destination, rowPitch);
+        switch (_transfer)
+        {
+            case BitPackedUNormTransfer.Alpha:
+                Encode<TPixel, Alpha4Transfer>(source, destination, rowPitch);
+                return;
+            case BitPackedUNormTransfer.Luminance:
+                Encode<TPixel, Luminance4Transfer>(source, destination, rowPitch);
+                return;
+            case BitPackedUNormTransfer.Intensity:
+                Encode<TPixel, Intensity4Transfer>(source, destination, rowPitch);
+                return;
+            case BitPackedUNormTransfer.Bw1:
+                Encode<TPixel, Bw1Transfer>(source, destination, rowPitch);
+                return;
+            default:
+                throw CreateUnsupportedFormatException(Format);
+        }
+    }
 
+    private void Decode<TPixel, TTransfer>(ReadOnlySpan<byte> source, ImageView<TPixel> destination, int rowPitch)
+        where TPixel : unmanaged, IPixel<TPixel>
+        where TTransfer : IBitPackedUNormTransfer
+    {
+        var rowByteCount = GetDefaultPitch(destination.Width);
+        var rowOffset = 0;
+        for (var y = 0; y < destination.Height; y++)
+        {
+            var sourceRow = source.Slice(rowOffset, rowByteCount);
+            var destinationRow = destination.GetRowSpan(y);
+            for (var x = 0; x < destination.Width; x++)
+            {
+                destinationRow[x] = TPixel.FromRgba8UNorm(TTransfer.Decode(sourceRow, x));
+            }
+
+            rowOffset = checked(rowOffset + rowPitch);
+        }
+    }
+
+    private void Encode<TPixel, TTransfer>(ImageView<TPixel> source, Span<byte> destination, int rowPitch)
+        where TPixel : unmanaged, IPixel<TPixel>
+        where TTransfer : IBitPackedUNormTransfer
+    {
         var rowByteCount = GetDefaultPitch(source.Width);
+        var rowOffset = 0;
         for (var y = 0; y < source.Height; y++)
         {
-            var destinationRow = destination.Slice(checked(y * rowPitch), rowByteCount);
+            var destinationRow = destination.Slice(rowOffset, rowByteCount);
             destinationRow.Clear();
 
             var sourceRow = source.GetRowSpan(y);
             for (var x = 0; x < source.Width; x++)
             {
-                EncodeTexel(sourceRow[x], destinationRow, x);
+                TTransfer.Encode(sourceRow[x], destinationRow, x);
             }
+
+            rowOffset = checked(rowOffset + rowPitch);
         }
     }
 
-    private Rgba8UNorm DecodeTexel(ReadOnlySpan<byte> row, int x)
+    private interface IBitPackedUNormTransfer
     {
-        if (_transfer == BitPackedUNormTransfer.Bw1)
-        {
-            var bitValue = ReadBit(row, x) ? byte.MaxValue : byte.MinValue;
-            return new Rgba8UNorm(bitValue, bitValue, bitValue);
-        }
+        static abstract Rgba8UNorm Decode(ReadOnlySpan<byte> row, int x);
 
-        var nibbleValue = ExpandNibble(ReadNibble(row, x));
-        return _transfer switch
-        {
-            BitPackedUNormTransfer.Alpha => new Rgba8UNorm(0, 0, 0, nibbleValue),
-            BitPackedUNormTransfer.Luminance => new Rgba8UNorm(nibbleValue, nibbleValue, nibbleValue),
-            BitPackedUNormTransfer.Intensity => new Rgba8UNorm(nibbleValue, nibbleValue, nibbleValue, nibbleValue),
-            _ => throw CreateUnsupportedFormatException(Format)
-        };
+        static abstract void Encode<TPixel>(TPixel source, Span<byte> row, int x)
+            where TPixel : unmanaged, IPixel<TPixel>;
     }
 
-    private void EncodeTexel<TPixel>(TPixel source, Span<byte> row, int x)
-        where TPixel : unmanaged, IPixel<TPixel>
+    private readonly struct Alpha4Transfer : IBitPackedUNormTransfer
     {
-        if (_transfer == BitPackedUNormTransfer.Bw1)
+        public static Rgba8UNorm Decode(ReadOnlySpan<byte> row, int x) =>
+            new(0, 0, 0, ExpandNibble(ReadNibble(row, x)));
+
+        public static void Encode<TPixel>(TPixel source, Span<byte> row, int x)
+            where TPixel : unmanaged, IPixel<TPixel> =>
+            WriteNibble(row, x, (byte)(TPixel.ToRgba8UNorm(source).Alpha >> 4));
+    }
+
+    private readonly struct Luminance4Transfer : IBitPackedUNormTransfer
+    {
+        public static Rgba8UNorm Decode(ReadOnlySpan<byte> row, int x)
+        {
+            var value = ExpandNibble(ReadNibble(row, x));
+            return new Rgba8UNorm(value, value, value);
+        }
+
+        public static void Encode<TPixel>(TPixel source, Span<byte> row, int x)
+            where TPixel : unmanaged, IPixel<TPixel> =>
+            WriteNibble(row, x, (byte)(TPixel.ToRgba8UNorm(source).Red >> 4));
+    }
+
+    private readonly struct Intensity4Transfer : IBitPackedUNormTransfer
+    {
+        public static Rgba8UNorm Decode(ReadOnlySpan<byte> row, int x)
+        {
+            var value = ExpandNibble(ReadNibble(row, x));
+            return new Rgba8UNorm(value, value, value, value);
+        }
+
+        public static void Encode<TPixel>(TPixel source, Span<byte> row, int x)
+            where TPixel : unmanaged, IPixel<TPixel> =>
+            WriteNibble(row, x, (byte)(TPixel.ToRgba8UNorm(source).Red >> 4));
+    }
+
+    private readonly struct Bw1Transfer : IBitPackedUNormTransfer
+    {
+        public static Rgba8UNorm Decode(ReadOnlySpan<byte> row, int x)
+        {
+            var value = ReadBit(row, x) ? byte.MaxValue : byte.MinValue;
+            return new Rgba8UNorm(value, value, value);
+        }
+
+        public static void Encode<TPixel>(TPixel source, Span<byte> row, int x)
+            where TPixel : unmanaged, IPixel<TPixel>
         {
             if (TPixel.ToRgba32Float(source).Red >= 0.5f)
             {
                 SetBit(row, x);
             }
-
-            return;
         }
-
-        EncodeNibbleTexel(TPixel.ToRgba8UNorm(source), row, x);
-    }
-
-    private void EncodeNibbleTexel(Rgba8UNorm source, Span<byte> row, int x)
-    {
-        // Single-channel luminance/intensity formats use red as their scalar carrier.
-        var value = _transfer == BitPackedUNormTransfer.Alpha
-            ? source.Alpha
-            : source.Red;
-
-        WriteNibble(row, x, (byte)(value >> 4));
     }
 
     private static bool ReadBit(ReadOnlySpan<byte> row, int x) =>
