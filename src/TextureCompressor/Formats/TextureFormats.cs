@@ -416,6 +416,24 @@ public static class TextureFormats
     public static readonly TextureFormat Rgb12UNorm =
         TextureFormat.Uncompressed("RGB12_UNORM", TextureComponents.Rgb, TextureValueKind.UNorm, 12, 12, 12);
 
+    public static readonly TextureFormat R10X6UNorm =
+        PaddedWord("R10X6_UNORM_PACK16", TextureComponents.R, TextureValueKind.UNorm, 10, 0, 0, 0, 16);
+
+    public static readonly TextureFormat R10X6G10X6UNorm =
+        PaddedWord("R10X6G10X6_UNORM_2PACK16", TextureComponents.Rg, TextureValueKind.UNorm, 10, 10, 0, 0, 32);
+
+    public static readonly TextureFormat R10X6G10X6B10X6A10X6UNorm =
+        PaddedWord("R10X6G10X6B10X6A10X6_UNORM_4PACK16", TextureComponents.Rgba, TextureValueKind.UNorm, 10, 10, 10, 10, 64);
+
+    public static readonly TextureFormat R12X4UNorm =
+        PaddedWord("R12X4_UNORM_PACK16", TextureComponents.R, TextureValueKind.UNorm, 12, 0, 0, 0, 16);
+
+    public static readonly TextureFormat R12X4G12X4UNorm =
+        PaddedWord("R12X4G12X4_UNORM_2PACK16", TextureComponents.Rg, TextureValueKind.UNorm, 12, 12, 0, 0, 32);
+
+    public static readonly TextureFormat R12X4G12X4B12X4A12X4UNorm =
+        PaddedWord("R12X4G12X4B12X4A12X4_UNORM_4PACK16", TextureComponents.Rgba, TextureValueKind.UNorm, 12, 12, 12, 12, 64);
+
     public static readonly TextureFormat R8G8B8G8_422UNorm = new(
         "R8G8_B8G8_422_UNORM",
         TextureFormatKind.Uncompressed,
@@ -480,6 +498,18 @@ public static class TextureFormats
         2,
         1,
         64);
+
+    public static readonly TextureFormat G10X6B10X6G10X6R10X6_422UNorm =
+        PackedRgb422("G10X6B10X6G10X6R10X6_422_UNORM_4PACK16", 10);
+
+    public static readonly TextureFormat B10X6G10X6R10X6G10X6_422UNorm =
+        PackedRgb422("B10X6G10X6R10X6G10X6_422_UNORM_4PACK16", 10);
+
+    public static readonly TextureFormat G12X4B12X4G12X4R12X4_422UNorm =
+        PackedRgb422("G12X4B12X4G12X4R12X4_422_UNORM_4PACK16", 12);
+
+    public static readonly TextureFormat B12X4G12X4R12X4G12X4_422UNorm =
+        PackedRgb422("B12X4G12X4R12X4G12X4_422_UNORM_4PACK16", 12);
 
     public static readonly TextureFormat B16G16R16G16_422UNorm = new(
         "B16G16_R16G16_422_UNORM",
@@ -692,6 +722,12 @@ public static class TextureFormats
     public static readonly TextureFormat Yvu10Lsb2P444UNorm =
         PlanarYuv("YVU10LSB_2P_444_UNORM", 10);
 
+    public static readonly TextureFormat Yuv12Msb2P444UNorm =
+        PlanarYuv("YUV12MSB_2P_444_UNORM", 12);
+
+    public static readonly TextureFormat Yuv16_2P444UNorm =
+        PlanarYuv("YUV16_2P_444_UNORM", 16);
+
     public static readonly TextureFormat Yvu2P422UNorm =
         PlanarYuv("YVU_2P_422_UNORM", 8);
 
@@ -821,11 +857,17 @@ public static class TextureFormats
     public static readonly TextureFormat Rgb10A2RevUNorm =
         TextureFormat.Uncompressed("RGB10_A2_REV_UNORM", TextureComponents.Rgba, TextureValueKind.UNorm, 10, 10, 10, 2);
 
+    public static readonly TextureFormat Rgb10A2RevSNorm =
+        TextureFormat.Uncompressed("RGB10_A2_REV_SNORM", TextureComponents.Rgba, TextureValueKind.SNorm, 10, 10, 10, 2);
+
     public static readonly TextureFormat Rgb10A2UInt =
         TextureFormat.Uncompressed("RGB10_A2_UINT", TextureComponents.Rgba, TextureValueKind.UInt, 10, 10, 10, 2);
 
     public static readonly TextureFormat Rgb10A2RevUInt =
         TextureFormat.Uncompressed("RGB10_A2_REV_UINT", TextureComponents.Rgba, TextureValueKind.UInt, 10, 10, 10, 2);
+
+    public static readonly TextureFormat Rgb10A2RevSInt =
+        TextureFormat.Uncompressed("RGB10_A2_REV_SINT", TextureComponents.Rgba, TextureValueKind.SInt, 10, 10, 10, 2);
 
     public static readonly TextureFormat Rgba12UNorm =
         TextureFormat.Uncompressed("RGBA12_UNORM", TextureComponents.Rgba, TextureValueKind.UNorm, 12, 12, 12, 12);
@@ -972,8 +1014,14 @@ public static class TextureFormats
     public static readonly TextureFormat Bgr10A2RevUNorm =
         TextureFormat.Uncompressed("BGR10_A2_REV_UNORM", TextureComponents.Bgra, TextureValueKind.UNorm, 10, 10, 10, 2);
 
+    public static readonly TextureFormat Bgr10A2RevSNorm =
+        TextureFormat.Uncompressed("BGR10_A2_REV_SNORM", TextureComponents.Bgra, TextureValueKind.SNorm, 10, 10, 10, 2);
+
     public static readonly TextureFormat Bgr10A2RevUInt =
         TextureFormat.Uncompressed("BGR10_A2_REV_UINT", TextureComponents.Bgra, TextureValueKind.UInt, 10, 10, 10, 2);
+
+    public static readonly TextureFormat Bgr10A2RevSInt =
+        TextureFormat.Uncompressed("BGR10_A2_REV_SINT", TextureComponents.Bgra, TextureValueKind.SInt, 10, 10, 10, 2);
 
     public static readonly TextureFormat Palette4Rgb8 =
         TextureFormat.Paletted("PALETTE4_RGB8", TextureComponents.Rgb, TextureValueKind.UNorm, 8, 8, 8, 0, 4, 16, 3);
@@ -1013,6 +1061,20 @@ public static class TextureFormats
 
     public static readonly TextureFormat DepthComponent24 =
         DepthComponent("DEPTH_COMPONENT24", TextureValueKind.UNorm, 24);
+
+    public static readonly TextureFormat Depth24X8 =
+        new(
+            "DEPTH24_X8",
+            TextureFormatKind.Uncompressed,
+            TextureComponents.Depth,
+            TextureValueKind.UNorm,
+            24,
+            0,
+            0,
+            0,
+            1,
+            1,
+            32);
 
     public static readonly TextureFormat DepthComponent32 =
         DepthComponent("DEPTH_COMPONENT32", TextureValueKind.UNorm, 32);
@@ -1370,6 +1432,40 @@ public static class TextureFormats
         1,
         1,
         bitsPerBlock);
+
+    private static TextureFormat PaddedWord(
+        string name,
+        TextureComponents components,
+        TextureValueKind valueKind,
+        int redBits,
+        int greenBits,
+        int blueBits,
+        int alphaBits,
+        int bitsPerBlock) => new(
+            name,
+            TextureFormatKind.Uncompressed,
+            components,
+            valueKind,
+            redBits,
+            greenBits,
+            blueBits,
+            alphaBits,
+            1,
+            1,
+            bitsPerBlock);
+
+    private static TextureFormat PackedRgb422(string name, int bitsPerComponent) => new(
+        name,
+        TextureFormatKind.Uncompressed,
+        TextureComponents.Rgb,
+        TextureValueKind.UNorm,
+        bitsPerComponent,
+        bitsPerComponent,
+        bitsPerComponent,
+        0,
+        2,
+        1,
+        64);
 
     private static TextureFormat RgtcLatc1(string name, TextureComponents components, TextureValueKind valueKind) =>
         TextureFormat.BlockCompressed(name, components, valueKind, 8, 0, 0, 0, 4, 4, 64);

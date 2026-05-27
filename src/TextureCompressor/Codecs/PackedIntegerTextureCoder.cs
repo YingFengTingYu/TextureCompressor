@@ -18,7 +18,9 @@ public sealed class PackedIntegerTextureCoder(TextureFormat format) : IPitchText
     public static bool IsSupported(TextureFormat format) =>
         format == TextureFormats.Rgb10A2UInt
         || format == TextureFormats.Rgb10A2RevUInt
-        || format == TextureFormats.Bgr10A2RevUInt;
+        || format == TextureFormats.Rgb10A2RevSInt
+        || format == TextureFormats.Bgr10A2RevUInt
+        || format == TextureFormats.Bgr10A2RevSInt;
 
     public int GetDefaultPitch(int width) => Format.GetRowByteCount(width);
 
@@ -50,6 +52,12 @@ public sealed class PackedIntegerTextureCoder(TextureFormat format) : IPitchText
             case PackedIntegerKind.Bgr10A2RevUInt:
                 Decode<TPixel, Bgr10A2RevUIntTransfer>(source, destination, rowPitch);
                 return;
+            case PackedIntegerKind.Rgb10A2RevSInt:
+                DecodeSigned<TPixel, Rgb10A2RevSIntTransfer>(source, destination, rowPitch);
+                return;
+            case PackedIntegerKind.Bgr10A2RevSInt:
+                DecodeSigned<TPixel, Bgr10A2RevSIntTransfer>(source, destination, rowPitch);
+                return;
             default:
                 throw CreateUnsupportedFormatException(Format);
         }
@@ -70,6 +78,12 @@ public sealed class PackedIntegerTextureCoder(TextureFormat format) : IPitchText
             case PackedIntegerKind.Bgr10A2RevUInt:
                 Encode<TPixel, Bgr10A2RevUIntTransfer>(source, destination, rowPitch);
                 return;
+            case PackedIntegerKind.Rgb10A2RevSInt:
+                EncodeSigned<TPixel, Rgb10A2RevSIntTransfer>(source, destination, rowPitch);
+                return;
+            case PackedIntegerKind.Bgr10A2RevSInt:
+                EncodeSigned<TPixel, Bgr10A2RevSIntTransfer>(source, destination, rowPitch);
+                return;
             default:
                 throw CreateUnsupportedFormatException(Format);
         }
@@ -80,6 +94,13 @@ public sealed class PackedIntegerTextureCoder(TextureFormat format) : IPitchText
         static abstract Rgba16UNorm Decode(uint value);
 
         static abstract uint Encode(Rgba16UNorm value);
+    }
+
+    private interface IPackedSignedIntegerTransfer
+    {
+        static abstract Rgba16SNorm Decode(uint value);
+
+        static abstract uint Encode(Rgba16SNorm value);
     }
 
     private readonly struct Rgb10A2UIntTransfer : IPackedIntegerTransfer
@@ -130,6 +151,38 @@ public sealed class PackedIntegerTextureCoder(TextureFormat format) : IPitchText
             | (ClampUInt(value.Alpha, AlphaMask) << 30);
     }
 
+    private readonly struct Rgb10A2RevSIntTransfer : IPackedSignedIntegerTransfer
+    {
+        public static Rgba16SNorm Decode(uint value) =>
+            new(
+                DecodeSInt(value & ColorMask, 10),
+                DecodeSInt((value >> 10) & ColorMask, 10),
+                DecodeSInt((value >> 20) & ColorMask, 10),
+                DecodeSInt(value >> 30, 2));
+
+        public static uint Encode(Rgba16SNorm value) =>
+            EncodeSInt(value.Red, 10)
+            | (EncodeSInt(value.Green, 10) << 10)
+            | (EncodeSInt(value.Blue, 10) << 20)
+            | (EncodeSInt(value.Alpha, 2) << 30);
+    }
+
+    private readonly struct Bgr10A2RevSIntTransfer : IPackedSignedIntegerTransfer
+    {
+        public static Rgba16SNorm Decode(uint value) =>
+            new(
+                DecodeSInt((value >> 20) & ColorMask, 10),
+                DecodeSInt((value >> 10) & ColorMask, 10),
+                DecodeSInt(value & ColorMask, 10),
+                DecodeSInt(value >> 30, 2));
+
+        public static uint Encode(Rgba16SNorm value) =>
+            EncodeSInt(value.Blue, 10)
+            | (EncodeSInt(value.Green, 10) << 10)
+            | (EncodeSInt(value.Red, 10) << 20)
+            | (EncodeSInt(value.Alpha, 2) << 30);
+    }
+
     private void Decode<TPixel, TTransfer>(ReadOnlySpan<byte> source, ImageView<TPixel> destination, int rowPitch)
         where TPixel : unmanaged, IPixel<TPixel>
         where TTransfer : IPackedIntegerTransfer
@@ -150,6 +203,26 @@ public sealed class PackedIntegerTextureCoder(TextureFormat format) : IPitchText
         }
     }
 
+    private void DecodeSigned<TPixel, TTransfer>(ReadOnlySpan<byte> source, ImageView<TPixel> destination, int rowPitch)
+        where TPixel : unmanaged, IPixel<TPixel>
+        where TTransfer : IPackedSignedIntegerTransfer
+    {
+        var rowOffset = 0;
+        for (var y = 0; y < destination.Height; y++)
+        {
+            var destinationRow = destination.GetRowSpan(y);
+            var texelOffset = rowOffset;
+            for (var x = 0; x < destination.Width; x++)
+            {
+                var value = BinaryPrimitives.ReadUInt32LittleEndian(source.Slice(texelOffset, BytesPerTexel));
+                destinationRow[x] = TPixel.FromRgba16SNorm(TTransfer.Decode(value));
+                texelOffset = checked(texelOffset + BytesPerTexel);
+            }
+
+            rowOffset = checked(rowOffset + rowPitch);
+        }
+    }
+
     private void Encode<TPixel, TTransfer>(ImageView<TPixel> source, Span<byte> destination, int rowPitch)
         where TPixel : unmanaged, IPixel<TPixel>
         where TTransfer : IPackedIntegerTransfer
@@ -162,6 +235,26 @@ public sealed class PackedIntegerTextureCoder(TextureFormat format) : IPitchText
             for (var x = 0; x < source.Width; x++)
             {
                 var value = TTransfer.Encode(TPixel.ToRgba16UNorm(sourceRow[x]));
+                BinaryPrimitives.WriteUInt32LittleEndian(destination.Slice(texelOffset, BytesPerTexel), value);
+                texelOffset = checked(texelOffset + BytesPerTexel);
+            }
+
+            rowOffset = checked(rowOffset + rowPitch);
+        }
+    }
+
+    private void EncodeSigned<TPixel, TTransfer>(ImageView<TPixel> source, Span<byte> destination, int rowPitch)
+        where TPixel : unmanaged, IPixel<TPixel>
+        where TTransfer : IPackedSignedIntegerTransfer
+    {
+        var rowOffset = 0;
+        for (var y = 0; y < source.Height; y++)
+        {
+            var sourceRow = source.GetRowSpan(y);
+            var texelOffset = rowOffset;
+            for (var x = 0; x < source.Width; x++)
+            {
+                var value = TTransfer.Encode(TPixel.ToRgba16SNorm(sourceRow[x]));
                 BinaryPrimitives.WriteUInt32LittleEndian(destination.Slice(texelOffset, BytesPerTexel), value);
                 texelOffset = checked(texelOffset + BytesPerTexel);
             }
@@ -191,6 +284,24 @@ public sealed class PackedIntegerTextureCoder(TextureFormat format) : IPitchText
     private static uint ClampUInt(ushort value, uint max) =>
         value > max ? max : value;
 
+    private static short DecodeSInt(uint value, int bits) =>
+        (short)SignExtend(value, bits);
+
+    private static uint EncodeSInt(short value, int bits)
+    {
+        var min = -(1 << (bits - 1));
+        var max = (1 << (bits - 1)) - 1;
+        var clamped = Math.Clamp((int)value, min, max);
+        return (uint)clamped & ((1u << bits) - 1u);
+    }
+
+    private static int SignExtend(uint value, int bits)
+    {
+        var signBit = 1 << (bits - 1);
+        var mask = (1 << bits) - 1;
+        return (((int)value & mask) ^ signBit) - signBit;
+    }
+
     private static PackedIntegerKind GetPackedIntegerKind(TextureFormat format)
     {
         if (format == TextureFormats.Rgb10A2UInt)
@@ -203,9 +314,19 @@ public sealed class PackedIntegerTextureCoder(TextureFormat format) : IPitchText
             return PackedIntegerKind.Rgb10A2RevUInt;
         }
 
+        if (format == TextureFormats.Rgb10A2RevSInt)
+        {
+            return PackedIntegerKind.Rgb10A2RevSInt;
+        }
+
         if (format == TextureFormats.Bgr10A2RevUInt)
         {
             return PackedIntegerKind.Bgr10A2RevUInt;
+        }
+
+        if (format == TextureFormats.Bgr10A2RevSInt)
+        {
+            return PackedIntegerKind.Bgr10A2RevSInt;
         }
 
         throw CreateUnsupportedFormatException(format);
@@ -218,6 +339,8 @@ public sealed class PackedIntegerTextureCoder(TextureFormat format) : IPitchText
     {
         Rgb10A2UInt,
         Rgb10A2RevUInt,
-        Bgr10A2RevUInt
+        Bgr10A2RevUInt,
+        Rgb10A2RevSInt,
+        Bgr10A2RevSInt
     }
 }

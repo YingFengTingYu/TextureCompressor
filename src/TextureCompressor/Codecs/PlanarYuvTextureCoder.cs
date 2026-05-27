@@ -236,6 +236,8 @@ public sealed class PlanarYuvTextureCoder : IPitchTextureCoder
         if (format == TextureFormats.Yuv10Lsb2P444UNorm) { layout = new PlanarYuvLayout(10, 1, 1, Biplanar: true, VFirst: false, MsbAligned: false); return true; }
         if (format == TextureFormats.Yvu10Msb2P444UNorm) { layout = new PlanarYuvLayout(10, 1, 1, Biplanar: true, VFirst: true, MsbAligned: true); return true; }
         if (format == TextureFormats.Yvu10Lsb2P444UNorm) { layout = new PlanarYuvLayout(10, 1, 1, Biplanar: true, VFirst: true, MsbAligned: false); return true; }
+        if (format == TextureFormats.Yuv12Msb2P444UNorm) { layout = new PlanarYuvLayout(12, 1, 1, Biplanar: true, VFirst: false, MsbAligned: true); return true; }
+        if (format == TextureFormats.Yuv16_2P444UNorm) { layout = new PlanarYuvLayout(16, 1, 1, Biplanar: true, VFirst: false, MsbAligned: false); return true; }
         if (format == TextureFormats.Yvu2P422UNorm) { layout = new PlanarYuvLayout(8, 2, 1, Biplanar: true, VFirst: true, MsbAligned: false); return true; }
         if (format == TextureFormats.Yvu10Msb2P422UNorm) { layout = new PlanarYuvLayout(10, 2, 1, Biplanar: true, VFirst: true, MsbAligned: true); return true; }
         if (format == TextureFormats.Yvu10Lsb2P422UNorm) { layout = new PlanarYuvLayout(10, 2, 1, Biplanar: true, VFirst: true, MsbAligned: false); return true; }

@@ -111,6 +111,24 @@ public sealed class PackedUNormTextureCoder : IPitchTextureCoder
             case PackedUNormTransfer.Rgb12:
                 Decode<TPixel, Rgba16UNorm, Rgba16UNormTransfer, Rgb12UNormTransfer>(source, destination, rowPitch);
                 return;
+            case PackedUNormTransfer.R10X6:
+                Decode<TPixel, Rgba16UNorm, Rgba16UNormTransfer, R10X6UNormTransfer>(source, destination, rowPitch);
+                return;
+            case PackedUNormTransfer.Rg10X6:
+                Decode<TPixel, Rgba16UNorm, Rgba16UNormTransfer, Rg10X6UNormTransfer>(source, destination, rowPitch);
+                return;
+            case PackedUNormTransfer.Rgba10X6:
+                Decode<TPixel, Rgba16UNorm, Rgba16UNormTransfer, Rgba10X6UNormTransfer>(source, destination, rowPitch);
+                return;
+            case PackedUNormTransfer.R12X4:
+                Decode<TPixel, Rgba16UNorm, Rgba16UNormTransfer, R12X4UNormTransfer>(source, destination, rowPitch);
+                return;
+            case PackedUNormTransfer.Rg12X4:
+                Decode<TPixel, Rgba16UNorm, Rgba16UNormTransfer, Rg12X4UNormTransfer>(source, destination, rowPitch);
+                return;
+            case PackedUNormTransfer.Rgba12X4:
+                Decode<TPixel, Rgba16UNorm, Rgba16UNormTransfer, Rgba12X4UNormTransfer>(source, destination, rowPitch);
+                return;
             case PackedUNormTransfer.Rgba2:
                 Decode<TPixel, Rgba8UNorm, Rgba8UNormTransfer, Rgba2UNormTransfer>(source, destination, rowPitch);
                 return;
@@ -237,6 +255,24 @@ public sealed class PackedUNormTextureCoder : IPitchTextureCoder
                 return;
             case PackedUNormTransfer.Rgb12:
                 Encode<TPixel, Rgba16UNorm, Rgba16UNormTransfer, Rgb12UNormTransfer>(source, destination, rowPitch);
+                return;
+            case PackedUNormTransfer.R10X6:
+                Encode<TPixel, Rgba16UNorm, Rgba16UNormTransfer, R10X6UNormTransfer>(source, destination, rowPitch);
+                return;
+            case PackedUNormTransfer.Rg10X6:
+                Encode<TPixel, Rgba16UNorm, Rgba16UNormTransfer, Rg10X6UNormTransfer>(source, destination, rowPitch);
+                return;
+            case PackedUNormTransfer.Rgba10X6:
+                Encode<TPixel, Rgba16UNorm, Rgba16UNormTransfer, Rgba10X6UNormTransfer>(source, destination, rowPitch);
+                return;
+            case PackedUNormTransfer.R12X4:
+                Encode<TPixel, Rgba16UNorm, Rgba16UNormTransfer, R12X4UNormTransfer>(source, destination, rowPitch);
+                return;
+            case PackedUNormTransfer.Rg12X4:
+                Encode<TPixel, Rgba16UNorm, Rgba16UNormTransfer, Rg12X4UNormTransfer>(source, destination, rowPitch);
+                return;
+            case PackedUNormTransfer.Rgba12X4:
+                Encode<TPixel, Rgba16UNorm, Rgba16UNormTransfer, Rgba12X4UNormTransfer>(source, destination, rowPitch);
                 return;
             case PackedUNormTransfer.Rgba2:
                 Encode<TPixel, Rgba8UNorm, Rgba8UNormTransfer, Rgba2UNormTransfer>(source, destination, rowPitch);
@@ -825,6 +861,98 @@ public sealed class PackedUNormTextureCoder : IPitchTextureCoder
             var packed = (red << 24) | (green << 12) | blue;
             BinaryPrimitives.WriteUInt32LittleEndian(texel, (uint)packed);
             texel[4] = (byte)(packed >> 32);
+        }
+    }
+
+    private readonly struct R10X6UNormTransfer : IPackedUNormTransfer<Rgba16UNorm>
+    {
+        public static int BytesPerTexel => 2;
+
+        public static Rgba16UNorm Decode(ReadOnlySpan<byte> texel) =>
+            new(DecodePaddedWord(texel, 0, 10), 0, 0);
+
+        public static void Encode(Rgba16UNorm value, Span<byte> texel) =>
+            EncodePaddedWord(value.Red, texel, 0, 10);
+    }
+
+    private readonly struct Rg10X6UNormTransfer : IPackedUNormTransfer<Rgba16UNorm>
+    {
+        public static int BytesPerTexel => 4;
+
+        public static Rgba16UNorm Decode(ReadOnlySpan<byte> texel) => new(
+            DecodePaddedWord(texel, 0, 10),
+            DecodePaddedWord(texel, 2, 10),
+            0);
+
+        public static void Encode(Rgba16UNorm value, Span<byte> texel)
+        {
+            EncodePaddedWord(value.Red, texel, 0, 10);
+            EncodePaddedWord(value.Green, texel, 2, 10);
+        }
+    }
+
+    private readonly struct Rgba10X6UNormTransfer : IPackedUNormTransfer<Rgba16UNorm>
+    {
+        public static int BytesPerTexel => 8;
+
+        public static Rgba16UNorm Decode(ReadOnlySpan<byte> texel) => new(
+            DecodePaddedWord(texel, 0, 10),
+            DecodePaddedWord(texel, 2, 10),
+            DecodePaddedWord(texel, 4, 10),
+            DecodePaddedWord(texel, 6, 10));
+
+        public static void Encode(Rgba16UNorm value, Span<byte> texel)
+        {
+            EncodePaddedWord(value.Red, texel, 0, 10);
+            EncodePaddedWord(value.Green, texel, 2, 10);
+            EncodePaddedWord(value.Blue, texel, 4, 10);
+            EncodePaddedWord(value.Alpha, texel, 6, 10);
+        }
+    }
+
+    private readonly struct R12X4UNormTransfer : IPackedUNormTransfer<Rgba16UNorm>
+    {
+        public static int BytesPerTexel => 2;
+
+        public static Rgba16UNorm Decode(ReadOnlySpan<byte> texel) =>
+            new(DecodePaddedWord(texel, 0, 12), 0, 0);
+
+        public static void Encode(Rgba16UNorm value, Span<byte> texel) =>
+            EncodePaddedWord(value.Red, texel, 0, 12);
+    }
+
+    private readonly struct Rg12X4UNormTransfer : IPackedUNormTransfer<Rgba16UNorm>
+    {
+        public static int BytesPerTexel => 4;
+
+        public static Rgba16UNorm Decode(ReadOnlySpan<byte> texel) => new(
+            DecodePaddedWord(texel, 0, 12),
+            DecodePaddedWord(texel, 2, 12),
+            0);
+
+        public static void Encode(Rgba16UNorm value, Span<byte> texel)
+        {
+            EncodePaddedWord(value.Red, texel, 0, 12);
+            EncodePaddedWord(value.Green, texel, 2, 12);
+        }
+    }
+
+    private readonly struct Rgba12X4UNormTransfer : IPackedUNormTransfer<Rgba16UNorm>
+    {
+        public static int BytesPerTexel => 8;
+
+        public static Rgba16UNorm Decode(ReadOnlySpan<byte> texel) => new(
+            DecodePaddedWord(texel, 0, 12),
+            DecodePaddedWord(texel, 2, 12),
+            DecodePaddedWord(texel, 4, 12),
+            DecodePaddedWord(texel, 6, 12));
+
+        public static void Encode(Rgba16UNorm value, Span<byte> texel)
+        {
+            EncodePaddedWord(value.Red, texel, 0, 12);
+            EncodePaddedWord(value.Green, texel, 2, 12);
+            EncodePaddedWord(value.Blue, texel, 4, 12);
+            EncodePaddedWord(value.Alpha, texel, 6, 12);
         }
     }
 
@@ -1438,6 +1566,20 @@ public sealed class PackedUNormTextureCoder : IPitchTextureCoder
         }
     }
 
+    private static ushort DecodePaddedWord(ReadOnlySpan<byte> texel, int offset, int bits)
+    {
+        var shift = 16 - bits;
+        var value = (uint)BinaryPrimitives.ReadUInt16LittleEndian(texel.Slice(offset, sizeof(ushort))) >> shift;
+        return (ushort)((value << shift) | (value >> (bits - shift)));
+    }
+
+    private static void EncodePaddedWord(ushort value, Span<byte> texel, int offset, int bits)
+    {
+        var shift = 16 - bits;
+        var packed = (ushort)(((uint)value >> shift) << shift);
+        BinaryPrimitives.WriteUInt16LittleEndian(texel.Slice(offset, sizeof(ushort)), packed);
+    }
+
     private void ValidateSourceLength(int width, int height, ReadOnlySpan<byte> source, int rowPitch)
     {
         var requiredBytes = GetEncodedByteCount(width, height, rowPitch);
@@ -1569,6 +1711,42 @@ public sealed class PackedUNormTextureCoder : IPitchTextureCoder
         if (format == TextureFormats.Rgba2UNorm)
         {
             transfer = PackedUNormTransfer.Rgba2;
+            return true;
+        }
+
+        if (format == TextureFormats.R10X6UNorm)
+        {
+            transfer = PackedUNormTransfer.R10X6;
+            return true;
+        }
+
+        if (format == TextureFormats.R10X6G10X6UNorm)
+        {
+            transfer = PackedUNormTransfer.Rg10X6;
+            return true;
+        }
+
+        if (format == TextureFormats.R10X6G10X6B10X6A10X6UNorm)
+        {
+            transfer = PackedUNormTransfer.Rgba10X6;
+            return true;
+        }
+
+        if (format == TextureFormats.R12X4UNorm)
+        {
+            transfer = PackedUNormTransfer.R12X4;
+            return true;
+        }
+
+        if (format == TextureFormats.R12X4G12X4UNorm)
+        {
+            transfer = PackedUNormTransfer.Rg12X4;
+            return true;
+        }
+
+        if (format == TextureFormats.R12X4G12X4B12X4A12X4UNorm)
+        {
+            transfer = PackedUNormTransfer.Rgba12X4;
             return true;
         }
 
@@ -1719,6 +1897,12 @@ public sealed class PackedUNormTextureCoder : IPitchTextureCoder
         Bgr565Rev,
         Rgb10,
         Rgb12,
+        R10X6,
+        Rg10X6,
+        Rgba10X6,
+        R12X4,
+        Rg12X4,
+        Rgba12X4,
         Rgba2,
         Rgba4,
         Rgba4Rev,

@@ -109,6 +109,12 @@ public sealed class TextureCoderManager
             return true;
         }
 
+        if (PackedSNormTextureCoder.IsSupported(format))
+        {
+            coder = new PackedSNormTextureCoder(format);
+            return true;
+        }
+
         if (PackedIntegerTextureCoder.IsSupported(format))
         {
             coder = new PackedIntegerTextureCoder(format);

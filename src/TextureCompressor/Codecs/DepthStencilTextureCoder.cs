@@ -277,6 +277,9 @@ public sealed class DepthStencilTextureCoder : IPitchTextureCoder
             case DepthStencilTransfer.DepthComponent24:
                 DecodeTexels<TPixel, DepthComponent24Transfer>(source, destination, rowPitch);
                 return;
+            case DepthStencilTransfer.Depth24X8:
+                DecodeTexels<TPixel, Depth24X8Transfer>(source, destination, rowPitch);
+                return;
             case DepthStencilTransfer.DepthComponent32:
                 DecodeTexels<TPixel, DepthComponent32Transfer>(source, destination, rowPitch);
                 return;
@@ -319,6 +322,9 @@ public sealed class DepthStencilTextureCoder : IPitchTextureCoder
                 return;
             case DepthStencilTransfer.DepthComponent24:
                 EncodeTexels<TPixel, DepthComponent24Transfer>(source, destination, rowPitch);
+                return;
+            case DepthStencilTransfer.Depth24X8:
+                EncodeTexels<TPixel, Depth24X8Transfer>(source, destination, rowPitch);
                 return;
             case DepthStencilTransfer.DepthComponent32:
                 EncodeTexels<TPixel, DepthComponent32Transfer>(source, destination, rowPitch);
@@ -440,6 +446,17 @@ public sealed class DepthStencilTextureCoder : IPitchTextureCoder
 
         public static void Encode(Rgba32Float source, Span<byte> destination) =>
             WriteUnsignedLittleEndian(destination, FloatToUNorm(source.Red, 32));
+    }
+
+    private readonly struct Depth24X8Transfer : IDepthStencilPixelTransfer
+    {
+        public static int BytesPerTexel => 4;
+
+        public static Rgba32Float Decode(ReadOnlySpan<byte> source) =>
+            new(UNormToFloat(BinaryPrimitives.ReadUInt32LittleEndian(source) >> 8, 24), 0f, 0f);
+
+        public static void Encode(Rgba32Float source, Span<byte> destination) =>
+            BinaryPrimitives.WriteUInt32LittleEndian(destination, FloatToUNorm(source.Red, 24) << 8);
     }
 
     private readonly struct DepthComponent32FloatTransfer : IDepthStencilPixelTransfer
@@ -941,6 +958,12 @@ public sealed class DepthStencilTextureCoder : IPitchTextureCoder
             return true;
         }
 
+        if (format == TextureFormats.Depth24X8)
+        {
+            transfer = DepthStencilTransfer.Depth24X8;
+            return true;
+        }
+
         if (format == TextureFormats.DepthComponent32)
         {
             transfer = DepthStencilTransfer.DepthComponent32;
@@ -1013,6 +1036,7 @@ public sealed class DepthStencilTextureCoder : IPitchTextureCoder
         DepthComponent8,
         DepthComponent16,
         DepthComponent24,
+        Depth24X8,
         DepthComponent32,
         DepthComponent32Float,
         StencilIndex1,

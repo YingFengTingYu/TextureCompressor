@@ -160,6 +160,24 @@ public sealed class TextureFormatTests
     }
 
     [Theory]
+    [MemberData(nameof(VulkanUncompressedFormats))]
+    public void VulkanUncompressedFormatMetadataIsStable(
+        TextureFormat format,
+        string name,
+        TextureComponents components,
+        TextureValueKind valueKind,
+        int bitsPerBlock,
+        int bytesPerBlock)
+    {
+        Assert.Equal(name, format.Name);
+        Assert.Equal(TextureFormatKind.Uncompressed, format.Kind);
+        Assert.Equal(components, format.Components);
+        Assert.Equal(valueKind, format.ValueKind);
+        Assert.Equal(bitsPerBlock, format.BitsPerBlock);
+        Assert.Equal(bytesPerBlock, format.BytesPerBlock);
+    }
+
+    [Theory]
     [InlineData(nameof(TextureFormats.Rgbm), "RGBM")]
     [InlineData(nameof(TextureFormats.Rgbd), "RGBD")]
     public void RgbmAndRgbdFormatsAreFloatRgbaByteEncoded(string formatName, string name)
@@ -295,8 +313,22 @@ public sealed class TextureFormatTests
         { TextureFormats.G8R8G8B8_422UNorm, "G8R8_G8B8_422_UNORM", 32, 4 },
         { TextureFormats.G8B8G8R8_422UNorm, "G8B8_G8R8_422_UNORM", 32, 4 },
         { TextureFormats.B8G8R8G8_422UNorm, "B8G8_R8G8_422_UNORM", 32, 4 },
+        { TextureFormats.G10X6B10X6G10X6R10X6_422UNorm, "G10X6B10X6G10X6R10X6_422_UNORM_4PACK16", 64, 8 },
+        { TextureFormats.B10X6G10X6R10X6G10X6_422UNorm, "B10X6G10X6R10X6G10X6_422_UNORM_4PACK16", 64, 8 },
+        { TextureFormats.G12X4B12X4G12X4R12X4_422UNorm, "G12X4B12X4G12X4R12X4_422_UNORM_4PACK16", 64, 8 },
+        { TextureFormats.B12X4G12X4R12X4G12X4_422UNorm, "B12X4G12X4R12X4G12X4_422_UNORM_4PACK16", 64, 8 },
         { TextureFormats.G16B16G16R16_422UNorm, "G16B16_G16R16_422_UNORM", 64, 8 },
         { TextureFormats.B16G16R16G16_422UNorm, "B16G16_R16G16_422_UNORM", 64, 8 }
+    };
+
+    public static TheoryData<TextureFormat, string, TextureComponents, TextureValueKind, int, int> VulkanUncompressedFormats() => new()
+    {
+        { TextureFormats.R10X6UNorm, "R10X6_UNORM_PACK16", TextureComponents.R, TextureValueKind.UNorm, 16, 2 },
+        { TextureFormats.R10X6G10X6UNorm, "R10X6G10X6_UNORM_2PACK16", TextureComponents.Rg, TextureValueKind.UNorm, 32, 4 },
+        { TextureFormats.R10X6G10X6B10X6A10X6UNorm, "R10X6G10X6B10X6A10X6_UNORM_4PACK16", TextureComponents.Rgba, TextureValueKind.UNorm, 64, 8 },
+        { TextureFormats.R12X4UNorm, "R12X4_UNORM_PACK16", TextureComponents.R, TextureValueKind.UNorm, 16, 2 },
+        { TextureFormats.R12X4G12X4UNorm, "R12X4G12X4_UNORM_2PACK16", TextureComponents.Rg, TextureValueKind.UNorm, 32, 4 },
+        { TextureFormats.R12X4G12X4B12X4A12X4UNorm, "R12X4G12X4B12X4A12X4_UNORM_4PACK16", TextureComponents.Rgba, TextureValueKind.UNorm, 64, 8 }
     };
 
     public static TheoryData<TextureFormat, string, int, int> PackedYuv422Formats() => new()

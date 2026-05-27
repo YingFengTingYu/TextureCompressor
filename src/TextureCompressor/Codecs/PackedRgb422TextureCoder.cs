@@ -22,6 +22,10 @@ public sealed class PackedRgb422TextureCoder : IPitchTextureCoder
         || format == TextureFormats.G8R8G8B8_422UNorm
         || format == TextureFormats.G8B8G8R8_422UNorm
         || format == TextureFormats.B8G8R8G8_422UNorm
+        || format == TextureFormats.G10X6B10X6G10X6R10X6_422UNorm
+        || format == TextureFormats.B10X6G10X6R10X6G10X6_422UNorm
+        || format == TextureFormats.G12X4B12X4G12X4R12X4_422UNorm
+        || format == TextureFormats.B12X4G12X4R12X4G12X4_422UNorm
         || format == TextureFormats.G16B16G16R16_422UNorm
         || format == TextureFormats.B16G16R16G16_422UNorm;
 
@@ -155,10 +159,10 @@ public sealed class PackedRgb422TextureCoder : IPitchTextureCoder
 
     private void DecodeBlock16(ReadOnlySpan<byte> block, out Rgba16UNorm first, out Rgba16UNorm second)
     {
-        var c0 = ReadUInt16(block, 0);
-        var c1 = ReadUInt16(block, 1);
-        var c2 = ReadUInt16(block, 2);
-        var c3 = ReadUInt16(block, 3);
+        var c0 = DecodeUInt16Component(block, 0);
+        var c1 = DecodeUInt16Component(block, 1);
+        var c2 = DecodeUInt16Component(block, 2);
+        var c3 = DecodeUInt16Component(block, 3);
 
         ushort red;
         ushort green0;
@@ -230,16 +234,16 @@ public sealed class PackedRgb422TextureCoder : IPitchTextureCoder
         switch (_plan.Layout)
         {
             case PackedRgb422Layout.GbGr:
-                WriteUInt16(block, 0, first.Green);
-                WriteUInt16(block, 1, blue);
-                WriteUInt16(block, 2, second.Green);
-                WriteUInt16(block, 3, red);
+                EncodeUInt16Component(block, 0, first.Green);
+                EncodeUInt16Component(block, 1, blue);
+                EncodeUInt16Component(block, 2, second.Green);
+                EncodeUInt16Component(block, 3, red);
                 break;
             case PackedRgb422Layout.BgRg:
-                WriteUInt16(block, 0, blue);
-                WriteUInt16(block, 1, first.Green);
-                WriteUInt16(block, 2, red);
-                WriteUInt16(block, 3, second.Green);
+                EncodeUInt16Component(block, 0, blue);
+                EncodeUInt16Component(block, 1, first.Green);
+                EncodeUInt16Component(block, 2, red);
+                EncodeUInt16Component(block, 3, second.Green);
                 break;
             default:
                 throw new ArgumentOutOfRangeException(nameof(_plan));
@@ -281,6 +285,31 @@ public sealed class PackedRgb422TextureCoder : IPitchTextureCoder
     private static void WriteUInt16(Span<byte> block, int component, ushort value) =>
         BinaryPrimitives.WriteUInt16LittleEndian(block.Slice(component * sizeof(ushort), sizeof(ushort)), value);
 
+    private ushort DecodeUInt16Component(ReadOnlySpan<byte> block, int component)
+    {
+        var value = ReadUInt16(block, component);
+        if (_plan.UnusedLowBits == 0)
+        {
+            return value;
+        }
+
+        var bits = 16 - _plan.UnusedLowBits;
+        var componentValue = (uint)value >> _plan.UnusedLowBits;
+        return (ushort)((componentValue << _plan.UnusedLowBits) | (componentValue >> (bits - _plan.UnusedLowBits)));
+    }
+
+    private void EncodeUInt16Component(Span<byte> block, int component, ushort value)
+    {
+        if (_plan.UnusedLowBits == 0)
+        {
+            WriteUInt16(block, component, value);
+            return;
+        }
+
+        var packed = (ushort)(((uint)value >> _plan.UnusedLowBits) << _plan.UnusedLowBits);
+        WriteUInt16(block, component, packed);
+    }
+
     private static byte AverageUNorm8(byte first, byte second) =>
         RgbaColorConversions.FloatToUNorm8(
             (RgbaColorConversions.UNorm8ToFloat(first) + RgbaColorConversions.UNorm8ToFloat(second)) * 0.5f);
@@ -311,6 +340,26 @@ public sealed class PackedRgb422TextureCoder : IPitchTextureCoder
             return new PackedRgb422Plan(PackedRgb422Layout.BgRg, 8, format.BytesPerBlock);
         }
 
+        if (format == TextureFormats.G10X6B10X6G10X6R10X6_422UNorm)
+        {
+            return new PackedRgb422Plan(PackedRgb422Layout.GbGr, 10, format.BytesPerBlock, 6);
+        }
+
+        if (format == TextureFormats.B10X6G10X6R10X6G10X6_422UNorm)
+        {
+            return new PackedRgb422Plan(PackedRgb422Layout.BgRg, 10, format.BytesPerBlock, 6);
+        }
+
+        if (format == TextureFormats.G12X4B12X4G12X4R12X4_422UNorm)
+        {
+            return new PackedRgb422Plan(PackedRgb422Layout.GbGr, 12, format.BytesPerBlock, 4);
+        }
+
+        if (format == TextureFormats.B12X4G12X4R12X4G12X4_422UNorm)
+        {
+            return new PackedRgb422Plan(PackedRgb422Layout.BgRg, 12, format.BytesPerBlock, 4);
+        }
+
         if (format == TextureFormats.G16B16G16R16_422UNorm)
         {
             return new PackedRgb422Plan(PackedRgb422Layout.GbGr, 16, format.BytesPerBlock);
@@ -327,7 +376,11 @@ public sealed class PackedRgb422TextureCoder : IPitchTextureCoder
     private static NotSupportedException CreateUnsupportedFormatException(TextureFormat format) =>
         new($"Packed RGB 4:2:2 texture coder does not support texture format '{format.Name}'.");
 
-    private readonly record struct PackedRgb422Plan(PackedRgb422Layout Layout, int BitsPerComponent, int BytesPerBlock);
+    private readonly record struct PackedRgb422Plan(
+        PackedRgb422Layout Layout,
+        int BitsPerComponent,
+        int BytesPerBlock,
+        int UnusedLowBits = 0);
 
     private enum PackedRgb422Layout
     {
