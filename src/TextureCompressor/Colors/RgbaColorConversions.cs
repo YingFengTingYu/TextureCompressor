@@ -203,6 +203,23 @@ internal static class RgbaColorConversions
         return MathF.Max((float)(value / (double)int.MaxValue), -1f);
     }
 
+    public static float Srgb8ToLinearFloat(byte value)
+    {
+        var srgb = UNorm8ToFloat(value);
+        return srgb <= 0.04045f
+            ? srgb / 12.92f
+            : MathF.Pow((srgb + 0.055f) / 1.055f, 2.4f);
+    }
+
+    public static byte LinearFloatToSrgb8(float value)
+    {
+        value = Saturate(value);
+        var srgb = value <= 0.0031308f
+            ? value * 12.92f
+            : (1.055f * MathF.Pow(value, 1f / 2.4f)) - 0.055f;
+        return FloatToUNorm8(srgb);
+    }
+
     private static float Saturate(float value)
     {
         if (float.IsNaN(value))

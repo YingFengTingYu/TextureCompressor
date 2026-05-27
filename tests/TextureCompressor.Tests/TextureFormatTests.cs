@@ -124,6 +124,14 @@ public sealed class TextureFormatTests
         Assert.Throws<ArgumentOutOfRangeException>(() => TextureFormats.Rgba8UNorm.GetByteCount(1, height));
     }
 
+    [Theory]
+    [MemberData(nameof(SrgbFormats))]
+    public void SrgbFormatNamesUseSrgbSuffix(TextureFormat format, string name)
+    {
+        Assert.Equal(name, format.Name);
+        Assert.Equal(TextureValueKind.Srgb, format.ValueKind);
+    }
+
     public static TheoryData<TextureFormat, string, TextureFormatKind, TextureComponents, int, int, int> MvpFormats() => new()
     {
         { TextureFormats.R8, "R8_UNORM", TextureFormatKind.Uncompressed, TextureComponents.R, 1, 8, 1 },
@@ -136,5 +144,19 @@ public sealed class TextureFormatTests
         { TextureFormats.Bgra8, "BGRA8_UNORM", TextureFormatKind.Uncompressed, TextureComponents.Bgra, 4, 32, 4 },
         { TextureFormats.Luminance4Alpha4UNorm, "LUMINANCE4_ALPHA4_UNORM", TextureFormatKind.Uncompressed, TextureComponents.LuminanceAlpha, 2, 8, 1 },
         { TextureFormats.Bc1, "BC1_UNORM", TextureFormatKind.BlockCompressed, TextureComponents.Rgba, 4, 64, 8 }
+    };
+
+    public static TheoryData<TextureFormat, string> SrgbFormats() => new()
+    {
+        { TextureFormats.Luminance8Srgb, "LUMINANCE8_SRGB" },
+        { TextureFormats.Luminance8Alpha8Srgb, "LUMINANCE8_ALPHA8_SRGB" },
+        { TextureFormats.R8Srgb, "R8_SRGB" },
+        { TextureFormats.Rg8Srgb, "RG8_SRGB" },
+        { TextureFormats.Rgb8Srgb, "RGB8_SRGB" },
+        { TextureFormats.Bgr8Srgb, "BGR8_SRGB" },
+        { TextureFormats.Rgba8Srgb, "RGBA8_SRGB" },
+        { TextureFormats.Abgr8Srgb, "ABGR8_SRGB" },
+        { TextureFormats.Bgra8Srgb, "BGRA8_SRGB" },
+        { TextureFormats.Bgrx8Srgb, "BGRX8_SRGB" }
     };
 }

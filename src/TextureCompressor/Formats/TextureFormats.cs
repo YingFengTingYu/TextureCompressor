@@ -163,11 +163,11 @@ public static class TextureFormats
     public static readonly TextureFormat Luminance32Alpha32Float =
         TextureFormat.Uncompressed("LUMINANCE32_ALPHA32_FLOAT", TextureComponents.LuminanceAlpha, TextureValueKind.Float, 32, alphaBits: 32);
 
-    public static readonly TextureFormat Sluminance8 =
-        TextureFormat.Uncompressed("SLUMINANCE8", TextureComponents.Luminance, TextureValueKind.Srgb, 8);
+    public static readonly TextureFormat Luminance8Srgb =
+        TextureFormat.Uncompressed("LUMINANCE8_SRGB", TextureComponents.Luminance, TextureValueKind.Srgb, 8);
 
-    public static readonly TextureFormat Sluminance8Alpha8 =
-        TextureFormat.Uncompressed("SLUMINANCE8_ALPHA8", TextureComponents.LuminanceAlpha, TextureValueKind.Srgb, 8, alphaBits: 8);
+    public static readonly TextureFormat Luminance8Alpha8Srgb =
+        TextureFormat.Uncompressed("LUMINANCE8_ALPHA8_SRGB", TextureComponents.LuminanceAlpha, TextureValueKind.Srgb, 8, alphaBits: 8);
 
     public static readonly TextureFormat Intensity4UNorm = new(
         "INTENSITY4_UNORM",
@@ -239,8 +239,8 @@ public static class TextureFormats
     public static readonly TextureFormat R8SInt =
         TextureFormat.Uncompressed("R8_SINT", TextureComponents.R, TextureValueKind.SInt, 8);
 
-    public static readonly TextureFormat Sr8 =
-        TextureFormat.Uncompressed("SR8", TextureComponents.R, TextureValueKind.Srgb, 8);
+    public static readonly TextureFormat R8Srgb =
+        TextureFormat.Uncompressed("R8_SRGB", TextureComponents.R, TextureValueKind.Srgb, 8);
 
     public static readonly TextureFormat R16UNorm =
         TextureFormat.Uncompressed("R16_UNORM", TextureComponents.R, TextureValueKind.UNorm, 16);
@@ -287,8 +287,8 @@ public static class TextureFormats
     public static readonly TextureFormat Rg8SInt =
         TextureFormat.Uncompressed("RG8_SINT", TextureComponents.Rg, TextureValueKind.SInt, 8, 8);
 
-    public static readonly TextureFormat Srg8 =
-        TextureFormat.Uncompressed("SRG8", TextureComponents.Rg, TextureValueKind.Srgb, 8, 8);
+    public static readonly TextureFormat Rg8Srgb =
+        TextureFormat.Uncompressed("RG8_SRGB", TextureComponents.Rg, TextureValueKind.Srgb, 8, 8);
 
     public static readonly TextureFormat Rg16UNorm =
         TextureFormat.Uncompressed("RG16_UNORM", TextureComponents.Rg, TextureValueKind.UNorm, 16, 16);
@@ -332,8 +332,8 @@ public static class TextureFormats
     public static readonly TextureFormat Rgb8SInt =
         TextureFormat.Uncompressed("RGB8_SINT", TextureComponents.Rgb, TextureValueKind.SInt, 8, 8, 8);
 
-    public static readonly TextureFormat Srgb8 =
-        TextureFormat.Uncompressed("SRGB8", TextureComponents.Rgb, TextureValueKind.Srgb, 8, 8, 8);
+    public static readonly TextureFormat Rgb8Srgb =
+        TextureFormat.Uncompressed("RGB8_SRGB", TextureComponents.Rgb, TextureValueKind.Srgb, 8, 8, 8);
 
     public static readonly TextureFormat Rgb16UNorm =
         TextureFormat.Uncompressed("RGB16_UNORM", TextureComponents.Rgb, TextureValueKind.UNorm, 16, 16, 16);
@@ -522,7 +522,7 @@ public static class TextureFormats
         TextureFormat.Uncompressed("RGBA8_SINT", TextureComponents.Rgba, TextureValueKind.SInt, 8, 8, 8, 8);
 
     public static readonly TextureFormat Rgba8Srgb =
-        TextureFormat.Uncompressed("SRGB8_ALPHA8", TextureComponents.Rgba, TextureValueKind.Srgb, 8, 8, 8, 8);
+        TextureFormat.Uncompressed("RGBA8_SRGB", TextureComponents.Rgba, TextureValueKind.Srgb, 8, 8, 8, 8);
 
     public static readonly TextureFormat Rgba16UNorm =
         TextureFormat.Uncompressed("RGBA16_UNORM", TextureComponents.Rgba, TextureValueKind.UNorm, 16, 16, 16, 16);
