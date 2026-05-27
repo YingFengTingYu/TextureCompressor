@@ -11,20 +11,22 @@ public readonly record struct TextureFormat(
     int AlphaBits,
     int BlockWidth,
     int BlockHeight,
-    int BitsPerBlock)
+    int BitsPerBlock,
+    int BlockDepth = 1,
+    bool IsVariableSize = false)
 {
     public int ChannelCount => Components switch
     {
         TextureComponents.R => 1,
         TextureComponents.Rg => 2,
-        TextureComponents.Rgb or TextureComponents.Bgr => 3,
-        TextureComponents.Rgba or TextureComponents.Bgra or TextureComponents.Bgrx or TextureComponents.Argb or TextureComponents.Abgr => 4,
+        TextureComponents.Rgb or TextureComponents.Yuv or TextureComponents.Bgr => 3,
+        TextureComponents.Rgba or TextureComponents.Yuva or TextureComponents.Bgra or TextureComponents.Bgrx or TextureComponents.Argb or TextureComponents.Abgr => 4,
         TextureComponents.Alpha or TextureComponents.Luminance or TextureComponents.Intensity => 1,
         TextureComponents.LuminanceAlpha => 2,
         _ => throw new InvalidOperationException($"Unsupported texture component layout '{Components}'.")
     };
 
-    public int BitsPerTexel => BitsPerBlock / checked(BlockWidth * BlockHeight);
+    public int BitsPerTexel => BitsPerBlock / checked(BlockWidth * BlockHeight * BlockDepth);
 
     public int BytesPerBlock => (BitsPerBlock + 7) / 8;
 
@@ -35,6 +37,7 @@ public readonly record struct TextureFormat(
     public long GetRowByteCount64(int width)
     {
         ValidateLayout();
+        ValidateFixedSizeLayout();
         ValidateWidth(width);
 
         var blockCountX = (width + BlockWidth - 1L) / BlockWidth;
@@ -97,9 +100,17 @@ public readonly record struct TextureFormat(
 
     private void ValidateLayout()
     {
-        if (BlockWidth <= 0 || BlockHeight <= 0 || BitsPerBlock <= 0)
+        if (BlockWidth <= 0 || BlockHeight <= 0 || BlockDepth <= 0 || BitsPerBlock <= 0)
         {
             throw new InvalidOperationException("Texture format block dimensions and bit count must be positive.");
+        }
+    }
+
+    private void ValidateFixedSizeLayout()
+    {
+        if (IsVariableSize)
+        {
+            throw new NotSupportedException($"Texture format '{Name}' has a variable-size payload.");
         }
     }
 

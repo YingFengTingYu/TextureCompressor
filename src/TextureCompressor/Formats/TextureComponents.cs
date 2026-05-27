@@ -5,6 +5,8 @@ public enum TextureComponents
     R,
     Rg,
     Rgb,
+    Yuv,
+    Yuva,
     Rgba,
     Bgr,
     Bgra,

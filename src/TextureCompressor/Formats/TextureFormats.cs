@@ -480,6 +480,209 @@ public static class TextureFormats
         1,
         8);
 
+    public static readonly TextureFormat Uyvy422UNorm = new(
+        "UYVY422_UNORM",
+        TextureFormatKind.Uncompressed,
+        TextureComponents.Yuv,
+        TextureValueKind.UNorm,
+        8,
+        8,
+        8,
+        0,
+        2,
+        1,
+        32);
+
+    public static readonly TextureFormat Yuy2UNorm = new(
+        "YUY2_UNORM",
+        TextureFormatKind.Uncompressed,
+        TextureComponents.Yuv,
+        TextureValueKind.UNorm,
+        8,
+        8,
+        8,
+        0,
+        2,
+        1,
+        32);
+
+    public static readonly TextureFormat Vyua10Msb444UNorm =
+        PackedYuva444("VYUA10MSB_444_UNORM", 10, 10, 10, 10, 64);
+
+    public static readonly TextureFormat Vyua10Lsb444UNorm =
+        PackedYuva444("VYUA10LSB_444_UNORM", 10, 10, 10, 10, 64);
+
+    public static readonly TextureFormat Vyua12Msb444UNorm =
+        PackedYuva444("VYUA12MSB_444_UNORM", 12, 12, 12, 12, 64);
+
+    public static readonly TextureFormat Vyua12Lsb444UNorm =
+        PackedYuva444("VYUA12LSB_444_UNORM", 12, 12, 12, 12, 64);
+
+    public static readonly TextureFormat Uyv10A2_444UNorm =
+        PackedYuva444("UYV10A2_444_UNORM", 10, 10, 10, 2, 32);
+
+    public static readonly TextureFormat Uyva16_444UNorm =
+        PackedYuva444("UYVA16_444_UNORM", 16, 16, 16, 16, 64);
+
+    public static readonly TextureFormat Yuyv16_422UNorm =
+        PackedYuv422("YUYV16_422_UNORM", 16);
+
+    public static readonly TextureFormat Uyvy16_422UNorm =
+        PackedYuv422("UYVY16_422_UNORM", 16);
+
+    public static readonly TextureFormat Yuyv10Msb422UNorm =
+        PackedYuv422("YUYV10MSB_422_UNORM", 10);
+
+    public static readonly TextureFormat Yuyv10Lsb422UNorm =
+        PackedYuv422("YUYV10LSB_422_UNORM", 10);
+
+    public static readonly TextureFormat Uyvy10Msb422UNorm =
+        PackedYuv422("UYVY10MSB_422_UNORM", 10);
+
+    public static readonly TextureFormat Uyvy10Lsb422UNorm =
+        PackedYuv422("UYVY10LSB_422_UNORM", 10);
+
+    public static readonly TextureFormat Yuyv12Msb422UNorm =
+        PackedYuv422("YUYV12MSB_422_UNORM", 12);
+
+    public static readonly TextureFormat Yuyv12Lsb422UNorm =
+        PackedYuv422("YUYV12LSB_422_UNORM", 12);
+
+    public static readonly TextureFormat Uyvy12Msb422UNorm =
+        PackedYuv422("UYVY12MSB_422_UNORM", 12);
+
+    public static readonly TextureFormat Uyvy12Lsb422UNorm =
+        PackedYuv422("UYVY12LSB_422_UNORM", 12);
+
+    public static readonly TextureFormat Yuv3P444UNorm =
+        PlanarYuv("YUV_3P_444_UNORM", 8);
+
+    public static readonly TextureFormat Yuv10Msb3P444UNorm =
+        PlanarYuv("YUV10MSB_3P_444_UNORM", 10);
+
+    public static readonly TextureFormat Yuv10Lsb3P444UNorm =
+        PlanarYuv("YUV10LSB_3P_444_UNORM", 10);
+
+    public static readonly TextureFormat Yuv12Msb3P444UNorm =
+        PlanarYuv("YUV12MSB_3P_444_UNORM", 12);
+
+    public static readonly TextureFormat Yuv12Lsb3P444UNorm =
+        PlanarYuv("YUV12LSB_3P_444_UNORM", 12);
+
+    public static readonly TextureFormat Yuv16_3P444UNorm =
+        PlanarYuv("YUV16_3P_444_UNORM", 16);
+
+    public static readonly TextureFormat Yuv3P422UNorm =
+        PlanarYuv("YUV_3P_422_UNORM", 8);
+
+    public static readonly TextureFormat Yuv10Msb3P422UNorm =
+        PlanarYuv("YUV10MSB_3P_422_UNORM", 10);
+
+    public static readonly TextureFormat Yuv10Lsb3P422UNorm =
+        PlanarYuv("YUV10LSB_3P_422_UNORM", 10);
+
+    public static readonly TextureFormat Yuv12Msb3P422UNorm =
+        PlanarYuv("YUV12MSB_3P_422_UNORM", 12);
+
+    public static readonly TextureFormat Yuv12Lsb3P422UNorm =
+        PlanarYuv("YUV12LSB_3P_422_UNORM", 12);
+
+    public static readonly TextureFormat Yuv16_3P422UNorm =
+        PlanarYuv("YUV16_3P_422_UNORM", 16);
+
+    public static readonly TextureFormat Yuv3P420UNorm =
+        PlanarYuv("YUV_3P_420_UNORM", 8);
+
+    public static readonly TextureFormat Yuv10Msb3P420UNorm =
+        PlanarYuv("YUV10MSB_3P_420_UNORM", 10);
+
+    public static readonly TextureFormat Yuv10Lsb3P420UNorm =
+        PlanarYuv("YUV10LSB_3P_420_UNORM", 10);
+
+    public static readonly TextureFormat Yuv12Msb3P420UNorm =
+        PlanarYuv("YUV12MSB_3P_420_UNORM", 12);
+
+    public static readonly TextureFormat Yuv12Lsb3P420UNorm =
+        PlanarYuv("YUV12LSB_3P_420_UNORM", 12);
+
+    public static readonly TextureFormat Yuv16_3P420UNorm =
+        PlanarYuv("YUV16_3P_420_UNORM", 16);
+
+    public static readonly TextureFormat Yvu3P420UNorm =
+        PlanarYuv("YVU_3P_420_UNORM", 8);
+
+    public static readonly TextureFormat Yuv2P422UNorm =
+        PlanarYuv("YUV_2P_422_UNORM", 8);
+
+    public static readonly TextureFormat Yuv10Msb2P422UNorm =
+        PlanarYuv("YUV10MSB_2P_422_UNORM", 10);
+
+    public static readonly TextureFormat Yuv10Lsb2P422UNorm =
+        PlanarYuv("YUV10LSB_2P_422_UNORM", 10);
+
+    public static readonly TextureFormat Yuv12Msb2P422UNorm =
+        PlanarYuv("YUV12MSB_2P_422_UNORM", 12);
+
+    public static readonly TextureFormat Yuv12Lsb2P422UNorm =
+        PlanarYuv("YUV12LSB_2P_422_UNORM", 12);
+
+    public static readonly TextureFormat Yuv16_2P422UNorm =
+        PlanarYuv("YUV16_2P_422_UNORM", 16);
+
+    public static readonly TextureFormat Yuv2P420UNorm =
+        PlanarYuv("YUV_2P_420_UNORM", 8);
+
+    public static readonly TextureFormat Yuv10Msb2P420UNorm =
+        PlanarYuv("YUV10MSB_2P_420_UNORM", 10);
+
+    public static readonly TextureFormat Yuv10Lsb2P420UNorm =
+        PlanarYuv("YUV10LSB_2P_420_UNORM", 10);
+
+    public static readonly TextureFormat Yuv12Msb2P420UNorm =
+        PlanarYuv("YUV12MSB_2P_420_UNORM", 12);
+
+    public static readonly TextureFormat Yuv12Lsb2P420UNorm =
+        PlanarYuv("YUV12LSB_2P_420_UNORM", 12);
+
+    public static readonly TextureFormat Yuv16_2P420UNorm =
+        PlanarYuv("YUV16_2P_420_UNORM", 16);
+
+    public static readonly TextureFormat Yuv2P444UNorm =
+        PlanarYuv("YUV_2P_444_UNORM", 8);
+
+    public static readonly TextureFormat Yvu2P444UNorm =
+        PlanarYuv("YVU_2P_444_UNORM", 8);
+
+    public static readonly TextureFormat Yuv10Msb2P444UNorm =
+        PlanarYuv("YUV10MSB_2P_444_UNORM", 10);
+
+    public static readonly TextureFormat Yuv10Lsb2P444UNorm =
+        PlanarYuv("YUV10LSB_2P_444_UNORM", 10);
+
+    public static readonly TextureFormat Yvu10Msb2P444UNorm =
+        PlanarYuv("YVU10MSB_2P_444_UNORM", 10);
+
+    public static readonly TextureFormat Yvu10Lsb2P444UNorm =
+        PlanarYuv("YVU10LSB_2P_444_UNORM", 10);
+
+    public static readonly TextureFormat Yvu2P422UNorm =
+        PlanarYuv("YVU_2P_422_UNORM", 8);
+
+    public static readonly TextureFormat Yvu10Msb2P422UNorm =
+        PlanarYuv("YVU10MSB_2P_422_UNORM", 10);
+
+    public static readonly TextureFormat Yvu10Lsb2P422UNorm =
+        PlanarYuv("YVU10LSB_2P_422_UNORM", 10);
+
+    public static readonly TextureFormat Yvu2P420UNorm =
+        PlanarYuv("YVU_2P_420_UNORM", 8);
+
+    public static readonly TextureFormat Yvu10Msb2P420UNorm =
+        PlanarYuv("YVU10MSB_2P_420_UNORM", 10);
+
+    public static readonly TextureFormat Yvu10Lsb2P420UNorm =
+        PlanarYuv("YVU10LSB_2P_420_UNORM", 10);
+
     public static readonly TextureFormat Bgr565UNorm =
         TextureFormat.Uncompressed("BGR565_UNORM", TextureComponents.Bgr, TextureValueKind.UNorm, 5, 6, 5);
 
@@ -748,4 +951,44 @@ public static class TextureFormats
             4,
             4,
             64);
+
+    private static TextureFormat PackedYuva444(string name, int yBits, int uBits, int vBits, int alphaBits, int bitsPerBlock) => new(
+        name,
+        TextureFormatKind.Uncompressed,
+        TextureComponents.Yuva,
+        TextureValueKind.UNorm,
+        yBits,
+        uBits,
+        vBits,
+        alphaBits,
+        1,
+        1,
+        bitsPerBlock);
+
+    private static TextureFormat PackedYuv422(string name, int bitsPerComponent) => new(
+        name,
+        TextureFormatKind.Uncompressed,
+        TextureComponents.Yuv,
+        TextureValueKind.UNorm,
+        bitsPerComponent,
+        bitsPerComponent,
+        bitsPerComponent,
+        0,
+        2,
+        1,
+        64);
+
+    private static TextureFormat PlanarYuv(string name, int bitsPerComponent) => new(
+        name,
+        TextureFormatKind.Uncompressed,
+        TextureComponents.Yuv,
+        TextureValueKind.UNorm,
+        bitsPerComponent,
+        bitsPerComponent,
+        bitsPerComponent,
+        0,
+        1,
+        1,
+        bitsPerComponent * 3,
+        IsVariableSize: true);
 }

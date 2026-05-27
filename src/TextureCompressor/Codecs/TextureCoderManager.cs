@@ -121,6 +121,24 @@ public sealed class TextureCoderManager
             return true;
         }
 
+        if (PackedYuv422TextureCoder.IsSupported(format))
+        {
+            coder = new PackedYuv422TextureCoder(format);
+            return true;
+        }
+
+        if (PackedYuva444TextureCoder.IsSupported(format))
+        {
+            coder = new PackedYuva444TextureCoder(format);
+            return true;
+        }
+
+        if (PlanarYuvTextureCoder.IsSupported(format))
+        {
+            coder = new PlanarYuvTextureCoder(format);
+            return true;
+        }
+
         if (RgbmTextureCoder.IsSupported(format))
         {
             coder = new RgbmTextureCoder(format);

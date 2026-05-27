@@ -175,6 +175,50 @@ public sealed class TextureFormatTests
         Assert.Equal(bytesPerBlock * 3, format.GetRowByteCount(6));
     }
 
+    [Theory]
+    [MemberData(nameof(PackedYuv422Formats))]
+    public void PackedYuv422FormatsDescribeTwoPixelBlocks(TextureFormat format, string name, int bitsPerBlock, int bytesPerBlock)
+    {
+        Assert.Equal(name, format.Name);
+        Assert.Equal(TextureFormatKind.Uncompressed, format.Kind);
+        Assert.Equal(TextureComponents.Yuv, format.Components);
+        Assert.Equal(TextureValueKind.UNorm, format.ValueKind);
+        Assert.Equal(3, format.ChannelCount);
+        Assert.Equal(2, format.BlockWidth);
+        Assert.Equal(1, format.BlockHeight);
+        Assert.Equal(bitsPerBlock, format.BitsPerBlock);
+        Assert.Equal(bytesPerBlock, format.BytesPerBlock);
+        Assert.Equal(bytesPerBlock * 3, format.GetRowByteCount(6));
+    }
+
+    [Theory]
+    [MemberData(nameof(PackedYuva444Formats))]
+    public void PackedYuva444FormatsDescribeSinglePixelBlocks(TextureFormat format, string name, int bitsPerBlock, int bytesPerBlock)
+    {
+        Assert.Equal(name, format.Name);
+        Assert.Equal(TextureFormatKind.Uncompressed, format.Kind);
+        Assert.Equal(TextureComponents.Yuva, format.Components);
+        Assert.Equal(TextureValueKind.UNorm, format.ValueKind);
+        Assert.Equal(4, format.ChannelCount);
+        Assert.Equal(1, format.BlockWidth);
+        Assert.Equal(1, format.BlockHeight);
+        Assert.Equal(bitsPerBlock, format.BitsPerBlock);
+        Assert.Equal(bytesPerBlock, format.BytesPerBlock);
+        Assert.Equal(bytesPerBlock * 7, format.GetRowByteCount(7));
+    }
+
+    [Fact]
+    public void PlanarYuvFormatsAreVariableSizePayloads()
+    {
+        var format = TextureFormats.Yuv3P420UNorm;
+
+        Assert.Equal("YUV_3P_420_UNORM", format.Name);
+        Assert.Equal(TextureComponents.Yuv, format.Components);
+        Assert.True(format.IsVariableSize);
+        Assert.Throws<NotSupportedException>(() => format.GetRowByteCount(4));
+        Assert.Throws<NotSupportedException>(() => format.GetByteCount(4, 4));
+    }
+
     public static TheoryData<TextureFormat, string, TextureFormatKind, TextureComponents, int, int, int> MvpFormats() => new()
     {
         { TextureFormats.R8, "R8_UNORM", TextureFormatKind.Uncompressed, TextureComponents.R, 1, 8, 1 },
@@ -211,5 +255,25 @@ public sealed class TextureFormatTests
         { TextureFormats.B8G8R8G8_422UNorm, "B8G8_R8G8_422_UNORM", 32, 4 },
         { TextureFormats.G16B16G16R16_422UNorm, "G16B16_G16R16_422_UNORM", 64, 8 },
         { TextureFormats.B16G16R16G16_422UNorm, "B16G16_R16G16_422_UNORM", 64, 8 }
+    };
+
+    public static TheoryData<TextureFormat, string, int, int> PackedYuv422Formats() => new()
+    {
+        { TextureFormats.Uyvy422UNorm, "UYVY422_UNORM", 32, 4 },
+        { TextureFormats.Yuy2UNorm, "YUY2_UNORM", 32, 4 },
+        { TextureFormats.Yuyv16_422UNorm, "YUYV16_422_UNORM", 64, 8 },
+        { TextureFormats.Uyvy16_422UNorm, "UYVY16_422_UNORM", 64, 8 },
+        { TextureFormats.Yuyv10Msb422UNorm, "YUYV10MSB_422_UNORM", 64, 8 },
+        { TextureFormats.Uyvy10Lsb422UNorm, "UYVY10LSB_422_UNORM", 64, 8 }
+    };
+
+    public static TheoryData<TextureFormat, string, int, int> PackedYuva444Formats() => new()
+    {
+        { TextureFormats.Vyua10Msb444UNorm, "VYUA10MSB_444_UNORM", 64, 8 },
+        { TextureFormats.Vyua10Lsb444UNorm, "VYUA10LSB_444_UNORM", 64, 8 },
+        { TextureFormats.Vyua12Msb444UNorm, "VYUA12MSB_444_UNORM", 64, 8 },
+        { TextureFormats.Vyua12Lsb444UNorm, "VYUA12LSB_444_UNORM", 64, 8 },
+        { TextureFormats.Uyv10A2_444UNorm, "UYV10A2_444_UNORM", 32, 4 },
+        { TextureFormats.Uyva16_444UNorm, "UYVA16_444_UNORM", 64, 8 }
     };
 }
