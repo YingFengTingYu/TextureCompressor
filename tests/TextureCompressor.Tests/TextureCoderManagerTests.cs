@@ -157,12 +157,12 @@ public sealed class TextureCoderManagerTests
     }
 
     [Fact]
-    public void GlobalManagerDoesNotClaimCompressedFormats()
+    public void GlobalManagerFindsS3tcCoder()
     {
-        var found = TextureCoderManager.Global.TryGetCoder(TextureFormats.Bc1, out var coder);
+        var coder = TextureCoderManager.Global.GetCoder(TextureFormats.Bc1Rgba);
 
-        Assert.False(found);
-        Assert.Null(coder);
+        Assert.True(S3tcTextureCoder.IsSupported(TextureFormats.Bc1Rgba));
+        Assert.IsType<S3tcTextureCoder>(coder);
     }
 
     [Fact]

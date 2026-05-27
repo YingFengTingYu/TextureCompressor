@@ -90,7 +90,7 @@ public sealed class TextureFormatTests
     [InlineData(5, 16)]
     public void Bc1RowByteCountUsesFourByFourBlocks(int width, int expected)
     {
-        Assert.Equal(expected, TextureFormats.Bc1.GetRowByteCount(width));
+        Assert.Equal(expected, TextureFormats.Bc1Rgba.GetRowByteCount(width));
     }
 
     [Theory]
@@ -114,7 +114,7 @@ public sealed class TextureFormatTests
     [InlineData(5, 5, 32)]
     public void Bc1ByteCountUsesFourByFourBlocks(int width, int height, int expected)
     {
-        Assert.Equal(expected, TextureFormats.Bc1.GetByteCount(width, height));
+        Assert.Equal(expected, TextureFormats.Bc1Rgba.GetByteCount(width, height));
     }
 
     [Theory]
@@ -242,7 +242,8 @@ public sealed class TextureFormatTests
         { TextureFormats.Abgr4UNorm, "ABGR4_UNORM", TextureFormatKind.Uncompressed, TextureComponents.Abgr, 4, 16, 2 },
         { TextureFormats.Bgra8, "BGRA8_UNORM", TextureFormatKind.Uncompressed, TextureComponents.Bgra, 4, 32, 4 },
         { TextureFormats.Luminance4Alpha4UNorm, "LUMINANCE4_ALPHA4_UNORM", TextureFormatKind.Uncompressed, TextureComponents.LuminanceAlpha, 2, 8, 1 },
-        { TextureFormats.Bc1, "BC1_UNORM", TextureFormatKind.BlockCompressed, TextureComponents.Rgba, 4, 64, 8 }
+        { TextureFormats.Bc1Rgb, "BC1_RGB_UNORM", TextureFormatKind.BlockCompressed, TextureComponents.Rgb, 3, 64, 8 },
+        { TextureFormats.Bc1Rgba, "BC1_RGBA_UNORM", TextureFormatKind.BlockCompressed, TextureComponents.Rgba, 4, 64, 8 }
     };
 
     public static TheoryData<TextureFormat, string> SrgbFormats() => new()
@@ -256,7 +257,15 @@ public sealed class TextureFormatTests
         { TextureFormats.Rgba8Srgb, "RGBA8_SRGB" },
         { TextureFormats.Abgr8Srgb, "ABGR8_SRGB" },
         { TextureFormats.Bgra8Srgb, "BGRA8_SRGB" },
-        { TextureFormats.Bgrx8Srgb, "BGRX8_SRGB" }
+        { TextureFormats.Bgrx8Srgb, "BGRX8_SRGB" },
+        { TextureFormats.Bc1RgbSrgb, "BC1_RGB_SRGB" },
+        { TextureFormats.Bc1RgbaSrgb, "BC1_RGBA_SRGB" },
+        { TextureFormats.Bc2RgbaSrgb, "BC2_RGBA_SRGB" },
+        { TextureFormats.Bc3RgbaSrgb, "BC3_RGBA_SRGB" },
+        { TextureFormats.Dxt1RgbSrgb, "RGB_DXT1_SRGB" },
+        { TextureFormats.Dxt1RgbaSrgb, "RGBA_DXT1_SRGB" },
+        { TextureFormats.Dxt3RgbaSrgb, "RGBA_DXT3_SRGB" },
+        { TextureFormats.Dxt5RgbaSrgb, "RGBA_DXT5_SRGB" }
     };
 
     public static TheoryData<TextureFormat, string, int, int> PackedRgb422Formats() => new()

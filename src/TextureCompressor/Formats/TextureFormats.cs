@@ -1008,9 +1008,35 @@ public static class TextureFormats
     public static readonly TextureFormat Depth32FloatStencil8 =
         DepthStencil("DEPTH32F_STENCIL8", 32, 8, 64);
 
-    public static readonly TextureFormat Bc1 =
+    public static readonly TextureFormat Bc1Rgb =
         TextureFormat.BlockCompressed(
-            "BC1_UNORM",
+            "BC1_RGB_UNORM",
+            TextureComponents.Rgb,
+            TextureValueKind.UNorm,
+            5,
+            6,
+            5,
+            0,
+            4,
+            4,
+            64);
+
+    public static readonly TextureFormat Bc1RgbSrgb =
+        TextureFormat.BlockCompressed(
+            "BC1_RGB_SRGB",
+            TextureComponents.Rgb,
+            TextureValueKind.Srgb,
+            5,
+            6,
+            5,
+            0,
+            4,
+            4,
+            64);
+
+    public static readonly TextureFormat Bc1Rgba =
+        TextureFormat.BlockCompressed(
+            "BC1_RGBA_UNORM",
             TextureComponents.Rgba,
             TextureValueKind.UNorm,
             5,
@@ -1020,6 +1046,201 @@ public static class TextureFormats
             4,
             4,
             64);
+
+    public static readonly TextureFormat Bc1RgbaSrgb =
+        TextureFormat.BlockCompressed(
+            "BC1_RGBA_SRGB",
+            TextureComponents.Rgba,
+            TextureValueKind.Srgb,
+            5,
+            6,
+            5,
+            1,
+            4,
+            4,
+            64);
+
+    public static readonly TextureFormat Bc2Rgba =
+        TextureFormat.BlockCompressed(
+            "BC2_RGBA_UNORM",
+            TextureComponents.Rgba,
+            TextureValueKind.UNorm,
+            5,
+            6,
+            5,
+            4,
+            4,
+            4,
+            128);
+
+    public static readonly TextureFormat Bc2RgbaSrgb =
+        TextureFormat.BlockCompressed(
+            "BC2_RGBA_SRGB",
+            TextureComponents.Rgba,
+            TextureValueKind.Srgb,
+            5,
+            6,
+            5,
+            4,
+            4,
+            4,
+            128);
+
+    public static readonly TextureFormat Bc3Rgba =
+        TextureFormat.BlockCompressed(
+            "BC3_RGBA_UNORM",
+            TextureComponents.Rgba,
+            TextureValueKind.UNorm,
+            5,
+            6,
+            5,
+            8,
+            4,
+            4,
+            128);
+
+    public static readonly TextureFormat Bc3RgbaSrgb =
+        TextureFormat.BlockCompressed(
+            "BC3_RGBA_SRGB",
+            TextureComponents.Rgba,
+            TextureValueKind.Srgb,
+            5,
+            6,
+            5,
+            8,
+            4,
+            4,
+            128);
+
+    public static readonly TextureFormat Dxt1Rgb =
+        TextureFormat.BlockCompressed(
+            "RGB_DXT1_UNORM",
+            TextureComponents.Rgb,
+            TextureValueKind.UNorm,
+            5,
+            6,
+            5,
+            0,
+            4,
+            4,
+            64);
+
+    public static readonly TextureFormat Dxt1RgbSrgb =
+        TextureFormat.BlockCompressed(
+            "RGB_DXT1_SRGB",
+            TextureComponents.Rgb,
+            TextureValueKind.Srgb,
+            5,
+            6,
+            5,
+            0,
+            4,
+            4,
+            64);
+
+    public static readonly TextureFormat Dxt1Rgba =
+        TextureFormat.BlockCompressed(
+            "RGBA_DXT1_UNORM",
+            TextureComponents.Rgba,
+            TextureValueKind.UNorm,
+            5,
+            6,
+            5,
+            1,
+            4,
+            4,
+            64);
+
+    public static readonly TextureFormat Dxt1RgbaSrgb =
+        TextureFormat.BlockCompressed(
+            "RGBA_DXT1_SRGB",
+            TextureComponents.Rgba,
+            TextureValueKind.Srgb,
+            5,
+            6,
+            5,
+            1,
+            4,
+            4,
+            64);
+
+    public static readonly TextureFormat Dxt2Rgba =
+        TextureFormat.BlockCompressed(
+            "RGBA_DXT2_UNORM",
+            TextureComponents.Rgba,
+            TextureValueKind.UNorm,
+            5,
+            6,
+            5,
+            4,
+            4,
+            4,
+            128);
+
+    public static readonly TextureFormat Dxt3Rgba =
+        TextureFormat.BlockCompressed(
+            "RGBA_DXT3_UNORM",
+            TextureComponents.Rgba,
+            TextureValueKind.UNorm,
+            5,
+            6,
+            5,
+            4,
+            4,
+            4,
+            128);
+
+    public static readonly TextureFormat Dxt3RgbaSrgb =
+        TextureFormat.BlockCompressed(
+            "RGBA_DXT3_SRGB",
+            TextureComponents.Rgba,
+            TextureValueKind.Srgb,
+            5,
+            6,
+            5,
+            4,
+            4,
+            4,
+            128);
+
+    public static readonly TextureFormat Dxt4Rgba =
+        TextureFormat.BlockCompressed(
+            "RGBA_DXT4_UNORM",
+            TextureComponents.Rgba,
+            TextureValueKind.UNorm,
+            5,
+            6,
+            5,
+            8,
+            4,
+            4,
+            128);
+
+    public static readonly TextureFormat Dxt5Rgba =
+        TextureFormat.BlockCompressed(
+            "RGBA_DXT5_UNORM",
+            TextureComponents.Rgba,
+            TextureValueKind.UNorm,
+            5,
+            6,
+            5,
+            8,
+            4,
+            4,
+            128);
+
+    public static readonly TextureFormat Dxt5RgbaSrgb =
+        TextureFormat.BlockCompressed(
+            "RGBA_DXT5_SRGB",
+            TextureComponents.Rgba,
+            TextureValueKind.Srgb,
+            5,
+            6,
+            5,
+            8,
+            4,
+            4,
+            128);
 
     private static TextureFormat DepthComponent(string name, TextureValueKind valueKind, int bits) =>
         TextureFormat.Uncompressed(name, TextureComponents.Depth, valueKind, bits);

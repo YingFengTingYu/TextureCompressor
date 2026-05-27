@@ -157,6 +157,12 @@ public sealed class TextureCoderManager
             return true;
         }
 
+        if (S3tcTextureCoder.IsSupported(format))
+        {
+            coder = new S3tcTextureCoder(format);
+            return true;
+        }
+
         if (SequentialUncompressedTextureCoder.IsSupported(format))
         {
             coder = new SequentialUncompressedTextureCoder(format);
