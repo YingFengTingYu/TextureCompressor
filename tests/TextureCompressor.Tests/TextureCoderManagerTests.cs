@@ -67,6 +67,16 @@ public sealed class TextureCoderManagerTests
         Assert.IsType<SequentialUncompressedTextureCoder>(coder);
     }
 
+    [Theory]
+    [MemberData(nameof(SecondBatchSequentialFormats))]
+    public void GlobalManagerFindsSecondBatchSequentialUncompressedCoders(TextureFormat format)
+    {
+        var coder = TextureCoderManager.Global.GetCoder(format);
+
+        Assert.True(SequentialUncompressedTextureCoder.IsSupported(format));
+        Assert.IsType<SequentialUncompressedTextureCoder>(coder);
+    }
+
     [Fact]
     public void SequentialUncompressedCoderDoesNotClaimPackedUNormFormats()
     {
@@ -219,6 +229,164 @@ public sealed class TextureCoderManagerTests
         Assert.Equal(2f, decoded.Pixels[0].Green);
         Assert.Equal(0f, decoded.Pixels[0].Blue);
         Assert.Equal(1f, decoded.Pixels[0].Alpha);
+    }
+
+    [Fact]
+    public void EncodeAndDecodeLuminance8Alpha8StoresLuminanceAndAlpha()
+    {
+        var source = new ArrayTextureBitmap<Rgba8UNorm>(
+            1,
+            1,
+            [new Rgba8UNorm(9, 20, 30, 40)]);
+
+        var coder = Assert.IsType<SequentialUncompressedTextureCoder>(TextureCoderManager.Global.GetCoder(TextureFormats.Luminance8Alpha8UNorm));
+        var rowPitch = coder.GetDefaultPitch(source.Width);
+        var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
+        coder.Encode(source.AsView(), encoded, rowPitch);
+
+        var decoded = new ArrayTextureBitmap<Rgba8UNorm>(1, 1);
+        coder.Decode(encoded, decoded.AsView(), rowPitch);
+
+        Assert.Equal([9, 40], encoded);
+        Assert.Equal(9, decoded.Pixels[0].Red);
+        Assert.Equal(9, decoded.Pixels[0].Green);
+        Assert.Equal(9, decoded.Pixels[0].Blue);
+        Assert.Equal(40, decoded.Pixels[0].Alpha);
+    }
+
+    [Fact]
+    public void EncodeAndDecodeLuminance16Alpha16SNormStoresLuminanceAndAlpha()
+    {
+        var source = new ArrayTextureBitmap<Rgba16SNorm>(
+            1,
+            1,
+            [new Rgba16SNorm(-1000, 2000, -3000, 4000)]);
+
+        var coder = Assert.IsType<SequentialUncompressedTextureCoder>(TextureCoderManager.Global.GetCoder(TextureFormats.Luminance16Alpha16SNorm));
+        var rowPitch = coder.GetDefaultPitch(source.Width);
+        var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
+        coder.Encode(source.AsView(), encoded, rowPitch);
+
+        var decoded = new ArrayTextureBitmap<Rgba16SNorm>(1, 1);
+        coder.Decode(encoded, decoded.AsView(), rowPitch);
+
+        Assert.Equal([0x18, 0xfc, 0xa0, 0x0f], encoded);
+        Assert.Equal((short)-1000, decoded.Pixels[0].Red);
+        Assert.Equal((short)-1000, decoded.Pixels[0].Green);
+        Assert.Equal((short)-1000, decoded.Pixels[0].Blue);
+        Assert.Equal((short)4000, decoded.Pixels[0].Alpha);
+    }
+
+    [Fact]
+    public void EncodeAndDecodeLuminance32Alpha32FloatStoresLuminanceAndAlpha()
+    {
+        var source = new ArrayTextureBitmap<Rgba32Float>(
+            1,
+            1,
+            [new Rgba32Float(1f, 2f, 4f, 8f)]);
+
+        var coder = Assert.IsType<SequentialUncompressedTextureCoder>(TextureCoderManager.Global.GetCoder(TextureFormats.Luminance32Alpha32Float));
+        var rowPitch = coder.GetDefaultPitch(source.Width);
+        var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
+        coder.Encode(source.AsView(), encoded, rowPitch);
+
+        var decoded = new ArrayTextureBitmap<Rgba32Float>(1, 1);
+        coder.Decode(encoded, decoded.AsView(), rowPitch);
+
+        Assert.Equal([0x00, 0x00, 0x80, 0x3f, 0x00, 0x00, 0x00, 0x41], encoded);
+        Assert.Equal(1f, decoded.Pixels[0].Red);
+        Assert.Equal(1f, decoded.Pixels[0].Green);
+        Assert.Equal(1f, decoded.Pixels[0].Blue);
+        Assert.Equal(8f, decoded.Pixels[0].Alpha);
+    }
+
+    [Fact]
+    public void EncodeAndDecodeBgr8SwizzlesChannels()
+    {
+        var source = new ArrayTextureBitmap<Rgba8UNorm>(
+            1,
+            1,
+            [new Rgba8UNorm(1, 2, 3, 4)]);
+
+        var coder = Assert.IsType<SequentialUncompressedTextureCoder>(TextureCoderManager.Global.GetCoder(TextureFormats.Bgr8UNorm));
+        var rowPitch = coder.GetDefaultPitch(source.Width);
+        var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
+        coder.Encode(source.AsView(), encoded, rowPitch);
+
+        var decoded = new ArrayTextureBitmap<Rgba8UNorm>(1, 1);
+        coder.Decode(encoded, decoded.AsView(), rowPitch);
+
+        Assert.Equal([3, 2, 1], encoded);
+        Assert.Equal(1, decoded.Pixels[0].Red);
+        Assert.Equal(2, decoded.Pixels[0].Green);
+        Assert.Equal(3, decoded.Pixels[0].Blue);
+        Assert.Equal(255, decoded.Pixels[0].Alpha);
+    }
+
+    [Fact]
+    public void EncodeAndDecodeBgr16FloatSwizzlesChannels()
+    {
+        var source = new ArrayTextureBitmap<Rgba16Float>(
+            1,
+            1,
+            [new Rgba16Float(1f, 2f, 4f, 8f)]);
+
+        var coder = Assert.IsType<SequentialUncompressedTextureCoder>(TextureCoderManager.Global.GetCoder(TextureFormats.Bgr16Float));
+        var rowPitch = coder.GetDefaultPitch(source.Width);
+        var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
+        coder.Encode(source.AsView(), encoded, rowPitch);
+
+        var decoded = new ArrayTextureBitmap<Rgba16Float>(1, 1);
+        coder.Decode(encoded, decoded.AsView(), rowPitch);
+
+        Assert.Equal([0x00, 0x44, 0x00, 0x40, 0x00, 0x3c], encoded);
+        Assert.Equal((Half)1f, decoded.Pixels[0].Red);
+        Assert.Equal((Half)2f, decoded.Pixels[0].Green);
+        Assert.Equal((Half)4f, decoded.Pixels[0].Blue);
+        Assert.Equal((Half)1f, decoded.Pixels[0].Alpha);
+    }
+
+    [Fact]
+    public void EncodeAndDecodeAbgr8StoresAlphaFirstAndSwizzlesChannels()
+    {
+        var source = new ArrayTextureBitmap<Rgba8UNorm>(
+            1,
+            1,
+            [new Rgba8UNorm(1, 2, 3, 4)]);
+
+        var coder = Assert.IsType<SequentialUncompressedTextureCoder>(TextureCoderManager.Global.GetCoder(TextureFormats.Abgr8UNorm));
+        var rowPitch = coder.GetDefaultPitch(source.Width);
+        var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
+        coder.Encode(source.AsView(), encoded, rowPitch);
+
+        var decoded = new ArrayTextureBitmap<Rgba8UNorm>(1, 1);
+        coder.Decode(encoded, decoded.AsView(), rowPitch);
+
+        Assert.Equal([4, 3, 2, 1], encoded);
+        Assert.Equal(source.Pixels[0], decoded.Pixels[0]);
+    }
+
+    [Fact]
+    public void EncodeAndDecodeBgrx8WritesZeroPaddingAndRestoresOpaqueAlpha()
+    {
+        var source = new ArrayTextureBitmap<Rgba8UNorm>(
+            1,
+            1,
+            [new Rgba8UNorm(1, 2, 3, 4)]);
+
+        var coder = Assert.IsType<SequentialUncompressedTextureCoder>(TextureCoderManager.Global.GetCoder(TextureFormats.Bgrx8UNorm));
+        var rowPitch = coder.GetDefaultPitch(source.Width);
+        var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
+        coder.Encode(source.AsView(), encoded, rowPitch);
+
+        var decoded = new ArrayTextureBitmap<Rgba8UNorm>(1, 1);
+        coder.Decode(encoded, decoded.AsView(), rowPitch);
+
+        Assert.Equal([3, 2, 1, 0], encoded);
+        Assert.Equal(1, decoded.Pixels[0].Red);
+        Assert.Equal(2, decoded.Pixels[0].Green);
+        Assert.Equal(3, decoded.Pixels[0].Blue);
+        Assert.Equal(255, decoded.Pixels[0].Alpha);
     }
 
     [Fact]
@@ -973,5 +1141,27 @@ public sealed class TextureCoderManagerTests
         TextureFormats.Bgra32SNorm,
         TextureFormats.Bgra16Float,
         TextureFormats.Bgra32Float
+    };
+
+    public static TheoryData<TextureFormat> SecondBatchSequentialFormats() => new()
+    {
+        TextureFormats.Luminance8Alpha8UNorm,
+        TextureFormats.Luminance16Alpha16UNorm,
+        TextureFormats.Luminance16Alpha16SNorm,
+        TextureFormats.Luminance16Alpha16Float,
+        TextureFormats.Luminance32Alpha32UNorm,
+        TextureFormats.Luminance32Alpha32SNorm,
+        TextureFormats.Luminance32Alpha32Float,
+        TextureFormats.Bgr8UNorm,
+        TextureFormats.Bgr8SNorm,
+        TextureFormats.Bgr16UNorm,
+        TextureFormats.Bgr16SNorm,
+        TextureFormats.Bgr32UNorm,
+        TextureFormats.Bgr32SNorm,
+        TextureFormats.Bgr16Float,
+        TextureFormats.Bgr32Float,
+        TextureFormats.Abgr8UNorm,
+        TextureFormats.Abgr8SNorm,
+        TextureFormats.Bgrx8UNorm
     };
 }

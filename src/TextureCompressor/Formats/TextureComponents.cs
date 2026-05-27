@@ -8,6 +8,7 @@ public enum TextureComponents
     Rgba,
     Bgr,
     Bgra,
+    Bgrx,
     Argb,
     Abgr,
     Alpha,
