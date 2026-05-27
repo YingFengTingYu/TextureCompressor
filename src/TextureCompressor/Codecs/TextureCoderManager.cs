@@ -103,6 +103,12 @@ public sealed class TextureCoderManager
             return true;
         }
 
+        if (PackedIntegerTextureCoder.IsSupported(format))
+        {
+            coder = new PackedIntegerTextureCoder(format);
+            return true;
+        }
+
         if (SequentialUncompressedTextureCoder.IsSupported(format))
         {
             coder = new SequentialUncompressedTextureCoder(format);

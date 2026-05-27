@@ -4,5 +4,6 @@ public enum TextureValueKind
 {
     UNorm,
     SNorm,
+    UInt,
     Float
 }

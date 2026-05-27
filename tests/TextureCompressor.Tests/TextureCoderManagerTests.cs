@@ -32,6 +32,14 @@ public sealed class TextureCoderManagerTests
     }
 
     [Fact]
+    public void GlobalManagerFindsPackedIntegerCoder()
+    {
+        var coder = TextureCoderManager.Global.GetCoder(TextureFormats.Rgb10A2UInt);
+
+        Assert.IsType<PackedIntegerTextureCoder>(coder);
+    }
+
+    [Fact]
     public void SequentialUncompressedCoderDoesNotClaimPackedUNormFormats()
     {
         Assert.False(SequentialUncompressedTextureCoder.IsSupported(TextureFormats.Rgb565UNorm));
@@ -263,5 +271,74 @@ public sealed class TextureCoderManagerTests
         Assert.Equal(1f, decoded.Pixels[0].Green);
         Assert.Equal(1f, decoded.Pixels[0].Blue);
         Assert.Equal(1f, decoded.Pixels[0].Alpha);
+    }
+
+    [Fact]
+    public void EncodeAndDecodeRgb10A2UIntUsesPackedIntegerCoder()
+    {
+        var source = new ArrayTextureBitmap<Rgba16UNorm>(
+            1,
+            1,
+            [new Rgba16UNorm(1023, 0, 512, 3)]);
+
+        var coder = Assert.IsType<PackedIntegerTextureCoder>(TextureCoderManager.Global.GetCoder(TextureFormats.Rgb10A2UInt));
+        var rowPitch = coder.GetDefaultPitch(source.Width);
+        var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
+        coder.Encode(source.AsView(), encoded, rowPitch);
+
+        var decoded = new ArrayTextureBitmap<Rgba16UNorm>(1, 1);
+        coder.Decode(encoded, decoded.AsView(), rowPitch);
+
+        Assert.Equal([0x03, 0x08, 0xc0, 0xff], encoded);
+        Assert.Equal((ushort)1023, decoded.Pixels[0].Red);
+        Assert.Equal((ushort)0, decoded.Pixels[0].Green);
+        Assert.Equal((ushort)512, decoded.Pixels[0].Blue);
+        Assert.Equal((ushort)3, decoded.Pixels[0].Alpha);
+    }
+
+    [Fact]
+    public void EncodeAndDecodeRgb10A2RevUIntReversesBitOrder()
+    {
+        var source = new ArrayTextureBitmap<Rgba16UNorm>(
+            1,
+            1,
+            [new Rgba16UNorm(1, 2, 3, 3)]);
+
+        var coder = Assert.IsType<PackedIntegerTextureCoder>(TextureCoderManager.Global.GetCoder(TextureFormats.Rgb10A2RevUInt));
+        var rowPitch = coder.GetDefaultPitch(source.Width);
+        var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
+        coder.Encode(source.AsView(), encoded, rowPitch);
+
+        var decoded = new ArrayTextureBitmap<Rgba16UNorm>(1, 1);
+        coder.Decode(encoded, decoded.AsView(), rowPitch);
+
+        Assert.Equal([0x01, 0x08, 0x30, 0xc0], encoded);
+        Assert.Equal((ushort)1, decoded.Pixels[0].Red);
+        Assert.Equal((ushort)2, decoded.Pixels[0].Green);
+        Assert.Equal((ushort)3, decoded.Pixels[0].Blue);
+        Assert.Equal((ushort)3, decoded.Pixels[0].Alpha);
+    }
+
+    [Fact]
+    public void EncodeAndDecodeBgr10A2RevUIntSwizzlesChannels()
+    {
+        var source = new ArrayTextureBitmap<Rgba16UNorm>(
+            1,
+            1,
+            [new Rgba16UNorm(1023, 1, 512, 3)]);
+
+        var coder = Assert.IsType<PackedIntegerTextureCoder>(TextureCoderManager.Global.GetCoder(TextureFormats.Bgr10A2RevUInt));
+        var rowPitch = coder.GetDefaultPitch(source.Width);
+        var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
+        coder.Encode(source.AsView(), encoded, rowPitch);
+
+        var decoded = new ArrayTextureBitmap<Rgba16UNorm>(1, 1);
+        coder.Decode(encoded, decoded.AsView(), rowPitch);
+
+        Assert.Equal([0x00, 0x06, 0xf0, 0xff], encoded);
+        Assert.Equal((ushort)1023, decoded.Pixels[0].Red);
+        Assert.Equal((ushort)1, decoded.Pixels[0].Green);
+        Assert.Equal((ushort)512, decoded.Pixels[0].Blue);
+        Assert.Equal((ushort)3, decoded.Pixels[0].Alpha);
     }
 }
