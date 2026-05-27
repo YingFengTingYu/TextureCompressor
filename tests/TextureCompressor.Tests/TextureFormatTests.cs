@@ -94,6 +94,24 @@ public sealed class TextureFormatTests
     }
 
     [Theory]
+    [InlineData(1, 8)]
+    [InlineData(4, 8)]
+    [InlineData(5, 16)]
+    public void Bc4RowByteCountUsesFourByFourBlocks(int width, int expected)
+    {
+        Assert.Equal(expected, TextureFormats.Bc4UNorm.GetRowByteCount(width));
+    }
+
+    [Theory]
+    [InlineData(1, 16)]
+    [InlineData(4, 16)]
+    [InlineData(5, 32)]
+    public void Bc5RowByteCountUsesFourByFourBlocks(int width, int expected)
+    {
+        Assert.Equal(expected, TextureFormats.Bc5UNorm.GetRowByteCount(width));
+    }
+
+    [Theory]
     [InlineData(3, 2, 24)]
     [InlineData(7, 5, 140)]
     public void Rgba8ByteCountMatchesPackedRows(int width, int height, int expected)
@@ -243,7 +261,10 @@ public sealed class TextureFormatTests
         { TextureFormats.Bgra8, "BGRA8_UNORM", TextureFormatKind.Uncompressed, TextureComponents.Bgra, 4, 32, 4 },
         { TextureFormats.Luminance4Alpha4UNorm, "LUMINANCE4_ALPHA4_UNORM", TextureFormatKind.Uncompressed, TextureComponents.LuminanceAlpha, 2, 8, 1 },
         { TextureFormats.Bc1Rgb, "BC1_RGB_UNORM", TextureFormatKind.BlockCompressed, TextureComponents.Rgb, 3, 64, 8 },
-        { TextureFormats.Bc1Rgba, "BC1_RGBA_UNORM", TextureFormatKind.BlockCompressed, TextureComponents.Rgba, 4, 64, 8 }
+        { TextureFormats.Bc1Rgba, "BC1_RGBA_UNORM", TextureFormatKind.BlockCompressed, TextureComponents.Rgba, 4, 64, 8 },
+        { TextureFormats.Bc4UNorm, "BC4_UNORM", TextureFormatKind.BlockCompressed, TextureComponents.R, 1, 64, 8 },
+        { TextureFormats.Bc5UNorm, "BC5_UNORM", TextureFormatKind.BlockCompressed, TextureComponents.Rg, 2, 128, 16 },
+        { TextureFormats.Latc2UNorm, "LATC2_UNORM", TextureFormatKind.BlockCompressed, TextureComponents.LuminanceAlpha, 2, 128, 16 }
     };
 
     public static TheoryData<TextureFormat, string> SrgbFormats() => new()

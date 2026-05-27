@@ -163,6 +163,12 @@ public sealed class TextureCoderManager
             return true;
         }
 
+        if (RgtcLatcTextureCoder.IsSupported(format))
+        {
+            coder = new RgtcLatcTextureCoder(format);
+            return true;
+        }
+
         if (SequentialUncompressedTextureCoder.IsSupported(format))
         {
             coder = new SequentialUncompressedTextureCoder(format);
