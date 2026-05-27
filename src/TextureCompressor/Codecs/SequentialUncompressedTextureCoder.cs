@@ -183,6 +183,15 @@ public sealed class SequentialUncompressedTextureCoder : IPitchTextureCoder
             case SequentialTransfer.R32Float:
                 Decode<TPixel, Rgba32Float, Rgba32FloatCarrierTransfer, R32FloatTransfer>(source, destination, rowPitch);
                 return;
+            case SequentialTransfer.R64UNorm:
+                Decode<TPixel, Rgba64UNorm, Rgba64UNormCarrierTransfer, R64UNormTransfer>(source, destination, rowPitch);
+                return;
+            case SequentialTransfer.R64SNorm:
+                Decode<TPixel, Rgba64SNorm, Rgba64SNormCarrierTransfer, R64SNormTransfer>(source, destination, rowPitch);
+                return;
+            case SequentialTransfer.R64Float:
+                Decode<TPixel, Rgba64Float, Rgba64FloatCarrierTransfer, R64FloatTransfer>(source, destination, rowPitch);
+                return;
             case SequentialTransfer.R8Srgb:
                 Decode<TPixel, Rgba32Float, Rgba32FloatCarrierTransfer, R8SrgbTransfer>(source, destination, rowPitch);
                 return;
@@ -210,6 +219,15 @@ public sealed class SequentialUncompressedTextureCoder : IPitchTextureCoder
             case SequentialTransfer.Rg32Float:
                 Decode<TPixel, Rgba32Float, Rgba32FloatCarrierTransfer, Rg32FloatTransfer>(source, destination, rowPitch);
                 return;
+            case SequentialTransfer.Rg64UNorm:
+                Decode<TPixel, Rgba64UNorm, Rgba64UNormCarrierTransfer, Rg64UNormTransfer>(source, destination, rowPitch);
+                return;
+            case SequentialTransfer.Rg64SNorm:
+                Decode<TPixel, Rgba64SNorm, Rgba64SNormCarrierTransfer, Rg64SNormTransfer>(source, destination, rowPitch);
+                return;
+            case SequentialTransfer.Rg64Float:
+                Decode<TPixel, Rgba64Float, Rgba64FloatCarrierTransfer, Rg64FloatTransfer>(source, destination, rowPitch);
+                return;
             case SequentialTransfer.Rg8Srgb:
                 Decode<TPixel, Rgba32Float, Rgba32FloatCarrierTransfer, Rg8SrgbTransfer>(source, destination, rowPitch);
                 return;
@@ -236,6 +254,15 @@ public sealed class SequentialUncompressedTextureCoder : IPitchTextureCoder
                 return;
             case SequentialTransfer.Rgb32Float:
                 Decode<TPixel, Rgba32Float, Rgba32FloatCarrierTransfer, Rgb32FloatTransfer>(source, destination, rowPitch);
+                return;
+            case SequentialTransfer.Rgb64UNorm:
+                Decode<TPixel, Rgba64UNorm, Rgba64UNormCarrierTransfer, Rgb64UNormTransfer>(source, destination, rowPitch);
+                return;
+            case SequentialTransfer.Rgb64SNorm:
+                Decode<TPixel, Rgba64SNorm, Rgba64SNormCarrierTransfer, Rgb64SNormTransfer>(source, destination, rowPitch);
+                return;
+            case SequentialTransfer.Rgb64Float:
+                Decode<TPixel, Rgba64Float, Rgba64FloatCarrierTransfer, Rgb64FloatTransfer>(source, destination, rowPitch);
                 return;
             case SequentialTransfer.Rgb8Srgb:
                 Decode<TPixel, Rgba32Float, Rgba32FloatCarrierTransfer, Rgb8SrgbTransfer>(source, destination, rowPitch);
@@ -290,6 +317,15 @@ public sealed class SequentialUncompressedTextureCoder : IPitchTextureCoder
                 return;
             case SequentialTransfer.Rgba32Float:
                 Decode<TPixel, Rgba32Float, Rgba32FloatCarrierTransfer, Rgba32FloatTransfer>(source, destination, rowPitch);
+                return;
+            case SequentialTransfer.Rgba64UNorm:
+                Decode<TPixel, Rgba64UNorm, Rgba64UNormCarrierTransfer, Rgba64UNormTransfer>(source, destination, rowPitch);
+                return;
+            case SequentialTransfer.Rgba64SNorm:
+                Decode<TPixel, Rgba64SNorm, Rgba64SNormCarrierTransfer, Rgba64SNormTransfer>(source, destination, rowPitch);
+                return;
+            case SequentialTransfer.Rgba64Float:
+                Decode<TPixel, Rgba64Float, Rgba64FloatCarrierTransfer, Rgba64FloatTransfer>(source, destination, rowPitch);
                 return;
             case SequentialTransfer.Rgba8Srgb:
                 Decode<TPixel, Rgba32Float, Rgba32FloatCarrierTransfer, Rgba8SrgbTransfer>(source, destination, rowPitch);
@@ -472,6 +508,15 @@ public sealed class SequentialUncompressedTextureCoder : IPitchTextureCoder
             case SequentialTransfer.R32Float:
                 Encode<TPixel, Rgba32Float, Rgba32FloatCarrierTransfer, R32FloatTransfer>(source, destination, rowPitch);
                 return;
+            case SequentialTransfer.R64UNorm:
+                Encode<TPixel, Rgba64UNorm, Rgba64UNormCarrierTransfer, R64UNormTransfer>(source, destination, rowPitch);
+                return;
+            case SequentialTransfer.R64SNorm:
+                Encode<TPixel, Rgba64SNorm, Rgba64SNormCarrierTransfer, R64SNormTransfer>(source, destination, rowPitch);
+                return;
+            case SequentialTransfer.R64Float:
+                Encode<TPixel, Rgba64Float, Rgba64FloatCarrierTransfer, R64FloatTransfer>(source, destination, rowPitch);
+                return;
             case SequentialTransfer.R8Srgb:
                 Encode<TPixel, Rgba32Float, Rgba32FloatCarrierTransfer, R8SrgbTransfer>(source, destination, rowPitch);
                 return;
@@ -499,6 +544,15 @@ public sealed class SequentialUncompressedTextureCoder : IPitchTextureCoder
             case SequentialTransfer.Rg32Float:
                 Encode<TPixel, Rgba32Float, Rgba32FloatCarrierTransfer, Rg32FloatTransfer>(source, destination, rowPitch);
                 return;
+            case SequentialTransfer.Rg64UNorm:
+                Encode<TPixel, Rgba64UNorm, Rgba64UNormCarrierTransfer, Rg64UNormTransfer>(source, destination, rowPitch);
+                return;
+            case SequentialTransfer.Rg64SNorm:
+                Encode<TPixel, Rgba64SNorm, Rgba64SNormCarrierTransfer, Rg64SNormTransfer>(source, destination, rowPitch);
+                return;
+            case SequentialTransfer.Rg64Float:
+                Encode<TPixel, Rgba64Float, Rgba64FloatCarrierTransfer, Rg64FloatTransfer>(source, destination, rowPitch);
+                return;
             case SequentialTransfer.Rg8Srgb:
                 Encode<TPixel, Rgba32Float, Rgba32FloatCarrierTransfer, Rg8SrgbTransfer>(source, destination, rowPitch);
                 return;
@@ -525,6 +579,15 @@ public sealed class SequentialUncompressedTextureCoder : IPitchTextureCoder
                 return;
             case SequentialTransfer.Rgb32Float:
                 Encode<TPixel, Rgba32Float, Rgba32FloatCarrierTransfer, Rgb32FloatTransfer>(source, destination, rowPitch);
+                return;
+            case SequentialTransfer.Rgb64UNorm:
+                Encode<TPixel, Rgba64UNorm, Rgba64UNormCarrierTransfer, Rgb64UNormTransfer>(source, destination, rowPitch);
+                return;
+            case SequentialTransfer.Rgb64SNorm:
+                Encode<TPixel, Rgba64SNorm, Rgba64SNormCarrierTransfer, Rgb64SNormTransfer>(source, destination, rowPitch);
+                return;
+            case SequentialTransfer.Rgb64Float:
+                Encode<TPixel, Rgba64Float, Rgba64FloatCarrierTransfer, Rgb64FloatTransfer>(source, destination, rowPitch);
                 return;
             case SequentialTransfer.Rgb8Srgb:
                 Encode<TPixel, Rgba32Float, Rgba32FloatCarrierTransfer, Rgb8SrgbTransfer>(source, destination, rowPitch);
@@ -579,6 +642,15 @@ public sealed class SequentialUncompressedTextureCoder : IPitchTextureCoder
                 return;
             case SequentialTransfer.Rgba32Float:
                 Encode<TPixel, Rgba32Float, Rgba32FloatCarrierTransfer, Rgba32FloatTransfer>(source, destination, rowPitch);
+                return;
+            case SequentialTransfer.Rgba64UNorm:
+                Encode<TPixel, Rgba64UNorm, Rgba64UNormCarrierTransfer, Rgba64UNormTransfer>(source, destination, rowPitch);
+                return;
+            case SequentialTransfer.Rgba64SNorm:
+                Encode<TPixel, Rgba64SNorm, Rgba64SNormCarrierTransfer, Rgba64SNormTransfer>(source, destination, rowPitch);
+                return;
+            case SequentialTransfer.Rgba64Float:
+                Encode<TPixel, Rgba64Float, Rgba64FloatCarrierTransfer, Rgba64FloatTransfer>(source, destination, rowPitch);
                 return;
             case SequentialTransfer.Rgba8Srgb:
                 Encode<TPixel, Rgba32Float, Rgba32FloatCarrierTransfer, Rgba8SrgbTransfer>(source, destination, rowPitch);
@@ -732,6 +804,39 @@ public sealed class SequentialUncompressedTextureCoder : IPitchTextureCoder
         public static Rgba32Float ToCarrier<TPixel>(TPixel value)
             where TPixel : unmanaged, IPixel<TPixel> =>
             TPixel.ToRgba32Float(value);
+    }
+
+    private readonly struct Rgba64UNormCarrierTransfer : ISequentialCarrierTransfer<Rgba64UNorm>
+    {
+        public static TPixel FromCarrier<TPixel>(Rgba64UNorm value)
+            where TPixel : unmanaged, IPixel<TPixel> =>
+            TPixel.FromRgba64UNorm(value);
+
+        public static Rgba64UNorm ToCarrier<TPixel>(TPixel value)
+            where TPixel : unmanaged, IPixel<TPixel> =>
+            TPixel.ToRgba64UNorm(value);
+    }
+
+    private readonly struct Rgba64SNormCarrierTransfer : ISequentialCarrierTransfer<Rgba64SNorm>
+    {
+        public static TPixel FromCarrier<TPixel>(Rgba64SNorm value)
+            where TPixel : unmanaged, IPixel<TPixel> =>
+            TPixel.FromRgba64SNorm(value);
+
+        public static Rgba64SNorm ToCarrier<TPixel>(TPixel value)
+            where TPixel : unmanaged, IPixel<TPixel> =>
+            TPixel.ToRgba64SNorm(value);
+    }
+
+    private readonly struct Rgba64FloatCarrierTransfer : ISequentialCarrierTransfer<Rgba64Float>
+    {
+        public static TPixel FromCarrier<TPixel>(Rgba64Float value)
+            where TPixel : unmanaged, IPixel<TPixel> =>
+            TPixel.FromRgba64Float(value);
+
+        public static Rgba64Float ToCarrier<TPixel>(TPixel value)
+            where TPixel : unmanaged, IPixel<TPixel> =>
+            TPixel.ToRgba64Float(value);
     }
 
     private void Decode<TPixel, TCarrier, TCarrierTransfer, TTransfer>(
@@ -1182,6 +1287,27 @@ public sealed class SequentialUncompressedTextureCoder : IPitchTextureCoder
         public static void Encode(Rgba32Float value, Span<byte> texel) => WriteSingle(texel, 0, value.Red);
     }
 
+    private readonly struct R64UNormTransfer : ISequentialTransfer<Rgba64UNorm>
+    {
+        public static Rgba64UNorm Decode(ReadOnlySpan<byte> texel) => new(ReadUInt64(texel, 0), 0, 0);
+
+        public static void Encode(Rgba64UNorm value, Span<byte> texel) => WriteUInt64(texel, 0, value.Red);
+    }
+
+    private readonly struct R64SNormTransfer : ISequentialTransfer<Rgba64SNorm>
+    {
+        public static Rgba64SNorm Decode(ReadOnlySpan<byte> texel) => new(ReadInt64(texel, 0), 0, 0);
+
+        public static void Encode(Rgba64SNorm value, Span<byte> texel) => WriteInt64(texel, 0, value.Red);
+    }
+
+    private readonly struct R64FloatTransfer : ISequentialTransfer<Rgba64Float>
+    {
+        public static Rgba64Float Decode(ReadOnlySpan<byte> texel) => new(ReadDouble(texel, 0), 0d, 0d);
+
+        public static void Encode(Rgba64Float value, Span<byte> texel) => WriteDouble(texel, 0, value.Red);
+    }
+
     private readonly struct Rg8UNormTransfer : ISequentialTransfer<Rgba8UNorm>
     {
         public static Rgba8UNorm Decode(ReadOnlySpan<byte> texel) => new(texel[0], texel[1], 0);
@@ -1273,6 +1399,42 @@ public sealed class SequentialUncompressedTextureCoder : IPitchTextureCoder
         {
             WriteSingle(texel, 0, value.Red);
             WriteSingle(texel, 4, value.Green);
+        }
+    }
+
+    private readonly struct Rg64UNormTransfer : ISequentialTransfer<Rgba64UNorm>
+    {
+        public static Rgba64UNorm Decode(ReadOnlySpan<byte> texel) =>
+            new(ReadUInt64(texel, 0), ReadUInt64(texel, 8), 0);
+
+        public static void Encode(Rgba64UNorm value, Span<byte> texel)
+        {
+            WriteUInt64(texel, 0, value.Red);
+            WriteUInt64(texel, 8, value.Green);
+        }
+    }
+
+    private readonly struct Rg64SNormTransfer : ISequentialTransfer<Rgba64SNorm>
+    {
+        public static Rgba64SNorm Decode(ReadOnlySpan<byte> texel) =>
+            new(ReadInt64(texel, 0), ReadInt64(texel, 8), 0);
+
+        public static void Encode(Rgba64SNorm value, Span<byte> texel)
+        {
+            WriteInt64(texel, 0, value.Red);
+            WriteInt64(texel, 8, value.Green);
+        }
+    }
+
+    private readonly struct Rg64FloatTransfer : ISequentialTransfer<Rgba64Float>
+    {
+        public static Rgba64Float Decode(ReadOnlySpan<byte> texel) =>
+            new(ReadDouble(texel, 0), ReadDouble(texel, 8), 0d);
+
+        public static void Encode(Rgba64Float value, Span<byte> texel)
+        {
+            WriteDouble(texel, 0, value.Red);
+            WriteDouble(texel, 8, value.Green);
         }
     }
 
@@ -1376,6 +1538,45 @@ public sealed class SequentialUncompressedTextureCoder : IPitchTextureCoder
             WriteSingle(texel, 0, value.Red);
             WriteSingle(texel, 4, value.Green);
             WriteSingle(texel, 8, value.Blue);
+        }
+    }
+
+    private readonly struct Rgb64UNormTransfer : ISequentialTransfer<Rgba64UNorm>
+    {
+        public static Rgba64UNorm Decode(ReadOnlySpan<byte> texel) =>
+            new(ReadUInt64(texel, 0), ReadUInt64(texel, 8), ReadUInt64(texel, 16));
+
+        public static void Encode(Rgba64UNorm value, Span<byte> texel)
+        {
+            WriteUInt64(texel, 0, value.Red);
+            WriteUInt64(texel, 8, value.Green);
+            WriteUInt64(texel, 16, value.Blue);
+        }
+    }
+
+    private readonly struct Rgb64SNormTransfer : ISequentialTransfer<Rgba64SNorm>
+    {
+        public static Rgba64SNorm Decode(ReadOnlySpan<byte> texel) =>
+            new(ReadInt64(texel, 0), ReadInt64(texel, 8), ReadInt64(texel, 16));
+
+        public static void Encode(Rgba64SNorm value, Span<byte> texel)
+        {
+            WriteInt64(texel, 0, value.Red);
+            WriteInt64(texel, 8, value.Green);
+            WriteInt64(texel, 16, value.Blue);
+        }
+    }
+
+    private readonly struct Rgb64FloatTransfer : ISequentialTransfer<Rgba64Float>
+    {
+        public static Rgba64Float Decode(ReadOnlySpan<byte> texel) =>
+            new(ReadDouble(texel, 0), ReadDouble(texel, 8), ReadDouble(texel, 16));
+
+        public static void Encode(Rgba64Float value, Span<byte> texel)
+        {
+            WriteDouble(texel, 0, value.Red);
+            WriteDouble(texel, 8, value.Green);
+            WriteDouble(texel, 16, value.Blue);
         }
     }
 
@@ -1590,6 +1791,48 @@ public sealed class SequentialUncompressedTextureCoder : IPitchTextureCoder
             WriteSingle(texel, 4, value.Green);
             WriteSingle(texel, 8, value.Blue);
             WriteSingle(texel, 12, value.Alpha);
+        }
+    }
+
+    private readonly struct Rgba64UNormTransfer : ISequentialTransfer<Rgba64UNorm>
+    {
+        public static Rgba64UNorm Decode(ReadOnlySpan<byte> texel) =>
+            new(ReadUInt64(texel, 0), ReadUInt64(texel, 8), ReadUInt64(texel, 16), ReadUInt64(texel, 24));
+
+        public static void Encode(Rgba64UNorm value, Span<byte> texel)
+        {
+            WriteUInt64(texel, 0, value.Red);
+            WriteUInt64(texel, 8, value.Green);
+            WriteUInt64(texel, 16, value.Blue);
+            WriteUInt64(texel, 24, value.Alpha);
+        }
+    }
+
+    private readonly struct Rgba64SNormTransfer : ISequentialTransfer<Rgba64SNorm>
+    {
+        public static Rgba64SNorm Decode(ReadOnlySpan<byte> texel) =>
+            new(ReadInt64(texel, 0), ReadInt64(texel, 8), ReadInt64(texel, 16), ReadInt64(texel, 24));
+
+        public static void Encode(Rgba64SNorm value, Span<byte> texel)
+        {
+            WriteInt64(texel, 0, value.Red);
+            WriteInt64(texel, 8, value.Green);
+            WriteInt64(texel, 16, value.Blue);
+            WriteInt64(texel, 24, value.Alpha);
+        }
+    }
+
+    private readonly struct Rgba64FloatTransfer : ISequentialTransfer<Rgba64Float>
+    {
+        public static Rgba64Float Decode(ReadOnlySpan<byte> texel) =>
+            new(ReadDouble(texel, 0), ReadDouble(texel, 8), ReadDouble(texel, 16), ReadDouble(texel, 24));
+
+        public static void Encode(Rgba64Float value, Span<byte> texel)
+        {
+            WriteDouble(texel, 0, value.Red);
+            WriteDouble(texel, 8, value.Green);
+            WriteDouble(texel, 16, value.Blue);
+            WriteDouble(texel, 24, value.Alpha);
         }
     }
 
@@ -2132,6 +2375,12 @@ public sealed class SequentialUncompressedTextureCoder : IPitchTextureCoder
             return true;
         }
 
+        if (format == TextureFormats.R64Float)
+        {
+            transfer = SequentialTransfer.R64Float;
+            return true;
+        }
+
         if (format == TextureFormats.R8Srgb)
         {
             transfer = SequentialTransfer.R8Srgb;
@@ -2186,6 +2435,12 @@ public sealed class SequentialUncompressedTextureCoder : IPitchTextureCoder
             return true;
         }
 
+        if (format == TextureFormats.Rg64Float)
+        {
+            transfer = SequentialTransfer.Rg64Float;
+            return true;
+        }
+
         if (format == TextureFormats.Rg8Srgb)
         {
             transfer = SequentialTransfer.Rg8Srgb;
@@ -2237,6 +2492,12 @@ public sealed class SequentialUncompressedTextureCoder : IPitchTextureCoder
         if (format == TextureFormats.Rgb32Float)
         {
             transfer = SequentialTransfer.Rgb32Float;
+            return true;
+        }
+
+        if (format == TextureFormats.Rgb64Float)
+        {
+            transfer = SequentialTransfer.Rgb64Float;
             return true;
         }
 
@@ -2345,6 +2606,12 @@ public sealed class SequentialUncompressedTextureCoder : IPitchTextureCoder
         if (format == TextureFormats.Rgba32Float)
         {
             transfer = SequentialTransfer.Rgba32Float;
+            return true;
+        }
+
+        if (format == TextureFormats.Rgba64Float)
+        {
+            transfer = SequentialTransfer.Rgba64Float;
             return true;
         }
 
@@ -2624,6 +2891,18 @@ public sealed class SequentialUncompressedTextureCoder : IPitchTextureCoder
             return true;
         }
 
+        if (format == TextureFormats.R64UInt)
+        {
+            transfer = SequentialTransfer.R64UNorm;
+            return true;
+        }
+
+        if (format == TextureFormats.R64SInt)
+        {
+            transfer = SequentialTransfer.R64SNorm;
+            return true;
+        }
+
         if (format == TextureFormats.Rg8UInt)
         {
             transfer = SequentialTransfer.Rg8UNorm;
@@ -2660,6 +2939,18 @@ public sealed class SequentialUncompressedTextureCoder : IPitchTextureCoder
             return true;
         }
 
+        if (format == TextureFormats.Rg64UInt)
+        {
+            transfer = SequentialTransfer.Rg64UNorm;
+            return true;
+        }
+
+        if (format == TextureFormats.Rg64SInt)
+        {
+            transfer = SequentialTransfer.Rg64SNorm;
+            return true;
+        }
+
         if (format == TextureFormats.Rgb8UInt)
         {
             transfer = SequentialTransfer.Rgb8UNorm;
@@ -2693,6 +2984,18 @@ public sealed class SequentialUncompressedTextureCoder : IPitchTextureCoder
         if (format == TextureFormats.Rgb32SInt)
         {
             transfer = SequentialTransfer.Rgb32SNorm;
+            return true;
+        }
+
+        if (format == TextureFormats.Rgb64UInt)
+        {
+            transfer = SequentialTransfer.Rgb64UNorm;
+            return true;
+        }
+
+        if (format == TextureFormats.Rgb64SInt)
+        {
+            transfer = SequentialTransfer.Rgb64SNorm;
             return true;
         }
 
@@ -2780,6 +3083,18 @@ public sealed class SequentialUncompressedTextureCoder : IPitchTextureCoder
             return true;
         }
 
+        if (format == TextureFormats.Rgba64UInt)
+        {
+            transfer = SequentialTransfer.Rgba64UNorm;
+            return true;
+        }
+
+        if (format == TextureFormats.Rgba64SInt)
+        {
+            transfer = SequentialTransfer.Rgba64SNorm;
+            return true;
+        }
+
         if (format == TextureFormats.Bgra8UInt)
         {
             transfer = SequentialTransfer.Bgra8UNorm;
@@ -2832,11 +3147,20 @@ public sealed class SequentialUncompressedTextureCoder : IPitchTextureCoder
     private static int ReadInt32(ReadOnlySpan<byte> source, int offset) =>
         BinaryPrimitives.ReadInt32LittleEndian(source.Slice(offset, sizeof(int)));
 
+    private static ulong ReadUInt64(ReadOnlySpan<byte> source, int offset) =>
+        BinaryPrimitives.ReadUInt64LittleEndian(source.Slice(offset, sizeof(ulong)));
+
+    private static long ReadInt64(ReadOnlySpan<byte> source, int offset) =>
+        BinaryPrimitives.ReadInt64LittleEndian(source.Slice(offset, sizeof(long)));
+
     private static Half ReadHalf(ReadOnlySpan<byte> source, int offset) =>
         BitConverter.UInt16BitsToHalf(ReadUInt16(source, offset));
 
     private static float ReadSingle(ReadOnlySpan<byte> source, int offset) =>
         BitConverter.Int32BitsToSingle(ReadInt32(source, offset));
+
+    private static double ReadDouble(ReadOnlySpan<byte> source, int offset) =>
+        BitConverter.Int64BitsToDouble(ReadInt64(source, offset));
 
     private static void WriteUInt16(Span<byte> destination, int offset, ushort value) =>
         BinaryPrimitives.WriteUInt16LittleEndian(destination.Slice(offset, sizeof(ushort)), value);
@@ -2850,11 +3174,20 @@ public sealed class SequentialUncompressedTextureCoder : IPitchTextureCoder
     private static void WriteInt32(Span<byte> destination, int offset, int value) =>
         BinaryPrimitives.WriteInt32LittleEndian(destination.Slice(offset, sizeof(int)), value);
 
+    private static void WriteUInt64(Span<byte> destination, int offset, ulong value) =>
+        BinaryPrimitives.WriteUInt64LittleEndian(destination.Slice(offset, sizeof(ulong)), value);
+
+    private static void WriteInt64(Span<byte> destination, int offset, long value) =>
+        BinaryPrimitives.WriteInt64LittleEndian(destination.Slice(offset, sizeof(long)), value);
+
     private static void WriteHalf(Span<byte> destination, int offset, Half value) =>
         WriteUInt16(destination, offset, BitConverter.HalfToUInt16Bits(value));
 
     private static void WriteSingle(Span<byte> destination, int offset, float value) =>
         WriteInt32(destination, offset, BitConverter.SingleToInt32Bits(value));
+
+    private static void WriteDouble(Span<byte> destination, int offset, double value) =>
+        WriteInt64(destination, offset, BitConverter.DoubleToInt64Bits(value));
 
     private static float DecodeSrgb(byte value) =>
         RgbaColorConversions.Srgb8ToLinearFloat(value);
@@ -2915,6 +3248,9 @@ public sealed class SequentialUncompressedTextureCoder : IPitchTextureCoder
         R32SNorm,
         R16Float,
         R32Float,
+        R64UNorm,
+        R64SNorm,
+        R64Float,
         R8Srgb,
         Rg8UNorm,
         Rg8SNorm,
@@ -2924,6 +3260,9 @@ public sealed class SequentialUncompressedTextureCoder : IPitchTextureCoder
         Rg32SNorm,
         Rg16Float,
         Rg32Float,
+        Rg64UNorm,
+        Rg64SNorm,
+        Rg64Float,
         Rg8Srgb,
         Rgb8UNorm,
         Rgb8SNorm,
@@ -2933,6 +3272,9 @@ public sealed class SequentialUncompressedTextureCoder : IPitchTextureCoder
         Rgb32SNorm,
         Rgb16Float,
         Rgb32Float,
+        Rgb64UNorm,
+        Rgb64SNorm,
+        Rgb64Float,
         Rgb8Srgb,
         Bgr8UNorm,
         Bgr8SNorm,
@@ -2951,6 +3293,9 @@ public sealed class SequentialUncompressedTextureCoder : IPitchTextureCoder
         Rgba32SNorm,
         Rgba16Float,
         Rgba32Float,
+        Rgba64UNorm,
+        Rgba64SNorm,
+        Rgba64Float,
         Rgba8Srgb,
         Abgr8UNorm,
         Abgr8SNorm,
