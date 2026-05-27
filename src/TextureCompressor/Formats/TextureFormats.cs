@@ -939,6 +939,45 @@ public static class TextureFormats
     public static readonly TextureFormat Bgr10A2RevUInt =
         TextureFormat.Uncompressed("BGR10_A2_REV_UINT", TextureComponents.Bgra, TextureValueKind.UInt, 10, 10, 10, 2);
 
+    public static readonly TextureFormat DepthComponent8 =
+        DepthComponent("DEPTH_COMPONENT8", TextureValueKind.UNorm, 8);
+
+    public static readonly TextureFormat DepthComponent16 =
+        DepthComponent("DEPTH_COMPONENT16", TextureValueKind.UNorm, 16);
+
+    public static readonly TextureFormat DepthComponent24 =
+        DepthComponent("DEPTH_COMPONENT24", TextureValueKind.UNorm, 24);
+
+    public static readonly TextureFormat DepthComponent32 =
+        DepthComponent("DEPTH_COMPONENT32", TextureValueKind.UNorm, 32);
+
+    public static readonly TextureFormat DepthComponent32Float =
+        DepthComponent("DEPTH_COMPONENT32_FLOAT", TextureValueKind.Float, 32);
+
+    public static readonly TextureFormat StencilIndex1 =
+        StencilIndex("STENCIL_INDEX1", 1, 8, 8);
+
+    public static readonly TextureFormat StencilIndex4 =
+        StencilIndex("STENCIL_INDEX4", 4, 2, 8);
+
+    public static readonly TextureFormat StencilIndex8 =
+        TextureFormat.Uncompressed("STENCIL_INDEX8", TextureComponents.Stencil, TextureValueKind.UInt, 8);
+
+    public static readonly TextureFormat StencilIndex16 =
+        TextureFormat.Uncompressed("STENCIL_INDEX16", TextureComponents.Stencil, TextureValueKind.UInt, 16);
+
+    public static readonly TextureFormat Depth16Stencil8 =
+        DepthStencil("DEPTH16_STENCIL8", 16, 8, 24);
+
+    public static readonly TextureFormat Depth24Stencil8 =
+        DepthStencil("DEPTH24_STENCIL8", 24, 8, 32);
+
+    public static readonly TextureFormat Depth32Stencil8 =
+        DepthStencil("DEPTH32_STENCIL8", 32, 8, 40);
+
+    public static readonly TextureFormat Depth32FloatStencil8 =
+        DepthStencil("DEPTH32F_STENCIL8", 32, 8, 64);
+
     public static readonly TextureFormat Bc1 =
         TextureFormat.BlockCompressed(
             "BC1_UNORM",
@@ -951,6 +990,35 @@ public static class TextureFormats
             4,
             4,
             64);
+
+    private static TextureFormat DepthComponent(string name, TextureValueKind valueKind, int bits) =>
+        TextureFormat.Uncompressed(name, TextureComponents.Depth, valueKind, bits);
+
+    private static TextureFormat StencilIndex(string name, int bits, int blockWidth, int bitsPerBlock) => new(
+        name,
+        TextureFormatKind.Uncompressed,
+        TextureComponents.Stencil,
+        TextureValueKind.UInt,
+        bits,
+        0,
+        0,
+        0,
+        blockWidth,
+        1,
+        bitsPerBlock);
+
+    private static TextureFormat DepthStencil(string name, int depthBits, int stencilBits, int bitsPerBlock) => new(
+        name,
+        TextureFormatKind.Uncompressed,
+        TextureComponents.DepthStencil,
+        TextureValueKind.DepthStencil,
+        depthBits,
+        stencilBits,
+        0,
+        0,
+        1,
+        1,
+        bitsPerBlock);
 
     private static TextureFormat PackedYuva444(string name, int yBits, int uBits, int vBits, int alphaBits, int bitsPerBlock) => new(
         name,

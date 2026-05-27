@@ -219,6 +219,18 @@ public sealed class TextureFormatTests
         Assert.Throws<NotSupportedException>(() => format.GetByteCount(4, 4));
     }
 
+    [Fact]
+    public void StencilSubByteFormatsDescribePackedBlocks()
+    {
+        Assert.Equal(8, TextureFormats.StencilIndex1.BlockWidth);
+        Assert.Equal(8, TextureFormats.StencilIndex1.BitsPerBlock);
+        Assert.Equal(2, TextureFormats.StencilIndex1.GetRowByteCount(9));
+
+        Assert.Equal(2, TextureFormats.StencilIndex4.BlockWidth);
+        Assert.Equal(8, TextureFormats.StencilIndex4.BitsPerBlock);
+        Assert.Equal(2, TextureFormats.StencilIndex4.GetRowByteCount(3));
+    }
+
     public static TheoryData<TextureFormat, string, TextureFormatKind, TextureComponents, int, int, int> MvpFormats() => new()
     {
         { TextureFormats.R8, "R8_UNORM", TextureFormatKind.Uncompressed, TextureComponents.R, 1, 8, 1 },

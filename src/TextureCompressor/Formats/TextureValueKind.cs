@@ -7,5 +7,6 @@ public enum TextureValueKind
     UInt,
     SInt,
     Float,
-    Srgb
+    Srgb,
+    DepthStencil
 }

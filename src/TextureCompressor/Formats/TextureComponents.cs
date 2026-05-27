@@ -16,5 +16,8 @@ public enum TextureComponents
     Alpha,
     Luminance,
     LuminanceAlpha,
-    Intensity
+    Intensity,
+    Depth,
+    Stencil,
+    DepthStencil
 }

@@ -97,6 +97,16 @@ public sealed class TextureCoderManagerTests
     }
 
     [Theory]
+    [MemberData(nameof(DepthStencilFormats))]
+    public void GlobalManagerFindsDepthStencilCoders(TextureFormat format)
+    {
+        var coder = TextureCoderManager.Global.GetCoder(format);
+
+        Assert.True(DepthStencilTextureCoder.IsSupported(format));
+        Assert.IsType<DepthStencilTextureCoder>(coder);
+    }
+
+    [Theory]
     [MemberData(nameof(FirstBatchSequentialFormats))]
     public void GlobalManagerFindsFirstBatchSequentialUncompressedCoders(TextureFormat format)
     {
@@ -153,6 +163,61 @@ public sealed class TextureCoderManagerTests
 
         Assert.False(found);
         Assert.Null(coder);
+    }
+
+    [Fact]
+    public void DepthStencilCoderRoundTripsDepth16Stencil8()
+    {
+        byte[] encoded = [0, 0, 0];
+        var coder = new DepthStencilTextureCoder(TextureFormats.Depth16Stencil8);
+
+        coder.EncodeDepthStencil([0.5f], [0xabu], 1, 1, encoded);
+
+        var depth = new float[1];
+        var stencil = new uint[1];
+        coder.DecodeDepthStencil(1, 1, encoded, depth, stencil);
+
+        Assert.Equal([0xab, 0x00, 0x80], encoded);
+        Assert.InRange(depth[0], 0.5f, 0.50002f);
+        Assert.Equal(0xabu, stencil[0]);
+    }
+
+    [Fact]
+    public void EncodeAndDecodeDepth16Stencil8UsesDepthStencilCoder()
+    {
+        var source = new ArrayTextureBitmap<Rgba32Float>(
+            1,
+            1,
+            [new Rgba32Float(0.5f, 0xab / 255f, 0f)]);
+
+        var coder = Assert.IsType<DepthStencilTextureCoder>(TextureCoderManager.Global.GetCoder(TextureFormats.Depth16Stencil8));
+        var rowPitch = coder.GetDefaultPitch(source.Width);
+        var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
+        coder.Encode(source.AsView(), encoded, rowPitch);
+
+        var decoded = new ArrayTextureBitmap<Rgba32Float>(1, 1);
+        coder.Decode(encoded, decoded.AsView(), rowPitch);
+
+        Assert.Equal([0xab, 0x00, 0x80], encoded);
+        AssertClose(0.5f, decoded.Pixels[0].Red, 0.00002f);
+        AssertClose(0xab / 255f, decoded.Pixels[0].Green, 0.0001f);
+        Assert.Equal(0f, decoded.Pixels[0].Blue);
+        Assert.Equal(1f, decoded.Pixels[0].Alpha);
+    }
+
+    [Fact]
+    public void DepthStencilCoderPacksStencilIndex4()
+    {
+        byte[] encoded = [0];
+        var coder = new DepthStencilTextureCoder(TextureFormats.StencilIndex4);
+
+        coder.EncodeStencil([0xau, 0x5u], 2, 1, encoded);
+
+        var stencil = new uint[2];
+        coder.DecodeStencil(2, 1, encoded, stencil);
+
+        Assert.Equal([0xa5], encoded);
+        Assert.Equal([0xau, 0x5u], stencil);
     }
 
     [Fact]
@@ -1570,6 +1635,23 @@ public sealed class TextureCoderManagerTests
         TextureFormats.Yuv3P420UNorm,
         TextureFormats.Yuv2P420UNorm,
         TextureFormats.Yvu10Lsb2P422UNorm
+    };
+
+    public static TheoryData<TextureFormat> DepthStencilFormats() => new()
+    {
+        TextureFormats.DepthComponent8,
+        TextureFormats.DepthComponent16,
+        TextureFormats.DepthComponent24,
+        TextureFormats.DepthComponent32,
+        TextureFormats.DepthComponent32Float,
+        TextureFormats.StencilIndex1,
+        TextureFormats.StencilIndex4,
+        TextureFormats.StencilIndex8,
+        TextureFormats.StencilIndex16,
+        TextureFormats.Depth16Stencil8,
+        TextureFormats.Depth24Stencil8,
+        TextureFormats.Depth32Stencil8,
+        TextureFormats.Depth32FloatStencil8
     };
 
     public static TheoryData<TextureFormat> FirstBatchSequentialFormats() => new()
