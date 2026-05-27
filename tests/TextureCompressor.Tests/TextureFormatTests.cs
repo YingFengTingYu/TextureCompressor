@@ -66,6 +66,16 @@ public sealed class TextureFormatTests
     }
 
     [Theory]
+    [InlineData(1, 1)]
+    [InlineData(2, 1)]
+    [InlineData(3, 2)]
+    [InlineData(5, 3)]
+    public void Alpha4RowByteCountRoundsEachRowToWholeBytes(int width, int expected)
+    {
+        Assert.Equal(expected, TextureFormats.Alpha4UNorm.GetRowByteCount(width));
+    }
+
+    [Theory]
     [InlineData(1, 8)]
     [InlineData(4, 8)]
     [InlineData(5, 16)]
@@ -80,6 +90,12 @@ public sealed class TextureFormatTests
     public void Rgba8ByteCountMatchesPackedRows(int width, int height, int expected)
     {
         Assert.Equal(expected, TextureFormats.Rgba8UNorm.GetByteCount(width, height));
+    }
+
+    [Fact]
+    public void Luminance4ByteCountRoundsEveryRowIndependently()
+    {
+        Assert.Equal(6, TextureFormats.Luminance4UNorm.GetByteCount(5, 2));
     }
 
     [Theory]

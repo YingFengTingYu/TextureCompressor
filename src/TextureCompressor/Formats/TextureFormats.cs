@@ -2,6 +2,45 @@ namespace TextureCompressor.Formats;
 
 public static class TextureFormats
 {
+    public static readonly TextureFormat Alpha4UNorm = new(
+        "ALPHA4_UNORM",
+        TextureFormatKind.Uncompressed,
+        TextureComponents.Alpha,
+        TextureValueKind.UNorm,
+        0,
+        0,
+        0,
+        4,
+        2,
+        1,
+        8);
+
+    public static readonly TextureFormat Luminance4UNorm = new(
+        "LUMINANCE4_UNORM",
+        TextureFormatKind.Uncompressed,
+        TextureComponents.Luminance,
+        TextureValueKind.UNorm,
+        4,
+        0,
+        0,
+        0,
+        2,
+        1,
+        8);
+
+    public static readonly TextureFormat Intensity4UNorm = new(
+        "INTENSITY4_UNORM",
+        TextureFormatKind.Uncompressed,
+        TextureComponents.Intensity,
+        TextureValueKind.UNorm,
+        4,
+        0,
+        0,
+        0,
+        2,
+        1,
+        8);
+
     public static readonly TextureFormat R8 =
         TextureFormat.Uncompressed("R8_UNORM", TextureComponents.R, TextureValueKind.UNorm, 8);
 

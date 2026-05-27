@@ -40,6 +40,14 @@ public sealed class TextureCoderManagerTests
     }
 
     [Fact]
+    public void GlobalManagerFindsBitPackedUNormCoder()
+    {
+        var coder = TextureCoderManager.Global.GetCoder(TextureFormats.Luminance4UNorm);
+
+        Assert.IsType<BitPackedUNormTextureCoder>(coder);
+    }
+
+    [Fact]
     public void SequentialUncompressedCoderDoesNotClaimPackedUNormFormats()
     {
         Assert.False(SequentialUncompressedTextureCoder.IsSupported(TextureFormats.Rgb565UNorm));
@@ -205,6 +213,130 @@ public sealed class TextureCoderManagerTests
     }
 
     [Fact]
+    public void EncodeAndDecodeLuminance4DoesNotPackAcrossRows()
+    {
+        var source = new ArrayTextureBitmap<Rgba8UNorm>(
+            5,
+            2,
+            [
+                Nibble(0),
+                Nibble(1),
+                Nibble(2),
+                Nibble(3),
+                Nibble(4),
+                Nibble(5),
+                Nibble(6),
+                Nibble(7),
+                Nibble(8),
+                Nibble(9)
+            ]);
+
+        var coder = Assert.IsType<BitPackedUNormTextureCoder>(TextureCoderManager.Global.GetCoder(TextureFormats.Luminance4UNorm));
+        var rowPitch = coder.GetDefaultPitch(source.Width);
+        var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
+        coder.Encode(source.AsView(), encoded, rowPitch);
+
+        var decoded = new ArrayTextureBitmap<Rgba8UNorm>(5, 2);
+        coder.Decode(encoded, decoded.AsView(), rowPitch);
+
+        Assert.Equal(3, rowPitch);
+        Assert.Equal([0x01, 0x23, 0x40, 0x56, 0x78, 0x90], encoded);
+        AssertLuminance(decoded.Pixels[0], 0);
+        AssertLuminance(decoded.Pixels[4], 4);
+        AssertLuminance(decoded.Pixels[5], 5);
+        AssertLuminance(decoded.Pixels[9], 9);
+    }
+
+    [Fact]
+    public void EncodeAndDecodeLuminance4HonorsRowPitchPadding()
+    {
+        var source = new ArrayTextureBitmap<Rgba8UNorm>(
+            5,
+            2,
+            [
+                Nibble(0),
+                Nibble(1),
+                Nibble(2),
+                Nibble(3),
+                Nibble(4),
+                Nibble(5),
+                Nibble(6),
+                Nibble(7),
+                Nibble(8),
+                Nibble(9)
+            ]);
+
+        var coder = Assert.IsType<BitPackedUNormTextureCoder>(TextureCoderManager.Global.GetCoder(TextureFormats.Luminance4UNorm));
+        var rowPitch = coder.GetDefaultPitch(source.Width) + 1;
+        var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
+        Array.Fill<byte>(encoded, 0x7e);
+        coder.Encode(source.AsView(), encoded, rowPitch);
+
+        var decoded = new ArrayTextureBitmap<Rgba8UNorm>(5, 2);
+        coder.Decode(encoded, decoded.AsView(), rowPitch);
+
+        Assert.Equal([0x01, 0x23, 0x40, 0x7e, 0x56, 0x78, 0x90, 0x7e], encoded);
+        AssertLuminance(decoded.Pixels[0], 0);
+        AssertLuminance(decoded.Pixels[4], 4);
+        AssertLuminance(decoded.Pixels[5], 5);
+        AssertLuminance(decoded.Pixels[9], 9);
+    }
+
+    [Fact]
+    public void EncodeAndDecodeAlpha4UsesAlphaChannel()
+    {
+        var source = new ArrayTextureBitmap<Rgba8UNorm>(
+            2,
+            1,
+            [
+                new Rgba8UNorm(255, 255, 255, 0),
+                new Rgba8UNorm(0, 0, 0, 255)
+            ]);
+
+        var coder = Assert.IsType<BitPackedUNormTextureCoder>(TextureCoderManager.Global.GetCoder(TextureFormats.Alpha4UNorm));
+        var rowPitch = coder.GetDefaultPitch(source.Width);
+        var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
+        coder.Encode(source.AsView(), encoded, rowPitch);
+
+        var decoded = new ArrayTextureBitmap<Rgba8UNorm>(2, 1);
+        coder.Decode(encoded, decoded.AsView(), rowPitch);
+
+        Assert.Equal([0x0f], encoded);
+        Assert.Equal(0, decoded.Pixels[0].Red);
+        Assert.Equal(0, decoded.Pixels[0].Green);
+        Assert.Equal(0, decoded.Pixels[0].Blue);
+        Assert.Equal(0, decoded.Pixels[0].Alpha);
+        Assert.Equal(0, decoded.Pixels[1].Red);
+        Assert.Equal(0, decoded.Pixels[1].Green);
+        Assert.Equal(0, decoded.Pixels[1].Blue);
+        Assert.Equal(255, decoded.Pixels[1].Alpha);
+    }
+
+    [Fact]
+    public void EncodeAndDecodeIntensity4UsesRedForAllChannels()
+    {
+        var source = new ArrayTextureBitmap<Rgba8UNorm>(
+            2,
+            1,
+            [
+                Nibble(2),
+                Nibble(13)
+            ]);
+
+        var coder = Assert.IsType<BitPackedUNormTextureCoder>(TextureCoderManager.Global.GetCoder(TextureFormats.Intensity4UNorm));
+        var rowPitch = coder.GetDefaultPitch(source.Width);
+        var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
+        coder.Encode(source.AsView(), encoded, rowPitch);
+
+        var decoded = new ArrayTextureBitmap<Rgba8UNorm>(2, 1);
+        coder.Decode(encoded, decoded.AsView(), rowPitch);
+
+        Assert.Equal([0x2d], encoded);
+        AssertIntensity(decoded.Pixels[0], 2);
+        AssertIntensity(decoded.Pixels[1], 13);
+    }
+
+    [Fact]
     public void EncodeAndDecodeRgb10A2UsesRgba16Carrier()
     {
         var source = new ArrayTextureBitmap<Rgba16UNorm>(
@@ -340,5 +472,26 @@ public sealed class TextureCoderManagerTests
         Assert.Equal((ushort)1, decoded.Pixels[0].Green);
         Assert.Equal((ushort)512, decoded.Pixels[0].Blue);
         Assert.Equal((ushort)3, decoded.Pixels[0].Alpha);
+    }
+
+    private static Rgba8UNorm Nibble(int value) =>
+        new((byte)(value * 17), 0, 0);
+
+    private static void AssertLuminance(Rgba8UNorm pixel, int nibble)
+    {
+        var value = (byte)(nibble * 17);
+        Assert.Equal(value, pixel.Red);
+        Assert.Equal(value, pixel.Green);
+        Assert.Equal(value, pixel.Blue);
+        Assert.Equal(255, pixel.Alpha);
+    }
+
+    private static void AssertIntensity(Rgba8UNorm pixel, int nibble)
+    {
+        var value = (byte)(nibble * 17);
+        Assert.Equal(value, pixel.Red);
+        Assert.Equal(value, pixel.Green);
+        Assert.Equal(value, pixel.Blue);
+        Assert.Equal(value, pixel.Alpha);
     }
 }

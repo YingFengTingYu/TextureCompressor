@@ -19,6 +19,7 @@ public readonly record struct TextureFormat(
         TextureComponents.Rg => 2,
         TextureComponents.Rgb => 3,
         TextureComponents.Rgba or TextureComponents.Bgra => 4,
+        TextureComponents.Alpha or TextureComponents.Luminance or TextureComponents.Intensity => 1,
         _ => throw new InvalidOperationException($"Unsupported texture component layout '{Components}'.")
     };
 

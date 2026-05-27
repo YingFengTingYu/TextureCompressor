@@ -91,6 +91,12 @@ public sealed class TextureCoderManager
 
     private static bool TryCreateBuiltInCoder(TextureFormat format, [NotNullWhen(true)] out ITextureCoder? coder)
     {
+        if (BitPackedUNormTextureCoder.IsSupported(format))
+        {
+            coder = new BitPackedUNormTextureCoder(format);
+            return true;
+        }
+
         if (PackedUNormTextureCoder.IsSupported(format))
         {
             coder = new PackedUNormTextureCoder(format);
