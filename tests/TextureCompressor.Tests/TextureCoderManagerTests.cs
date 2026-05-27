@@ -87,6 +87,16 @@ public sealed class TextureCoderManagerTests
         Assert.IsType<SequentialUncompressedTextureCoder>(coder);
     }
 
+    [Theory]
+    [MemberData(nameof(IntegerSequentialFormats))]
+    public void GlobalManagerFindsIntegerSequentialUncompressedCoders(TextureFormat format)
+    {
+        var coder = TextureCoderManager.Global.GetCoder(format);
+
+        Assert.True(SequentialUncompressedTextureCoder.IsSupported(format));
+        Assert.IsType<SequentialUncompressedTextureCoder>(coder);
+    }
+
     [Fact]
     public void SequentialUncompressedCoderDoesNotClaimPackedUNormFormats()
     {
@@ -489,6 +499,135 @@ public sealed class TextureCoderManagerTests
         AssertClose(0.5f, decoded.Pixels[0].Green, 0.005f);
         AssertClose(0.5f, decoded.Pixels[0].Blue, 0.005f);
         AssertClose(0.25f, decoded.Pixels[0].Alpha, 0.002f);
+    }
+
+    [Fact]
+    public void EncodeAndDecodeRgba8UIntUsesUnsignedCarrier()
+    {
+        var source = new ArrayTextureBitmap<Rgba8UNorm>(
+            1,
+            1,
+            [new Rgba8UNorm(1, 2, 3, 4)]);
+
+        var coder = Assert.IsType<SequentialUncompressedTextureCoder>(TextureCoderManager.Global.GetCoder(TextureFormats.Rgba8UInt));
+        var rowPitch = coder.GetDefaultPitch(source.Width);
+        var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
+        coder.Encode(source.AsView(), encoded, rowPitch);
+
+        var decoded = new ArrayTextureBitmap<Rgba8UNorm>(1, 1);
+        coder.Decode(encoded, decoded.AsView(), rowPitch);
+
+        Assert.Equal([1, 2, 3, 4], encoded);
+        Assert.Equal(source.Pixels[0], decoded.Pixels[0]);
+    }
+
+    [Fact]
+    public void EncodeAndDecodeRgba16SIntUsesSignedCarrier()
+    {
+        var source = new ArrayTextureBitmap<Rgba16SNorm>(
+            1,
+            1,
+            [new Rgba16SNorm(-1, 2, -3, 4)]);
+
+        var coder = Assert.IsType<SequentialUncompressedTextureCoder>(TextureCoderManager.Global.GetCoder(TextureFormats.Rgba16SInt));
+        var rowPitch = coder.GetDefaultPitch(source.Width);
+        var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
+        coder.Encode(source.AsView(), encoded, rowPitch);
+
+        var decoded = new ArrayTextureBitmap<Rgba16SNorm>(1, 1);
+        coder.Decode(encoded, decoded.AsView(), rowPitch);
+
+        Assert.Equal([0xff, 0xff, 0x02, 0x00, 0xfd, 0xff, 0x04, 0x00], encoded);
+        Assert.Equal(source.Pixels[0], decoded.Pixels[0]);
+    }
+
+    [Fact]
+    public void EncodeAndDecodeLuminance8SIntStoresSignedLuminance()
+    {
+        var source = new ArrayTextureBitmap<Rgba8SNorm>(
+            1,
+            1,
+            [new Rgba8SNorm(-9, 20, 30, 40)]);
+
+        var coder = Assert.IsType<SequentialUncompressedTextureCoder>(TextureCoderManager.Global.GetCoder(TextureFormats.Luminance8SInt));
+        var rowPitch = coder.GetDefaultPitch(source.Width);
+        var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
+        coder.Encode(source.AsView(), encoded, rowPitch);
+
+        var decoded = new ArrayTextureBitmap<Rgba8SNorm>(1, 1);
+        coder.Decode(encoded, decoded.AsView(), rowPitch);
+
+        Assert.Equal([0xf7], encoded);
+        Assert.Equal((sbyte)-9, decoded.Pixels[0].Red);
+        Assert.Equal((sbyte)-9, decoded.Pixels[0].Green);
+        Assert.Equal((sbyte)-9, decoded.Pixels[0].Blue);
+        Assert.Equal(sbyte.MaxValue, decoded.Pixels[0].Alpha);
+    }
+
+    [Fact]
+    public void EncodeAndDecodeLuminance8Alpha8SIntStoresSignedLuminanceAndAlpha()
+    {
+        var source = new ArrayTextureBitmap<Rgba8SNorm>(
+            1,
+            1,
+            [new Rgba8SNorm(-9, 20, 30, -40)]);
+
+        var coder = Assert.IsType<SequentialUncompressedTextureCoder>(TextureCoderManager.Global.GetCoder(TextureFormats.Luminance8Alpha8SInt));
+        var rowPitch = coder.GetDefaultPitch(source.Width);
+        var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
+        coder.Encode(source.AsView(), encoded, rowPitch);
+
+        var decoded = new ArrayTextureBitmap<Rgba8SNorm>(1, 1);
+        coder.Decode(encoded, decoded.AsView(), rowPitch);
+
+        Assert.Equal([0xf7, 0xd8], encoded);
+        Assert.Equal((sbyte)-9, decoded.Pixels[0].Red);
+        Assert.Equal((sbyte)-9, decoded.Pixels[0].Green);
+        Assert.Equal((sbyte)-9, decoded.Pixels[0].Blue);
+        Assert.Equal((sbyte)-40, decoded.Pixels[0].Alpha);
+    }
+
+    [Fact]
+    public void EncodeAndDecodeBgr32UIntSwizzlesChannels()
+    {
+        var source = new ArrayTextureBitmap<Rgba32UNorm>(
+            1,
+            1,
+            [new Rgba32UNorm(1, 2, 3, 4)]);
+
+        var coder = Assert.IsType<SequentialUncompressedTextureCoder>(TextureCoderManager.Global.GetCoder(TextureFormats.Bgr32UInt));
+        var rowPitch = coder.GetDefaultPitch(source.Width);
+        var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
+        coder.Encode(source.AsView(), encoded, rowPitch);
+
+        var decoded = new ArrayTextureBitmap<Rgba32UNorm>(1, 1);
+        coder.Decode(encoded, decoded.AsView(), rowPitch);
+
+        Assert.Equal([0x03, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00], encoded);
+        Assert.Equal(1u, decoded.Pixels[0].Red);
+        Assert.Equal(2u, decoded.Pixels[0].Green);
+        Assert.Equal(3u, decoded.Pixels[0].Blue);
+        Assert.Equal(uint.MaxValue, decoded.Pixels[0].Alpha);
+    }
+
+    [Fact]
+    public void EncodeAndDecodeAbgr8SIntStoresAlphaFirstAndSwizzlesChannels()
+    {
+        var source = new ArrayTextureBitmap<Rgba8SNorm>(
+            1,
+            1,
+            [new Rgba8SNorm(-1, 2, -3, 4)]);
+
+        var coder = Assert.IsType<SequentialUncompressedTextureCoder>(TextureCoderManager.Global.GetCoder(TextureFormats.Abgr8SInt));
+        var rowPitch = coder.GetDefaultPitch(source.Width);
+        var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
+        coder.Encode(source.AsView(), encoded, rowPitch);
+
+        var decoded = new ArrayTextureBitmap<Rgba8SNorm>(1, 1);
+        coder.Decode(encoded, decoded.AsView(), rowPitch);
+
+        Assert.Equal([0x04, 0xfd, 0x02, 0xff], encoded);
+        Assert.Equal(source.Pixels[0], decoded.Pixels[0]);
     }
 
     [Fact]
@@ -1284,5 +1423,71 @@ public sealed class TextureCoderManagerTests
         TextureFormats.Abgr8Srgb,
         TextureFormats.Bgra8Srgb,
         TextureFormats.Bgrx8Srgb
+    };
+
+    public static TheoryData<TextureFormat> IntegerSequentialFormats() => new()
+    {
+        TextureFormats.Alpha8UInt,
+        TextureFormats.Alpha8SInt,
+        TextureFormats.Alpha16UInt,
+        TextureFormats.Alpha16SInt,
+        TextureFormats.Alpha32UInt,
+        TextureFormats.Alpha32SInt,
+        TextureFormats.Luminance8UInt,
+        TextureFormats.Luminance8SInt,
+        TextureFormats.Luminance16UInt,
+        TextureFormats.Luminance16SInt,
+        TextureFormats.Luminance32UInt,
+        TextureFormats.Luminance32SInt,
+        TextureFormats.Luminance8Alpha8UInt,
+        TextureFormats.Luminance8Alpha8SInt,
+        TextureFormats.Luminance16Alpha16UInt,
+        TextureFormats.Luminance16Alpha16SInt,
+        TextureFormats.Luminance32Alpha32UInt,
+        TextureFormats.Luminance32Alpha32SInt,
+        TextureFormats.Intensity8UInt,
+        TextureFormats.Intensity8SInt,
+        TextureFormats.Intensity16UInt,
+        TextureFormats.Intensity16SInt,
+        TextureFormats.Intensity32UInt,
+        TextureFormats.Intensity32SInt,
+        TextureFormats.R8UInt,
+        TextureFormats.R8SInt,
+        TextureFormats.R16UInt,
+        TextureFormats.R16SInt,
+        TextureFormats.R32UInt,
+        TextureFormats.R32SInt,
+        TextureFormats.Rg8UInt,
+        TextureFormats.Rg8SInt,
+        TextureFormats.Rg16UInt,
+        TextureFormats.Rg16SInt,
+        TextureFormats.Rg32UInt,
+        TextureFormats.Rg32SInt,
+        TextureFormats.Rgb8UInt,
+        TextureFormats.Rgb8SInt,
+        TextureFormats.Rgb16UInt,
+        TextureFormats.Rgb16SInt,
+        TextureFormats.Rgb32UInt,
+        TextureFormats.Rgb32SInt,
+        TextureFormats.Bgr8UInt,
+        TextureFormats.Bgr8SInt,
+        TextureFormats.Bgr16UInt,
+        TextureFormats.Bgr16SInt,
+        TextureFormats.Bgr32UInt,
+        TextureFormats.Bgr32SInt,
+        TextureFormats.Abgr8UInt,
+        TextureFormats.Abgr8SInt,
+        TextureFormats.Rgba8UInt,
+        TextureFormats.Rgba8SInt,
+        TextureFormats.Rgba16UInt,
+        TextureFormats.Rgba16SInt,
+        TextureFormats.Rgba32UInt,
+        TextureFormats.Rgba32SInt,
+        TextureFormats.Bgra8UInt,
+        TextureFormats.Bgra8SInt,
+        TextureFormats.Bgra16UInt,
+        TextureFormats.Bgra16SInt,
+        TextureFormats.Bgra32UInt,
+        TextureFormats.Bgra32SInt
     };
 }

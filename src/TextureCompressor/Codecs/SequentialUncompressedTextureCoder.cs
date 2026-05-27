@@ -84,8 +84,14 @@ public sealed class SequentialUncompressedTextureCoder : IPitchTextureCoder
             case SequentialTransfer.Luminance8UNorm:
                 Decode<TPixel, Rgba8UNorm, Rgba8UNormCarrierTransfer, Luminance8UNormTransfer>(source, destination, rowPitch);
                 return;
+            case SequentialTransfer.Luminance8SInt:
+                Decode<TPixel, Rgba8SNorm, Rgba8SNormCarrierTransfer, Luminance8SIntTransfer>(source, destination, rowPitch);
+                return;
             case SequentialTransfer.Luminance16UNorm:
                 Decode<TPixel, Rgba16UNorm, Rgba16UNormCarrierTransfer, Luminance16UNormTransfer>(source, destination, rowPitch);
+                return;
+            case SequentialTransfer.Luminance16SInt:
+                Decode<TPixel, Rgba16SNorm, Rgba16SNormCarrierTransfer, Luminance16SIntTransfer>(source, destination, rowPitch);
                 return;
             case SequentialTransfer.Luminance32UNorm:
                 Decode<TPixel, Rgba32UNorm, Rgba32UNormCarrierTransfer, Luminance32UNormTransfer>(source, destination, rowPitch);
@@ -101,6 +107,9 @@ public sealed class SequentialUncompressedTextureCoder : IPitchTextureCoder
                 return;
             case SequentialTransfer.Luminance8Alpha8UNorm:
                 Decode<TPixel, Rgba8UNorm, Rgba8UNormCarrierTransfer, Luminance8Alpha8UNormTransfer>(source, destination, rowPitch);
+                return;
+            case SequentialTransfer.Luminance8Alpha8SInt:
+                Decode<TPixel, Rgba8SNorm, Rgba8SNormCarrierTransfer, Luminance8Alpha8SIntTransfer>(source, destination, rowPitch);
                 return;
             case SequentialTransfer.Luminance16Alpha16UNorm:
                 Decode<TPixel, Rgba16UNorm, Rgba16UNormCarrierTransfer, Luminance16Alpha16UNormTransfer>(source, destination, rowPitch);
@@ -364,8 +373,14 @@ public sealed class SequentialUncompressedTextureCoder : IPitchTextureCoder
             case SequentialTransfer.Luminance8UNorm:
                 Encode<TPixel, Rgba8UNorm, Rgba8UNormCarrierTransfer, Luminance8UNormTransfer>(source, destination, rowPitch);
                 return;
+            case SequentialTransfer.Luminance8SInt:
+                Encode<TPixel, Rgba8SNorm, Rgba8SNormCarrierTransfer, Luminance8SIntTransfer>(source, destination, rowPitch);
+                return;
             case SequentialTransfer.Luminance16UNorm:
                 Encode<TPixel, Rgba16UNorm, Rgba16UNormCarrierTransfer, Luminance16UNormTransfer>(source, destination, rowPitch);
+                return;
+            case SequentialTransfer.Luminance16SInt:
+                Encode<TPixel, Rgba16SNorm, Rgba16SNormCarrierTransfer, Luminance16SIntTransfer>(source, destination, rowPitch);
                 return;
             case SequentialTransfer.Luminance32UNorm:
                 Encode<TPixel, Rgba32UNorm, Rgba32UNormCarrierTransfer, Luminance32UNormTransfer>(source, destination, rowPitch);
@@ -381,6 +396,9 @@ public sealed class SequentialUncompressedTextureCoder : IPitchTextureCoder
                 return;
             case SequentialTransfer.Luminance8Alpha8UNorm:
                 Encode<TPixel, Rgba8UNorm, Rgba8UNormCarrierTransfer, Luminance8Alpha8UNormTransfer>(source, destination, rowPitch);
+                return;
+            case SequentialTransfer.Luminance8Alpha8SInt:
+                Encode<TPixel, Rgba8SNorm, Rgba8SNormCarrierTransfer, Luminance8Alpha8SIntTransfer>(source, destination, rowPitch);
                 return;
             case SequentialTransfer.Luminance16Alpha16UNorm:
                 Encode<TPixel, Rgba16UNorm, Rgba16UNormCarrierTransfer, Luminance16Alpha16UNormTransfer>(source, destination, rowPitch);
@@ -831,6 +849,17 @@ public sealed class SequentialUncompressedTextureCoder : IPitchTextureCoder
         public static void Encode(Rgba8UNorm value, Span<byte> texel) => texel[0] = value.Red;
     }
 
+    private readonly struct Luminance8SIntTransfer : ISequentialTransfer<Rgba8SNorm>
+    {
+        public static Rgba8SNorm Decode(ReadOnlySpan<byte> texel)
+        {
+            var value = (sbyte)texel[0];
+            return new Rgba8SNorm(value, value, value);
+        }
+
+        public static void Encode(Rgba8SNorm value, Span<byte> texel) => texel[0] = unchecked((byte)value.Red);
+    }
+
     private readonly struct Luminance16UNormTransfer : ISequentialTransfer<Rgba16UNorm>
     {
         public static Rgba16UNorm Decode(ReadOnlySpan<byte> texel)
@@ -840,6 +869,17 @@ public sealed class SequentialUncompressedTextureCoder : IPitchTextureCoder
         }
 
         public static void Encode(Rgba16UNorm value, Span<byte> texel) => WriteUInt16(texel, 0, value.Red);
+    }
+
+    private readonly struct Luminance16SIntTransfer : ISequentialTransfer<Rgba16SNorm>
+    {
+        public static Rgba16SNorm Decode(ReadOnlySpan<byte> texel)
+        {
+            var value = ReadInt16(texel, 0);
+            return new Rgba16SNorm(value, value, value);
+        }
+
+        public static void Encode(Rgba16SNorm value, Span<byte> texel) => WriteInt16(texel, 0, value.Red);
     }
 
     private readonly struct Luminance32UNormTransfer : ISequentialTransfer<Rgba32UNorm>
@@ -894,6 +934,21 @@ public sealed class SequentialUncompressedTextureCoder : IPitchTextureCoder
         {
             texel[0] = value.Red;
             texel[1] = value.Alpha;
+        }
+    }
+
+    private readonly struct Luminance8Alpha8SIntTransfer : ISequentialTransfer<Rgba8SNorm>
+    {
+        public static Rgba8SNorm Decode(ReadOnlySpan<byte> texel)
+        {
+            var luminance = (sbyte)texel[0];
+            return new Rgba8SNorm(luminance, luminance, luminance, (sbyte)texel[1]);
+        }
+
+        public static void Encode(Rgba8SNorm value, Span<byte> texel)
+        {
+            texel[0] = unchecked((byte)value.Red);
+            texel[1] = unchecked((byte)value.Alpha);
         }
     }
 
@@ -1838,6 +1893,11 @@ public sealed class SequentialUncompressedTextureCoder : IPitchTextureCoder
 
     private static bool TryGetTransfer(TextureFormat format, out SequentialTransfer transfer)
     {
+        if (TryGetIntegerTransfer(format, out transfer))
+        {
+            return true;
+        }
+
         if (format == TextureFormats.Alpha8UNorm)
         {
             transfer = SequentialTransfer.Alpha8UNorm;
@@ -2382,6 +2442,384 @@ public sealed class SequentialUncompressedTextureCoder : IPitchTextureCoder
         return false;
     }
 
+    private static bool TryGetIntegerTransfer(TextureFormat format, out SequentialTransfer transfer)
+    {
+        if (format == TextureFormats.Alpha8UInt)
+        {
+            transfer = SequentialTransfer.Alpha8UNorm;
+            return true;
+        }
+
+        if (format == TextureFormats.Alpha8SInt)
+        {
+            transfer = SequentialTransfer.Alpha8SNorm;
+            return true;
+        }
+
+        if (format == TextureFormats.Alpha16UInt)
+        {
+            transfer = SequentialTransfer.Alpha16UNorm;
+            return true;
+        }
+
+        if (format == TextureFormats.Alpha16SInt)
+        {
+            transfer = SequentialTransfer.Alpha16SNorm;
+            return true;
+        }
+
+        if (format == TextureFormats.Alpha32UInt)
+        {
+            transfer = SequentialTransfer.Alpha32UNorm;
+            return true;
+        }
+
+        if (format == TextureFormats.Alpha32SInt)
+        {
+            transfer = SequentialTransfer.Alpha32SNorm;
+            return true;
+        }
+
+        if (format == TextureFormats.Luminance8UInt)
+        {
+            transfer = SequentialTransfer.Luminance8UNorm;
+            return true;
+        }
+
+        if (format == TextureFormats.Luminance8SInt)
+        {
+            transfer = SequentialTransfer.Luminance8SInt;
+            return true;
+        }
+
+        if (format == TextureFormats.Luminance16UInt)
+        {
+            transfer = SequentialTransfer.Luminance16UNorm;
+            return true;
+        }
+
+        if (format == TextureFormats.Luminance16SInt)
+        {
+            transfer = SequentialTransfer.Luminance16SInt;
+            return true;
+        }
+
+        if (format == TextureFormats.Luminance32UInt)
+        {
+            transfer = SequentialTransfer.Luminance32UNorm;
+            return true;
+        }
+
+        if (format == TextureFormats.Luminance32SInt)
+        {
+            transfer = SequentialTransfer.Luminance32SNorm;
+            return true;
+        }
+
+        if (format == TextureFormats.Luminance8Alpha8UInt)
+        {
+            transfer = SequentialTransfer.Luminance8Alpha8UNorm;
+            return true;
+        }
+
+        if (format == TextureFormats.Luminance8Alpha8SInt)
+        {
+            transfer = SequentialTransfer.Luminance8Alpha8SInt;
+            return true;
+        }
+
+        if (format == TextureFormats.Luminance16Alpha16UInt)
+        {
+            transfer = SequentialTransfer.Luminance16Alpha16UNorm;
+            return true;
+        }
+
+        if (format == TextureFormats.Luminance16Alpha16SInt)
+        {
+            transfer = SequentialTransfer.Luminance16Alpha16SNorm;
+            return true;
+        }
+
+        if (format == TextureFormats.Luminance32Alpha32UInt)
+        {
+            transfer = SequentialTransfer.Luminance32Alpha32UNorm;
+            return true;
+        }
+
+        if (format == TextureFormats.Luminance32Alpha32SInt)
+        {
+            transfer = SequentialTransfer.Luminance32Alpha32SNorm;
+            return true;
+        }
+
+        if (format == TextureFormats.Intensity8UInt)
+        {
+            transfer = SequentialTransfer.Intensity8UNorm;
+            return true;
+        }
+
+        if (format == TextureFormats.Intensity8SInt)
+        {
+            transfer = SequentialTransfer.Intensity8SNorm;
+            return true;
+        }
+
+        if (format == TextureFormats.Intensity16UInt)
+        {
+            transfer = SequentialTransfer.Intensity16UNorm;
+            return true;
+        }
+
+        if (format == TextureFormats.Intensity16SInt)
+        {
+            transfer = SequentialTransfer.Intensity16SNorm;
+            return true;
+        }
+
+        if (format == TextureFormats.Intensity32UInt)
+        {
+            transfer = SequentialTransfer.Intensity32UNorm;
+            return true;
+        }
+
+        if (format == TextureFormats.Intensity32SInt)
+        {
+            transfer = SequentialTransfer.Intensity32SNorm;
+            return true;
+        }
+
+        if (format == TextureFormats.R8UInt)
+        {
+            transfer = SequentialTransfer.R8UNorm;
+            return true;
+        }
+
+        if (format == TextureFormats.R8SInt)
+        {
+            transfer = SequentialTransfer.R8SNorm;
+            return true;
+        }
+
+        if (format == TextureFormats.R16UInt)
+        {
+            transfer = SequentialTransfer.R16UNorm;
+            return true;
+        }
+
+        if (format == TextureFormats.R16SInt)
+        {
+            transfer = SequentialTransfer.R16SNorm;
+            return true;
+        }
+
+        if (format == TextureFormats.R32UInt)
+        {
+            transfer = SequentialTransfer.R32UNorm;
+            return true;
+        }
+
+        if (format == TextureFormats.R32SInt)
+        {
+            transfer = SequentialTransfer.R32SNorm;
+            return true;
+        }
+
+        if (format == TextureFormats.Rg8UInt)
+        {
+            transfer = SequentialTransfer.Rg8UNorm;
+            return true;
+        }
+
+        if (format == TextureFormats.Rg8SInt)
+        {
+            transfer = SequentialTransfer.Rg8SNorm;
+            return true;
+        }
+
+        if (format == TextureFormats.Rg16UInt)
+        {
+            transfer = SequentialTransfer.Rg16UNorm;
+            return true;
+        }
+
+        if (format == TextureFormats.Rg16SInt)
+        {
+            transfer = SequentialTransfer.Rg16SNorm;
+            return true;
+        }
+
+        if (format == TextureFormats.Rg32UInt)
+        {
+            transfer = SequentialTransfer.Rg32UNorm;
+            return true;
+        }
+
+        if (format == TextureFormats.Rg32SInt)
+        {
+            transfer = SequentialTransfer.Rg32SNorm;
+            return true;
+        }
+
+        if (format == TextureFormats.Rgb8UInt)
+        {
+            transfer = SequentialTransfer.Rgb8UNorm;
+            return true;
+        }
+
+        if (format == TextureFormats.Rgb8SInt)
+        {
+            transfer = SequentialTransfer.Rgb8SNorm;
+            return true;
+        }
+
+        if (format == TextureFormats.Rgb16UInt)
+        {
+            transfer = SequentialTransfer.Rgb16UNorm;
+            return true;
+        }
+
+        if (format == TextureFormats.Rgb16SInt)
+        {
+            transfer = SequentialTransfer.Rgb16SNorm;
+            return true;
+        }
+
+        if (format == TextureFormats.Rgb32UInt)
+        {
+            transfer = SequentialTransfer.Rgb32UNorm;
+            return true;
+        }
+
+        if (format == TextureFormats.Rgb32SInt)
+        {
+            transfer = SequentialTransfer.Rgb32SNorm;
+            return true;
+        }
+
+        if (format == TextureFormats.Bgr8UInt)
+        {
+            transfer = SequentialTransfer.Bgr8UNorm;
+            return true;
+        }
+
+        if (format == TextureFormats.Bgr8SInt)
+        {
+            transfer = SequentialTransfer.Bgr8SNorm;
+            return true;
+        }
+
+        if (format == TextureFormats.Bgr16UInt)
+        {
+            transfer = SequentialTransfer.Bgr16UNorm;
+            return true;
+        }
+
+        if (format == TextureFormats.Bgr16SInt)
+        {
+            transfer = SequentialTransfer.Bgr16SNorm;
+            return true;
+        }
+
+        if (format == TextureFormats.Bgr32UInt)
+        {
+            transfer = SequentialTransfer.Bgr32UNorm;
+            return true;
+        }
+
+        if (format == TextureFormats.Bgr32SInt)
+        {
+            transfer = SequentialTransfer.Bgr32SNorm;
+            return true;
+        }
+
+        if (format == TextureFormats.Abgr8UInt)
+        {
+            transfer = SequentialTransfer.Abgr8UNorm;
+            return true;
+        }
+
+        if (format == TextureFormats.Abgr8SInt)
+        {
+            transfer = SequentialTransfer.Abgr8SNorm;
+            return true;
+        }
+
+        if (format == TextureFormats.Rgba8UInt)
+        {
+            transfer = SequentialTransfer.Rgba8UNorm;
+            return true;
+        }
+
+        if (format == TextureFormats.Rgba8SInt)
+        {
+            transfer = SequentialTransfer.Rgba8SNorm;
+            return true;
+        }
+
+        if (format == TextureFormats.Rgba16UInt)
+        {
+            transfer = SequentialTransfer.Rgba16UNorm;
+            return true;
+        }
+
+        if (format == TextureFormats.Rgba16SInt)
+        {
+            transfer = SequentialTransfer.Rgba16SNorm;
+            return true;
+        }
+
+        if (format == TextureFormats.Rgba32UInt)
+        {
+            transfer = SequentialTransfer.Rgba32UNorm;
+            return true;
+        }
+
+        if (format == TextureFormats.Rgba32SInt)
+        {
+            transfer = SequentialTransfer.Rgba32SNorm;
+            return true;
+        }
+
+        if (format == TextureFormats.Bgra8UInt)
+        {
+            transfer = SequentialTransfer.Bgra8UNorm;
+            return true;
+        }
+
+        if (format == TextureFormats.Bgra8SInt)
+        {
+            transfer = SequentialTransfer.Bgra8SNorm;
+            return true;
+        }
+
+        if (format == TextureFormats.Bgra16UInt)
+        {
+            transfer = SequentialTransfer.Bgra16UNorm;
+            return true;
+        }
+
+        if (format == TextureFormats.Bgra16SInt)
+        {
+            transfer = SequentialTransfer.Bgra16SNorm;
+            return true;
+        }
+
+        if (format == TextureFormats.Bgra32UInt)
+        {
+            transfer = SequentialTransfer.Bgra32UNorm;
+            return true;
+        }
+
+        if (format == TextureFormats.Bgra32SInt)
+        {
+            transfer = SequentialTransfer.Bgra32SNorm;
+            return true;
+        }
+
+        transfer = default;
+        return false;
+    }
+
     private static ushort ReadUInt16(ReadOnlySpan<byte> source, int offset) =>
         BinaryPrimitives.ReadUInt16LittleEndian(source.Slice(offset, sizeof(ushort)));
 
@@ -2444,12 +2882,15 @@ public sealed class SequentialUncompressedTextureCoder : IPitchTextureCoder
         Alpha16Float,
         Alpha32Float,
         Luminance8UNorm,
+        Luminance8SInt,
         Luminance16UNorm,
+        Luminance16SInt,
         Luminance32UNorm,
         Luminance32SNorm,
         Luminance16Float,
         Luminance32Float,
         Luminance8Alpha8UNorm,
+        Luminance8Alpha8SInt,
         Luminance16Alpha16UNorm,
         Luminance16Alpha16SNorm,
         Luminance16Alpha16Float,
