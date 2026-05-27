@@ -97,6 +97,12 @@ public sealed class TextureCoderManager
             return true;
         }
 
+        if (PackedFloatTextureCoder.IsSupported(format))
+        {
+            coder = new PackedFloatTextureCoder(format);
+            return true;
+        }
+
         if (SequentialUncompressedTextureCoder.IsSupported(format))
         {
             coder = new SequentialUncompressedTextureCoder(format);

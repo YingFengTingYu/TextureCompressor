@@ -24,6 +24,14 @@ public sealed class TextureCoderManagerTests
     }
 
     [Fact]
+    public void GlobalManagerFindsPackedFloatCoder()
+    {
+        var coder = TextureCoderManager.Global.GetCoder(TextureFormats.R11G11B10Float);
+
+        Assert.IsType<PackedFloatTextureCoder>(coder);
+    }
+
+    [Fact]
     public void SequentialUncompressedCoderDoesNotClaimPackedUNormFormats()
     {
         Assert.False(SequentialUncompressedTextureCoder.IsSupported(TextureFormats.Rgb565UNorm));
@@ -209,5 +217,51 @@ public sealed class TextureCoderManagerTests
         Assert.Equal(0, decoded.Pixels[0].Green);
         Assert.Equal(ushort.MaxValue, decoded.Pixels[0].Blue);
         Assert.Equal(ushort.MaxValue, decoded.Pixels[0].Alpha);
+    }
+
+    [Fact]
+    public void EncodeAndDecodeR11G11B10FloatUsesPackedFloatCoder()
+    {
+        var source = new ArrayTextureBitmap<Rgba32Float>(
+            1,
+            1,
+            [new Rgba32Float(1f, 2f, 4f)]);
+
+        var coder = Assert.IsType<PackedFloatTextureCoder>(TextureCoderManager.Global.GetCoder(TextureFormats.R11G11B10Float));
+        var rowPitch = coder.GetDefaultPitch(source.Width);
+        var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
+        coder.Encode(source.AsView(), encoded, rowPitch);
+
+        var decoded = new ArrayTextureBitmap<Rgba32Float>(1, 1);
+        coder.Decode(encoded, decoded.AsView(), rowPitch);
+
+        Assert.Equal([0xc0, 0x03, 0x20, 0x88], encoded);
+        Assert.Equal(1f, decoded.Pixels[0].Red);
+        Assert.Equal(2f, decoded.Pixels[0].Green);
+        Assert.Equal(4f, decoded.Pixels[0].Blue);
+        Assert.Equal(1f, decoded.Pixels[0].Alpha);
+    }
+
+    [Fact]
+    public void EncodeAndDecodeRgb9E5UsesSharedExponent()
+    {
+        var source = new ArrayTextureBitmap<Rgba32Float>(
+            1,
+            1,
+            [new Rgba32Float(1f, 1f, 1f)]);
+
+        var coder = Assert.IsType<PackedFloatTextureCoder>(TextureCoderManager.Global.GetCoder(TextureFormats.Rgb9E5));
+        var rowPitch = coder.GetDefaultPitch(source.Width);
+        var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
+        coder.Encode(source.AsView(), encoded, rowPitch);
+
+        var decoded = new ArrayTextureBitmap<Rgba32Float>(1, 1);
+        coder.Decode(encoded, decoded.AsView(), rowPitch);
+
+        Assert.Equal([0x00, 0x01, 0x02, 0x84], encoded);
+        Assert.Equal(1f, decoded.Pixels[0].Red);
+        Assert.Equal(1f, decoded.Pixels[0].Green);
+        Assert.Equal(1f, decoded.Pixels[0].Blue);
+        Assert.Equal(1f, decoded.Pixels[0].Alpha);
     }
 }

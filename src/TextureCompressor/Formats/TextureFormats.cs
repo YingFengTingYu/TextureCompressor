@@ -47,6 +47,22 @@ public static class TextureFormats
     public static readonly TextureFormat Rgba32Float =
         TextureFormat.Uncompressed("RGBA32_FLOAT", TextureComponents.Rgba, TextureValueKind.Float, 32, 32, 32, 32);
 
+    public static readonly TextureFormat R11G11B10Float =
+        TextureFormat.Uncompressed("R11G11B10_FLOAT", TextureComponents.Rgb, TextureValueKind.Float, 11, 11, 10);
+
+    public static readonly TextureFormat Rgb9E5 = new(
+        "RGB9_E5",
+        TextureFormatKind.Uncompressed,
+        TextureComponents.Rgb,
+        TextureValueKind.Float,
+        9,
+        9,
+        9,
+        0,
+        1,
+        1,
+        32);
+
     public static readonly TextureFormat Bgra8 =
         TextureFormat.Uncompressed("BGRA8_UNORM", TextureComponents.Bgra, TextureValueKind.UNorm, 8, 8, 8, 8);
 
