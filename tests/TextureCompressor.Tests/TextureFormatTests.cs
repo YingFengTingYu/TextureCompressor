@@ -132,6 +132,25 @@ public sealed class TextureFormatTests
         Assert.Equal(TextureValueKind.Srgb, format.ValueKind);
     }
 
+    [Theory]
+    [InlineData(nameof(TextureFormats.Rgbm), "RGBM")]
+    [InlineData(nameof(TextureFormats.Rgbd), "RGBD")]
+    public void RgbmAndRgbdFormatsAreFloatRgbaByteEncoded(string formatName, string name)
+    {
+        var format = formatName == nameof(TextureFormats.Rgbm)
+            ? TextureFormats.Rgbm
+            : TextureFormats.Rgbd;
+
+        Assert.Equal(name, format.Name);
+        Assert.Equal(TextureFormatKind.Uncompressed, format.Kind);
+        Assert.Equal(TextureComponents.Rgba, format.Components);
+        Assert.Equal(TextureValueKind.Float, format.ValueKind);
+        Assert.Equal(4, format.ChannelCount);
+        Assert.Equal(32, format.BitsPerBlock);
+        Assert.Equal(4, format.BytesPerBlock);
+        Assert.Equal(28, format.GetRowByteCount(7));
+    }
+
     public static TheoryData<TextureFormat, string, TextureFormatKind, TextureComponents, int, int, int> MvpFormats() => new()
     {
         { TextureFormats.R8, "R8_UNORM", TextureFormatKind.Uncompressed, TextureComponents.R, 1, 8, 1 },

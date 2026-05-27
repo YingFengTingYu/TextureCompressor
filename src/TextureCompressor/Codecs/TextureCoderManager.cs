@@ -115,6 +115,12 @@ public sealed class TextureCoderManager
             return true;
         }
 
+        if (RgbmTextureCoder.IsSupported(format))
+        {
+            coder = new RgbmTextureCoder(format);
+            return true;
+        }
+
         if (SequentialUncompressedTextureCoder.IsSupported(format))
         {
             coder = new SequentialUncompressedTextureCoder(format);
