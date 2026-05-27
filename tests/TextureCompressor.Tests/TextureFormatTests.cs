@@ -256,6 +256,18 @@ public sealed class TextureFormatTests
     }
 
     [Fact]
+    public void OpaqueYuv420FormatIsVariableSizeWithoutCpuLayout()
+    {
+        var format = TextureFormats.Yuv420Opaque;
+
+        Assert.Equal("420_OPAQUE", format.Name);
+        Assert.Equal(TextureComponents.Yuv, format.Components);
+        Assert.True(format.IsVariableSize);
+        Assert.Throws<NotSupportedException>(() => format.GetRowByteCount(4));
+        Assert.Throws<NotSupportedException>(() => format.GetByteCount(4, 4));
+    }
+
+    [Fact]
     public void StencilSubByteFormatsDescribePackedBlocks()
     {
         Assert.Equal(8, TextureFormats.StencilIndex1.BlockWidth);
@@ -297,6 +309,25 @@ public sealed class TextureFormatTests
         Assert.Equal(TextureValueKind.UInt, format.ValueKind);
         Assert.Equal(1, format.ChannelCount);
         Assert.Equal(8, format.RedBits);
+        Assert.Equal(bitsPerBlock, format.BitsPerBlock);
+        Assert.Equal(bytesPerBlock, format.BytesPerBlock);
+    }
+
+    [Theory]
+    [MemberData(nameof(IndexedFormats))]
+    public void IndexedFormatsDescribePackedIndexStorage(
+        TextureFormat format,
+        string name,
+        TextureComponents components,
+        int channelCount,
+        int bitsPerBlock,
+        int bytesPerBlock)
+    {
+        Assert.Equal(name, format.Name);
+        Assert.Equal(TextureFormatKind.Uncompressed, format.Kind);
+        Assert.Equal(components, format.Components);
+        Assert.Equal(TextureValueKind.UNorm, format.ValueKind);
+        Assert.Equal(channelCount, format.ChannelCount);
         Assert.Equal(bitsPerBlock, format.BitsPerBlock);
         Assert.Equal(bytesPerBlock, format.BytesPerBlock);
     }
@@ -369,6 +400,7 @@ public sealed class TextureFormatTests
     {
         { TextureFormats.Bgr10XR, "BGR10_XR", TextureComponents.Bgr, TextureValueKind.XR, 3, 32, 4 },
         { TextureFormats.Bgr10XRSrgb, "BGR10_XR_SRGB", TextureComponents.Bgr, TextureValueKind.XRSrgb, 3, 32, 4 },
+        { TextureFormats.Rgb10XRA2UNorm, "RGB10_XR_BIAS_A2_UNORM", TextureComponents.Rgba, TextureValueKind.XR, 4, 32, 4 },
         { TextureFormats.Bgra10XR, "BGRA10_XR", TextureComponents.Bgra, TextureValueKind.XR, 4, 64, 8 },
         { TextureFormats.Bgra10XRSrgb, "BGRA10_XR_SRGB", TextureComponents.Bgra, TextureValueKind.XRSrgb, 4, 64, 8 }
     };
@@ -391,11 +423,20 @@ public sealed class TextureFormatTests
 
     public static TheoryData<TextureFormat, string, int, int> PackedYuva444Formats() => new()
     {
+        { TextureFormats.Ayuv444UNorm, "AYUV444_UNORM", 32, 4 },
         { TextureFormats.Vyua10Msb444UNorm, "VYUA10MSB_444_UNORM", 64, 8 },
         { TextureFormats.Vyua10Lsb444UNorm, "VYUA10LSB_444_UNORM", 64, 8 },
         { TextureFormats.Vyua12Msb444UNorm, "VYUA12MSB_444_UNORM", 64, 8 },
         { TextureFormats.Vyua12Lsb444UNorm, "VYUA12LSB_444_UNORM", 64, 8 },
         { TextureFormats.Uyv10A2_444UNorm, "UYV10A2_444_UNORM", 32, 4 },
         { TextureFormats.Uyva16_444UNorm, "UYVA16_444_UNORM", 64, 8 }
+    };
+
+    public static TheoryData<TextureFormat, string, TextureComponents, int, int, int> IndexedFormats() => new()
+    {
+        { TextureFormats.Ai44, "AI44", TextureComponents.LuminanceAlpha, 2, 8, 1 },
+        { TextureFormats.Ia44, "IA44", TextureComponents.LuminanceAlpha, 2, 8, 1 },
+        { TextureFormats.P8, "P8", TextureComponents.Luminance, 1, 8, 1 },
+        { TextureFormats.A8P8, "A8P8", TextureComponents.LuminanceAlpha, 2, 16, 2 }
     };
 }

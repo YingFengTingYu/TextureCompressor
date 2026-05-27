@@ -599,6 +599,9 @@ public static class TextureFormats
         1,
         32);
 
+    public static readonly TextureFormat Ayuv444UNorm =
+        PackedYuva444("AYUV444_UNORM", 8, 8, 8, 8, 32);
+
     public static readonly TextureFormat Vyua10Msb444UNorm =
         PackedYuva444("VYUA10MSB_444_UNORM", 10, 10, 10, 10, 64);
 
@@ -664,6 +667,9 @@ public static class TextureFormats
 
     public static readonly TextureFormat Yuv16_3P444UNorm =
         PlanarYuv("YUV16_3P_444_UNORM", 16);
+
+    public static readonly TextureFormat V408UNorm =
+        PlanarYuv("V408_UNORM", 8);
 
     public static readonly TextureFormat Yuv3P422UNorm =
         PlanarYuv("YUV_3P_422_UNORM", 8);
@@ -781,6 +787,15 @@ public static class TextureFormats
 
     public static readonly TextureFormat Yvu10Lsb2P420UNorm =
         PlanarYuv("YVU10LSB_2P_420_UNORM", 10);
+
+    public static readonly TextureFormat Nv11UNorm =
+        PlanarYuv("NV11_UNORM", 8);
+
+    public static readonly TextureFormat V208UNorm =
+        PlanarYuv("V208_UNORM", 8);
+
+    public static readonly TextureFormat Yuv420Opaque =
+        PlanarYuv("420_OPAQUE", 8);
 
     public static readonly TextureFormat Yuv14Msb2P420UNorm =
         PlanarYuv("YUV14MSB_2P_420_UNORM", 14);
@@ -910,6 +925,9 @@ public static class TextureFormats
 
     public static readonly TextureFormat Rgb10A2RevSInt =
         TextureFormat.Uncompressed("RGB10_A2_REV_SINT", TextureComponents.Rgba, TextureValueKind.SInt, 10, 10, 10, 2);
+
+    public static readonly TextureFormat Rgb10XRA2UNorm =
+        Xr("RGB10_XR_BIAS_A2_UNORM", TextureComponents.Rgba, TextureValueKind.XR, 10, 10, 10, 2, 32);
 
     public static readonly TextureFormat Rgba12UNorm =
         TextureFormat.Uncompressed("RGBA12_UNORM", TextureComponents.Rgba, TextureValueKind.UNorm, 12, 12, 12, 12);
@@ -1076,6 +1094,18 @@ public static class TextureFormats
 
     public static readonly TextureFormat Bgr10A2RevSInt =
         TextureFormat.Uncompressed("BGR10_A2_REV_SINT", TextureComponents.Bgra, TextureValueKind.SInt, 10, 10, 10, 2);
+
+    public static readonly TextureFormat Ai44 =
+        TextureFormat.Uncompressed("AI44", TextureComponents.LuminanceAlpha, TextureValueKind.UNorm, 4, alphaBits: 4);
+
+    public static readonly TextureFormat Ia44 =
+        TextureFormat.Uncompressed("IA44", TextureComponents.LuminanceAlpha, TextureValueKind.UNorm, 4, alphaBits: 4);
+
+    public static readonly TextureFormat P8 =
+        TextureFormat.Uncompressed("P8", TextureComponents.Luminance, TextureValueKind.UNorm, 8);
+
+    public static readonly TextureFormat A8P8 =
+        TextureFormat.Uncompressed("A8P8", TextureComponents.LuminanceAlpha, TextureValueKind.UNorm, 8, alphaBits: 8);
 
     public static readonly TextureFormat Palette4Rgb8 =
         TextureFormat.Paletted("PALETTE4_RGB8", TextureComponents.Rgb, TextureValueKind.UNorm, 8, 8, 8, 0, 4, 16, 3);

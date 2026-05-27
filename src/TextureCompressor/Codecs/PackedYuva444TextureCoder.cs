@@ -8,11 +8,16 @@ namespace TextureCompressor.Codecs;
 public sealed class PackedYuva444TextureCoder : IPitchTextureCoder
 {
     private readonly PackedYuva444Layout _layout;
+    private readonly bool _isAyuv;
     private readonly bool _isUyv10A2;
 
     public PackedYuva444TextureCoder(TextureFormat format)
     {
-        if (format == TextureFormats.Uyv10A2_444UNorm)
+        if (format == TextureFormats.Ayuv444UNorm)
+        {
+            _isAyuv = true;
+        }
+        else if (format == TextureFormats.Uyv10A2_444UNorm)
         {
             _isUyv10A2 = true;
         }
@@ -27,12 +32,12 @@ public sealed class PackedYuva444TextureCoder : IPitchTextureCoder
     public TextureFormat Format { get; }
 
     public static bool IsSupported(TextureFormat format) =>
-        format == TextureFormats.Uyv10A2_444UNorm || TryGetLayout(format, out _);
+        format == TextureFormats.Ayuv444UNorm || format == TextureFormats.Uyv10A2_444UNorm || TryGetLayout(format, out _);
 
     public int GetDefaultPitch(int width)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(width);
-        return checked(width * (_isUyv10A2 ? 4 : 8));
+        return checked(width * (_isAyuv || _isUyv10A2 ? 4 : 8));
     }
 
     public int GetEncodedByteCount(int width, int height, int rowPitch)
@@ -51,6 +56,12 @@ public sealed class PackedYuva444TextureCoder : IPitchTextureCoder
         where TPixel : unmanaged, IPixel<TPixel>
     {
         ValidateSourceLength(destination.Width, destination.Height, source, rowPitch);
+        if (_isAyuv)
+        {
+            DecodeAyuv(source, destination, rowPitch);
+            return;
+        }
+
         if (_isUyv10A2)
         {
             DecodeUyv10A2(source, destination, rowPitch);
@@ -64,6 +75,12 @@ public sealed class PackedYuva444TextureCoder : IPitchTextureCoder
         where TPixel : unmanaged, IPixel<TPixel>
     {
         ValidateDestinationLength(source.Width, source.Height, destination, rowPitch);
+        if (_isAyuv)
+        {
+            EncodeAyuv(source, destination, rowPitch);
+            return;
+        }
+
         if (_isUyv10A2)
         {
             EncodeUyv10A2(source, destination, rowPitch);
@@ -122,6 +139,51 @@ public sealed class PackedYuva444TextureCoder : IPitchTextureCoder
                 WriteYuvSample(pixelBytes[4..], second, _layout.BitsPerSample, _layout.MsbAligned);
                 WriteYuvSample(pixelBytes[6..], UnitToYuvSample(pixel.Alpha, _layout.BitsPerSample), _layout.BitsPerSample, _layout.MsbAligned);
                 pixelOffset = checked(pixelOffset + 8);
+            }
+
+            rowOffset = checked(rowOffset + rowPitch);
+        }
+    }
+
+    private static void DecodeAyuv<TPixel>(ReadOnlySpan<byte> source, ImageView<TPixel> destination, int rowPitch)
+        where TPixel : unmanaged, IPixel<TPixel>
+    {
+        var rowOffset = 0;
+        for (var y = 0; y < destination.Height; y++)
+        {
+            var destinationRow = destination.GetRowSpan(y);
+            var pixelOffset = rowOffset;
+            for (var x = 0; x < destination.Width; x++)
+            {
+                var v = source[pixelOffset];
+                var u = source[pixelOffset + 1];
+                var ySample = source[pixelOffset + 2];
+                var alpha = source[pixelOffset + 3];
+                destinationRow[x] = TPixel.FromRgba32Float(YuvToRgba32Float(ySample, u, v, bitsPerSample: 8, alpha / 255f));
+                pixelOffset = checked(pixelOffset + 4);
+            }
+
+            rowOffset = checked(rowOffset + rowPitch);
+        }
+    }
+
+    private static void EncodeAyuv<TPixel>(ImageView<TPixel> source, Span<byte> destination, int rowPitch)
+        where TPixel : unmanaged, IPixel<TPixel>
+    {
+        var rowOffset = 0;
+        for (var y = 0; y < source.Height; y++)
+        {
+            var sourceRow = source.GetRowSpan(y);
+            var pixelOffset = rowOffset;
+            for (var x = 0; x < source.Width; x++)
+            {
+                var pixel = TPixel.ToRgba32Float(sourceRow[x]);
+                RgbaToYuv(pixel, out var yValue, out var u, out var v);
+                destination[pixelOffset] = checked((byte)ChromaToYuvSample(v, bitsPerSample: 8));
+                destination[pixelOffset + 1] = checked((byte)ChromaToYuvSample(u, bitsPerSample: 8));
+                destination[pixelOffset + 2] = checked((byte)UnitToYuvSample(yValue, bitsPerSample: 8));
+                destination[pixelOffset + 3] = checked((byte)UnitToYuvSample(pixel.Alpha, bitsPerSample: 8));
+                pixelOffset = checked(pixelOffset + 4);
             }
 
             rowOffset = checked(rowOffset + rowPitch);

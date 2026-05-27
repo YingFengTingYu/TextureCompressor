@@ -205,6 +205,7 @@ public sealed class PlanarYuvTextureCoder : IPitchTextureCoder
         if (format == TextureFormats.Yuv12Msb3P444UNorm) { layout = new PlanarYuvLayout(12, 1, 1, Biplanar: false, VFirst: false, MsbAligned: true); return true; }
         if (format == TextureFormats.Yuv12Lsb3P444UNorm) { layout = new PlanarYuvLayout(12, 1, 1, Biplanar: false, VFirst: false, MsbAligned: false); return true; }
         if (format == TextureFormats.Yuv16_3P444UNorm) { layout = new PlanarYuvLayout(16, 1, 1, Biplanar: false, VFirst: false, MsbAligned: false); return true; }
+        if (format == TextureFormats.V408UNorm) { layout = new PlanarYuvLayout(8, 1, 1, Biplanar: false, VFirst: false, MsbAligned: false); return true; }
         if (format == TextureFormats.Yuv3P422UNorm) { layout = new PlanarYuvLayout(8, 2, 1, Biplanar: false, VFirst: false, MsbAligned: false); return true; }
         if (format == TextureFormats.Yuv10Msb3P422UNorm) { layout = new PlanarYuvLayout(10, 2, 1, Biplanar: false, VFirst: false, MsbAligned: true); return true; }
         if (format == TextureFormats.Yuv10Lsb3P422UNorm) { layout = new PlanarYuvLayout(10, 2, 1, Biplanar: false, VFirst: false, MsbAligned: false); return true; }
@@ -244,6 +245,7 @@ public sealed class PlanarYuvTextureCoder : IPitchTextureCoder
         if (format == TextureFormats.Yvu2P420UNorm) { layout = new PlanarYuvLayout(8, 2, 2, Biplanar: true, VFirst: true, MsbAligned: false); return true; }
         if (format == TextureFormats.Yvu10Msb2P420UNorm) { layout = new PlanarYuvLayout(10, 2, 2, Biplanar: true, VFirst: true, MsbAligned: true); return true; }
         if (format == TextureFormats.Yvu10Lsb2P420UNorm) { layout = new PlanarYuvLayout(10, 2, 2, Biplanar: true, VFirst: true, MsbAligned: false); return true; }
+        if (format == TextureFormats.V208UNorm) { layout = new PlanarYuvLayout(8, 1, 2, Biplanar: false, VFirst: false, MsbAligned: false); return true; }
         if (format == TextureFormats.Yuv14Msb2P420UNorm) { layout = new PlanarYuvLayout(14, 2, 2, Biplanar: true, VFirst: false, MsbAligned: true); return true; }
         if (format == TextureFormats.Yuv14Msb2P422UNorm) { layout = new PlanarYuvLayout(14, 2, 1, Biplanar: true, VFirst: false, MsbAligned: true); return true; }
 

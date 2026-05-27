@@ -90,6 +90,7 @@ public sealed class XrTextureCoder : IPitchTextureCoder
         {
             XrTransfer.Bgr10XR => DecodeBgr10(source, isSrgb: false),
             XrTransfer.Bgr10XRSrgb => DecodeBgr10(source, isSrgb: true),
+            XrTransfer.Rgb10XRA2UNorm => DecodeRgb10A2(source),
             XrTransfer.Bgra10XR => DecodeBgra10(source, isSrgb: false),
             XrTransfer.Bgra10XRSrgb => DecodeBgra10(source, isSrgb: true),
             _ => throw CreateUnsupportedFormatException(Format)
@@ -104,6 +105,9 @@ public sealed class XrTextureCoder : IPitchTextureCoder
                 return;
             case XrTransfer.Bgr10XRSrgb:
                 EncodeBgr10(value, destination, isSrgb: true);
+                return;
+            case XrTransfer.Rgb10XRA2UNorm:
+                EncodeRgb10A2(value, destination);
                 return;
             case XrTransfer.Bgra10XR:
                 EncodeBgra10(value, destination, isSrgb: false);
@@ -131,6 +135,26 @@ public sealed class XrTextureCoder : IPitchTextureCoder
         var green = EncodeColor(value.Green, isSrgb);
         var blue = EncodeColor(value.Blue, isSrgb);
         var packed = blue | (green << 10) | (red << 20);
+        BinaryPrimitives.WriteUInt32LittleEndian(destination, packed);
+    }
+
+    private static Rgba32Float DecodeRgb10A2(ReadOnlySpan<byte> source)
+    {
+        var packed = BinaryPrimitives.ReadUInt32LittleEndian(source);
+        var red = DecodeColor(packed & Xr10Mask, isSrgb: false);
+        var green = DecodeColor((packed >> 10) & Xr10Mask, isSrgb: false);
+        var blue = DecodeColor((packed >> 20) & Xr10Mask, isSrgb: false);
+        var alpha = ((packed >> 30) & 0x3u) / 3f;
+        return new Rgba32Float(red, green, blue, alpha);
+    }
+
+    private static void EncodeRgb10A2(Rgba32Float value, Span<byte> destination)
+    {
+        var red = EncodeColor(value.Red, isSrgb: false);
+        var green = EncodeColor(value.Green, isSrgb: false);
+        var blue = EncodeColor(value.Blue, isSrgb: false);
+        var alpha = EncodeAlpha2(value.Alpha);
+        var packed = red | (green << 10) | (blue << 20) | (alpha << 30);
         BinaryPrimitives.WriteUInt32LittleEndian(destination, packed);
     }
 
@@ -183,6 +207,17 @@ public sealed class XrTextureCoder : IPitchTextureCoder
         return (uint)encoded;
     }
 
+    private static uint EncodeAlpha2(float value)
+    {
+        if (float.IsNaN(value))
+        {
+            value = 0f;
+        }
+
+        var encoded = MathF.Round(Math.Clamp(value, 0f, 1f) * 3f);
+        return (uint)encoded;
+    }
+
     private static float DecodeSrgb(float value) =>
         value <= 0.04045f
             ? value / 12.92f
@@ -225,6 +260,12 @@ public sealed class XrTextureCoder : IPitchTextureCoder
             return true;
         }
 
+        if (format == TextureFormats.Rgb10XRA2UNorm)
+        {
+            transfer = XrTransfer.Rgb10XRA2UNorm;
+            return true;
+        }
+
         if (format == TextureFormats.Bgra10XR)
         {
             transfer = XrTransfer.Bgra10XR;
@@ -248,6 +289,7 @@ public sealed class XrTextureCoder : IPitchTextureCoder
     {
         Bgr10XR,
         Bgr10XRSrgb,
+        Rgb10XRA2UNorm,
         Bgra10XR,
         Bgra10XRSrgb
     }

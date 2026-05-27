@@ -151,6 +151,12 @@ public sealed class TextureCoderManager
             return true;
         }
 
+        if (Nv11TextureCoder.IsSupported(format))
+        {
+            coder = new Nv11TextureCoder(format);
+            return true;
+        }
+
         if (PlanarYuvTextureCoder.IsSupported(format))
         {
             coder = new PlanarYuvTextureCoder(format);
@@ -160,6 +166,12 @@ public sealed class TextureCoderManager
         if (RgbmTextureCoder.IsSupported(format))
         {
             coder = new RgbmTextureCoder(format);
+            return true;
+        }
+
+        if (IndexedTextureCoder.IsSupported(format))
+        {
+            coder = new IndexedTextureCoder(format);
             return true;
         }
 
