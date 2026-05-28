@@ -136,6 +136,21 @@ public sealed class TextureFormatTests
     }
 
     [Theory]
+    [MemberData(nameof(PvrtcByteCountCases))]
+    public void PvrtcByteCountUsesPvrtcStorageRules(TextureFormat format, int width, int height, int expectedRowBytes, int expectedBytes)
+    {
+        Assert.Equal(expectedRowBytes, format.GetRowByteCount(width));
+        Assert.Equal(expectedBytes, format.GetByteCount(width, height));
+    }
+
+    [Fact]
+    public void PvrtcIByteCountRejectsNonPowerOfTwoDimensions()
+    {
+        Assert.Throws<ArgumentException>(() => TextureFormats.RgbPvrtcI4BppUNorm.GetRowByteCount(127));
+        Assert.Throws<ArgumentException>(() => TextureFormats.RgbPvrtcI4BppUNorm.GetByteCount(127, 129));
+    }
+
+    [Theory]
     [InlineData(0)]
     [InlineData(-1)]
     public void RowByteCountRejectsInvalidWidth(int width)
@@ -373,7 +388,31 @@ public sealed class TextureFormatTests
         { TextureFormats.Dxt1RgbSrgb, "RGB_DXT1_SRGB" },
         { TextureFormats.Dxt1RgbaSrgb, "RGBA_DXT1_SRGB" },
         { TextureFormats.Dxt3RgbaSrgb, "RGBA_DXT3_SRGB" },
-        { TextureFormats.Dxt5RgbaSrgb, "RGBA_DXT5_SRGB" }
+        { TextureFormats.Dxt5RgbaSrgb, "RGBA_DXT5_SRGB" },
+        { TextureFormats.RgbPvrtcI2BppSrgb, "RGB_PVRTC1_2BPP_SRGB" },
+        { TextureFormats.RgbaPvrtcI2BppSrgb, "RGBA_PVRTC1_2BPP_SRGB" },
+        { TextureFormats.RgbPvrtcI4BppSrgb, "RGB_PVRTC1_4BPP_SRGB" },
+        { TextureFormats.RgbaPvrtcI4BppSrgb, "RGBA_PVRTC1_4BPP_SRGB" },
+        { TextureFormats.RgbaPvrtcII2BppSrgb, "RGBA_PVRTC2_2BPP_SRGB" },
+        { TextureFormats.RgbaPvrtcII4BppSrgb, "RGBA_PVRTC2_4BPP_SRGB" }
+    };
+
+    public static TheoryData<TextureFormat, int, int, int, int> PvrtcByteCountCases() => new()
+    {
+        { TextureFormats.RgbPvrtcI4BppUNorm, 1, 1, 16, 32 },
+        { TextureFormats.RgbPvrtcI4BppUNorm, 4, 4, 16, 32 },
+        { TextureFormats.RgbPvrtcI4BppUNorm, 8, 8, 16, 32 },
+        { TextureFormats.RgbPvrtcI2BppUNorm, 1, 1, 16, 32 },
+        { TextureFormats.RgbPvrtcI2BppUNorm, 16, 8, 16, 32 },
+        { TextureFormats.RgbPvrtcI6BppFloat, 1, 1, 32, 64 },
+        { TextureFormats.RgbPvrtcI6BppFloat, 32, 32, 96, 768 },
+        { TextureFormats.RgbPvrtcI8BppFloat, 1, 1, 32, 64 },
+        { TextureFormats.RgbaPvrtcII4BppUNorm, 1, 1, 8, 8 },
+        { TextureFormats.RgbaPvrtcII4BppUNorm, 127, 129, 256, 8448 },
+        { TextureFormats.RgbaPvrtcII2BppUNorm, 1, 1, 8, 8 },
+        { TextureFormats.RgbaPvrtcII2BppUNorm, 127, 129, 128, 4224 },
+        { TextureFormats.RgbPvrtcII6BppFloat, 1, 1, 16, 16 },
+        { TextureFormats.RgbPvrtcII8BppFloat, 1, 1, 16, 16 }
     };
 
     public static TheoryData<TextureFormat, string, int, int> PackedRgb422Formats() => new()

@@ -1196,6 +1196,54 @@ public static class TextureFormats
     public static readonly TextureFormat Depth32FloatStencil8 =
         DepthStencil("DEPTH32F_STENCIL8", 32, 8, 64);
 
+    public static readonly TextureFormat RgbPvrtcI2BppUNorm =
+        TextureFormat.BlockCompressed("RGB_PVRTC1_2BPP_UNORM", TextureComponents.Rgb, TextureValueKind.UNorm, 5, 5, 4, 0, 8, 4, 64, TexturePayloadSizeMode.PvrtcI);
+
+    public static readonly TextureFormat RgbPvrtcI2BppSrgb =
+        TextureFormat.BlockCompressed("RGB_PVRTC1_2BPP_SRGB", TextureComponents.Rgb, TextureValueKind.Srgb, 5, 5, 4, 0, 8, 4, 64, TexturePayloadSizeMode.PvrtcI);
+
+    public static readonly TextureFormat RgbaPvrtcI2BppUNorm =
+        TextureFormat.BlockCompressed("RGBA_PVRTC1_2BPP_UNORM", TextureComponents.Rgba, TextureValueKind.UNorm, 5, 5, 4, 3, 8, 4, 64, TexturePayloadSizeMode.PvrtcI);
+
+    public static readonly TextureFormat RgbaPvrtcI2BppSrgb =
+        TextureFormat.BlockCompressed("RGBA_PVRTC1_2BPP_SRGB", TextureComponents.Rgba, TextureValueKind.Srgb, 5, 5, 4, 3, 8, 4, 64, TexturePayloadSizeMode.PvrtcI);
+
+    public static readonly TextureFormat RgbPvrtcI4BppUNorm =
+        TextureFormat.BlockCompressed("RGB_PVRTC1_4BPP_UNORM", TextureComponents.Rgb, TextureValueKind.UNorm, 5, 5, 4, 0, 4, 4, 64, TexturePayloadSizeMode.PvrtcI);
+
+    public static readonly TextureFormat RgbPvrtcI4BppSrgb =
+        TextureFormat.BlockCompressed("RGB_PVRTC1_4BPP_SRGB", TextureComponents.Rgb, TextureValueKind.Srgb, 5, 5, 4, 0, 4, 4, 64, TexturePayloadSizeMode.PvrtcI);
+
+    public static readonly TextureFormat RgbaPvrtcI4BppUNorm =
+        TextureFormat.BlockCompressed("RGBA_PVRTC1_4BPP_UNORM", TextureComponents.Rgba, TextureValueKind.UNorm, 5, 5, 4, 3, 4, 4, 64, TexturePayloadSizeMode.PvrtcI);
+
+    public static readonly TextureFormat RgbaPvrtcI4BppSrgb =
+        TextureFormat.BlockCompressed("RGBA_PVRTC1_4BPP_SRGB", TextureComponents.Rgba, TextureValueKind.Srgb, 5, 5, 4, 3, 4, 4, 64, TexturePayloadSizeMode.PvrtcI);
+
+    public static readonly TextureFormat RgbaPvrtcII2BppUNorm =
+        TextureFormat.BlockCompressed("RGBA_PVRTC2_2BPP_UNORM", TextureComponents.Rgba, TextureValueKind.UNorm, 5, 5, 4, 3, 8, 4, 64, TexturePayloadSizeMode.PvrtcII);
+
+    public static readonly TextureFormat RgbaPvrtcII2BppSrgb =
+        TextureFormat.BlockCompressed("RGBA_PVRTC2_2BPP_SRGB", TextureComponents.Rgba, TextureValueKind.Srgb, 5, 5, 4, 3, 8, 4, 64, TexturePayloadSizeMode.PvrtcII);
+
+    public static readonly TextureFormat RgbaPvrtcII4BppUNorm =
+        TextureFormat.BlockCompressed("RGBA_PVRTC2_4BPP_UNORM", TextureComponents.Rgba, TextureValueKind.UNorm, 5, 5, 4, 3, 4, 4, 64, TexturePayloadSizeMode.PvrtcII);
+
+    public static readonly TextureFormat RgbaPvrtcII4BppSrgb =
+        TextureFormat.BlockCompressed("RGBA_PVRTC2_4BPP_SRGB", TextureComponents.Rgba, TextureValueKind.Srgb, 5, 5, 4, 3, 4, 4, 64, TexturePayloadSizeMode.PvrtcII);
+
+    public static readonly TextureFormat RgbPvrtcI6BppFloat =
+        TextureFormat.BlockCompressed("RGB_PVRTC1_6BPP_FLOAT", TextureComponents.Rgb, TextureValueKind.Float, 16, 16, 16, 0, 8, 4, 192, TexturePayloadSizeMode.PvrtcI);
+
+    public static readonly TextureFormat RgbPvrtcI8BppFloat =
+        TextureFormat.BlockCompressed("RGB_PVRTC1_8BPP_FLOAT", TextureComponents.Rgb, TextureValueKind.Float, 16, 16, 16, 0, 4, 4, 128, TexturePayloadSizeMode.PvrtcI);
+
+    public static readonly TextureFormat RgbPvrtcII6BppFloat =
+        TextureFormat.BlockCompressed("RGB_PVRTC2_6BPP_FLOAT", TextureComponents.Rgb, TextureValueKind.Float, 16, 16, 16, 0, 8, 4, 192, TexturePayloadSizeMode.PvrtcII);
+
+    public static readonly TextureFormat RgbPvrtcII8BppFloat =
+        TextureFormat.BlockCompressed("RGB_PVRTC2_8BPP_FLOAT", TextureComponents.Rgb, TextureValueKind.Float, 16, 16, 16, 0, 4, 4, 128, TexturePayloadSizeMode.PvrtcII);
+
     public static readonly TextureFormat Bc4UNorm =
         RgtcLatc1("BC4_UNORM", TextureComponents.R, TextureValueKind.UNorm);
 

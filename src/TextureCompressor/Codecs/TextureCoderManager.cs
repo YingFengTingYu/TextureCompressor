@@ -193,6 +193,12 @@ public sealed class TextureCoderManager
             return true;
         }
 
+        if (PvrtcTextureCoder.IsSupported(format))
+        {
+            coder = new PvrtcTextureCoder(format);
+            return true;
+        }
+
         if (SequentialUncompressedTextureCoder.IsSupported(format))
         {
             coder = new SequentialUncompressedTextureCoder(format);

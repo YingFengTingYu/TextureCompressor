@@ -14,8 +14,12 @@ public readonly record struct TextureFormat(
     int BitsPerBlock,
     int HeaderByteCount = 0,
     int BlockDepth = 1,
-    bool IsVariableSize = false)
+    bool IsVariableSize = false,
+    TexturePayloadSizeMode SizeMode = TexturePayloadSizeMode.Default)
 {
+    private const int PvrtcWordHeight = 4;
+    private const int PvrtcWordByteCount = 8;
+
     public int ChannelCount => Components switch
     {
         TextureComponents.R => 1,
@@ -43,6 +47,11 @@ public readonly record struct TextureFormat(
         ValidateFixedSizeLayout();
         ValidateWidth(width);
 
+        if (SizeMode is TexturePayloadSizeMode.PvrtcI or TexturePayloadSizeMode.PvrtcII)
+        {
+            return GetPvrtcRowByteCount(width);
+        }
+
         var blockCountX = (width + BlockWidth - 1L) / BlockWidth;
         return checked(blockCountX * BytesPerBlock);
     }
@@ -51,6 +60,15 @@ public readonly record struct TextureFormat(
 
     public long GetByteCount64(int width, int height)
     {
+        if (SizeMode is TexturePayloadSizeMode.PvrtcI or TexturePayloadSizeMode.PvrtcII)
+        {
+            ValidateLayout();
+            ValidateFixedSizeLayout();
+            ValidateWidth(width);
+            ValidateHeight(height);
+            return checked(HeaderByteCount + GetPvrtcPayloadByteCount(width, height));
+        }
+
         var rowByteCount = GetRowByteCount64(width);
         ValidateHeight(height);
 
@@ -123,7 +141,8 @@ public readonly record struct TextureFormat(
         int alphaBits,
         int blockWidth,
         int blockHeight,
-        int bitsPerBlock) => new(
+        int bitsPerBlock,
+        TexturePayloadSizeMode sizeMode = TexturePayloadSizeMode.Default) => new(
             name,
             TextureFormatKind.BlockCompressed,
             components,
@@ -134,7 +153,8 @@ public readonly record struct TextureFormat(
             alphaBits,
             blockWidth,
             blockHeight,
-            bitsPerBlock);
+            bitsPerBlock,
+            SizeMode: sizeMode);
 
     private void ValidateLayout()
     {
@@ -167,4 +187,61 @@ public readonly record struct TextureFormat(
             throw new ArgumentOutOfRangeException(nameof(height));
         }
     }
+
+    private long GetPvrtcRowByteCount(int width)
+    {
+        ValidatePvrtcIDimension(width, nameof(width));
+        var bitsPerTexel = BitsPerTexel;
+        return bitsPerTexel switch
+        {
+            6 => checked(GetPvrtcStreamRowByteCount(width, 4) + GetPvrtcStreamRowByteCount(width, 2)),
+            8 => checked(GetPvrtcStreamRowByteCount(width, 4) + GetPvrtcStreamRowByteCount(width, 4)),
+            2 or 4 => GetPvrtcStreamRowByteCount(width, bitsPerTexel),
+            _ => throw new InvalidOperationException($"Unsupported PVRTC bit rate '{bitsPerTexel}'.")
+        };
+    }
+
+    private long GetPvrtcPayloadByteCount(int width, int height)
+    {
+        ValidatePvrtcIDimension(width, nameof(width));
+        ValidatePvrtcIDimension(height, nameof(height));
+        var bitsPerTexel = BitsPerTexel;
+        return bitsPerTexel switch
+        {
+            6 => checked(GetPvrtcStreamByteCount(width, height, 4) + GetPvrtcStreamByteCount(width, height, 2)),
+            8 => checked(GetPvrtcStreamByteCount(width, height, 4) + GetPvrtcStreamByteCount(width, height, 4)),
+            2 or 4 => GetPvrtcStreamByteCount(width, height, bitsPerTexel),
+            _ => throw new InvalidOperationException($"Unsupported PVRTC bit rate '{bitsPerTexel}'.")
+        };
+    }
+
+    private long GetPvrtcStreamByteCount(int width, int height, int bitsPerTexel)
+    {
+        var rowByteCount = GetPvrtcStreamRowByteCount(width, bitsPerTexel);
+        var blockCountY = Math.Max(RoundUpDiv(height, PvrtcWordHeight), GetPvrtcMinimumWordCount());
+        return checked(rowByteCount * blockCountY);
+    }
+
+    private long GetPvrtcStreamRowByteCount(int width, int bitsPerTexel)
+    {
+        var wordWidth = bitsPerTexel == 2 ? 8 : 4;
+        var blockCountX = Math.Max(RoundUpDiv(width, wordWidth), GetPvrtcMinimumWordCount());
+        return checked(blockCountX * PvrtcWordByteCount);
+    }
+
+    private long GetPvrtcMinimumWordCount() =>
+        SizeMode == TexturePayloadSizeMode.PvrtcI ? 2 : 1;
+
+    private void ValidatePvrtcIDimension(int value, string parameterName)
+    {
+        if (SizeMode == TexturePayloadSizeMode.PvrtcI && !IsPowerOfTwo(value))
+        {
+            throw new ArgumentException("PVRTC I textures must have power-of-two dimensions.", parameterName);
+        }
+    }
+
+    private static long RoundUpDiv(long value, long divisor) =>
+        checked((value + divisor - 1) / divisor);
+
+    private static bool IsPowerOfTwo(int value) => value > 0 && (value & (value - 1)) == 0;
 }
