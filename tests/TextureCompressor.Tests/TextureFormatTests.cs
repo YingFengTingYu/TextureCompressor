@@ -175,6 +175,15 @@ public sealed class TextureFormatTests
     }
 
     [Theory]
+    [MemberData(nameof(EacNormFormats))]
+    public void EacFormatNamesUseNormSuffix(TextureFormat format, string name, TextureValueKind valueKind)
+    {
+        Assert.Equal(name, format.Name);
+        Assert.Equal(TextureFormatKind.BlockCompressed, format.Kind);
+        Assert.Equal(valueKind, format.ValueKind);
+    }
+
+    [Theory]
     [MemberData(nameof(VulkanUncompressedFormats))]
     public void VulkanUncompressedFormatMetadataIsStable(
         TextureFormat format,
@@ -367,6 +376,12 @@ public sealed class TextureFormatTests
         { TextureFormats.Dxt5A, "DXT5A", TextureFormatKind.BlockCompressed, TextureComponents.Alpha, 1, 64, 8 },
         { TextureFormats.Dxn, "DXN", TextureFormatKind.BlockCompressed, TextureComponents.Rg, 2, 128, 16 },
         { TextureFormats.Ctx1, "CTX1", TextureFormatKind.BlockCompressed, TextureComponents.Rg, 2, 64, 8 },
+        { TextureFormats.RgbEtc1UNorm, "RGB_ETC1_UNORM", TextureFormatKind.BlockCompressed, TextureComponents.Rgb, 3, 64, 8 },
+        { TextureFormats.RgbEtc2UNorm, "RGB_ETC2_UNORM", TextureFormatKind.BlockCompressed, TextureComponents.Rgb, 3, 64, 8 },
+        { TextureFormats.RgbA1Etc2UNorm, "RGB_A1_ETC2_UNORM", TextureFormatKind.BlockCompressed, TextureComponents.Rgba, 4, 64, 8 },
+        { TextureFormats.RgbaEtc2EacUNorm, "RGBA_ETC2_EAC_UNORM", TextureFormatKind.BlockCompressed, TextureComponents.Rgba, 4, 128, 16 },
+        { TextureFormats.R11EacUNorm, "R11_EAC_UNORM", TextureFormatKind.BlockCompressed, TextureComponents.R, 1, 64, 8 },
+        { TextureFormats.Rg11EacUNorm, "RG11_EAC_UNORM", TextureFormatKind.BlockCompressed, TextureComponents.Rg, 2, 128, 16 },
         { TextureFormats.RgbFxt1UNorm, "RGB_FXT1_UNORM", TextureFormatKind.BlockCompressed, TextureComponents.Rgb, 3, 128, 16 },
         { TextureFormats.RgbaFxt1UNorm, "RGBA_FXT1_UNORM", TextureFormatKind.BlockCompressed, TextureComponents.Rgba, 4, 128, 16 },
         { TextureFormats.AtcRgb, "ATC_RGB_UNORM", TextureFormatKind.BlockCompressed, TextureComponents.Rgb, 3, 64, 8 },
@@ -398,7 +413,18 @@ public sealed class TextureFormatTests
         { TextureFormats.RgbPvrtcI4BppSrgb, "RGB_PVRTC1_4BPP_SRGB" },
         { TextureFormats.RgbaPvrtcI4BppSrgb, "RGBA_PVRTC1_4BPP_SRGB" },
         { TextureFormats.RgbaPvrtcII2BppSrgb, "RGBA_PVRTC2_2BPP_SRGB" },
-        { TextureFormats.RgbaPvrtcII4BppSrgb, "RGBA_PVRTC2_4BPP_SRGB" }
+        { TextureFormats.RgbaPvrtcII4BppSrgb, "RGBA_PVRTC2_4BPP_SRGB" },
+        { TextureFormats.RgbEtc2Srgb, "RGB_ETC2_SRGB" },
+        { TextureFormats.RgbA1Etc2Srgb, "RGB_A1_ETC2_SRGB" },
+        { TextureFormats.RgbaEtc2EacSrgb, "RGBA_ETC2_EAC_SRGB" }
+    };
+
+    public static TheoryData<TextureFormat, string, TextureValueKind> EacNormFormats() => new()
+    {
+        { TextureFormats.R11EacUNorm, "R11_EAC_UNORM", TextureValueKind.UNorm },
+        { TextureFormats.R11EacSNorm, "R11_EAC_SNORM", TextureValueKind.SNorm },
+        { TextureFormats.Rg11EacUNorm, "RG11_EAC_UNORM", TextureValueKind.UNorm },
+        { TextureFormats.Rg11EacSNorm, "RG11_EAC_SNORM", TextureValueKind.SNorm }
     };
 
     public static TheoryData<TextureFormat, int, int, int, int> PvrtcByteCountCases() => new()
