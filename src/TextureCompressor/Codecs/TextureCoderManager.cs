@@ -187,6 +187,12 @@ public sealed class TextureCoderManager
             return true;
         }
 
+        if (AtcTextureCoder.IsSupported(format))
+        {
+            coder = new AtcTextureCoder(format);
+            return true;
+        }
+
         if (RgtcLatcTextureCoder.IsSupported(format))
         {
             coder = new RgtcLatcTextureCoder(format);

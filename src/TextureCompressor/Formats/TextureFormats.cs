@@ -1314,6 +1314,47 @@ public static class TextureFormats
     public static readonly TextureFormat Ctx1 =
         TextureFormat.BlockCompressed("CTX1", TextureComponents.Rg, TextureValueKind.UNorm, 8, 8, 0, 0, 4, 4, 64);
 
+    public static readonly TextureFormat AtcRgb =
+        TextureFormat.BlockCompressed(
+            "ATC_RGB_UNORM",
+            TextureComponents.Rgb,
+            TextureValueKind.UNorm,
+            5,
+            6,
+            5,
+            0,
+            4,
+            4,
+            64);
+
+    public static readonly TextureFormat AtcRgbaExplicitAlpha =
+        TextureFormat.BlockCompressed(
+            "ATC_RGBA_EXPLICIT_ALPHA_UNORM",
+            TextureComponents.Rgba,
+            TextureValueKind.UNorm,
+            5,
+            6,
+            5,
+            4,
+            4,
+            4,
+            128);
+
+    public static readonly TextureFormat AtcRgbaInterpolatedAlpha =
+        TextureFormat.BlockCompressed(
+            "ATC_RGBA_INTERPOLATED_ALPHA_UNORM",
+            TextureComponents.Rgba,
+            TextureValueKind.UNorm,
+            5,
+            6,
+            5,
+            8,
+            4,
+            4,
+            128);
+
+    public static readonly TextureFormat AtcRgba = AtcRgbaInterpolatedAlpha;
+
     public static readonly TextureFormat Bc1Rgb =
         TextureFormat.BlockCompressed(
             "BC1_RGB_UNORM",
