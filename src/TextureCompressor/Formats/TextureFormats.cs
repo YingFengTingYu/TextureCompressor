@@ -1277,59 +1277,17 @@ public static class TextureFormats
     public static readonly TextureFormat Rg11EacSNorm =
         TextureFormat.BlockCompressed("RG11_EAC_SNORM", TextureComponents.Rg, TextureValueKind.SNorm, 11, 11, 0, 0, 4, 4, 128);
 
-    public static readonly TextureFormat R11Eac = R11EacUNorm;
-
-    public static readonly TextureFormat SignedR11Eac = R11EacSNorm;
-
-    public static readonly TextureFormat Rg11Eac = Rg11EacUNorm;
-
-    public static readonly TextureFormat SignedRg11Eac = Rg11EacSNorm;
-
-    public static readonly TextureFormat Etc1Rgb = RgbEtc1UNorm;
-
-    public static readonly TextureFormat Etc2Rgb = RgbEtc2UNorm;
-
-    public static readonly TextureFormat Etc2RgbSrgb = RgbEtc2Srgb;
-
-    public static readonly TextureFormat Etc2RgbA1 = RgbA1Etc2UNorm;
-
-    public static readonly TextureFormat Etc2RgbA1Srgb = RgbA1Etc2Srgb;
-
-    public static readonly TextureFormat Etc2Rgba = RgbaEtc2EacUNorm;
-
-    public static readonly TextureFormat Etc2RgbaSrgb = RgbaEtc2EacSrgb;
-
-    public static readonly TextureFormat EacR11 = R11EacUNorm;
-
-    public static readonly TextureFormat EacR11UNorm = R11EacUNorm;
-
-    public static readonly TextureFormat EacR11SNorm = R11EacSNorm;
-
-    public static readonly TextureFormat EacSignedR11 = R11EacSNorm;
-
-    public static readonly TextureFormat EacRg11 = Rg11EacUNorm;
-
-    public static readonly TextureFormat EacRg11UNorm = Rg11EacUNorm;
-
-    public static readonly TextureFormat EacRg11SNorm = Rg11EacSNorm;
-
-    public static readonly TextureFormat EacSignedRg11 = Rg11EacSNorm;
-
     public static readonly TextureFormat Bc4UNorm =
         RgtcLatc1("BC4_UNORM", TextureComponents.R, TextureValueKind.UNorm);
 
     public static readonly TextureFormat Bc4SNorm =
         RgtcLatc1("BC4_SNORM", TextureComponents.R, TextureValueKind.SNorm);
 
-    public static readonly TextureFormat Bc4 = Bc4UNorm;
-
     public static readonly TextureFormat Bc5UNorm =
         RgtcLatc2("BC5_UNORM", TextureComponents.Rg, TextureValueKind.UNorm);
 
     public static readonly TextureFormat Bc5SNorm =
         RgtcLatc2("BC5_SNORM", TextureComponents.Rg, TextureValueKind.SNorm);
-
-    public static readonly TextureFormat Bc5 = Bc5UNorm;
 
     public static readonly TextureFormat Bc6HUFloat =
         TextureFormat.BlockCompressed("BC6H_UFLOAT", TextureComponents.Rgb, TextureValueKind.Float, 16, 16, 16, 0, 4, 4, 128);
@@ -1361,15 +1319,11 @@ public static class TextureFormats
     public static readonly TextureFormat Ati1SNorm =
         RgtcLatc1("ATI1_SNORM", TextureComponents.R, TextureValueKind.SNorm);
 
-    public static readonly TextureFormat Ati1 = Ati1UNorm;
-
     public static readonly TextureFormat Ati2UNorm =
         RgtcLatc2("ATI2_UNORM", TextureComponents.Rg, TextureValueKind.UNorm);
 
     public static readonly TextureFormat Ati2SNorm =
         RgtcLatc2("ATI2_SNORM", TextureComponents.Rg, TextureValueKind.SNorm);
-
-    public static readonly TextureFormat Ati2 = Ati2UNorm;
 
     public static readonly TextureFormat Rgtc1UNorm =
         RgtcLatc1("RGTC1_UNORM", TextureComponents.R, TextureValueKind.UNorm);
@@ -1377,15 +1331,11 @@ public static class TextureFormats
     public static readonly TextureFormat Rgtc1SNorm =
         RgtcLatc1("RGTC1_SNORM", TextureComponents.R, TextureValueKind.SNorm);
 
-    public static readonly TextureFormat Rgtc1 = Rgtc1UNorm;
-
     public static readonly TextureFormat Rgtc2UNorm =
         RgtcLatc2("RGTC2_UNORM", TextureComponents.Rg, TextureValueKind.UNorm);
 
     public static readonly TextureFormat Rgtc2SNorm =
         RgtcLatc2("RGTC2_SNORM", TextureComponents.Rg, TextureValueKind.SNorm);
-
-    public static readonly TextureFormat Rgtc2 = Rgtc2UNorm;
 
     public static readonly TextureFormat Latc1UNorm =
         RgtcLatc1("LATC1_UNORM", TextureComponents.Luminance, TextureValueKind.UNorm);
@@ -1393,15 +1343,11 @@ public static class TextureFormats
     public static readonly TextureFormat Latc1SNorm =
         RgtcLatc1("LATC1_SNORM", TextureComponents.Luminance, TextureValueKind.SNorm);
 
-    public static readonly TextureFormat Latc1 = Latc1UNorm;
-
     public static readonly TextureFormat Latc2UNorm =
         RgtcLatc2("LATC2_UNORM", TextureComponents.LuminanceAlpha, TextureValueKind.UNorm);
 
     public static readonly TextureFormat Latc2SNorm =
         RgtcLatc2("LATC2_SNORM", TextureComponents.LuminanceAlpha, TextureValueKind.SNorm);
-
-    public static readonly TextureFormat Latc2 = Latc2UNorm;
 
     public static readonly TextureFormat Dxn =
         TextureFormat.BlockCompressed("DXN", TextureComponents.Rg, TextureValueKind.UNorm, 8, 8, 0, 0, 4, 4, 128);
@@ -1453,8 +1399,6 @@ public static class TextureFormats
             4,
             4,
             128);
-
-    public static readonly TextureFormat AtcRgba = AtcRgbaInterpolatedAlpha;
 
     public static readonly TextureFormat Bc1Rgb =
         TextureFormat.BlockCompressed(
