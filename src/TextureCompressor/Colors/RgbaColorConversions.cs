@@ -367,6 +367,12 @@ internal static class RgbaColorConversions
         return FloatToUNorm8(srgb);
     }
 
+    public static byte Srgb8ToLinearUNorm8(byte value) =>
+        Srgb8ToLinearUNorm8Lookup.Table[value];
+
+    public static byte LinearUNorm8ToSrgb8(byte value) =>
+        LinearUNorm8ToSrgb8Lookup.Table[value];
+
     private static float Saturate(float value)
     {
         if (float.IsNaN(value))
@@ -425,6 +431,164 @@ internal static class RgbaColorConversions
         }
 
         return Math.Clamp(value, -1d, 1d);
+    }
+
+    private static double SrgbToLinear(double value)
+    {
+        value = SaturateDouble(value);
+        return value <= 0.04045d
+            ? value / 12.92d
+            : Math.Pow((value + 0.055d) / 1.055d, 2.4d);
+    }
+
+    private static uint CeilingToUNorm32(double value)
+    {
+        var ceiling = Math.Ceiling(SaturateDouble(value) * uint.MaxValue);
+        return ceiling >= uint.MaxValue ? uint.MaxValue : (uint)ceiling;
+    }
+
+    private static ulong CeilingToUNorm64(double value)
+    {
+        var ceiling = Math.Ceiling(SaturateDouble(value) * ulong.MaxValue);
+        return ceiling >= ulong.MaxValue ? ulong.MaxValue : (ulong)ceiling;
+    }
+
+    private static byte EncodeLinearUNormToSrgb8(uint value, ReadOnlySpan<uint> thresholds)
+    {
+        var low = 0;
+        var high = thresholds.Length;
+        while (low < high)
+        {
+            var mid = low + ((high - low) / 2);
+            if (value < thresholds[mid])
+            {
+                high = mid;
+            }
+            else
+            {
+                low = mid + 1;
+            }
+        }
+
+        return (byte)low;
+    }
+
+    private static byte EncodeLinearUNormToSrgb8(ulong value, ReadOnlySpan<ulong> thresholds)
+    {
+        var low = 0;
+        var high = thresholds.Length;
+        while (low < high)
+        {
+            var mid = low + ((high - low) / 2);
+            if (value < thresholds[mid])
+            {
+                high = mid;
+            }
+            else
+            {
+                low = mid + 1;
+            }
+        }
+
+        return (byte)low;
+    }
+
+    private static byte[] CreateSrgb8ToLinearUNorm8Table()
+    {
+        var table = new byte[byte.MaxValue + 1];
+        for (var i = 0; i < table.Length; i++)
+        {
+            table[i] = FloatToUNorm8(Srgb8ToLinearFloat((byte)i));
+        }
+
+        return table;
+    }
+
+    private static ushort[] CreateSrgb8ToLinearUNorm16Table()
+    {
+        var table = new ushort[byte.MaxValue + 1];
+        for (var i = 0; i < table.Length; i++)
+        {
+            table[i] = FloatToUNorm16(Srgb8ToLinearFloat((byte)i));
+        }
+
+        return table;
+    }
+
+    private static uint[] CreateSrgb8ToLinearUNorm32Table()
+    {
+        var table = new uint[byte.MaxValue + 1];
+        for (var i = 0; i < table.Length; i++)
+        {
+            table[i] = FloatToUNorm32(Srgb8ToLinearFloat((byte)i));
+        }
+
+        return table;
+    }
+
+    private static ulong[] CreateSrgb8ToLinearUNorm64Table()
+    {
+        var table = new ulong[byte.MaxValue + 1];
+        for (var i = 0; i < table.Length; i++)
+        {
+            table[i] = FloatToUInt64(Srgb8ToLinearFloat((byte)i));
+        }
+
+        return table;
+    }
+
+    private static byte[] CreateLinearUNorm8ToSrgb8Table()
+    {
+        var table = new byte[byte.MaxValue + 1];
+        for (var i = 0; i < table.Length; i++)
+        {
+            table[i] = LinearFloatToSrgb8(UNorm8ToFloat((byte)i));
+        }
+
+        return table;
+    }
+
+    private static byte[] CreateLinearUNorm16ToSrgb8Table()
+    {
+        var table = new byte[ushort.MaxValue + 1];
+        for (var i = 0; i < table.Length; i++)
+        {
+            table[i] = LinearFloatToSrgb8(UNorm16ToFloat((ushort)i));
+        }
+
+        return table;
+    }
+
+    private static uint[] CreateLinearUNorm32ToSrgb8Thresholds()
+    {
+        var thresholds = new uint[byte.MaxValue];
+        for (var i = 1; i <= byte.MaxValue; i++)
+        {
+            thresholds[i - 1] = CeilingToUNorm32(SrgbToLinear((i - 0.5d) / byte.MaxValue));
+        }
+
+        return thresholds;
+    }
+
+    private static ulong[] CreateLinearUNorm64ToSrgb8Thresholds()
+    {
+        var thresholds = new ulong[byte.MaxValue];
+        for (var i = 1; i <= byte.MaxValue; i++)
+        {
+            thresholds[i - 1] = CeilingToUNorm64(SrgbToLinear((i - 0.5d) / byte.MaxValue));
+        }
+
+        return thresholds;
+    }
+
+    private static class Srgb8ToLinearUNorm8Lookup
+    {
+        public static readonly byte[] Table = CreateSrgb8ToLinearUNorm8Table();
+    }
+
+    private static class LinearUNorm8ToSrgb8Lookup
+    {
+        public static readonly byte[] Table = CreateLinearUNorm8ToSrgb8Table();
     }
 
     private static ulong ScaleUnsigned(ulong value, ulong sourceMax, ulong targetMax)

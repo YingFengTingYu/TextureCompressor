@@ -1140,10 +1140,10 @@ public sealed class S3tcTextureCoder : IPitchTextureCoder
     }
 
     private static byte DecodeSrgb(byte value) =>
-        RgbaColorConversions.FloatToUNorm8(RgbaColorConversions.Srgb8ToLinearFloat(value));
+        RgbaColorConversions.Srgb8ToLinearUNorm8(value);
 
     private static byte EncodeSrgb(byte value) =>
-        RgbaColorConversions.LinearFloatToSrgb8(RgbaColorConversions.UNorm8ToFloat(value));
+        RgbaColorConversions.LinearUNorm8ToSrgb8(value);
 
     private static void PremultiplyAlpha(ReadOnlySpan<Rgba8UNorm> source, Span<Rgba8UNorm> destination)
     {
