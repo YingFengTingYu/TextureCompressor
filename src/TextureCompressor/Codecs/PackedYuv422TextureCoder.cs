@@ -70,8 +70,14 @@ public sealed class PackedYuv422TextureCoder : IPitchTextureCoder
             case PackedYuv422Transfer.Uyvy8:
                 Decode<TPixel, Uyvy8Transfer>(source, destination, rowPitch);
                 return;
+            case PackedYuv422Transfer.Uyvy8BigEndian:
+                Decode<TPixel, Uyvy8TransferBigEndian>(source, destination, rowPitch);
+                return;
             case PackedYuv422Transfer.Yuyv8:
                 Decode<TPixel, Yuyv8Transfer>(source, destination, rowPitch);
+                return;
+            case PackedYuv422Transfer.Yuyv8BigEndian:
+                Decode<TPixel, Yuyv8TransferBigEndian>(source, destination, rowPitch);
                 return;
             case PackedYuv422Transfer.Yuyv16:
                 Decode<TPixel, Yuyv16Transfer>(source, destination, rowPitch);
@@ -116,8 +122,14 @@ public sealed class PackedYuv422TextureCoder : IPitchTextureCoder
             case PackedYuv422Transfer.Uyvy8:
                 Encode<TPixel, Uyvy8Transfer>(source, destination, rowPitch);
                 return;
+            case PackedYuv422Transfer.Uyvy8BigEndian:
+                Encode<TPixel, Uyvy8TransferBigEndian>(source, destination, rowPitch);
+                return;
             case PackedYuv422Transfer.Yuyv8:
                 Encode<TPixel, Yuyv8Transfer>(source, destination, rowPitch);
+                return;
+            case PackedYuv422Transfer.Yuyv8BigEndian:
+                Encode<TPixel, Yuyv8TransferBigEndian>(source, destination, rowPitch);
                 return;
             case PackedYuv422Transfer.Yuyv16:
                 Encode<TPixel, Yuyv16Transfer>(source, destination, rowPitch);
@@ -162,6 +174,8 @@ public sealed class PackedYuv422TextureCoder : IPitchTextureCoder
             ? destination.Width / 2
             : (destination.Width + 1) / 2;
         var bytesPerSample = TTransfer.BytesPerBlock / 4;
+        var endianMode = TTransfer.EndianMode;
+        Span<byte> endianBlock = stackalloc byte[TTransfer.BytesPerBlock];
         var rowOffset = 0;
         for (var y = 0; y < destination.Height; y++)
         {
@@ -170,23 +184,19 @@ public sealed class PackedYuv422TextureCoder : IPitchTextureCoder
             var pixelX = 0;
             for (var blockX = 0; blockX < blockCountX; blockX++)
             {
+                var encodedBlock = source.Slice(blockOffset, TTransfer.BytesPerBlock);
                 uint y0;
                 uint y1;
                 uint u;
                 uint v;
-                if (TTransfer.UFirst)
+                if (endianMode == BigEndianByteSwapMode.None)
                 {
-                    u = ReadYuvSample<TTransfer>(source[blockOffset..]);
-                    y0 = ReadYuvSample<TTransfer>(source[(blockOffset + bytesPerSample)..]);
-                    v = ReadYuvSample<TTransfer>(source[(blockOffset + (2 * bytesPerSample))..]);
-                    y1 = ReadYuvSample<TTransfer>(source[(blockOffset + (3 * bytesPerSample))..]);
+                    ReadYuvBlock<TTransfer>(encodedBlock, bytesPerSample, out y0, out y1, out u, out v);
                 }
                 else
                 {
-                    y0 = ReadYuvSample<TTransfer>(source[blockOffset..]);
-                    u = ReadYuvSample<TTransfer>(source[(blockOffset + bytesPerSample)..]);
-                    y1 = ReadYuvSample<TTransfer>(source[(blockOffset + (2 * bytesPerSample))..]);
-                    v = ReadYuvSample<TTransfer>(source[(blockOffset + (3 * bytesPerSample))..]);
+                    BigEndianByteSwap.CopyToLittleEndian(encodedBlock, endianBlock, endianMode);
+                    ReadYuvBlock<TTransfer>(endianBlock, bytesPerSample, out y0, out y1, out u, out v);
                 }
 
                 destinationRow[pixelX] = TPixel.FromRgba32Float(YuvToRgba32Float(y0, u, v, TTransfer.BitsPerSample));
@@ -211,6 +221,8 @@ public sealed class PackedYuv422TextureCoder : IPitchTextureCoder
             ? source.Width / 2
             : (source.Width + 1) / 2;
         var bytesPerSample = TTransfer.BytesPerBlock / 4;
+        var endianMode = TTransfer.EndianMode;
+        Span<byte> endianBlock = stackalloc byte[TTransfer.BytesPerBlock];
         var rowOffset = 0;
         for (var y = 0; y < source.Height; y++)
         {
@@ -225,20 +237,15 @@ public sealed class PackedYuv422TextureCoder : IPitchTextureCoder
                 RgbaToYuv(second, out var y1, out var u1, out var v1);
                 var u = ChromaToYuvSample((u0 + u1) * 0.5f, TTransfer.BitsPerSample);
                 var v = ChromaToYuvSample((v0 + v1) * 0.5f, TTransfer.BitsPerSample);
-                var block = destination.Slice(blockOffset, TTransfer.BytesPerBlock);
-                if (TTransfer.UFirst)
+                var destinationBlock = destination.Slice(blockOffset, TTransfer.BytesPerBlock);
+                if (endianMode == BigEndianByteSwapMode.None)
                 {
-                    WriteYuvSample<TTransfer>(block, u);
-                    WriteYuvSample<TTransfer>(block[bytesPerSample..], UnitToYuvSample(y0, TTransfer.BitsPerSample));
-                    WriteYuvSample<TTransfer>(block[(2 * bytesPerSample)..], v);
-                    WriteYuvSample<TTransfer>(block[(3 * bytesPerSample)..], UnitToYuvSample(y1, TTransfer.BitsPerSample));
+                    WriteYuvBlock<TTransfer>(destinationBlock, bytesPerSample, y0, y1, u, v);
                 }
                 else
                 {
-                    WriteYuvSample<TTransfer>(block, UnitToYuvSample(y0, TTransfer.BitsPerSample));
-                    WriteYuvSample<TTransfer>(block[bytesPerSample..], u);
-                    WriteYuvSample<TTransfer>(block[(2 * bytesPerSample)..], UnitToYuvSample(y1, TTransfer.BitsPerSample));
-                    WriteYuvSample<TTransfer>(block[(3 * bytesPerSample)..], v);
+                    WriteYuvBlock<TTransfer>(endianBlock, bytesPerSample, y0, y1, u, v);
+                    BigEndianByteSwap.CopyFromLittleEndian(endianBlock, destinationBlock, endianMode);
                 }
 
                 blockOffset = checked(blockOffset + TTransfer.BytesPerBlock);
@@ -260,6 +267,8 @@ public sealed class PackedYuv422TextureCoder : IPitchTextureCoder
         static abstract bool RequiresEvenWidth { get; }
 
         static abstract int BytesPerBlock { get; }
+
+        static abstract BigEndianByteSwapMode EndianMode { get; }
     }
 
     private readonly struct Uyvy8Transfer : IPackedYuv422Transfer
@@ -269,6 +278,17 @@ public sealed class PackedYuv422TextureCoder : IPitchTextureCoder
         public static bool MsbAligned => false;
         public static bool RequiresEvenWidth => true;
         public static int BytesPerBlock => 4;
+        public static BigEndianByteSwapMode EndianMode => BigEndianByteSwapMode.None;
+    }
+
+    private readonly struct Uyvy8TransferBigEndian : IPackedYuv422Transfer
+    {
+        public static int BitsPerSample => Uyvy8Transfer.BitsPerSample;
+        public static bool UFirst => Uyvy8Transfer.UFirst;
+        public static bool MsbAligned => Uyvy8Transfer.MsbAligned;
+        public static bool RequiresEvenWidth => Uyvy8Transfer.RequiresEvenWidth;
+        public static int BytesPerBlock => Uyvy8Transfer.BytesPerBlock;
+        public static BigEndianByteSwapMode EndianMode => BigEndianByteSwapMode.Swap8In32;
     }
 
     private readonly struct Yuyv8Transfer : IPackedYuv422Transfer
@@ -278,6 +298,17 @@ public sealed class PackedYuv422TextureCoder : IPitchTextureCoder
         public static bool MsbAligned => false;
         public static bool RequiresEvenWidth => true;
         public static int BytesPerBlock => 4;
+        public static BigEndianByteSwapMode EndianMode => BigEndianByteSwapMode.None;
+    }
+
+    private readonly struct Yuyv8TransferBigEndian : IPackedYuv422Transfer
+    {
+        public static int BitsPerSample => Yuyv8Transfer.BitsPerSample;
+        public static bool UFirst => Yuyv8Transfer.UFirst;
+        public static bool MsbAligned => Yuyv8Transfer.MsbAligned;
+        public static bool RequiresEvenWidth => Yuyv8Transfer.RequiresEvenWidth;
+        public static int BytesPerBlock => Yuyv8Transfer.BytesPerBlock;
+        public static BigEndianByteSwapMode EndianMode => BigEndianByteSwapMode.Swap8In32;
     }
 
     private readonly struct Yuyv16Transfer : IPackedYuv422Transfer
@@ -287,6 +318,7 @@ public sealed class PackedYuv422TextureCoder : IPitchTextureCoder
         public static bool MsbAligned => false;
         public static bool RequiresEvenWidth => false;
         public static int BytesPerBlock => 8;
+        public static BigEndianByteSwapMode EndianMode => BigEndianByteSwapMode.None;
     }
 
     private readonly struct Uyvy16Transfer : IPackedYuv422Transfer
@@ -296,6 +328,7 @@ public sealed class PackedYuv422TextureCoder : IPitchTextureCoder
         public static bool MsbAligned => false;
         public static bool RequiresEvenWidth => false;
         public static int BytesPerBlock => 8;
+        public static BigEndianByteSwapMode EndianMode => BigEndianByteSwapMode.None;
     }
 
     private readonly struct Yuyv10MsbTransfer : IPackedYuv422Transfer
@@ -305,6 +338,7 @@ public sealed class PackedYuv422TextureCoder : IPitchTextureCoder
         public static bool MsbAligned => true;
         public static bool RequiresEvenWidth => false;
         public static int BytesPerBlock => 8;
+        public static BigEndianByteSwapMode EndianMode => BigEndianByteSwapMode.None;
     }
 
     private readonly struct Yuyv10LsbTransfer : IPackedYuv422Transfer
@@ -314,6 +348,7 @@ public sealed class PackedYuv422TextureCoder : IPitchTextureCoder
         public static bool MsbAligned => false;
         public static bool RequiresEvenWidth => false;
         public static int BytesPerBlock => 8;
+        public static BigEndianByteSwapMode EndianMode => BigEndianByteSwapMode.None;
     }
 
     private readonly struct Uyvy10MsbTransfer : IPackedYuv422Transfer
@@ -323,6 +358,7 @@ public sealed class PackedYuv422TextureCoder : IPitchTextureCoder
         public static bool MsbAligned => true;
         public static bool RequiresEvenWidth => false;
         public static int BytesPerBlock => 8;
+        public static BigEndianByteSwapMode EndianMode => BigEndianByteSwapMode.None;
     }
 
     private readonly struct Uyvy10LsbTransfer : IPackedYuv422Transfer
@@ -332,6 +368,7 @@ public sealed class PackedYuv422TextureCoder : IPitchTextureCoder
         public static bool MsbAligned => false;
         public static bool RequiresEvenWidth => false;
         public static int BytesPerBlock => 8;
+        public static BigEndianByteSwapMode EndianMode => BigEndianByteSwapMode.None;
     }
 
     private readonly struct Yuyv12MsbTransfer : IPackedYuv422Transfer
@@ -341,6 +378,7 @@ public sealed class PackedYuv422TextureCoder : IPitchTextureCoder
         public static bool MsbAligned => true;
         public static bool RequiresEvenWidth => false;
         public static int BytesPerBlock => 8;
+        public static BigEndianByteSwapMode EndianMode => BigEndianByteSwapMode.None;
     }
 
     private readonly struct Yuyv12LsbTransfer : IPackedYuv422Transfer
@@ -350,6 +388,7 @@ public sealed class PackedYuv422TextureCoder : IPitchTextureCoder
         public static bool MsbAligned => false;
         public static bool RequiresEvenWidth => false;
         public static int BytesPerBlock => 8;
+        public static BigEndianByteSwapMode EndianMode => BigEndianByteSwapMode.None;
     }
 
     private readonly struct Uyvy12MsbTransfer : IPackedYuv422Transfer
@@ -359,6 +398,7 @@ public sealed class PackedYuv422TextureCoder : IPitchTextureCoder
         public static bool MsbAligned => true;
         public static bool RequiresEvenWidth => false;
         public static int BytesPerBlock => 8;
+        public static BigEndianByteSwapMode EndianMode => BigEndianByteSwapMode.None;
     }
 
     private readonly struct Uyvy12LsbTransfer : IPackedYuv422Transfer
@@ -368,6 +408,7 @@ public sealed class PackedYuv422TextureCoder : IPitchTextureCoder
         public static bool MsbAligned => false;
         public static bool RequiresEvenWidth => false;
         public static int BytesPerBlock => 8;
+        public static BigEndianByteSwapMode EndianMode => BigEndianByteSwapMode.None;
     }
 
     private void ValidateSourceLength(int width, int height, ReadOnlySpan<byte> source, int rowPitch)
@@ -390,8 +431,30 @@ public sealed class PackedYuv422TextureCoder : IPitchTextureCoder
 
     private static bool TryGetTransfer(TextureFormat format, out PackedYuv422Transfer transfer)
     {
-        if (format == TextureFormats.Uyvy422UNorm) { transfer = PackedYuv422Transfer.Uyvy8; return true; }
-        if (format == TextureFormats.Yuy2UNorm) { transfer = PackedYuv422Transfer.Yuyv8; return true; }
+        if (format == TextureFormats.Uyvy422UNorm)
+        {
+            transfer = PackedYuv422Transfer.Uyvy8;
+            return true;
+        }
+
+        if (format == TextureFormats.Uyvy422UNormBigEndian)
+        {
+            transfer = PackedYuv422Transfer.Uyvy8BigEndian;
+            return true;
+        }
+
+        if (format == TextureFormats.Yuy2UNorm)
+        {
+            transfer = PackedYuv422Transfer.Yuyv8;
+            return true;
+        }
+
+        if (format == TextureFormats.Yuy2UNormBigEndian)
+        {
+            transfer = PackedYuv422Transfer.Yuyv8BigEndian;
+            return true;
+        }
+
         if (format == TextureFormats.Yuyv16_422UNorm) { transfer = PackedYuv422Transfer.Yuyv16; return true; }
         if (format == TextureFormats.Uyvy16_422UNorm) { transfer = PackedYuv422Transfer.Uyvy16; return true; }
         if (format == TextureFormats.Yuyv10Msb422UNorm) { transfer = PackedYuv422Transfer.Yuyv10Msb; return true; }
@@ -408,7 +471,60 @@ public sealed class PackedYuv422TextureCoder : IPitchTextureCoder
     }
 
     private static bool Is8BitPacked(PackedYuv422Transfer transfer) =>
-        transfer is PackedYuv422Transfer.Uyvy8 or PackedYuv422Transfer.Yuyv8;
+        transfer is PackedYuv422Transfer.Uyvy8
+            or PackedYuv422Transfer.Uyvy8BigEndian
+            or PackedYuv422Transfer.Yuyv8
+            or PackedYuv422Transfer.Yuyv8BigEndian;
+
+    private static void ReadYuvBlock<TTransfer>(
+        ReadOnlySpan<byte> block,
+        int bytesPerSample,
+        out uint y0,
+        out uint y1,
+        out uint u,
+        out uint v)
+        where TTransfer : IPackedYuv422Transfer
+    {
+        if (TTransfer.UFirst)
+        {
+            u = ReadYuvSample<TTransfer>(block);
+            y0 = ReadYuvSample<TTransfer>(block[bytesPerSample..]);
+            v = ReadYuvSample<TTransfer>(block[(2 * bytesPerSample)..]);
+            y1 = ReadYuvSample<TTransfer>(block[(3 * bytesPerSample)..]);
+        }
+        else
+        {
+            y0 = ReadYuvSample<TTransfer>(block);
+            u = ReadYuvSample<TTransfer>(block[bytesPerSample..]);
+            y1 = ReadYuvSample<TTransfer>(block[(2 * bytesPerSample)..]);
+            v = ReadYuvSample<TTransfer>(block[(3 * bytesPerSample)..]);
+        }
+    }
+
+    private static void WriteYuvBlock<TTransfer>(
+        Span<byte> block,
+        int bytesPerSample,
+        float y0,
+        float y1,
+        uint u,
+        uint v)
+        where TTransfer : IPackedYuv422Transfer
+    {
+        if (TTransfer.UFirst)
+        {
+            WriteYuvSample<TTransfer>(block, u);
+            WriteYuvSample<TTransfer>(block[bytesPerSample..], UnitToYuvSample(y0, TTransfer.BitsPerSample));
+            WriteYuvSample<TTransfer>(block[(2 * bytesPerSample)..], v);
+            WriteYuvSample<TTransfer>(block[(3 * bytesPerSample)..], UnitToYuvSample(y1, TTransfer.BitsPerSample));
+        }
+        else
+        {
+            WriteYuvSample<TTransfer>(block, UnitToYuvSample(y0, TTransfer.BitsPerSample));
+            WriteYuvSample<TTransfer>(block[bytesPerSample..], u);
+            WriteYuvSample<TTransfer>(block[(2 * bytesPerSample)..], UnitToYuvSample(y1, TTransfer.BitsPerSample));
+            WriteYuvSample<TTransfer>(block[(3 * bytesPerSample)..], v);
+        }
+    }
 
     private static uint ReadYuvSample<TTransfer>(ReadOnlySpan<byte> source)
         where TTransfer : IPackedYuv422Transfer
@@ -537,7 +653,9 @@ public sealed class PackedYuv422TextureCoder : IPitchTextureCoder
     private enum PackedYuv422Transfer
     {
         Uyvy8,
+        Uyvy8BigEndian,
         Yuyv8,
+        Yuyv8BigEndian,
         Yuyv16,
         Uyvy16,
         Yuyv10Msb,

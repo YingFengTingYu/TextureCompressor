@@ -108,7 +108,8 @@ public sealed class RgtcLatcTextureCoder : IPitchTextureCoder
             var blockOffset = rowOffset;
             for (var blockX = 0; blockX < blockCountX; blockX++)
             {
-                DecodeUnsignedBlock<TLayout>(source.Slice(blockOffset, bytesPerBlock), block);
+                var encodedBlock = source.Slice(blockOffset, bytesPerBlock);
+                DecodeUnsignedBlock<TLayout>(encodedBlock, block);
                 StoreUnsignedBlock(block, blockX, blockY, destination);
                 blockOffset = checked(blockOffset + bytesPerBlock);
             }
@@ -154,7 +155,8 @@ public sealed class RgtcLatcTextureCoder : IPitchTextureCoder
             var blockOffset = rowOffset;
             for (var blockX = 0; blockX < blockCountX; blockX++)
             {
-                DecodeSignedBlock<TLayout>(source.Slice(blockOffset, bytesPerBlock), block);
+                var encodedBlock = source.Slice(blockOffset, bytesPerBlock);
+                DecodeSignedBlock<TLayout>(encodedBlock, block);
                 StoreSignedBlock(block, blockX, blockY, destination);
                 blockOffset = checked(blockOffset + bytesPerBlock);
             }
@@ -201,7 +203,8 @@ public sealed class RgtcLatcTextureCoder : IPitchTextureCoder
             for (var blockX = 0; blockX < blockCountX; blockX++)
             {
                 LoadUnsignedBlock(source, blockX, blockY, block);
-                EncodeUnsignedBlock<TLayout>(block, destination.Slice(blockOffset, bytesPerBlock));
+                var encodedBlock = destination.Slice(blockOffset, bytesPerBlock);
+                EncodeUnsignedBlock<TLayout>(block, encodedBlock);
                 blockOffset = checked(blockOffset + bytesPerBlock);
             }
 
@@ -247,7 +250,8 @@ public sealed class RgtcLatcTextureCoder : IPitchTextureCoder
             for (var blockX = 0; blockX < blockCountX; blockX++)
             {
                 LoadSignedBlock(source, blockX, blockY, block);
-                EncodeSignedBlock<TLayout>(block, destination.Slice(blockOffset, bytesPerBlock));
+                var encodedBlock = destination.Slice(blockOffset, bytesPerBlock);
+                EncodeSignedBlock<TLayout>(block, encodedBlock);
                 blockOffset = checked(blockOffset + bytesPerBlock);
             }
 
@@ -892,7 +896,10 @@ public sealed class RgtcLatcTextureCoder : IPitchTextureCoder
 
     private static int GetBlockCount(int size) => (size + BlockSize - 1) / BlockSize;
 
-    private static bool TryGetLayout(TextureFormat format, out RgtcLatcLayout layout, out bool isSigned)
+    private static bool TryGetLayout(
+        TextureFormat format,
+        out RgtcLatcLayout layout,
+        out bool isSigned)
     {
         if (format == TextureFormats.Bc4UNorm
             || format == TextureFormats.Ati1UNorm

@@ -85,6 +85,154 @@ public sealed class S3tcTextureCoderTests
     }
 
     [Fact]
+    public void Dxt3ADecodesExplicitAlphaToRgba8Alpha()
+    {
+        var encoded = new byte[TextureFormats.Dxt3A.GetByteCount(4, 4)];
+        encoded[0] = 0x0f;
+
+        var decoded = new ArrayTextureBitmap<Rgba8UNorm>(4, 4);
+        var coder = new S3tcTextureCoder(TextureFormats.Dxt3A);
+
+        coder.Decode(encoded, decoded.AsView(), coder.GetDefaultPitch(decoded.Width));
+
+        Assert.Equal(new Rgba8UNorm(0, 0, 0, 255), decoded.Pixels[0]);
+        Assert.Equal(new Rgba8UNorm(0, 0, 0, 0), decoded.Pixels[1]);
+    }
+
+    [Fact]
+    public void Dxt5ADecodesInterpolatedAlphaToRgba8Alpha()
+    {
+        var encoded = new byte[TextureFormats.Dxt5A.GetByteCount(4, 4)];
+        WriteAlphaBlock(encoded, 255, 0, 1);
+
+        var decoded = new ArrayTextureBitmap<Rgba8UNorm>(4, 4);
+        var coder = new S3tcTextureCoder(TextureFormats.Dxt5A);
+
+        coder.Decode(encoded, decoded.AsView(), coder.GetDefaultPitch(decoded.Width));
+
+        Assert.Equal(new Rgba8UNorm(0, 0, 0, 0), decoded.Pixels[0]);
+        Assert.Equal(new Rgba8UNorm(0, 0, 0, 255), decoded.Pixels[1]);
+    }
+
+    [Fact]
+    public void EncodeAndDecodeDxt5ARoundTripsSolidAlpha()
+    {
+        var source = new ArrayTextureBitmap<Rgba8UNorm>(
+            4,
+            4,
+            Enumerable.Repeat(new Rgba8UNorm(17, 34, 51, 128), 16).ToArray());
+        var decoded = new ArrayTextureBitmap<Rgba8UNorm>(4, 4);
+        var coder = new S3tcTextureCoder(TextureFormats.Dxt5A);
+        var rowPitch = coder.GetDefaultPitch(source.Width);
+        var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
+
+        coder.Encode(source.AsView(), encoded, rowPitch);
+        coder.Decode(encoded, decoded.AsView(), rowPitch);
+
+        Assert.All(decoded.Pixels, pixel => Assert.Equal(new Rgba8UNorm(0, 0, 0, 128), pixel));
+    }
+
+    [Fact]
+    public void DxnDecodesTwoDxt5AChannelsToRgba8RedGreen()
+    {
+        var encoded = new byte[TextureFormats.Dxn.GetByteCount(4, 4)];
+        WriteAlphaBlock(encoded, 255, 0, 1);
+        WriteAlphaBlock(encoded.AsSpan(8), 64, 192, 1);
+
+        var decoded = new ArrayTextureBitmap<Rgba8UNorm>(4, 4);
+        var coder = new S3tcTextureCoder(TextureFormats.Dxn);
+
+        coder.Decode(encoded, decoded.AsView(), coder.GetDefaultPitch(decoded.Width));
+
+        Assert.Equal(new Rgba8UNorm(0, 192, 0, 255), decoded.Pixels[0]);
+        Assert.Equal(new Rgba8UNorm(255, 64, 0, 255), decoded.Pixels[1]);
+    }
+
+    [Fact]
+    public void EncodeAndDecodeDxnRoundTripsSolidRedGreen()
+    {
+        var source = new ArrayTextureBitmap<Rgba8UNorm>(
+            4,
+            4,
+            Enumerable.Repeat(new Rgba8UNorm(34, 200, 123, 64), 16).ToArray());
+        var decoded = new ArrayTextureBitmap<Rgba8UNorm>(4, 4);
+        var coder = new S3tcTextureCoder(TextureFormats.Dxn);
+        var rowPitch = coder.GetDefaultPitch(source.Width);
+        var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
+
+        coder.Encode(source.AsView(), encoded, rowPitch);
+        coder.Decode(encoded, decoded.AsView(), rowPitch);
+
+        Assert.All(decoded.Pixels, pixel => Assert.Equal(new Rgba8UNorm(34, 200, 0, 255), pixel));
+    }
+
+    [Fact]
+    public void DxnBigEndianDecodes8In16SwappedDxt5ABlocks()
+    {
+        var littleEndian = new byte[TextureFormats.DxnBigEndian.GetByteCount(4, 4)];
+        WriteAlphaBlock(littleEndian, 255, 0, 1);
+        WriteAlphaBlock(littleEndian.AsSpan(8), 64, 192, 1);
+        var encoded = Swap8In16(littleEndian);
+
+        var decoded = new ArrayTextureBitmap<Rgba8UNorm>(4, 4);
+        var coder = new S3tcTextureCoder(TextureFormats.DxnBigEndian);
+
+        coder.Decode(encoded, decoded.AsView(), coder.GetDefaultPitch(decoded.Width));
+
+        Assert.Equal(new Rgba8UNorm(0, 192, 0, 255), decoded.Pixels[0]);
+        Assert.Equal(new Rgba8UNorm(255, 64, 0, 255), decoded.Pixels[1]);
+    }
+
+    [Fact]
+    public void Ctx1DecodesSharedIndicesToRgba8RedGreen()
+    {
+        var encoded = new byte[TextureFormats.Ctx1.GetByteCount(4, 4)];
+        WriteCtx1Block(encoded, 255, 0, 64, 192, 1);
+
+        var decoded = new ArrayTextureBitmap<Rgba8UNorm>(4, 4);
+        var coder = new S3tcTextureCoder(TextureFormats.Ctx1);
+
+        coder.Decode(encoded, decoded.AsView(), coder.GetDefaultPitch(decoded.Width));
+
+        Assert.Equal(new Rgba8UNorm(0, 192, 0, 255), decoded.Pixels[0]);
+        Assert.Equal(new Rgba8UNorm(255, 64, 0, 255), decoded.Pixels[1]);
+    }
+
+    [Fact]
+    public void Ctx1BigEndianDecodes8In16SwappedBlock()
+    {
+        var littleEndian = new byte[TextureFormats.Ctx1BigEndian.GetByteCount(4, 4)];
+        WriteCtx1Block(littleEndian, 255, 0, 64, 192, 1);
+        var encoded = Swap8In16(littleEndian);
+
+        var decoded = new ArrayTextureBitmap<Rgba8UNorm>(4, 4);
+        var coder = new S3tcTextureCoder(TextureFormats.Ctx1BigEndian);
+
+        coder.Decode(encoded, decoded.AsView(), coder.GetDefaultPitch(decoded.Width));
+
+        Assert.Equal(new Rgba8UNorm(0, 192, 0, 255), decoded.Pixels[0]);
+        Assert.Equal(new Rgba8UNorm(255, 64, 0, 255), decoded.Pixels[1]);
+    }
+
+    [Fact]
+    public void EncodeAndDecodeCtx1RoundTripsSolidRedGreen()
+    {
+        var source = new ArrayTextureBitmap<Rgba8UNorm>(
+            4,
+            4,
+            Enumerable.Repeat(new Rgba8UNorm(34, 200, 123, 64), 16).ToArray());
+        var decoded = new ArrayTextureBitmap<Rgba8UNorm>(4, 4);
+        var coder = new S3tcTextureCoder(TextureFormats.Ctx1);
+        var rowPitch = coder.GetDefaultPitch(source.Width);
+        var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
+
+        coder.Encode(source.AsView(), encoded, rowPitch);
+        coder.Decode(encoded, decoded.AsView(), rowPitch);
+
+        Assert.All(decoded.Pixels, pixel => Assert.Equal(new Rgba8UNorm(34, 200, 0, 255), pixel));
+    }
+
+    [Fact]
     public void Dxt1RgbaSrgbDecodesRgbAfterS3tcInterpolationAndKeepsAlphaLinear()
     {
         var encoded = new byte[TextureFormats.Dxt1RgbaSrgb.GetByteCount(4, 4)];
@@ -265,6 +413,42 @@ public sealed class S3tcTextureCoderTests
         BinaryPrimitives.WriteUInt32LittleEndian(destination[4..], indices);
     }
 
+    private static void WriteAlphaBlock(Span<byte> destination, byte value0, byte value1, ulong indices)
+    {
+        destination[0] = value0;
+        destination[1] = value1;
+        for (var i = 0; i < 6; i++)
+        {
+            destination[2 + i] = (byte)(indices >> (8 * i));
+        }
+    }
+
+    private static void WriteCtx1Block(
+        Span<byte> destination,
+        byte red0,
+        byte red1,
+        byte green0,
+        byte green1,
+        uint indices)
+    {
+        destination[0] = red0;
+        destination[1] = red1;
+        destination[2] = green0;
+        destination[3] = green1;
+        BinaryPrimitives.WriteUInt32LittleEndian(destination[4..], indices);
+    }
+
+    private static byte[] Swap8In16(ReadOnlySpan<byte> source)
+    {
+        var destination = source.ToArray();
+        for (var i = 0; i < destination.Length; i += 2)
+        {
+            (destination[i], destination[i + 1]) = (destination[i + 1], destination[i]);
+        }
+
+        return destination;
+    }
+
     private static byte Srgb8ToLinearUNorm8(byte value)
     {
         var srgb = value / 255f;
@@ -292,8 +476,22 @@ public sealed class S3tcTextureCoderTests
         TextureFormats.Dxt2Rgba,
         TextureFormats.Dxt3Rgba,
         TextureFormats.Dxt3RgbaSrgb,
+        TextureFormats.Dxt3A,
         TextureFormats.Dxt4Rgba,
         TextureFormats.Dxt5Rgba,
-        TextureFormats.Dxt5RgbaSrgb
+        TextureFormats.Dxt5RgbaSrgb,
+        TextureFormats.Dxt5A,
+        TextureFormats.Dxn,
+        TextureFormats.Ctx1,
+        TextureFormats.Dxt1RgbBigEndian,
+        TextureFormats.Dxt1RgbaBigEndian,
+        TextureFormats.Dxt2RgbaBigEndian,
+        TextureFormats.Dxt3RgbaBigEndian,
+        TextureFormats.Dxt3ABigEndian,
+        TextureFormats.Dxt4RgbaBigEndian,
+        TextureFormats.Dxt5RgbaBigEndian,
+        TextureFormats.Dxt5ABigEndian,
+        TextureFormats.DxnBigEndian,
+        TextureFormats.Ctx1BigEndian
     };
 }

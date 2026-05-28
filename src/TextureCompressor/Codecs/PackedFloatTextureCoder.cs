@@ -15,7 +15,8 @@ public sealed class PackedFloatTextureCoder(TextureFormat format) : IPitchTextur
 
     public static bool IsSupported(TextureFormat format) =>
         format == TextureFormats.R11G11B10Float
-        || format == TextureFormats.Rgb9E5;
+        || format == TextureFormats.Rgb9E5
+        || format == TextureFormats.R11G11B10FloatBigEndian;
 
     public int GetDefaultPitch(int width) => Format.GetRowByteCount(width);
 
@@ -41,6 +42,9 @@ public sealed class PackedFloatTextureCoder(TextureFormat format) : IPitchTextur
             case PackedFloatKind.R11G11B10Float:
                 Decode<TPixel, R11G11B10FloatTransfer>(source, destination, rowPitch);
                 return;
+            case PackedFloatKind.R11G11B10FloatBigEndian:
+                Decode<TPixel, R11G11B10FloatTransferBigEndian>(source, destination, rowPitch);
+                return;
             case PackedFloatKind.Rgb9E5:
                 Decode<TPixel, Rgb9E5Transfer>(source, destination, rowPitch);
                 return;
@@ -58,6 +62,9 @@ public sealed class PackedFloatTextureCoder(TextureFormat format) : IPitchTextur
             case PackedFloatKind.R11G11B10Float:
                 Encode<TPixel, R11G11B10FloatTransfer>(source, destination, rowPitch);
                 return;
+            case PackedFloatKind.R11G11B10FloatBigEndian:
+                Encode<TPixel, R11G11B10FloatTransferBigEndian>(source, destination, rowPitch);
+                return;
             case PackedFloatKind.Rgb9E5:
                 Encode<TPixel, Rgb9E5Transfer>(source, destination, rowPitch);
                 return;
@@ -68,30 +75,68 @@ public sealed class PackedFloatTextureCoder(TextureFormat format) : IPitchTextur
 
     private interface IPackedFloatTransfer
     {
-        static abstract Rgba32Float Decode(uint value);
+        static abstract Rgba32Float Decode(ReadOnlySpan<byte> texel);
 
-        static abstract uint Encode(Rgba32Float value);
+        static abstract void Encode(Rgba32Float value, Span<byte> texel);
     }
 
     private readonly struct R11G11B10FloatTransfer : IPackedFloatTransfer
     {
-        public static Rgba32Float Decode(uint value) =>
+        public static Rgba32Float Decode(ReadOnlySpan<byte> texel) =>
+            DecodeValue(BinaryPrimitives.ReadUInt32LittleEndian(texel));
+
+        public static void Encode(Rgba32Float value, Span<byte> texel) =>
+            BinaryPrimitives.WriteUInt32LittleEndian(texel, EncodeValue(value));
+
+        private static Rgba32Float DecodeValue(uint value) =>
             new(
                 DecodeUnsignedFloat(value & 0x7ff, 6),
                 DecodeUnsignedFloat((value >> 11) & 0x7ff, 6),
                 DecodeUnsignedFloat((value >> 22) & 0x3ff, 5));
 
-        public static uint Encode(Rgba32Float value) =>
+        private static uint EncodeValue(Rgba32Float value) =>
             EncodeUnsignedFloat(value.Red, 6)
             | (EncodeUnsignedFloat(value.Green, 6) << 11)
             | (EncodeUnsignedFloat(value.Blue, 5) << 22);
     }
 
+    private readonly struct R11G11B10FloatTransferBigEndian : IPackedFloatTransfer
+    {
+        public static Rgba32Float Decode(ReadOnlySpan<byte> texel) =>
+            DecodeBigEndianTexel<R11G11B10FloatTransfer>(texel, BigEndianByteSwapMode.Swap8In32);
+
+        public static void Encode(Rgba32Float value, Span<byte> texel) =>
+            EncodeBigEndianTexel<R11G11B10FloatTransfer>(value, texel, BigEndianByteSwapMode.Swap8In32);
+    }
+
     private readonly struct Rgb9E5Transfer : IPackedFloatTransfer
     {
-        public static Rgba32Float Decode(uint value) => DecodeRgb9E5(value);
+        public static Rgba32Float Decode(ReadOnlySpan<byte> texel) =>
+            DecodeRgb9E5(BinaryPrimitives.ReadUInt32LittleEndian(texel));
 
-        public static uint Encode(Rgba32Float value) => EncodeRgb9E5(value);
+        public static void Encode(Rgba32Float value, Span<byte> texel) =>
+            BinaryPrimitives.WriteUInt32LittleEndian(texel, EncodeRgb9E5(value));
+    }
+
+    private static Rgba32Float DecodeBigEndianTexel<TTransfer>(
+        ReadOnlySpan<byte> source,
+        BigEndianByteSwapMode endianMode)
+        where TTransfer : IPackedFloatTransfer
+    {
+        Span<byte> littleEndianTexel = stackalloc byte[BytesPerTexel];
+        BigEndianByteSwap.CopyToLittleEndian(source, littleEndianTexel, endianMode);
+        return TTransfer.Decode(littleEndianTexel);
+    }
+
+    private static void EncodeBigEndianTexel<TTransfer>(
+        Rgba32Float value,
+        Span<byte> destination,
+        BigEndianByteSwapMode endianMode)
+        where TTransfer : IPackedFloatTransfer
+    {
+        Span<byte> littleEndianTexel = stackalloc byte[BytesPerTexel];
+        TTransfer.Encode(value, littleEndianTexel);
+        BigEndianByteSwap.CopyFromLittleEndian(littleEndianTexel, destination, endianMode);
     }
 
     private void Decode<TPixel, TTransfer>(ReadOnlySpan<byte> source, ImageView<TPixel> destination, int rowPitch)
@@ -105,8 +150,8 @@ public sealed class PackedFloatTextureCoder(TextureFormat format) : IPitchTextur
             var texelOffset = rowOffset;
             for (var x = 0; x < destination.Width; x++)
             {
-                var value = BinaryPrimitives.ReadUInt32LittleEndian(source.Slice(texelOffset, BytesPerTexel));
-                destinationRow[x] = TPixel.FromRgba32Float(TTransfer.Decode(value));
+                var encodedTexel = source.Slice(texelOffset, BytesPerTexel);
+                destinationRow[x] = TPixel.FromRgba32Float(TTransfer.Decode(encodedTexel));
                 texelOffset = checked(texelOffset + BytesPerTexel);
             }
 
@@ -125,8 +170,8 @@ public sealed class PackedFloatTextureCoder(TextureFormat format) : IPitchTextur
             var texelOffset = rowOffset;
             for (var x = 0; x < source.Width; x++)
             {
-                var value = TTransfer.Encode(TPixel.ToRgba32Float(sourceRow[x]));
-                BinaryPrimitives.WriteUInt32LittleEndian(destination.Slice(texelOffset, BytesPerTexel), value);
+                var encodedTexel = destination.Slice(texelOffset, BytesPerTexel);
+                TTransfer.Encode(TPixel.ToRgba32Float(sourceRow[x]), encodedTexel);
                 texelOffset = checked(texelOffset + BytesPerTexel);
             }
 
@@ -296,6 +341,11 @@ public sealed class PackedFloatTextureCoder(TextureFormat format) : IPitchTextur
             return PackedFloatKind.R11G11B10Float;
         }
 
+        if (format == TextureFormats.R11G11B10FloatBigEndian)
+        {
+            return PackedFloatKind.R11G11B10FloatBigEndian;
+        }
+
         if (format == TextureFormats.Rgb9E5)
         {
             return PackedFloatKind.Rgb9E5;
@@ -310,6 +360,7 @@ public sealed class PackedFloatTextureCoder(TextureFormat format) : IPitchTextur
     private enum PackedFloatKind
     {
         R11G11B10Float,
+        R11G11B10FloatBigEndian,
         Rgb9E5
     }
 }

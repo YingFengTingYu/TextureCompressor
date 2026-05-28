@@ -347,7 +347,11 @@ public sealed class TextureFormatTests
         { TextureFormats.Bc1Rgba, "BC1_RGBA_UNORM", TextureFormatKind.BlockCompressed, TextureComponents.Rgba, 4, 64, 8 },
         { TextureFormats.Bc4UNorm, "BC4_UNORM", TextureFormatKind.BlockCompressed, TextureComponents.R, 1, 64, 8 },
         { TextureFormats.Bc5UNorm, "BC5_UNORM", TextureFormatKind.BlockCompressed, TextureComponents.Rg, 2, 128, 16 },
-        { TextureFormats.Latc2UNorm, "LATC2_UNORM", TextureFormatKind.BlockCompressed, TextureComponents.LuminanceAlpha, 2, 128, 16 }
+        { TextureFormats.Latc2UNorm, "LATC2_UNORM", TextureFormatKind.BlockCompressed, TextureComponents.LuminanceAlpha, 2, 128, 16 },
+        { TextureFormats.Dxt3A, "DXT3A", TextureFormatKind.BlockCompressed, TextureComponents.Alpha, 1, 64, 8 },
+        { TextureFormats.Dxt5A, "DXT5A", TextureFormatKind.BlockCompressed, TextureComponents.Alpha, 1, 64, 8 },
+        { TextureFormats.Dxn, "DXN", TextureFormatKind.BlockCompressed, TextureComponents.Rg, 2, 128, 16 },
+        { TextureFormats.Ctx1, "CTX1", TextureFormatKind.BlockCompressed, TextureComponents.Rg, 2, 64, 8 }
     };
 
     public static TheoryData<TextureFormat, string> SrgbFormats() => new()
