@@ -202,6 +202,26 @@ public sealed class TextureFormatTests
     }
 
     [Theory]
+    [MemberData(nameof(ConsolePackedFormats))]
+    public void ConsolePackedFormatMetadataIsStable(
+        TextureFormat format,
+        string name,
+        TextureComponents components,
+        TextureValueKind valueKind,
+        int channelCount,
+        int bitsPerBlock,
+        int bytesPerBlock)
+    {
+        Assert.Equal(name, format.Name);
+        Assert.Equal(TextureFormatKind.Uncompressed, format.Kind);
+        Assert.Equal(components, format.Components);
+        Assert.Equal(valueKind, format.ValueKind);
+        Assert.Equal(channelCount, format.ChannelCount);
+        Assert.Equal(bitsPerBlock, format.BitsPerBlock);
+        Assert.Equal(bytesPerBlock, format.BytesPerBlock);
+    }
+
+    [Theory]
     [InlineData(nameof(TextureFormats.Rgbm), "RGBM")]
     [InlineData(nameof(TextureFormats.Rgbd), "RGBD")]
     public void RgbmAndRgbdFormatsAreFloatRgbaByteEncoded(string formatName, string name)
@@ -373,6 +393,7 @@ public sealed class TextureFormatTests
         { TextureFormats.Bc5UNorm, "BC5_UNORM", TextureFormatKind.BlockCompressed, TextureComponents.Rg, 2, 128, 16 },
         { TextureFormats.Latc2UNorm, "LATC2_UNORM", TextureFormatKind.BlockCompressed, TextureComponents.LuminanceAlpha, 2, 128, 16 },
         { TextureFormats.Dxt3A, "DXT3A", TextureFormatKind.BlockCompressed, TextureComponents.Alpha, 1, 64, 8 },
+        { TextureFormats.Dxt3A1111, "DXT3A_1111", TextureFormatKind.BlockCompressed, TextureComponents.Rgba, 4, 64, 8 },
         { TextureFormats.Dxt5A, "DXT5A", TextureFormatKind.BlockCompressed, TextureComponents.Alpha, 1, 64, 8 },
         { TextureFormats.Dxn, "DXN", TextureFormatKind.BlockCompressed, TextureComponents.Rg, 2, 128, 16 },
         { TextureFormats.Ctx1, "CTX1", TextureFormatKind.BlockCompressed, TextureComponents.Rg, 2, 64, 8 },
@@ -467,6 +488,22 @@ public sealed class TextureFormatTests
         { TextureFormats.R12X4UNorm, "R12X4_UNORM_PACK16", TextureComponents.R, TextureValueKind.UNorm, 16, 2 },
         { TextureFormats.R12X4G12X4UNorm, "R12X4G12X4_UNORM_2PACK16", TextureComponents.Rg, TextureValueKind.UNorm, 32, 4 },
         { TextureFormats.R12X4G12X4B12X4A12X4UNorm, "R12X4G12X4B12X4A12X4_UNORM_4PACK16", TextureComponents.Rgba, TextureValueKind.UNorm, 64, 8 }
+    };
+
+    public static TheoryData<TextureFormat, string, TextureComponents, TextureValueKind, int, int, int> ConsolePackedFormats() => new()
+    {
+        { TextureFormats.Rgb655UNorm, "RGB655_UNORM", TextureComponents.Rgb, TextureValueKind.UNorm, 3, 16, 2 },
+        { TextureFormats.Rg5SNormB6UNormRev, "RG5_SNORM_B6_UNORM_REV", TextureComponents.Rgb, TextureValueKind.SNorm, 3, 16, 2 },
+        { TextureFormats.Rgba4RevSNorm, "RGBA4_REV_SNORM", TextureComponents.Rgba, TextureValueKind.SNorm, 4, 16, 2 },
+        { TextureFormats.Rg8SNormB8UNormX8Rev, "RG8_SNORM_B8_UNORM_X8_REV", TextureComponents.Rgb, TextureValueKind.SNorm, 3, 32, 4 },
+        { TextureFormats.Rgb10SNormA2UNormRev, "RGB10_SNORM_A2_UNORM_REV", TextureComponents.Rgba, TextureValueKind.SNorm, 4, 32, 4 },
+        { TextureFormats.R10Gb11UNorm, "R10_GB11_UNORM", TextureComponents.Rgb, TextureValueKind.UNorm, 3, 32, 4 },
+        { TextureFormats.Rg11B10UNorm, "RG11_B10_UNORM", TextureComponents.Rgb, TextureValueKind.UNorm, 3, 32, 4 },
+        { TextureFormats.R10Gb11RevUNorm, "R10_GB11_REV_UNORM", TextureComponents.Rgb, TextureValueKind.UNorm, 3, 32, 4 },
+        { TextureFormats.Rg11B10RevUNorm, "RG11_B10_REV_UNORM", TextureComponents.Rgb, TextureValueKind.UNorm, 3, 32, 4 },
+        { TextureFormats.Rg11B10RevSNorm, "RG11_B10_REV_SNORM", TextureComponents.Rgb, TextureValueKind.SNorm, 3, 32, 4 },
+        { TextureFormats.R10Gb11RevSNorm, "R10_GB11_REV_SNORM", TextureComponents.Rgb, TextureValueKind.SNorm, 3, 32, 4 },
+        { TextureFormats.Depth24FloatStencil8, "D24FS8", TextureComponents.DepthStencil, TextureValueKind.DepthStencil, 2, 32, 4 }
     };
 
     public static TheoryData<TextureFormat, string, TextureComponents, TextureValueKind, int, int, int> XrFormats() => new()

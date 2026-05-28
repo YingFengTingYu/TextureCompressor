@@ -104,6 +104,16 @@ public sealed class TextureCoderManagerTests
         Assert.IsType<PackedSNormTextureCoder>(coder);
     }
 
+    [Theory]
+    [MemberData(nameof(ConsolePackedFormats))]
+    public void GlobalManagerFindsConsolePackedCoders(TextureFormat format, Type expectedCoderType)
+    {
+        var coder = TextureCoderManager.Global.GetCoder(format);
+
+        Assert.True(PackedUNormTextureCoder.IsSupported(format) || PackedSNormTextureCoder.IsSupported(format));
+        Assert.Equal(expectedCoderType, coder.GetType());
+    }
+
     [Fact]
     public void GlobalManagerFindsBitPackedUNormCoder()
     {
@@ -238,6 +248,23 @@ public sealed class TextureCoderManagerTests
     }
 
     [Fact]
+    public void DepthStencilCoderRoundTripsD24FS8With20e4Depth()
+    {
+        byte[] encoded = [0, 0, 0, 0];
+        var coder = new DepthStencilTextureCoder(TextureFormats.Depth24FloatStencil8);
+
+        coder.EncodeDepthStencil([1f], [0xffu], 1, 1, encoded);
+
+        var depth = new float[1];
+        var stencil = new uint[1];
+        coder.DecodeDepthStencil(1, 1, encoded, depth, stencil);
+
+        Assert.Equal([0xff, 0x00, 0x00, 0xf0], encoded);
+        Assert.Equal(1f, depth[0]);
+        Assert.Equal(0xffu, stencil[0]);
+    }
+
+    [Fact]
     public void EncodeAndDecodeDepth16Stencil8UsesDepthStencilCoder()
     {
         var source = new ArrayTextureBitmap<Rgba32Float>(
@@ -256,6 +283,29 @@ public sealed class TextureCoderManagerTests
         Assert.Equal([0xab, 0x00, 0x80], encoded);
         AssertClose(0.5f, decoded.Pixels[0].Red, 0.00002f);
         AssertClose(0xab / 255f, decoded.Pixels[0].Green, 0.0001f);
+        Assert.Equal(0f, decoded.Pixels[0].Blue);
+        Assert.Equal(1f, decoded.Pixels[0].Alpha);
+    }
+
+    [Fact]
+    public void EncodeAndDecodeD24FS8UsesFloat24DepthAndStencil()
+    {
+        var source = new ArrayTextureBitmap<Rgba32Float>(
+            1,
+            1,
+            [new Rgba32Float(1f, 1f, 0f)]);
+
+        var coder = Assert.IsType<DepthStencilTextureCoder>(TextureCoderManager.Global.GetCoder(TextureFormats.Depth24FloatStencil8));
+        var rowPitch = coder.GetDefaultPitch(source.Width);
+        var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
+        coder.Encode(source.AsView(), encoded, rowPitch);
+
+        var decoded = new ArrayTextureBitmap<Rgba32Float>(1, 1);
+        coder.Decode(encoded, decoded.AsView(), rowPitch);
+
+        Assert.Equal([0xff, 0x00, 0x00, 0xf0], encoded);
+        Assert.Equal(1f, decoded.Pixels[0].Red);
+        Assert.Equal(1f, decoded.Pixels[0].Green);
         Assert.Equal(0f, decoded.Pixels[0].Blue);
         Assert.Equal(1f, decoded.Pixels[0].Alpha);
     }
@@ -2059,6 +2109,78 @@ public sealed class TextureCoderManagerTests
         Assert.Equal((short)-short.MaxValue, decoded.Pixels[0].Alpha);
     }
 
+    [Theory]
+    [MemberData(nameof(ConsolePackedRoundTripCases))]
+    public void EncodeAndDecodeConsolePackedFormats(TextureFormat format, Rgba32Float sourcePixel, byte[] expected, Rgba32Float expectedPixel)
+    {
+        var source = new ArrayTextureBitmap<Rgba32Float>(1, 1, [sourcePixel]);
+
+        var coder = Assert.IsAssignableFrom<IPitchTextureCoder>(TextureCoderManager.Global.GetCoder(format));
+        var rowPitch = coder.GetDefaultPitch(source.Width);
+        var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
+        coder.Encode(source.AsView(), encoded, rowPitch);
+
+        var decoded = new ArrayTextureBitmap<Rgba32Float>(1, 1);
+        coder.Decode(encoded, decoded.AsView(), rowPitch);
+
+        Assert.Equal(expected, encoded);
+        AssertClose(expectedPixel.Red, decoded.Pixels[0].Red, 0.0001f);
+        AssertClose(expectedPixel.Green, decoded.Pixels[0].Green, 0.0001f);
+        AssertClose(expectedPixel.Blue, decoded.Pixels[0].Blue, 0.0001f);
+        AssertClose(expectedPixel.Alpha, decoded.Pixels[0].Alpha, 0.0001f);
+    }
+
+    [Theory]
+    [MemberData(nameof(ConsolePackedRevRedLowBitCases))]
+    public void EncodeConsolePackedRevFormatsStoreRedInLowBits(TextureFormat format, Rgba32Float sourcePixel, byte[] expected)
+    {
+        var source = new ArrayTextureBitmap<Rgba32Float>(1, 1, [sourcePixel]);
+
+        var coder = Assert.IsAssignableFrom<IPitchTextureCoder>(TextureCoderManager.Global.GetCoder(format));
+        var rowPitch = coder.GetDefaultPitch(source.Width);
+        var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
+        coder.Encode(source.AsView(), encoded, rowPitch);
+
+        Assert.Equal(expected, encoded);
+    }
+
+    [Theory]
+    [MemberData(nameof(ConsolePackedNonRevRedHighBitCases))]
+    public void EncodeConsolePackedNonRevFormatsStoreRedInHighBits(TextureFormat format, Rgba32Float sourcePixel, byte[] expected)
+    {
+        var source = new ArrayTextureBitmap<Rgba32Float>(1, 1, [sourcePixel]);
+
+        var coder = Assert.IsAssignableFrom<IPitchTextureCoder>(TextureCoderManager.Global.GetCoder(format));
+        var rowPitch = coder.GetDefaultPitch(source.Width);
+        var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
+        coder.Encode(source.AsView(), encoded, rowPitch);
+
+        Assert.Equal(expected, encoded);
+    }
+
+    [Theory]
+    [MemberData(nameof(ConsolePackedBigEndianRoundTripCases))]
+    public void EncodeAndDecodeConsolePackedBigEndianFormats(TextureFormat format, Rgba32Float sourcePixel, byte[] littleEndianExpected, Rgba32Float expectedPixel)
+    {
+        var source = new ArrayTextureBitmap<Rgba32Float>(1, 1, [sourcePixel]);
+        var expected = (byte[])littleEndianExpected.Clone();
+        Array.Reverse(expected);
+
+        var coder = Assert.IsAssignableFrom<IPitchTextureCoder>(TextureCoderManager.Global.GetCoder(format));
+        var rowPitch = coder.GetDefaultPitch(source.Width);
+        var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
+        coder.Encode(source.AsView(), encoded, rowPitch);
+
+        var decoded = new ArrayTextureBitmap<Rgba32Float>(1, 1);
+        coder.Decode(encoded, decoded.AsView(), rowPitch);
+
+        Assert.Equal(expected, encoded);
+        AssertClose(expectedPixel.Red, decoded.Pixels[0].Red, 0.0001f);
+        AssertClose(expectedPixel.Green, decoded.Pixels[0].Green, 0.0001f);
+        AssertClose(expectedPixel.Blue, decoded.Pixels[0].Blue, 0.0001f);
+        AssertClose(expectedPixel.Alpha, decoded.Pixels[0].Alpha, 0.0001f);
+    }
+
     [Fact]
     public void EncodeAndDecodeRgb10A2RevSIntUsesPackedIntegerCoder()
     {
@@ -2240,6 +2362,69 @@ public sealed class TextureCoderManagerTests
         TextureFormats.Bgr5A1RevUNorm
     };
 
+    public static TheoryData<TextureFormat, Type> ConsolePackedFormats() => new()
+    {
+        { TextureFormats.Rgb655UNorm, typeof(PackedUNormTextureCoder) },
+        { TextureFormats.Rg5SNormB6UNormRev, typeof(PackedSNormTextureCoder) },
+        { TextureFormats.Rgba4RevSNorm, typeof(PackedSNormTextureCoder) },
+        { TextureFormats.Rg8SNormB8UNormX8Rev, typeof(PackedSNormTextureCoder) },
+        { TextureFormats.Rgb10SNormA2UNormRev, typeof(PackedSNormTextureCoder) },
+        { TextureFormats.R10Gb11UNorm, typeof(PackedUNormTextureCoder) },
+        { TextureFormats.Rg11B10UNorm, typeof(PackedUNormTextureCoder) },
+        { TextureFormats.R10Gb11RevUNorm, typeof(PackedUNormTextureCoder) },
+        { TextureFormats.Rg11B10RevUNorm, typeof(PackedUNormTextureCoder) },
+        { TextureFormats.Rg11B10RevSNorm, typeof(PackedSNormTextureCoder) },
+        { TextureFormats.R10Gb11RevSNorm, typeof(PackedSNormTextureCoder) }
+    };
+
+    public static TheoryData<TextureFormat, Rgba32Float, byte[], Rgba32Float> ConsolePackedRoundTripCases() => new()
+    {
+        { TextureFormats.Rgb655UNorm, new Rgba32Float(1f, 0f, 1f), [0x1f, 0xfc], new Rgba32Float(1f, 0f, 1f) },
+        { TextureFormats.Rg5SNormB6UNormRev, new Rgba32Float(1f, -1f, 1f), [0x2f, 0xfe], new Rgba32Float(1f, -1f, 1f) },
+        { TextureFormats.Rgba4RevSNorm, new Rgba32Float(1f, 0f, -1f, 1f), [0x07, 0x79], new Rgba32Float(1f, 0f, -1f, 1f) },
+        { TextureFormats.Rg8SNormB8UNormX8Rev, new Rgba32Float(1f, -1f, 1f), [0x7f, 0x81, 0xff, 0x00], new Rgba32Float(1f, -1f, 1f) },
+        { TextureFormats.Rgb10SNormA2UNormRev, new Rgba32Float(1f, -1f, 0f, 1f), [0xff, 0x05, 0x08, 0xc0], new Rgba32Float(1f, -1f, 0f, 1f) },
+        { TextureFormats.R10Gb11UNorm, new Rgba32Float(1f, 0f, 1f), [0xff, 0x07, 0xc0, 0xff], new Rgba32Float(1f, 0f, 1f) },
+        { TextureFormats.Rg11B10UNorm, new Rgba32Float(1f, 0f, 1f), [0xff, 0x03, 0xe0, 0xff], new Rgba32Float(1f, 0f, 1f) },
+        { TextureFormats.R10Gb11RevUNorm, new Rgba32Float(1f, 0f, 1f), [0xff, 0x03, 0xe0, 0xff], new Rgba32Float(1f, 0f, 1f) },
+        { TextureFormats.Rg11B10RevUNorm, new Rgba32Float(1f, 0f, 1f), [0xff, 0x07, 0xc0, 0xff], new Rgba32Float(1f, 0f, 1f) },
+        { TextureFormats.Rg11B10RevSNorm, new Rgba32Float(1f, -1f, 1f), [0xff, 0x0b, 0xe0, 0x7f], new Rgba32Float(1f, -1f, 1f) },
+        { TextureFormats.R10Gb11RevSNorm, new Rgba32Float(1f, -1f, 1f), [0xff, 0x05, 0xf0, 0x7f], new Rgba32Float(1f, -1f, 1f) }
+    };
+
+    public static TheoryData<TextureFormat, Rgba32Float, byte[]> ConsolePackedRevRedLowBitCases() => new()
+    {
+        { TextureFormats.Rg5SNormB6UNormRev, new Rgba32Float(1f, 0f, 0f), [0x0f, 0x00] },
+        { TextureFormats.Rgba4RevSNorm, new Rgba32Float(1f, 0f, 0f, 0f), [0x07, 0x00] },
+        { TextureFormats.Rg8SNormB8UNormX8Rev, new Rgba32Float(1f, 0f, 0f), [0x7f, 0x00, 0x00, 0x00] },
+        { TextureFormats.Rgb10SNormA2UNormRev, new Rgba32Float(1f, 0f, 0f, 0f), [0xff, 0x01, 0x00, 0x00] },
+        { TextureFormats.R10Gb11RevUNorm, new Rgba32Float(1f, 0f, 0f), [0xff, 0x03, 0x00, 0x00] },
+        { TextureFormats.Rg11B10RevUNorm, new Rgba32Float(1f, 0f, 0f), [0xff, 0x07, 0x00, 0x00] },
+        { TextureFormats.Rg11B10RevSNorm, new Rgba32Float(1f, 0f, 0f), [0xff, 0x03, 0x00, 0x00] },
+        { TextureFormats.R10Gb11RevSNorm, new Rgba32Float(1f, 0f, 0f), [0xff, 0x01, 0x00, 0x00] }
+    };
+
+    public static TheoryData<TextureFormat, Rgba32Float, byte[]> ConsolePackedNonRevRedHighBitCases() => new()
+    {
+        { TextureFormats.R10Gb11UNorm, new Rgba32Float(1f, 0f, 0f), [0x00, 0x00, 0xc0, 0xff] },
+        { TextureFormats.Rg11B10UNorm, new Rgba32Float(1f, 0f, 0f), [0x00, 0x00, 0xe0, 0xff] }
+    };
+
+    public static TheoryData<TextureFormat, Rgba32Float, byte[], Rgba32Float> ConsolePackedBigEndianRoundTripCases() => new()
+    {
+        { TextureFormats.Rgb655UNormBigEndian, new Rgba32Float(1f, 0f, 1f), [0x1f, 0xfc], new Rgba32Float(1f, 0f, 1f) },
+        { TextureFormats.Rg5SNormB6UNormRevBigEndian, new Rgba32Float(1f, -1f, 1f), [0x2f, 0xfe], new Rgba32Float(1f, -1f, 1f) },
+        { TextureFormats.Rgba4RevSNormBigEndian, new Rgba32Float(1f, 0f, -1f, 1f), [0x07, 0x79], new Rgba32Float(1f, 0f, -1f, 1f) },
+        { TextureFormats.Rg8SNormB8UNormX8RevBigEndian, new Rgba32Float(1f, -1f, 1f), [0x7f, 0x81, 0xff, 0x00], new Rgba32Float(1f, -1f, 1f) },
+        { TextureFormats.Rgb10SNormA2UNormRevBigEndian, new Rgba32Float(1f, -1f, 0f, 1f), [0xff, 0x05, 0x08, 0xc0], new Rgba32Float(1f, -1f, 0f, 1f) },
+        { TextureFormats.R10Gb11UNormBigEndian, new Rgba32Float(1f, 0f, 1f), [0xff, 0x07, 0xc0, 0xff], new Rgba32Float(1f, 0f, 1f) },
+        { TextureFormats.Rg11B10UNormBigEndian, new Rgba32Float(1f, 0f, 1f), [0xff, 0x03, 0xe0, 0xff], new Rgba32Float(1f, 0f, 1f) },
+        { TextureFormats.R10Gb11RevUNormBigEndian, new Rgba32Float(1f, 0f, 1f), [0xff, 0x03, 0xe0, 0xff], new Rgba32Float(1f, 0f, 1f) },
+        { TextureFormats.Rg11B10RevUNormBigEndian, new Rgba32Float(1f, 0f, 1f), [0xff, 0x07, 0xc0, 0xff], new Rgba32Float(1f, 0f, 1f) },
+        { TextureFormats.Rg11B10RevSNormBigEndian, new Rgba32Float(1f, -1f, 1f), [0xff, 0x0b, 0xe0, 0x7f], new Rgba32Float(1f, -1f, 1f) },
+        { TextureFormats.R10Gb11RevSNormBigEndian, new Rgba32Float(1f, -1f, 1f), [0xff, 0x05, 0xf0, 0x7f], new Rgba32Float(1f, -1f, 1f) }
+    };
+
     public static TheoryData<TextureFormat> RepresentativePackedYuv422Formats() => new()
     {
         TextureFormats.Uyvy422UNorm,
@@ -2320,6 +2505,7 @@ public sealed class TextureCoderManagerTests
         TextureFormats.X24Stencil8,
         TextureFormats.Depth16Stencil8,
         TextureFormats.Depth24Stencil8,
+        TextureFormats.Depth24FloatStencil8,
         TextureFormats.Depth32Stencil8,
         TextureFormats.Depth32FloatStencil8
     };

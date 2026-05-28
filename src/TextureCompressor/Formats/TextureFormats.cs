@@ -407,11 +407,26 @@ public static class TextureFormats
     public static readonly TextureFormat Rgb565UNorm =
         TextureFormat.Uncompressed("RGB565_UNORM", TextureComponents.Rgb, TextureValueKind.UNorm, 5, 6, 5);
 
+    public static readonly TextureFormat Rgb655UNorm =
+        TextureFormat.Uncompressed("RGB655_UNORM", TextureComponents.Rgb, TextureValueKind.UNorm, 6, 5, 5);
+
     public static readonly TextureFormat Rgb565RevUNorm =
         TextureFormat.Uncompressed("RGB565_REV_UNORM", TextureComponents.Rgb, TextureValueKind.UNorm, 5, 6, 5);
 
     public static readonly TextureFormat Rgb10UNorm =
         TextureFormat.Uncompressed("RGB10_UNORM", TextureComponents.Rgb, TextureValueKind.UNorm, 10, 10, 10);
+
+    public static readonly TextureFormat R10Gb11UNorm =
+        TextureFormat.Uncompressed("R10_GB11_UNORM", TextureComponents.Rgb, TextureValueKind.UNorm, 10, 11, 11);
+
+    public static readonly TextureFormat Rg11B10UNorm =
+        TextureFormat.Uncompressed("RG11_B10_UNORM", TextureComponents.Rgb, TextureValueKind.UNorm, 11, 11, 10);
+
+    public static readonly TextureFormat R10Gb11RevUNorm =
+        TextureFormat.Uncompressed("R10_GB11_REV_UNORM", TextureComponents.Rgb, TextureValueKind.UNorm, 10, 11, 11);
+
+    public static readonly TextureFormat Rg11B10RevUNorm =
+        TextureFormat.Uncompressed("RG11_B10_REV_UNORM", TextureComponents.Rgb, TextureValueKind.UNorm, 11, 11, 10);
 
     public static readonly TextureFormat Rgb12UNorm =
         TextureFormat.Uncompressed("RGB12_UNORM", TextureComponents.Rgb, TextureValueKind.UNorm, 12, 12, 12);
@@ -860,6 +875,9 @@ public static class TextureFormats
     public static readonly TextureFormat Rgba4UNorm =
         TextureFormat.Uncompressed("RGBA4_UNORM", TextureComponents.Rgba, TextureValueKind.UNorm, 4, 4, 4, 4);
 
+    public static readonly TextureFormat Rgba4RevSNorm =
+        TextureFormat.Uncompressed("RGBA4_REV_SNORM", TextureComponents.Rgba, TextureValueKind.SNorm, 4, 4, 4, 4);
+
     public static readonly TextureFormat Rgba4RevUNorm =
         TextureFormat.Uncompressed("RGBA4_REV_UNORM", TextureComponents.Rgba, TextureValueKind.UNorm, 4, 4, 4, 4);
 
@@ -910,6 +928,9 @@ public static class TextureFormats
 
     public static readonly TextureFormat Rgb10A2UNorm =
         TextureFormat.Uncompressed("RGB10_A2_UNORM", TextureComponents.Rgba, TextureValueKind.UNorm, 10, 10, 10, 2);
+
+    public static readonly TextureFormat Rgb10SNormA2UNormRev =
+        TextureFormat.Uncompressed("RGB10_SNORM_A2_UNORM_REV", TextureComponents.Rgba, TextureValueKind.SNorm, 10, 10, 10, 2);
 
     public static readonly TextureFormat Rgb10A2RevUNorm =
         TextureFormat.Uncompressed("RGB10_A2_REV_UNORM", TextureComponents.Rgba, TextureValueKind.UNorm, 10, 10, 10, 2);
@@ -994,6 +1015,18 @@ public static class TextureFormats
 
     public static readonly TextureFormat R11G11B10Float =
         TextureFormat.Uncompressed("R11G11B10_FLOAT", TextureComponents.Rgb, TextureValueKind.Float, 11, 11, 10);
+
+    public static readonly TextureFormat Rg5SNormB6UNormRev =
+        TextureFormat.Uncompressed("RG5_SNORM_B6_UNORM_REV", TextureComponents.Rgb, TextureValueKind.SNorm, 5, 5, 6);
+
+    public static readonly TextureFormat Rg8SNormB8UNormX8Rev =
+        SplitPacked("RG8_SNORM_B8_UNORM_X8_REV", TextureComponents.Rgb, TextureValueKind.SNorm, 8, 8, 8, 0, 32);
+
+    public static readonly TextureFormat Rg11B10RevSNorm =
+        TextureFormat.Uncompressed("RG11_B10_REV_SNORM", TextureComponents.Rgb, TextureValueKind.SNorm, 11, 11, 10);
+
+    public static readonly TextureFormat R10Gb11RevSNorm =
+        TextureFormat.Uncompressed("R10_GB11_REV_SNORM", TextureComponents.Rgb, TextureValueKind.SNorm, 10, 11, 11);
 
     public static readonly TextureFormat Rgb9E5 = new(
         "RGB9_E5",
@@ -1189,6 +1222,9 @@ public static class TextureFormats
 
     public static readonly TextureFormat Depth24Stencil8 =
         DepthStencil("DEPTH24_STENCIL8", 24, 8, 32);
+
+    public static readonly TextureFormat Depth24FloatStencil8 =
+        DepthStencil("D24FS8", 24, 8, 32);
 
     public static readonly TextureFormat Depth32Stencil8 =
         DepthStencil("DEPTH32_STENCIL8", 32, 8, 40);
@@ -1598,6 +1634,9 @@ public static class TextureFormats
     public static readonly TextureFormat Dxt3A =
         TextureFormat.BlockCompressed("DXT3A", TextureComponents.Alpha, TextureValueKind.UNorm, 0, 0, 0, 4, 4, 4, 64);
 
+    public static readonly TextureFormat Dxt3A1111 =
+        TextureFormat.BlockCompressed("DXT3A_1111", TextureComponents.Rgba, TextureValueKind.UNorm, 1, 1, 1, 1, 4, 4, 64);
+
     public static readonly TextureFormat Dxt4Rgba =
         TextureFormat.BlockCompressed(
             "RGBA_DXT4_UNORM",
@@ -1646,22 +1685,43 @@ public static class TextureFormats
     public static readonly TextureFormat Luminance32UNormBigEndian = BigEndian(Luminance32UNorm);
     public static readonly TextureFormat Luminance8Alpha8UNormBigEndian = BigEndian(Luminance8Alpha8UNorm);
     public static readonly TextureFormat Luminance16Alpha16UNormBigEndian = BigEndian(Luminance16Alpha16UNorm);
+    public static readonly TextureFormat Luminance32Alpha32UNormBigEndian = BigEndian(Luminance32Alpha32UNorm);
     public static readonly TextureFormat Rgb565UNormBigEndian = BigEndian(Rgb565UNorm);
+    public static readonly TextureFormat Rgb655UNormBigEndian = BigEndian(Rgb655UNorm);
+    public static readonly TextureFormat Rg5SNormB6UNormRevBigEndian = BigEndian(Rg5SNormB6UNormRev);
     public static readonly TextureFormat A1Rgb5UNormBigEndian = BigEndian(A1Rgb5UNorm);
     public static readonly TextureFormat X1Rgb5UNormBigEndian = BigEndian(A1Rgb5UNorm, "X1_RGB5_UNORM");
     public static readonly TextureFormat Argb4UNormBigEndian = BigEndian(Argb4UNorm);
     public static readonly TextureFormat Xrgb4UNormBigEndian = BigEndian(Argb4UNorm, "XRGB4_UNORM");
+    public static readonly TextureFormat Rgba4RevSNormBigEndian = BigEndian(Rgba4RevSNorm);
     public static readonly TextureFormat Bgra8BigEndian = BigEndian(Bgra8);
     public static readonly TextureFormat Bgrx8UNormBigEndian = BigEndian(Bgrx8UNorm);
+    public static readonly TextureFormat Rg8UNormBigEndian = BigEndian(Rg8);
+    public static readonly TextureFormat Rg8SNormBigEndian = BigEndian(Rg8SNorm);
     public static readonly TextureFormat Rgba8UNormBigEndian = BigEndian(Rgba8UNorm);
+    public static readonly TextureFormat Rgba8SNormBigEndian = BigEndian(Rgba8SNorm);
+    public static readonly TextureFormat Rg8SNormB8UNormX8RevBigEndian = BigEndian(Rg8SNormB8UNormX8Rev);
+    public static readonly TextureFormat Rgb10SNormA2UNormRevBigEndian = BigEndian(Rgb10SNormA2UNormRev);
+    public static readonly TextureFormat R10Gb11UNormBigEndian = BigEndian(R10Gb11UNorm);
+    public static readonly TextureFormat Rg11B10UNormBigEndian = BigEndian(Rg11B10UNorm);
+    public static readonly TextureFormat R10Gb11RevUNormBigEndian = BigEndian(R10Gb11RevUNorm);
+    public static readonly TextureFormat Rg11B10RevUNormBigEndian = BigEndian(Rg11B10RevUNorm);
+    public static readonly TextureFormat Rg11B10RevSNormBigEndian = BigEndian(Rg11B10RevSNorm);
+    public static readonly TextureFormat R10Gb11RevSNormBigEndian = BigEndian(R10Gb11RevSNorm);
     public static readonly TextureFormat Bgr10A2RevUNormBigEndian = BigEndian(Bgr10A2RevUNorm);
     public static readonly TextureFormat Bgr10X2RevUNormBigEndian = BigEndian(Bgr10A2RevUNorm, "BGR10_X2_REV_UNORM");
     public static readonly TextureFormat Rgb10A2RevUNormBigEndian = BigEndian(Rgb10A2RevUNorm);
     public static readonly TextureFormat Rg16UNormBigEndian = BigEndian(Rg16UNorm);
+    public static readonly TextureFormat Rg16SNormBigEndian = BigEndian(Rg16SNorm);
     public static readonly TextureFormat Rgba16UNormBigEndian = BigEndian(Rgba16UNorm);
+    public static readonly TextureFormat Rgba16SNormBigEndian = BigEndian(Rgba16SNorm);
     public static readonly TextureFormat R16FloatBigEndian = BigEndian(R16Float);
     public static readonly TextureFormat Rg16FloatBigEndian = BigEndian(Rg16Float);
     public static readonly TextureFormat Rgba16FloatBigEndian = BigEndian(Rgba16Float);
+    public static readonly TextureFormat Rg32UNormBigEndian = BigEndian(Rg32UNorm);
+    public static readonly TextureFormat Rg32SNormBigEndian = BigEndian(Rg32SNorm);
+    public static readonly TextureFormat Rgba32UNormBigEndian = BigEndian(Rgba32UNorm);
+    public static readonly TextureFormat Rgba32SNormBigEndian = BigEndian(Rgba32SNorm);
     public static readonly TextureFormat R32FloatBigEndian = BigEndian(R32Float);
     public static readonly TextureFormat Rg32FloatBigEndian = BigEndian(Rg32Float);
     public static readonly TextureFormat Rgba32FloatBigEndian = BigEndian(Rgba32Float);
@@ -1673,11 +1733,13 @@ public static class TextureFormats
     public static readonly TextureFormat DepthComponent16BigEndian = BigEndian(DepthComponent16);
     public static readonly TextureFormat Depth24X8BigEndian = BigEndian(Depth24X8);
     public static readonly TextureFormat Depth24Stencil8BigEndian = BigEndian(Depth24Stencil8);
+    public static readonly TextureFormat Depth24FloatStencil8BigEndian = BigEndian(Depth24FloatStencil8);
     public static readonly TextureFormat Dxt1RgbBigEndian = BigEndian(Dxt1Rgb);
     public static readonly TextureFormat Dxt1RgbaBigEndian = BigEndian(Dxt1Rgba);
     public static readonly TextureFormat Dxt2RgbaBigEndian = BigEndian(Dxt2Rgba);
     public static readonly TextureFormat Dxt3RgbaBigEndian = BigEndian(Dxt3Rgba);
     public static readonly TextureFormat Dxt3ABigEndian = BigEndian(Dxt3A);
+    public static readonly TextureFormat Dxt3A1111BigEndian = BigEndian(Dxt3A1111);
     public static readonly TextureFormat Dxt4RgbaBigEndian = BigEndian(Dxt4Rgba);
     public static readonly TextureFormat Dxt5RgbaBigEndian = BigEndian(Dxt5Rgba);
     public static readonly TextureFormat Dxt5ABigEndian = BigEndian(Dxt5A);
@@ -1750,6 +1812,27 @@ public static class TextureFormats
         1,
         1,
         bitsPerBlock);
+
+    private static TextureFormat SplitPacked(
+        string name,
+        TextureComponents components,
+        TextureValueKind valueKind,
+        int redBits,
+        int greenBits,
+        int blueBits,
+        int alphaBits,
+        int bitsPerBlock) => new(
+            name,
+            TextureFormatKind.Uncompressed,
+            components,
+            valueKind,
+            redBits,
+            greenBits,
+            blueBits,
+            alphaBits,
+            1,
+            1,
+            bitsPerBlock);
 
     private static TextureFormat PaddedWord(
         string name,

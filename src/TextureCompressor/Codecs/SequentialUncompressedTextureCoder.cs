@@ -135,6 +135,9 @@ public sealed class SequentialUncompressedTextureCoder : IPitchTextureCoder
             case SequentialTransfer.Luminance32Alpha32UNorm:
                 Decode<TPixel, Rgba32UNorm, Rgba32UNormCarrierTransfer, Luminance32Alpha32UNormTransfer>(source, destination, rowPitch);
                 return;
+            case SequentialTransfer.Luminance32Alpha32UNormBigEndian:
+                Decode<TPixel, Rgba32UNorm, Rgba32UNormCarrierTransfer, Luminance32Alpha32UNormTransferBigEndian>(source, destination, rowPitch);
+                return;
             case SequentialTransfer.Luminance32Alpha32SNorm:
                 Decode<TPixel, Rgba32SNorm, Rgba32SNormCarrierTransfer, Luminance32Alpha32SNormTransfer>(source, destination, rowPitch);
                 return;
@@ -216,8 +219,14 @@ public sealed class SequentialUncompressedTextureCoder : IPitchTextureCoder
             case SequentialTransfer.Rg8UNorm:
                 Decode<TPixel, Rgba8UNorm, Rgba8UNormCarrierTransfer, Rg8UNormTransfer>(source, destination, rowPitch);
                 return;
+            case SequentialTransfer.Rg8UNormBigEndian:
+                Decode<TPixel, Rgba8UNorm, Rgba8UNormCarrierTransfer, Rg8UNormTransferBigEndian>(source, destination, rowPitch);
+                return;
             case SequentialTransfer.Rg8SNorm:
                 Decode<TPixel, Rgba8SNorm, Rgba8SNormCarrierTransfer, Rg8SNormTransfer>(source, destination, rowPitch);
+                return;
+            case SequentialTransfer.Rg8SNormBigEndian:
+                Decode<TPixel, Rgba8SNorm, Rgba8SNormCarrierTransfer, Rg8SNormTransferBigEndian>(source, destination, rowPitch);
                 return;
             case SequentialTransfer.Rg16UNorm:
                 Decode<TPixel, Rgba16UNorm, Rgba16UNormCarrierTransfer, Rg16UNormTransfer>(source, destination, rowPitch);
@@ -228,11 +237,20 @@ public sealed class SequentialUncompressedTextureCoder : IPitchTextureCoder
             case SequentialTransfer.Rg16SNorm:
                 Decode<TPixel, Rgba16SNorm, Rgba16SNormCarrierTransfer, Rg16SNormTransfer>(source, destination, rowPitch);
                 return;
+            case SequentialTransfer.Rg16SNormBigEndian:
+                Decode<TPixel, Rgba16SNorm, Rgba16SNormCarrierTransfer, Rg16SNormTransferBigEndian>(source, destination, rowPitch);
+                return;
             case SequentialTransfer.Rg32UNorm:
                 Decode<TPixel, Rgba32UNorm, Rgba32UNormCarrierTransfer, Rg32UNormTransfer>(source, destination, rowPitch);
                 return;
+            case SequentialTransfer.Rg32UNormBigEndian:
+                Decode<TPixel, Rgba32UNorm, Rgba32UNormCarrierTransfer, Rg32UNormTransferBigEndian>(source, destination, rowPitch);
+                return;
             case SequentialTransfer.Rg32SNorm:
                 Decode<TPixel, Rgba32SNorm, Rgba32SNormCarrierTransfer, Rg32SNormTransfer>(source, destination, rowPitch);
+                return;
+            case SequentialTransfer.Rg32SNormBigEndian:
+                Decode<TPixel, Rgba32SNorm, Rgba32SNormCarrierTransfer, Rg32SNormTransferBigEndian>(source, destination, rowPitch);
                 return;
             case SequentialTransfer.Rg16Float:
                 Decode<TPixel, Rgba16Float, Rgba16FloatCarrierTransfer, Rg16FloatTransfer>(source, destination, rowPitch);
@@ -330,6 +348,9 @@ public sealed class SequentialUncompressedTextureCoder : IPitchTextureCoder
             case SequentialTransfer.Rgba8SNorm:
                 Decode<TPixel, Rgba8SNorm, Rgba8SNormCarrierTransfer, Rgba8SNormTransfer>(source, destination, rowPitch);
                 return;
+            case SequentialTransfer.Rgba8SNormBigEndian:
+                Decode<TPixel, Rgba8SNorm, Rgba8SNormCarrierTransfer, Rgba8SNormTransferBigEndian>(source, destination, rowPitch);
+                return;
             case SequentialTransfer.Rgba16UNorm:
                 Decode<TPixel, Rgba16UNorm, Rgba16UNormCarrierTransfer, Rgba16UNormTransfer>(source, destination, rowPitch);
                 return;
@@ -339,11 +360,20 @@ public sealed class SequentialUncompressedTextureCoder : IPitchTextureCoder
             case SequentialTransfer.Rgba16SNorm:
                 Decode<TPixel, Rgba16SNorm, Rgba16SNormCarrierTransfer, Rgba16SNormTransfer>(source, destination, rowPitch);
                 return;
+            case SequentialTransfer.Rgba16SNormBigEndian:
+                Decode<TPixel, Rgba16SNorm, Rgba16SNormCarrierTransfer, Rgba16SNormTransferBigEndian>(source, destination, rowPitch);
+                return;
             case SequentialTransfer.Rgba32UNorm:
                 Decode<TPixel, Rgba32UNorm, Rgba32UNormCarrierTransfer, Rgba32UNormTransfer>(source, destination, rowPitch);
                 return;
+            case SequentialTransfer.Rgba32UNormBigEndian:
+                Decode<TPixel, Rgba32UNorm, Rgba32UNormCarrierTransfer, Rgba32UNormTransferBigEndian>(source, destination, rowPitch);
+                return;
             case SequentialTransfer.Rgba32SNorm:
                 Decode<TPixel, Rgba32SNorm, Rgba32SNormCarrierTransfer, Rgba32SNormTransfer>(source, destination, rowPitch);
+                return;
+            case SequentialTransfer.Rgba32SNormBigEndian:
+                Decode<TPixel, Rgba32SNorm, Rgba32SNormCarrierTransfer, Rgba32SNormTransferBigEndian>(source, destination, rowPitch);
                 return;
             case SequentialTransfer.Rgba16Float:
                 Decode<TPixel, Rgba16Float, Rgba16FloatCarrierTransfer, Rgba16FloatTransfer>(source, destination, rowPitch);
@@ -505,6 +535,9 @@ public sealed class SequentialUncompressedTextureCoder : IPitchTextureCoder
             case SequentialTransfer.Luminance32Alpha32UNorm:
                 Encode<TPixel, Rgba32UNorm, Rgba32UNormCarrierTransfer, Luminance32Alpha32UNormTransfer>(source, destination, rowPitch);
                 return;
+            case SequentialTransfer.Luminance32Alpha32UNormBigEndian:
+                Encode<TPixel, Rgba32UNorm, Rgba32UNormCarrierTransfer, Luminance32Alpha32UNormTransferBigEndian>(source, destination, rowPitch);
+                return;
             case SequentialTransfer.Luminance32Alpha32SNorm:
                 Encode<TPixel, Rgba32SNorm, Rgba32SNormCarrierTransfer, Luminance32Alpha32SNormTransfer>(source, destination, rowPitch);
                 return;
@@ -586,8 +619,14 @@ public sealed class SequentialUncompressedTextureCoder : IPitchTextureCoder
             case SequentialTransfer.Rg8UNorm:
                 Encode<TPixel, Rgba8UNorm, Rgba8UNormCarrierTransfer, Rg8UNormTransfer>(source, destination, rowPitch);
                 return;
+            case SequentialTransfer.Rg8UNormBigEndian:
+                Encode<TPixel, Rgba8UNorm, Rgba8UNormCarrierTransfer, Rg8UNormTransferBigEndian>(source, destination, rowPitch);
+                return;
             case SequentialTransfer.Rg8SNorm:
                 Encode<TPixel, Rgba8SNorm, Rgba8SNormCarrierTransfer, Rg8SNormTransfer>(source, destination, rowPitch);
+                return;
+            case SequentialTransfer.Rg8SNormBigEndian:
+                Encode<TPixel, Rgba8SNorm, Rgba8SNormCarrierTransfer, Rg8SNormTransferBigEndian>(source, destination, rowPitch);
                 return;
             case SequentialTransfer.Rg16UNorm:
                 Encode<TPixel, Rgba16UNorm, Rgba16UNormCarrierTransfer, Rg16UNormTransfer>(source, destination, rowPitch);
@@ -598,11 +637,20 @@ public sealed class SequentialUncompressedTextureCoder : IPitchTextureCoder
             case SequentialTransfer.Rg16SNorm:
                 Encode<TPixel, Rgba16SNorm, Rgba16SNormCarrierTransfer, Rg16SNormTransfer>(source, destination, rowPitch);
                 return;
+            case SequentialTransfer.Rg16SNormBigEndian:
+                Encode<TPixel, Rgba16SNorm, Rgba16SNormCarrierTransfer, Rg16SNormTransferBigEndian>(source, destination, rowPitch);
+                return;
             case SequentialTransfer.Rg32UNorm:
                 Encode<TPixel, Rgba32UNorm, Rgba32UNormCarrierTransfer, Rg32UNormTransfer>(source, destination, rowPitch);
                 return;
+            case SequentialTransfer.Rg32UNormBigEndian:
+                Encode<TPixel, Rgba32UNorm, Rgba32UNormCarrierTransfer, Rg32UNormTransferBigEndian>(source, destination, rowPitch);
+                return;
             case SequentialTransfer.Rg32SNorm:
                 Encode<TPixel, Rgba32SNorm, Rgba32SNormCarrierTransfer, Rg32SNormTransfer>(source, destination, rowPitch);
+                return;
+            case SequentialTransfer.Rg32SNormBigEndian:
+                Encode<TPixel, Rgba32SNorm, Rgba32SNormCarrierTransfer, Rg32SNormTransferBigEndian>(source, destination, rowPitch);
                 return;
             case SequentialTransfer.Rg16Float:
                 Encode<TPixel, Rgba16Float, Rgba16FloatCarrierTransfer, Rg16FloatTransfer>(source, destination, rowPitch);
@@ -700,6 +748,9 @@ public sealed class SequentialUncompressedTextureCoder : IPitchTextureCoder
             case SequentialTransfer.Rgba8SNorm:
                 Encode<TPixel, Rgba8SNorm, Rgba8SNormCarrierTransfer, Rgba8SNormTransfer>(source, destination, rowPitch);
                 return;
+            case SequentialTransfer.Rgba8SNormBigEndian:
+                Encode<TPixel, Rgba8SNorm, Rgba8SNormCarrierTransfer, Rgba8SNormTransferBigEndian>(source, destination, rowPitch);
+                return;
             case SequentialTransfer.Rgba16UNorm:
                 Encode<TPixel, Rgba16UNorm, Rgba16UNormCarrierTransfer, Rgba16UNormTransfer>(source, destination, rowPitch);
                 return;
@@ -709,11 +760,20 @@ public sealed class SequentialUncompressedTextureCoder : IPitchTextureCoder
             case SequentialTransfer.Rgba16SNorm:
                 Encode<TPixel, Rgba16SNorm, Rgba16SNormCarrierTransfer, Rgba16SNormTransfer>(source, destination, rowPitch);
                 return;
+            case SequentialTransfer.Rgba16SNormBigEndian:
+                Encode<TPixel, Rgba16SNorm, Rgba16SNormCarrierTransfer, Rgba16SNormTransferBigEndian>(source, destination, rowPitch);
+                return;
             case SequentialTransfer.Rgba32UNorm:
                 Encode<TPixel, Rgba32UNorm, Rgba32UNormCarrierTransfer, Rgba32UNormTransfer>(source, destination, rowPitch);
                 return;
+            case SequentialTransfer.Rgba32UNormBigEndian:
+                Encode<TPixel, Rgba32UNorm, Rgba32UNormCarrierTransfer, Rgba32UNormTransferBigEndian>(source, destination, rowPitch);
+                return;
             case SequentialTransfer.Rgba32SNorm:
                 Encode<TPixel, Rgba32SNorm, Rgba32SNormCarrierTransfer, Rgba32SNormTransfer>(source, destination, rowPitch);
+                return;
+            case SequentialTransfer.Rgba32SNormBigEndian:
+                Encode<TPixel, Rgba32SNorm, Rgba32SNormCarrierTransfer, Rgba32SNormTransferBigEndian>(source, destination, rowPitch);
                 return;
             case SequentialTransfer.Rgba16Float:
                 Encode<TPixel, Rgba16Float, Rgba16FloatCarrierTransfer, Rgba16FloatTransfer>(source, destination, rowPitch);
@@ -1029,10 +1089,19 @@ public sealed class SequentialUncompressedTextureCoder : IPitchTextureCoder
     private readonly struct Luminance16Alpha16UNormTransferBigEndian : ISequentialTransfer<Rgba16UNorm>
     {
         public static Rgba16UNorm Decode(ReadOnlySpan<byte> texel) =>
-            DecodeBigEndianTexel<Luminance16Alpha16UNormTransfer, Rgba16UNorm>(texel, BigEndianByteSwapMode.Swap8In16);
+            DecodeBigEndianTexel<Luminance16Alpha16UNormTransfer, Rgba16UNorm>(texel, BigEndianByteSwapMode.Swap8In32);
 
         public static void Encode(Rgba16UNorm value, Span<byte> texel) =>
-            EncodeBigEndianTexel<Luminance16Alpha16UNormTransfer, Rgba16UNorm>(value, texel, BigEndianByteSwapMode.Swap8In16);
+            EncodeBigEndianTexel<Luminance16Alpha16UNormTransfer, Rgba16UNorm>(value, texel, BigEndianByteSwapMode.Swap8In32);
+    }
+
+    private readonly struct Luminance32Alpha32UNormTransferBigEndian : ISequentialTransfer<Rgba32UNorm>
+    {
+        public static Rgba32UNorm Decode(ReadOnlySpan<byte> texel) =>
+            DecodeBigEndianTexel<Luminance32Alpha32UNormTransfer, Rgba32UNorm>(texel, BigEndianByteSwapMode.Swap8In16);
+
+        public static void Encode(Rgba32UNorm value, Span<byte> texel) =>
+            EncodeBigEndianTexel<Luminance32Alpha32UNormTransfer, Rgba32UNorm>(value, texel, BigEndianByteSwapMode.Swap8In16);
     }
 
     private readonly struct R16FloatTransferBigEndian : ISequentialTransfer<Rgba16Float>
@@ -1053,22 +1122,67 @@ public sealed class SequentialUncompressedTextureCoder : IPitchTextureCoder
             EncodeBigEndianTexel<R32FloatTransfer, Rgba32Float>(value, texel, BigEndianByteSwapMode.Swap8In32);
     }
 
+    private readonly struct Rg8UNormTransferBigEndian : ISequentialTransfer<Rgba8UNorm>
+    {
+        public static Rgba8UNorm Decode(ReadOnlySpan<byte> texel) =>
+            DecodeBigEndianTexel<Rg8UNormTransfer, Rgba8UNorm>(texel, BigEndianByteSwapMode.Swap8In16);
+
+        public static void Encode(Rgba8UNorm value, Span<byte> texel) =>
+            EncodeBigEndianTexel<Rg8UNormTransfer, Rgba8UNorm>(value, texel, BigEndianByteSwapMode.Swap8In16);
+    }
+
+    private readonly struct Rg8SNormTransferBigEndian : ISequentialTransfer<Rgba8SNorm>
+    {
+        public static Rgba8SNorm Decode(ReadOnlySpan<byte> texel) =>
+            DecodeBigEndianTexel<Rg8SNormTransfer, Rgba8SNorm>(texel, BigEndianByteSwapMode.Swap8In16);
+
+        public static void Encode(Rgba8SNorm value, Span<byte> texel) =>
+            EncodeBigEndianTexel<Rg8SNormTransfer, Rgba8SNorm>(value, texel, BigEndianByteSwapMode.Swap8In16);
+    }
+
     private readonly struct Rg16UNormTransferBigEndian : ISequentialTransfer<Rgba16UNorm>
     {
         public static Rgba16UNorm Decode(ReadOnlySpan<byte> texel) =>
-            DecodeBigEndianTexel<Rg16UNormTransfer, Rgba16UNorm>(texel, BigEndianByteSwapMode.Swap8In16);
+            DecodeBigEndianTexel<Rg16UNormTransfer, Rgba16UNorm>(texel, BigEndianByteSwapMode.Swap8In32);
 
         public static void Encode(Rgba16UNorm value, Span<byte> texel) =>
-            EncodeBigEndianTexel<Rg16UNormTransfer, Rgba16UNorm>(value, texel, BigEndianByteSwapMode.Swap8In16);
+            EncodeBigEndianTexel<Rg16UNormTransfer, Rgba16UNorm>(value, texel, BigEndianByteSwapMode.Swap8In32);
+    }
+
+    private readonly struct Rg16SNormTransferBigEndian : ISequentialTransfer<Rgba16SNorm>
+    {
+        public static Rgba16SNorm Decode(ReadOnlySpan<byte> texel) =>
+            DecodeBigEndianTexel<Rg16SNormTransfer, Rgba16SNorm>(texel, BigEndianByteSwapMode.Swap8In32);
+
+        public static void Encode(Rgba16SNorm value, Span<byte> texel) =>
+            EncodeBigEndianTexel<Rg16SNormTransfer, Rgba16SNorm>(value, texel, BigEndianByteSwapMode.Swap8In32);
     }
 
     private readonly struct Rg16FloatTransferBigEndian : ISequentialTransfer<Rgba16Float>
     {
         public static Rgba16Float Decode(ReadOnlySpan<byte> texel) =>
-            DecodeBigEndianTexel<Rg16FloatTransfer, Rgba16Float>(texel, BigEndianByteSwapMode.Swap8In16);
+            DecodeBigEndianTexel<Rg16FloatTransfer, Rgba16Float>(texel, BigEndianByteSwapMode.Swap8In32);
 
         public static void Encode(Rgba16Float value, Span<byte> texel) =>
-            EncodeBigEndianTexel<Rg16FloatTransfer, Rgba16Float>(value, texel, BigEndianByteSwapMode.Swap8In16);
+            EncodeBigEndianTexel<Rg16FloatTransfer, Rgba16Float>(value, texel, BigEndianByteSwapMode.Swap8In32);
+    }
+
+    private readonly struct Rg32UNormTransferBigEndian : ISequentialTransfer<Rgba32UNorm>
+    {
+        public static Rgba32UNorm Decode(ReadOnlySpan<byte> texel) =>
+            DecodeBigEndianTexel<Rg32UNormTransfer, Rgba32UNorm>(texel, BigEndianByteSwapMode.Swap8In16);
+
+        public static void Encode(Rgba32UNorm value, Span<byte> texel) =>
+            EncodeBigEndianTexel<Rg32UNormTransfer, Rgba32UNorm>(value, texel, BigEndianByteSwapMode.Swap8In16);
+    }
+
+    private readonly struct Rg32SNormTransferBigEndian : ISequentialTransfer<Rgba32SNorm>
+    {
+        public static Rgba32SNorm Decode(ReadOnlySpan<byte> texel) =>
+            DecodeBigEndianTexel<Rg32SNormTransfer, Rgba32SNorm>(texel, BigEndianByteSwapMode.Swap8In16);
+
+        public static void Encode(Rgba32SNorm value, Span<byte> texel) =>
+            EncodeBigEndianTexel<Rg32SNormTransfer, Rgba32SNorm>(value, texel, BigEndianByteSwapMode.Swap8In16);
     }
 
     private readonly struct Rg32FloatTransferBigEndian : ISequentialTransfer<Rgba32Float>
@@ -1089,6 +1203,15 @@ public sealed class SequentialUncompressedTextureCoder : IPitchTextureCoder
             EncodeBigEndianTexel<Rgba8UNormTransfer, Rgba8UNorm>(value, texel, BigEndianByteSwapMode.Swap8In32);
     }
 
+    private readonly struct Rgba8SNormTransferBigEndian : ISequentialTransfer<Rgba8SNorm>
+    {
+        public static Rgba8SNorm Decode(ReadOnlySpan<byte> texel) =>
+            DecodeBigEndianTexel<Rgba8SNormTransfer, Rgba8SNorm>(texel, BigEndianByteSwapMode.Swap8In32);
+
+        public static void Encode(Rgba8SNorm value, Span<byte> texel) =>
+            EncodeBigEndianTexel<Rgba8SNormTransfer, Rgba8SNorm>(value, texel, BigEndianByteSwapMode.Swap8In32);
+    }
+
     private readonly struct Rgba16UNormTransferBigEndian : ISequentialTransfer<Rgba16UNorm>
     {
         public static Rgba16UNorm Decode(ReadOnlySpan<byte> texel) =>
@@ -1098,6 +1221,15 @@ public sealed class SequentialUncompressedTextureCoder : IPitchTextureCoder
             EncodeBigEndianTexel<Rgba16UNormTransfer, Rgba16UNorm>(value, texel, BigEndianByteSwapMode.Swap8In16);
     }
 
+    private readonly struct Rgba16SNormTransferBigEndian : ISequentialTransfer<Rgba16SNorm>
+    {
+        public static Rgba16SNorm Decode(ReadOnlySpan<byte> texel) =>
+            DecodeBigEndianTexel<Rgba16SNormTransfer, Rgba16SNorm>(texel, BigEndianByteSwapMode.Swap8In16);
+
+        public static void Encode(Rgba16SNorm value, Span<byte> texel) =>
+            EncodeBigEndianTexel<Rgba16SNormTransfer, Rgba16SNorm>(value, texel, BigEndianByteSwapMode.Swap8In16);
+    }
+
     private readonly struct Rgba16FloatTransferBigEndian : ISequentialTransfer<Rgba16Float>
     {
         public static Rgba16Float Decode(ReadOnlySpan<byte> texel) =>
@@ -1105,6 +1237,24 @@ public sealed class SequentialUncompressedTextureCoder : IPitchTextureCoder
 
         public static void Encode(Rgba16Float value, Span<byte> texel) =>
             EncodeBigEndianTexel<Rgba16FloatTransfer, Rgba16Float>(value, texel, BigEndianByteSwapMode.Swap8In16);
+    }
+
+    private readonly struct Rgba32UNormTransferBigEndian : ISequentialTransfer<Rgba32UNorm>
+    {
+        public static Rgba32UNorm Decode(ReadOnlySpan<byte> texel) =>
+            DecodeBigEndianTexel<Rgba32UNormTransfer, Rgba32UNorm>(texel, BigEndianByteSwapMode.Swap8In32);
+
+        public static void Encode(Rgba32UNorm value, Span<byte> texel) =>
+            EncodeBigEndianTexel<Rgba32UNormTransfer, Rgba32UNorm>(value, texel, BigEndianByteSwapMode.Swap8In32);
+    }
+
+    private readonly struct Rgba32SNormTransferBigEndian : ISequentialTransfer<Rgba32SNorm>
+    {
+        public static Rgba32SNorm Decode(ReadOnlySpan<byte> texel) =>
+            DecodeBigEndianTexel<Rgba32SNormTransfer, Rgba32SNorm>(texel, BigEndianByteSwapMode.Swap8In32);
+
+        public static void Encode(Rgba32SNorm value, Span<byte> texel) =>
+            EncodeBigEndianTexel<Rgba32SNormTransfer, Rgba32SNorm>(value, texel, BigEndianByteSwapMode.Swap8In32);
     }
 
     private readonly struct Rgba32FloatTransferBigEndian : ISequentialTransfer<Rgba32Float>
@@ -2525,6 +2675,12 @@ public sealed class SequentialUncompressedTextureCoder : IPitchTextureCoder
             return true;
         }
 
+        if (format == TextureFormats.Luminance32Alpha32UNormBigEndian)
+        {
+            transfer = SequentialTransfer.Luminance32Alpha32UNormBigEndian;
+            return true;
+        }
+
         if (format == TextureFormats.Luminance32Alpha32SNorm)
         {
             transfer = SequentialTransfer.Luminance32Alpha32SNorm;
@@ -2675,9 +2831,21 @@ public sealed class SequentialUncompressedTextureCoder : IPitchTextureCoder
             return true;
         }
 
+        if (format == TextureFormats.Rg8UNormBigEndian)
+        {
+            transfer = SequentialTransfer.Rg8UNormBigEndian;
+            return true;
+        }
+
         if (format == TextureFormats.Rg8SNorm)
         {
             transfer = SequentialTransfer.Rg8SNorm;
+            return true;
+        }
+
+        if (format == TextureFormats.Rg8SNormBigEndian)
+        {
+            transfer = SequentialTransfer.Rg8SNormBigEndian;
             return true;
         }
 
@@ -2699,15 +2867,33 @@ public sealed class SequentialUncompressedTextureCoder : IPitchTextureCoder
             return true;
         }
 
+        if (format == TextureFormats.Rg16SNormBigEndian)
+        {
+            transfer = SequentialTransfer.Rg16SNormBigEndian;
+            return true;
+        }
+
         if (format == TextureFormats.Rg32UNorm)
         {
             transfer = SequentialTransfer.Rg32UNorm;
             return true;
         }
 
+        if (format == TextureFormats.Rg32UNormBigEndian)
+        {
+            transfer = SequentialTransfer.Rg32UNormBigEndian;
+            return true;
+        }
+
         if (format == TextureFormats.Rg32SNorm)
         {
             transfer = SequentialTransfer.Rg32SNorm;
+            return true;
+        }
+
+        if (format == TextureFormats.Rg32SNormBigEndian)
+        {
+            transfer = SequentialTransfer.Rg32SNormBigEndian;
             return true;
         }
 
@@ -2879,6 +3065,12 @@ public sealed class SequentialUncompressedTextureCoder : IPitchTextureCoder
             return true;
         }
 
+        if (format == TextureFormats.Rgba8SNormBigEndian)
+        {
+            transfer = SequentialTransfer.Rgba8SNormBigEndian;
+            return true;
+        }
+
         if (format == TextureFormats.Rgba16UNorm)
         {
             transfer = SequentialTransfer.Rgba16UNorm;
@@ -2897,15 +3089,33 @@ public sealed class SequentialUncompressedTextureCoder : IPitchTextureCoder
             return true;
         }
 
+        if (format == TextureFormats.Rgba16SNormBigEndian)
+        {
+            transfer = SequentialTransfer.Rgba16SNormBigEndian;
+            return true;
+        }
+
         if (format == TextureFormats.Rgba32UNorm)
         {
             transfer = SequentialTransfer.Rgba32UNorm;
             return true;
         }
 
+        if (format == TextureFormats.Rgba32UNormBigEndian)
+        {
+            transfer = SequentialTransfer.Rgba32UNormBigEndian;
+            return true;
+        }
+
         if (format == TextureFormats.Rgba32SNorm)
         {
             transfer = SequentialTransfer.Rgba32SNorm;
+            return true;
+        }
+
+        if (format == TextureFormats.Rgba32SNormBigEndian)
+        {
+            transfer = SequentialTransfer.Rgba32SNormBigEndian;
             return true;
         }
 
@@ -3568,6 +3778,7 @@ public sealed class SequentialUncompressedTextureCoder : IPitchTextureCoder
         Luminance16Alpha16SNorm,
         Luminance16Alpha16Float,
         Luminance32Alpha32UNorm,
+        Luminance32Alpha32UNormBigEndian,
         Luminance32Alpha32SNorm,
         Luminance32Alpha32Float,
         Luminance8Srgb,
@@ -3595,12 +3806,17 @@ public sealed class SequentialUncompressedTextureCoder : IPitchTextureCoder
         R64Float,
         R8Srgb,
         Rg8UNorm,
+        Rg8UNormBigEndian,
         Rg8SNorm,
+        Rg8SNormBigEndian,
         Rg16UNorm,
         Rg16UNormBigEndian,
         Rg16SNorm,
+        Rg16SNormBigEndian,
         Rg32UNorm,
+        Rg32UNormBigEndian,
         Rg32SNorm,
+        Rg32SNormBigEndian,
         Rg16Float,
         Rg16FloatBigEndian,
         Rg32Float,
@@ -3633,11 +3849,15 @@ public sealed class SequentialUncompressedTextureCoder : IPitchTextureCoder
         Rgba8UNorm,
         Rgba8UNormBigEndian,
         Rgba8SNorm,
+        Rgba8SNormBigEndian,
         Rgba16UNorm,
         Rgba16UNormBigEndian,
         Rgba16SNorm,
+        Rgba16SNormBigEndian,
         Rgba32UNorm,
+        Rgba32UNormBigEndian,
         Rgba32SNorm,
+        Rgba32SNormBigEndian,
         Rgba16Float,
         Rgba16FloatBigEndian,
         Rgba32Float,

@@ -1,4 +1,5 @@
 using System.Buffers.Binary;
+using System.Numerics;
 using TextureCompressor.Colors;
 using TextureCompressor.Formats;
 using TextureCompressor.Images;
@@ -290,6 +291,12 @@ public sealed class DepthStencilTextureCoder : IPitchTextureCoder
             case DepthStencilTransfer.Depth24Stencil8BigEndian:
                 EncodeDepthStencil<Depth24Stencil8DirectTransferBigEndian>(depth, stencil, width, height, destination, rowPitch);
                 return;
+            case DepthStencilTransfer.D24FS8:
+                EncodeDepthStencil<D24FS8DirectTransfer>(depth, stencil, width, height, destination, rowPitch);
+                return;
+            case DepthStencilTransfer.D24FS8BigEndian:
+                EncodeDepthStencil<D24FS8DirectTransferBigEndian>(depth, stencil, width, height, destination, rowPitch);
+                return;
             case DepthStencilTransfer.Depth32Stencil8:
                 EncodeDepthStencil<Depth32Stencil8DirectTransfer>(depth, stencil, width, height, destination, rowPitch);
                 return;
@@ -313,6 +320,12 @@ public sealed class DepthStencilTextureCoder : IPitchTextureCoder
                 return;
             case DepthStencilTransfer.Depth24Stencil8BigEndian:
                 DecodeDepthStencil<Depth24Stencil8DirectTransferBigEndian>(width, height, source, depth, stencil, rowPitch);
+                return;
+            case DepthStencilTransfer.D24FS8:
+                DecodeDepthStencil<D24FS8DirectTransfer>(width, height, source, depth, stencil, rowPitch);
+                return;
+            case DepthStencilTransfer.D24FS8BigEndian:
+                DecodeDepthStencil<D24FS8DirectTransferBigEndian>(width, height, source, depth, stencil, rowPitch);
                 return;
             case DepthStencilTransfer.Depth32Stencil8:
                 DecodeDepthStencil<Depth32Stencil8DirectTransfer>(width, height, source, depth, stencil, rowPitch);
@@ -654,6 +667,35 @@ public sealed class DepthStencilTextureCoder : IPitchTextureCoder
             EncodeBigEndianDirect<Depth24Stencil8DirectTransfer>(depth, stencil, destination, BigEndianByteSwapMode.Swap8In32);
     }
 
+    private readonly struct D24FS8DirectTransfer : IDepthStencilDirectTransfer
+    {
+        public static int BytesPerTexel => 4;
+
+        public static void Decode(ReadOnlySpan<byte> source, out float depth, out uint stencil)
+        {
+            var packed = BinaryPrimitives.ReadUInt32LittleEndian(source);
+            depth = Float20e4To32(packed >> 8);
+            stencil = packed & 0xffu;
+        }
+
+        public static void Encode(float depth, uint stencil, Span<byte> destination)
+        {
+            var packed = (Float32To20e4(depth) << 8) | Math.Min(stencil, 0xffu);
+            BinaryPrimitives.WriteUInt32LittleEndian(destination, packed);
+        }
+    }
+
+    private readonly struct D24FS8DirectTransferBigEndian : IDepthStencilDirectTransfer
+    {
+        public static int BytesPerTexel => D24FS8DirectTransfer.BytesPerTexel;
+
+        public static void Decode(ReadOnlySpan<byte> source, out float depth, out uint stencil) =>
+            DecodeBigEndianDirect<D24FS8DirectTransfer>(source, out depth, out stencil, BigEndianByteSwapMode.Swap8In32);
+
+        public static void Encode(float depth, uint stencil, Span<byte> destination) =>
+            EncodeBigEndianDirect<D24FS8DirectTransfer>(depth, stencil, destination, BigEndianByteSwapMode.Swap8In32);
+    }
+
     private readonly struct Depth32Stencil8DirectTransfer : IDepthStencilDirectTransfer
     {
         public static int BytesPerTexel => 5;
@@ -748,6 +790,12 @@ public sealed class DepthStencilTextureCoder : IPitchTextureCoder
             case DepthStencilTransfer.Depth24Stencil8BigEndian:
                 DecodeTexels<TPixel, Depth24Stencil8TransferBigEndian>(source, destination, rowPitch);
                 return;
+            case DepthStencilTransfer.D24FS8:
+                DecodeTexels<TPixel, D24FS8Transfer>(source, destination, rowPitch);
+                return;
+            case DepthStencilTransfer.D24FS8BigEndian:
+                DecodeTexels<TPixel, D24FS8TransferBigEndian>(source, destination, rowPitch);
+                return;
             case DepthStencilTransfer.Depth32Stencil8:
                 DecodeTexels<TPixel, Depth32Stencil8Transfer>(source, destination, rowPitch);
                 return;
@@ -808,6 +856,12 @@ public sealed class DepthStencilTextureCoder : IPitchTextureCoder
                 return;
             case DepthStencilTransfer.Depth24Stencil8BigEndian:
                 EncodeTexels<TPixel, Depth24Stencil8TransferBigEndian>(source, destination, rowPitch);
+                return;
+            case DepthStencilTransfer.D24FS8:
+                EncodeTexels<TPixel, D24FS8Transfer>(source, destination, rowPitch);
+                return;
+            case DepthStencilTransfer.D24FS8BigEndian:
+                EncodeTexels<TPixel, D24FS8TransferBigEndian>(source, destination, rowPitch);
                 return;
             case DepthStencilTransfer.Depth32Stencil8:
                 EncodeTexels<TPixel, Depth32Stencil8Transfer>(source, destination, rowPitch);
@@ -1073,6 +1127,34 @@ public sealed class DepthStencilTextureCoder : IPitchTextureCoder
             EncodeBigEndianPixel<Depth24Stencil8Transfer>(source, destination, BigEndianByteSwapMode.Swap8In32);
     }
 
+    private readonly struct D24FS8Transfer : IDepthStencilPixelTransfer
+    {
+        public static int BytesPerTexel => 4;
+
+        public static Rgba32Float Decode(ReadOnlySpan<byte> source)
+        {
+            var packed = BinaryPrimitives.ReadUInt32LittleEndian(source);
+            return new Rgba32Float(Float20e4To32(packed >> 8), UNormToFloat(packed & 0xffu, 8), 0f);
+        }
+
+        public static void Encode(Rgba32Float source, Span<byte> destination)
+        {
+            var packed = (Float32To20e4(source.Red) << 8) | FloatToUNorm(source.Green, 8);
+            BinaryPrimitives.WriteUInt32LittleEndian(destination, packed);
+        }
+    }
+
+    private readonly struct D24FS8TransferBigEndian : IDepthStencilPixelTransfer
+    {
+        public static int BytesPerTexel => D24FS8Transfer.BytesPerTexel;
+
+        public static Rgba32Float Decode(ReadOnlySpan<byte> source) =>
+            DecodeBigEndianPixel<D24FS8Transfer>(source, BigEndianByteSwapMode.Swap8In32);
+
+        public static void Encode(Rgba32Float source, Span<byte> destination) =>
+            EncodeBigEndianPixel<D24FS8Transfer>(source, destination, BigEndianByteSwapMode.Swap8In32);
+    }
+
     private readonly struct Depth32Stencil8Transfer : IDepthStencilPixelTransfer
     {
         public static int BytesPerTexel => 5;
@@ -1272,6 +1354,58 @@ public sealed class DepthStencilTextureCoder : IPitchTextureCoder
 
     private static uint GetMaxUInt(int bits) => bits == 32 ? uint.MaxValue : (1u << bits) - 1u;
 
+    private static uint Float32To20e4(float value)
+    {
+        if (!(value > 0f))
+        {
+            return 0;
+        }
+
+        var bits = BitConverter.SingleToUInt32Bits(value);
+        if (bits >= 0x3ffffff8u)
+        {
+            return 0xffffffu;
+        }
+
+        if (bits < 0x38800000u)
+        {
+            var shift = Math.Min(113u - (bits >> 23), 24u);
+            bits = (0x800000u | (bits & 0x7fffffu)) >> (int)shift;
+        }
+        else
+        {
+            bits = unchecked(bits + 0xc8000000u);
+        }
+
+        bits += 3u + ((bits >> 3) & 1u);
+        return (bits >> 3) & 0xffffffu;
+    }
+
+    private static float Float20e4To32(uint value)
+    {
+        value &= 0xffffffu;
+        if (value == 0)
+        {
+            return 0f;
+        }
+
+        var mantissa = value & 0xfffffu;
+        var exponent = value >> 20;
+        int singleExponent;
+        if (exponent == 0)
+        {
+            var mantissaLeadingZeroCount = BitOperations.LeadingZeroCount(mantissa) - (32 - 21);
+            singleExponent = 113 - mantissaLeadingZeroCount;
+            mantissa = (mantissa << mantissaLeadingZeroCount) & 0xfffffu;
+        }
+        else
+        {
+            singleExponent = (int)exponent + 112;
+        }
+
+        return BitConverter.UInt32BitsToSingle(((uint)singleExponent << 23) | (mantissa << 3));
+    }
+
     private void ValidateDepthFormat()
     {
         if (Format.Components != TextureComponents.Depth)
@@ -1468,6 +1602,18 @@ public sealed class DepthStencilTextureCoder : IPitchTextureCoder
             return true;
         }
 
+        if (format == TextureFormats.Depth24FloatStencil8)
+        {
+            transfer = DepthStencilTransfer.D24FS8;
+            return true;
+        }
+
+        if (format == TextureFormats.Depth24FloatStencil8BigEndian)
+        {
+            transfer = DepthStencilTransfer.D24FS8BigEndian;
+            return true;
+        }
+
         if (format == TextureFormats.Depth32Stencil8)
         {
             transfer = DepthStencilTransfer.Depth32Stencil8;
@@ -1506,6 +1652,8 @@ public sealed class DepthStencilTextureCoder : IPitchTextureCoder
         Depth16Stencil8,
         Depth24Stencil8,
         Depth24Stencil8BigEndian,
+        D24FS8,
+        D24FS8BigEndian,
         Depth32Stencil8,
         Depth32FloatStencil8
     }
