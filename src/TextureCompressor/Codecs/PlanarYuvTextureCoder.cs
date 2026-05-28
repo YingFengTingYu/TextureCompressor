@@ -117,17 +117,17 @@ public sealed class PlanarYuvTextureCoder : IPitchTextureCoder
 
     private void DecodeByLayout<TPixel, TSample>(ReadOnlySpan<byte> source, ImageView<TPixel> destination)
         where TPixel : unmanaged, IPixel<TPixel>
-        where TSample : IPlanarYuvSampleTransfer
+        where TSample : struct, IPlanarYuvSampleTransfer
     {
         if (_layout.Biplanar)
         {
             if (_layout.VFirst)
             {
-                DecodeBySubsample<TPixel, TSample, BiplanarTransfer, VuTransfer>(source, destination);
+                DecodeBySubsample<TPixel, TSample, BiplanarLayout, VuChromaOrder>(source, destination);
             }
             else
             {
-                DecodeBySubsample<TPixel, TSample, BiplanarTransfer, UvTransfer>(source, destination);
+                DecodeBySubsample<TPixel, TSample, BiplanarLayout, UvChromaOrder>(source, destination);
             }
 
             return;
@@ -135,27 +135,27 @@ public sealed class PlanarYuvTextureCoder : IPitchTextureCoder
 
         if (_layout.VFirst)
         {
-            DecodeBySubsample<TPixel, TSample, ThreePlaneTransfer, VuTransfer>(source, destination);
+            DecodeBySubsample<TPixel, TSample, ThreePlaneLayout, VuChromaOrder>(source, destination);
         }
         else
         {
-            DecodeBySubsample<TPixel, TSample, ThreePlaneTransfer, UvTransfer>(source, destination);
+            DecodeBySubsample<TPixel, TSample, ThreePlaneLayout, UvChromaOrder>(source, destination);
         }
     }
 
     private void EncodeByLayout<TPixel, TSample>(ImageView<TPixel> source, Span<byte> destination)
         where TPixel : unmanaged, IPixel<TPixel>
-        where TSample : IPlanarYuvSampleTransfer
+        where TSample : struct, IPlanarYuvSampleTransfer
     {
         if (_layout.Biplanar)
         {
             if (_layout.VFirst)
             {
-                EncodeBySubsample<TPixel, TSample, BiplanarTransfer, VuTransfer>(source, destination);
+                EncodeBySubsample<TPixel, TSample, BiplanarLayout, VuChromaOrder>(source, destination);
             }
             else
             {
-                EncodeBySubsample<TPixel, TSample, BiplanarTransfer, UvTransfer>(source, destination);
+                EncodeBySubsample<TPixel, TSample, BiplanarLayout, UvChromaOrder>(source, destination);
             }
 
             return;
@@ -163,33 +163,33 @@ public sealed class PlanarYuvTextureCoder : IPitchTextureCoder
 
         if (_layout.VFirst)
         {
-            EncodeBySubsample<TPixel, TSample, ThreePlaneTransfer, VuTransfer>(source, destination);
+            EncodeBySubsample<TPixel, TSample, ThreePlaneLayout, VuChromaOrder>(source, destination);
         }
         else
         {
-            EncodeBySubsample<TPixel, TSample, ThreePlaneTransfer, UvTransfer>(source, destination);
+            EncodeBySubsample<TPixel, TSample, ThreePlaneLayout, UvChromaOrder>(source, destination);
         }
     }
 
     private void DecodeBySubsample<TPixel, TSample, TPlane, TOrder>(ReadOnlySpan<byte> source, ImageView<TPixel> destination)
         where TPixel : unmanaged, IPixel<TPixel>
-        where TSample : IPlanarYuvSampleTransfer
-        where TPlane : IPlanarYuvPlaneTransfer
-        where TOrder : IPlanarYuvOrderTransfer
+        where TSample : struct, IPlanarYuvSampleTransfer
+        where TPlane : struct, IPlanarYuvPlaneLayout
+        where TOrder : struct, IPlanarYuvChromaOrder
     {
         switch ((_layout.ChromaSubsampleX, _layout.ChromaSubsampleY))
         {
             case (1, 1):
-                Decode<TPixel, TSample, TPlane, TOrder, Subsample444Transfer>(source, destination);
+                Decode<TPixel, TSample, TPlane, TOrder, Subsample444>(source, destination);
                 return;
             case (2, 1):
-                Decode<TPixel, TSample, TPlane, TOrder, Subsample422Transfer>(source, destination);
+                Decode<TPixel, TSample, TPlane, TOrder, Subsample422>(source, destination);
                 return;
             case (2, 2):
-                Decode<TPixel, TSample, TPlane, TOrder, Subsample420Transfer>(source, destination);
+                Decode<TPixel, TSample, TPlane, TOrder, Subsample420>(source, destination);
                 return;
             case (1, 2):
-                Decode<TPixel, TSample, TPlane, TOrder, Subsample412Transfer>(source, destination);
+                Decode<TPixel, TSample, TPlane, TOrder, Subsample412>(source, destination);
                 return;
             default:
                 throw CreateUnsupportedFormatException(Format);
@@ -198,23 +198,23 @@ public sealed class PlanarYuvTextureCoder : IPitchTextureCoder
 
     private void EncodeBySubsample<TPixel, TSample, TPlane, TOrder>(ImageView<TPixel> source, Span<byte> destination)
         where TPixel : unmanaged, IPixel<TPixel>
-        where TSample : IPlanarYuvSampleTransfer
-        where TPlane : IPlanarYuvPlaneTransfer
-        where TOrder : IPlanarYuvOrderTransfer
+        where TSample : struct, IPlanarYuvSampleTransfer
+        where TPlane : struct, IPlanarYuvPlaneLayout
+        where TOrder : struct, IPlanarYuvChromaOrder
     {
         switch ((_layout.ChromaSubsampleX, _layout.ChromaSubsampleY))
         {
             case (1, 1):
-                Encode<TPixel, TSample, TPlane, TOrder, Subsample444Transfer>(source, destination);
+                Encode<TPixel, TSample, TPlane, TOrder, Subsample444>(source, destination);
                 return;
             case (2, 1):
-                Encode<TPixel, TSample, TPlane, TOrder, Subsample422Transfer>(source, destination);
+                Encode<TPixel, TSample, TPlane, TOrder, Subsample422>(source, destination);
                 return;
             case (2, 2):
-                Encode<TPixel, TSample, TPlane, TOrder, Subsample420Transfer>(source, destination);
+                Encode<TPixel, TSample, TPlane, TOrder, Subsample420>(source, destination);
                 return;
             case (1, 2):
-                Encode<TPixel, TSample, TPlane, TOrder, Subsample412Transfer>(source, destination);
+                Encode<TPixel, TSample, TPlane, TOrder, Subsample412>(source, destination);
                 return;
             default:
                 throw CreateUnsupportedFormatException(Format);
@@ -223,52 +223,39 @@ public sealed class PlanarYuvTextureCoder : IPitchTextureCoder
 
     private static void Decode<TPixel, TSample, TPlane, TOrder, TSubsample>(ReadOnlySpan<byte> source, ImageView<TPixel> destination)
         where TPixel : unmanaged, IPixel<TPixel>
-        where TSample : IPlanarYuvSampleTransfer
-        where TPlane : IPlanarYuvPlaneTransfer
-        where TOrder : IPlanarYuvOrderTransfer
-        where TSubsample : IPlanarYuvSubsampleTransfer
+        where TSample : struct, IPlanarYuvSampleTransfer
+        where TPlane : struct, IPlanarYuvPlaneLayout
+        where TOrder : struct, IPlanarYuvChromaOrder
+        where TSubsample : struct, IPlanarYuvSubsampling
     {
         var lumaSampleCount = checked(destination.Width * destination.Height);
         var lumaByteCount = checked(lumaSampleCount * TSample.BytesPerSample);
-        var chromaWidth = checked((destination.Width + TSubsample.X - 1) / TSubsample.X);
-        var chromaHeight = checked((destination.Height + TSubsample.Y - 1) / TSubsample.Y);
+        var chromaWidth = TSubsample.GetChromaWidth(destination.Width);
+        var chromaHeight = TSubsample.GetChromaHeight(destination.Height);
         var chromaSampleCount = checked(chromaWidth * chromaHeight);
         var chromaPlaneByteCount = checked(chromaSampleCount * TSample.BytesPerSample);
 
         var luma = source[..lumaByteCount];
         var chroma = source[lumaByteCount..];
-        ReadOnlySpan<byte> firstChromaPlane;
-        ReadOnlySpan<byte> secondChromaPlane;
-        if (TPlane.Biplanar)
-        {
-            firstChromaPlane = chroma;
-            secondChromaPlane = chroma[TSample.BytesPerSample..];
-        }
-        else
-        {
-            firstChromaPlane = chroma[..chromaPlaneByteCount];
-            secondChromaPlane = chroma.Slice(chromaPlaneByteCount, chromaPlaneByteCount);
-        }
+        TPlane.GetChromaPlanes<TSample>(chroma, chromaPlaneByteCount, out var firstChromaPlane, out var secondChromaPlane);
 
         var lumaRowOffset = 0;
         var lumaRowByteCount = checked(destination.Width * TSample.BytesPerSample);
         for (var y = 0; y < destination.Height; y++)
         {
             var destinationRow = destination.GetRowSpan(y);
-            var chromaY = y / TSubsample.Y;
+            var chromaY = TSubsample.GetChromaY(y);
             var chromaRowIndex = chromaY * chromaWidth;
             var lumaOffset = lumaRowOffset;
             for (var x = 0; x < destination.Width; x++)
             {
-                var chromaX = x / TSubsample.X;
+                var chromaX = TSubsample.GetChromaX(x);
                 var chromaIndex = chromaRowIndex + chromaX;
-                var firstChromaIndex = TPlane.Biplanar
-                    ? chromaIndex * 2 * TSample.BytesPerSample
-                    : chromaIndex * TSample.BytesPerSample;
+                var firstChromaIndex = TPlane.GetChromaIndex<TSample>(chromaIndex);
                 var first = TSample.Read(firstChromaPlane[firstChromaIndex..]);
                 var second = TSample.Read(secondChromaPlane[firstChromaIndex..]);
-                var u = TOrder.VFirst ? second : first;
-                var v = TOrder.VFirst ? first : second;
+                var u = TOrder.GetU(first, second);
+                var v = TOrder.GetV(first, second);
                 var ySample = TSample.Read(luma[lumaOffset..]);
                 destinationRow[x] = TPixel.FromRgba32Float(YuvToRgba32Float(ySample, u, v, TSample.BitsPerSample));
                 lumaOffset = checked(lumaOffset + TSample.BytesPerSample);
@@ -280,15 +267,15 @@ public sealed class PlanarYuvTextureCoder : IPitchTextureCoder
 
     private static void Encode<TPixel, TSample, TPlane, TOrder, TSubsample>(ImageView<TPixel> source, Span<byte> destination)
         where TPixel : unmanaged, IPixel<TPixel>
-        where TSample : IPlanarYuvSampleTransfer
-        where TPlane : IPlanarYuvPlaneTransfer
-        where TOrder : IPlanarYuvOrderTransfer
-        where TSubsample : IPlanarYuvSubsampleTransfer
+        where TSample : struct, IPlanarYuvSampleTransfer
+        where TPlane : struct, IPlanarYuvPlaneLayout
+        where TOrder : struct, IPlanarYuvChromaOrder
+        where TSubsample : struct, IPlanarYuvSubsampling
     {
         var texelCount = checked(source.Width * source.Height);
         var lumaByteCount = checked(texelCount * TSample.BytesPerSample);
-        var chromaWidth = checked((source.Width + TSubsample.X - 1) / TSubsample.X);
-        var chromaHeight = checked((source.Height + TSubsample.Y - 1) / TSubsample.Y);
+        var chromaWidth = TSubsample.GetChromaWidth(source.Width);
+        var chromaHeight = TSubsample.GetChromaHeight(source.Height);
         var chromaSampleCount = checked(chromaWidth * chromaHeight);
         var chromaPlaneByteCount = checked(chromaSampleCount * TSample.BytesPerSample);
 
@@ -305,17 +292,16 @@ public sealed class PlanarYuvTextureCoder : IPitchTextureCoder
         }
 
         var chroma = destination[lumaByteCount..];
-        var firstChromaPlane = TPlane.Biplanar ? chroma : chroma[..chromaPlaneByteCount];
-        var secondChromaPlane = TPlane.Biplanar ? chroma[TSample.BytesPerSample..] : chroma.Slice(chromaPlaneByteCount, chromaPlaneByteCount);
+        TPlane.GetChromaPlanes<TSample>(chroma, chromaPlaneByteCount, out var firstChromaPlane, out var secondChromaPlane);
         for (var chromaY = 0; chromaY < chromaHeight; chromaY++)
         {
-            var sourceY = chromaY * TSubsample.Y;
-            var sourceHeight = Math.Min(TSubsample.Y, source.Height - sourceY);
+            var sourceY = TSubsample.GetSourceY(chromaY);
+            var sourceHeight = TSubsample.GetSourceHeight(source.Height, sourceY);
             var chromaRowIndex = chromaY * chromaWidth;
             for (var chromaX = 0; chromaX < chromaWidth; chromaX++)
             {
-                var sourceX = chromaX * TSubsample.X;
-                var sourceWidth = Math.Min(TSubsample.X, source.Width - sourceX);
+                var sourceX = TSubsample.GetSourceX(chromaX);
+                var sourceWidth = TSubsample.GetSourceWidth(source.Width, sourceX);
                 var uTotal = 0f;
                 var vTotal = 0f;
                 var sampleCount = 0;
@@ -331,16 +317,12 @@ public sealed class PlanarYuvTextureCoder : IPitchTextureCoder
                     }
                 }
 
-                var first = TOrder.VFirst
-                    ? ChromaToYuvSample(vTotal / sampleCount, TSample.BitsPerSample)
-                    : ChromaToYuvSample(uTotal / sampleCount, TSample.BitsPerSample);
-                var second = TOrder.VFirst
-                    ? ChromaToYuvSample(uTotal / sampleCount, TSample.BitsPerSample)
-                    : ChromaToYuvSample(vTotal / sampleCount, TSample.BitsPerSample);
+                var uAverage = uTotal / sampleCount;
+                var vAverage = vTotal / sampleCount;
+                var first = TOrder.GetFirstChromaSample(uAverage, vAverage, TSample.BitsPerSample);
+                var second = TOrder.GetSecondChromaSample(uAverage, vAverage, TSample.BitsPerSample);
                 var chromaIndex = chromaRowIndex + chromaX;
-                var firstChromaIndex = TPlane.Biplanar
-                    ? chromaIndex * 2 * TSample.BytesPerSample
-                    : chromaIndex * TSample.BytesPerSample;
+                var firstChromaIndex = TPlane.GetChromaIndex<TSample>(chromaIndex);
                 TSample.Write(firstChromaPlane[firstChromaIndex..], first);
                 TSample.Write(secondChromaPlane[firstChromaIndex..], second);
             }
@@ -358,21 +340,54 @@ public sealed class PlanarYuvTextureCoder : IPitchTextureCoder
         static abstract void Write(Span<byte> destination, uint sample);
     }
 
-    private interface IPlanarYuvPlaneTransfer
+    private interface IPlanarYuvPlaneLayout
     {
-        static abstract bool Biplanar { get; }
+        static abstract void GetChromaPlanes<TSample>(
+            ReadOnlySpan<byte> chroma,
+            int chromaPlaneByteCount,
+            out ReadOnlySpan<byte> first,
+            out ReadOnlySpan<byte> second)
+            where TSample : struct, IPlanarYuvSampleTransfer;
+
+        static abstract void GetChromaPlanes<TSample>(
+            Span<byte> chroma,
+            int chromaPlaneByteCount,
+            out Span<byte> first,
+            out Span<byte> second)
+            where TSample : struct, IPlanarYuvSampleTransfer;
+
+        static abstract int GetChromaIndex<TSample>(int chromaIndex)
+            where TSample : struct, IPlanarYuvSampleTransfer;
     }
 
-    private interface IPlanarYuvOrderTransfer
+    private interface IPlanarYuvChromaOrder
     {
-        static abstract bool VFirst { get; }
+        static abstract uint GetU(uint first, uint second);
+
+        static abstract uint GetV(uint first, uint second);
+
+        static abstract uint GetFirstChromaSample(float u, float v, int bitsPerSample);
+
+        static abstract uint GetSecondChromaSample(float u, float v, int bitsPerSample);
     }
 
-    private interface IPlanarYuvSubsampleTransfer
+    private interface IPlanarYuvSubsampling
     {
-        static abstract int X { get; }
+        static abstract int GetChromaWidth(int width);
 
-        static abstract int Y { get; }
+        static abstract int GetChromaHeight(int height);
+
+        static abstract int GetChromaX(int x);
+
+        static abstract int GetChromaY(int y);
+
+        static abstract int GetSourceX(int chromaX);
+
+        static abstract int GetSourceY(int chromaY);
+
+        static abstract int GetSourceWidth(int width, int sourceX);
+
+        static abstract int GetSourceHeight(int height, int sourceY);
     }
 
     private readonly struct Sample8Transfer : IPlanarYuvSampleTransfer
@@ -451,48 +466,164 @@ public sealed class PlanarYuvTextureCoder : IPitchTextureCoder
             BinaryPrimitives.WriteUInt16LittleEndian(destination, checked((ushort)sample));
     }
 
-    private readonly struct ThreePlaneTransfer : IPlanarYuvPlaneTransfer
+    private readonly struct ThreePlaneLayout : IPlanarYuvPlaneLayout
     {
-        public static bool Biplanar => false;
+        public static void GetChromaPlanes<TSample>(
+            ReadOnlySpan<byte> chroma,
+            int chromaPlaneByteCount,
+            out ReadOnlySpan<byte> first,
+            out ReadOnlySpan<byte> second)
+            where TSample : struct, IPlanarYuvSampleTransfer
+        {
+            first = chroma[..chromaPlaneByteCount];
+            second = chroma.Slice(chromaPlaneByteCount, chromaPlaneByteCount);
+        }
+
+        public static void GetChromaPlanes<TSample>(
+            Span<byte> chroma,
+            int chromaPlaneByteCount,
+            out Span<byte> first,
+            out Span<byte> second)
+            where TSample : struct, IPlanarYuvSampleTransfer
+        {
+            first = chroma[..chromaPlaneByteCount];
+            second = chroma.Slice(chromaPlaneByteCount, chromaPlaneByteCount);
+        }
+
+        public static int GetChromaIndex<TSample>(int chromaIndex)
+            where TSample : struct, IPlanarYuvSampleTransfer =>
+            chromaIndex * TSample.BytesPerSample;
     }
 
-    private readonly struct BiplanarTransfer : IPlanarYuvPlaneTransfer
+    private readonly struct BiplanarLayout : IPlanarYuvPlaneLayout
     {
-        public static bool Biplanar => true;
+        public static void GetChromaPlanes<TSample>(
+            ReadOnlySpan<byte> chroma,
+            int chromaPlaneByteCount,
+            out ReadOnlySpan<byte> first,
+            out ReadOnlySpan<byte> second)
+            where TSample : struct, IPlanarYuvSampleTransfer
+        {
+            first = chroma;
+            second = chroma[TSample.BytesPerSample..];
+        }
+
+        public static void GetChromaPlanes<TSample>(
+            Span<byte> chroma,
+            int chromaPlaneByteCount,
+            out Span<byte> first,
+            out Span<byte> second)
+            where TSample : struct, IPlanarYuvSampleTransfer
+        {
+            first = chroma;
+            second = chroma[TSample.BytesPerSample..];
+        }
+
+        public static int GetChromaIndex<TSample>(int chromaIndex)
+            where TSample : struct, IPlanarYuvSampleTransfer =>
+            chromaIndex * 2 * TSample.BytesPerSample;
     }
 
-    private readonly struct UvTransfer : IPlanarYuvOrderTransfer
+    private readonly struct UvChromaOrder : IPlanarYuvChromaOrder
     {
-        public static bool VFirst => false;
+        public static uint GetU(uint first, uint second) => first;
+
+        public static uint GetV(uint first, uint second) => second;
+
+        public static uint GetFirstChromaSample(float u, float v, int bitsPerSample) =>
+            ChromaToYuvSample(u, bitsPerSample);
+
+        public static uint GetSecondChromaSample(float u, float v, int bitsPerSample) =>
+            ChromaToYuvSample(v, bitsPerSample);
     }
 
-    private readonly struct VuTransfer : IPlanarYuvOrderTransfer
+    private readonly struct VuChromaOrder : IPlanarYuvChromaOrder
     {
-        public static bool VFirst => true;
+        public static uint GetU(uint first, uint second) => second;
+
+        public static uint GetV(uint first, uint second) => first;
+
+        public static uint GetFirstChromaSample(float u, float v, int bitsPerSample) =>
+            ChromaToYuvSample(v, bitsPerSample);
+
+        public static uint GetSecondChromaSample(float u, float v, int bitsPerSample) =>
+            ChromaToYuvSample(u, bitsPerSample);
     }
 
-    private readonly struct Subsample444Transfer : IPlanarYuvSubsampleTransfer
+    private readonly struct Subsample444 : IPlanarYuvSubsampling
     {
-        public static int X => 1;
-        public static int Y => 1;
+        public static int GetChromaWidth(int width) => width;
+
+        public static int GetChromaHeight(int height) => height;
+
+        public static int GetChromaX(int x) => x;
+
+        public static int GetChromaY(int y) => y;
+
+        public static int GetSourceX(int chromaX) => chromaX;
+
+        public static int GetSourceY(int chromaY) => chromaY;
+
+        public static int GetSourceWidth(int width, int sourceX) => 1;
+
+        public static int GetSourceHeight(int height, int sourceY) => 1;
     }
 
-    private readonly struct Subsample422Transfer : IPlanarYuvSubsampleTransfer
+    private readonly struct Subsample422 : IPlanarYuvSubsampling
     {
-        public static int X => 2;
-        public static int Y => 1;
+        public static int GetChromaWidth(int width) => checked((width + 1) / 2);
+
+        public static int GetChromaHeight(int height) => height;
+
+        public static int GetChromaX(int x) => x / 2;
+
+        public static int GetChromaY(int y) => y;
+
+        public static int GetSourceX(int chromaX) => chromaX * 2;
+
+        public static int GetSourceY(int chromaY) => chromaY;
+
+        public static int GetSourceWidth(int width, int sourceX) => Math.Min(2, width - sourceX);
+
+        public static int GetSourceHeight(int height, int sourceY) => 1;
     }
 
-    private readonly struct Subsample420Transfer : IPlanarYuvSubsampleTransfer
+    private readonly struct Subsample420 : IPlanarYuvSubsampling
     {
-        public static int X => 2;
-        public static int Y => 2;
+        public static int GetChromaWidth(int width) => checked((width + 1) / 2);
+
+        public static int GetChromaHeight(int height) => checked((height + 1) / 2);
+
+        public static int GetChromaX(int x) => x / 2;
+
+        public static int GetChromaY(int y) => y / 2;
+
+        public static int GetSourceX(int chromaX) => chromaX * 2;
+
+        public static int GetSourceY(int chromaY) => chromaY * 2;
+
+        public static int GetSourceWidth(int width, int sourceX) => Math.Min(2, width - sourceX);
+
+        public static int GetSourceHeight(int height, int sourceY) => Math.Min(2, height - sourceY);
     }
 
-    private readonly struct Subsample412Transfer : IPlanarYuvSubsampleTransfer
+    private readonly struct Subsample412 : IPlanarYuvSubsampling
     {
-        public static int X => 1;
-        public static int Y => 2;
+        public static int GetChromaWidth(int width) => width;
+
+        public static int GetChromaHeight(int height) => checked((height + 1) / 2);
+
+        public static int GetChromaX(int x) => x;
+
+        public static int GetChromaY(int y) => y / 2;
+
+        public static int GetSourceX(int chromaX) => chromaX;
+
+        public static int GetSourceY(int chromaY) => chromaY * 2;
+
+        public static int GetSourceWidth(int width, int sourceX) => 1;
+
+        public static int GetSourceHeight(int height, int sourceY) => Math.Min(2, height - sourceY);
     }
 
     private void ValidateSourceLength(int width, int height, ReadOnlySpan<byte> source, int rowPitch)

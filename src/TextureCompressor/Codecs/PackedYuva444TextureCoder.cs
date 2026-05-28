@@ -119,7 +119,7 @@ public sealed class PackedYuva444TextureCoder : IPitchTextureCoder
 
     private static void Decode<TPixel, TTransfer>(ReadOnlySpan<byte> source, ImageView<TPixel> destination, int rowPitch)
         where TPixel : unmanaged, IPixel<TPixel>
-        where TTransfer : IPackedYuva444Transfer
+        where TTransfer : struct, IPackedYuva444Transfer
     {
         var rowOffset = 0;
         for (var y = 0; y < destination.Height; y++)
@@ -138,7 +138,7 @@ public sealed class PackedYuva444TextureCoder : IPitchTextureCoder
 
     private static void Encode<TPixel, TTransfer>(ImageView<TPixel> source, Span<byte> destination, int rowPitch)
         where TPixel : unmanaged, IPixel<TPixel>
-        where TTransfer : IPackedYuva444Transfer
+        where TTransfer : struct, IPackedYuva444Transfer
     {
         var rowOffset = 0;
         for (var y = 0; y < source.Height; y++)
@@ -166,11 +166,33 @@ public sealed class PackedYuva444TextureCoder : IPitchTextureCoder
 
     private interface IWideYuva444Transfer : IPackedYuva444Transfer
     {
-        static abstract int BitsPerSample { get; }
+        static abstract uint ReadFirst(ReadOnlySpan<byte> source);
 
-        static abstract bool VFirst { get; }
+        static abstract uint ReadY(ReadOnlySpan<byte> source);
 
-        static abstract bool MsbAligned { get; }
+        static abstract uint ReadSecond(ReadOnlySpan<byte> source);
+
+        static abstract uint ReadAlpha(ReadOnlySpan<byte> source);
+
+        static abstract void WriteFirst(Span<byte> destination, uint sample);
+
+        static abstract void WriteY(Span<byte> destination, uint sample);
+
+        static abstract void WriteSecond(Span<byte> destination, uint sample);
+
+        static abstract void WriteAlpha(Span<byte> destination, uint sample);
+
+        static abstract uint GetU(uint first, uint second);
+
+        static abstract uint GetV(uint first, uint second);
+
+        static abstract uint GetFirstChromaSample(float u, float v);
+
+        static abstract uint GetSecondChromaSample(float u, float v);
+
+        static abstract uint UnitToYuvSample(float value);
+
+        static abstract Rgba32Float YuvToRgba32Float(uint ySample, uint uSample, uint vSample, uint alpha);
     }
 
     private readonly struct AyuvTransfer : IPackedYuva444Transfer
@@ -225,9 +247,36 @@ public sealed class PackedYuva444TextureCoder : IPitchTextureCoder
     private readonly struct Vyua10MsbTransfer : IWideYuva444Transfer
     {
         public static int BytesPerTexel => 8;
-        public static int BitsPerSample => 10;
-        public static bool VFirst => true;
-        public static bool MsbAligned => true;
+
+        public static uint ReadFirst(ReadOnlySpan<byte> source) => Read10Msb(source);
+
+        public static uint ReadY(ReadOnlySpan<byte> source) => Read10Msb(source[2..]);
+
+        public static uint ReadSecond(ReadOnlySpan<byte> source) => Read10Msb(source[4..]);
+
+        public static uint ReadAlpha(ReadOnlySpan<byte> source) => Read10Msb(source[6..]);
+
+        public static void WriteFirst(Span<byte> destination, uint sample) => Write10Msb(destination, sample);
+
+        public static void WriteY(Span<byte> destination, uint sample) => Write10Msb(destination[2..], sample);
+
+        public static void WriteSecond(Span<byte> destination, uint sample) => Write10Msb(destination[4..], sample);
+
+        public static void WriteAlpha(Span<byte> destination, uint sample) => Write10Msb(destination[6..], sample);
+
+        public static uint GetU(uint first, uint second) => second;
+
+        public static uint GetV(uint first, uint second) => first;
+
+        public static uint GetFirstChromaSample(float u, float v) => ChromaToYuvSample(v, bitsPerSample: 10);
+
+        public static uint GetSecondChromaSample(float u, float v) => ChromaToYuvSample(u, bitsPerSample: 10);
+
+        public static uint UnitToYuvSample(float value) =>
+            PackedYuva444TextureCoder.UnitToYuvSample(value, bitsPerSample: 10);
+
+        public static Rgba32Float YuvToRgba32Float(uint ySample, uint uSample, uint vSample, uint alpha) =>
+            PackedYuva444TextureCoder.YuvToRgba32Float(ySample, uSample, vSample, bitsPerSample: 10, alpha / (float)GetMaxYuvSample(bitsPerSample: 10));
 
         public static Rgba32Float Decode(ReadOnlySpan<byte> source) => DecodeWide<Vyua10MsbTransfer>(source);
 
@@ -237,9 +286,36 @@ public sealed class PackedYuva444TextureCoder : IPitchTextureCoder
     private readonly struct Vyua10LsbTransfer : IWideYuva444Transfer
     {
         public static int BytesPerTexel => 8;
-        public static int BitsPerSample => 10;
-        public static bool VFirst => true;
-        public static bool MsbAligned => false;
+
+        public static uint ReadFirst(ReadOnlySpan<byte> source) => Read10Lsb(source);
+
+        public static uint ReadY(ReadOnlySpan<byte> source) => Read10Lsb(source[2..]);
+
+        public static uint ReadSecond(ReadOnlySpan<byte> source) => Read10Lsb(source[4..]);
+
+        public static uint ReadAlpha(ReadOnlySpan<byte> source) => Read10Lsb(source[6..]);
+
+        public static void WriteFirst(Span<byte> destination, uint sample) => Write10Lsb(destination, sample);
+
+        public static void WriteY(Span<byte> destination, uint sample) => Write10Lsb(destination[2..], sample);
+
+        public static void WriteSecond(Span<byte> destination, uint sample) => Write10Lsb(destination[4..], sample);
+
+        public static void WriteAlpha(Span<byte> destination, uint sample) => Write10Lsb(destination[6..], sample);
+
+        public static uint GetU(uint first, uint second) => second;
+
+        public static uint GetV(uint first, uint second) => first;
+
+        public static uint GetFirstChromaSample(float u, float v) => ChromaToYuvSample(v, bitsPerSample: 10);
+
+        public static uint GetSecondChromaSample(float u, float v) => ChromaToYuvSample(u, bitsPerSample: 10);
+
+        public static uint UnitToYuvSample(float value) =>
+            PackedYuva444TextureCoder.UnitToYuvSample(value, bitsPerSample: 10);
+
+        public static Rgba32Float YuvToRgba32Float(uint ySample, uint uSample, uint vSample, uint alpha) =>
+            PackedYuva444TextureCoder.YuvToRgba32Float(ySample, uSample, vSample, bitsPerSample: 10, alpha / (float)GetMaxYuvSample(bitsPerSample: 10));
 
         public static Rgba32Float Decode(ReadOnlySpan<byte> source) => DecodeWide<Vyua10LsbTransfer>(source);
 
@@ -249,9 +325,36 @@ public sealed class PackedYuva444TextureCoder : IPitchTextureCoder
     private readonly struct Vyua12MsbTransfer : IWideYuva444Transfer
     {
         public static int BytesPerTexel => 8;
-        public static int BitsPerSample => 12;
-        public static bool VFirst => true;
-        public static bool MsbAligned => true;
+
+        public static uint ReadFirst(ReadOnlySpan<byte> source) => Read12Msb(source);
+
+        public static uint ReadY(ReadOnlySpan<byte> source) => Read12Msb(source[2..]);
+
+        public static uint ReadSecond(ReadOnlySpan<byte> source) => Read12Msb(source[4..]);
+
+        public static uint ReadAlpha(ReadOnlySpan<byte> source) => Read12Msb(source[6..]);
+
+        public static void WriteFirst(Span<byte> destination, uint sample) => Write12Msb(destination, sample);
+
+        public static void WriteY(Span<byte> destination, uint sample) => Write12Msb(destination[2..], sample);
+
+        public static void WriteSecond(Span<byte> destination, uint sample) => Write12Msb(destination[4..], sample);
+
+        public static void WriteAlpha(Span<byte> destination, uint sample) => Write12Msb(destination[6..], sample);
+
+        public static uint GetU(uint first, uint second) => second;
+
+        public static uint GetV(uint first, uint second) => first;
+
+        public static uint GetFirstChromaSample(float u, float v) => ChromaToYuvSample(v, bitsPerSample: 12);
+
+        public static uint GetSecondChromaSample(float u, float v) => ChromaToYuvSample(u, bitsPerSample: 12);
+
+        public static uint UnitToYuvSample(float value) =>
+            PackedYuva444TextureCoder.UnitToYuvSample(value, bitsPerSample: 12);
+
+        public static Rgba32Float YuvToRgba32Float(uint ySample, uint uSample, uint vSample, uint alpha) =>
+            PackedYuva444TextureCoder.YuvToRgba32Float(ySample, uSample, vSample, bitsPerSample: 12, alpha / (float)GetMaxYuvSample(bitsPerSample: 12));
 
         public static Rgba32Float Decode(ReadOnlySpan<byte> source) => DecodeWide<Vyua12MsbTransfer>(source);
 
@@ -261,9 +364,36 @@ public sealed class PackedYuva444TextureCoder : IPitchTextureCoder
     private readonly struct Vyua12LsbTransfer : IWideYuva444Transfer
     {
         public static int BytesPerTexel => 8;
-        public static int BitsPerSample => 12;
-        public static bool VFirst => true;
-        public static bool MsbAligned => false;
+
+        public static uint ReadFirst(ReadOnlySpan<byte> source) => Read12Lsb(source);
+
+        public static uint ReadY(ReadOnlySpan<byte> source) => Read12Lsb(source[2..]);
+
+        public static uint ReadSecond(ReadOnlySpan<byte> source) => Read12Lsb(source[4..]);
+
+        public static uint ReadAlpha(ReadOnlySpan<byte> source) => Read12Lsb(source[6..]);
+
+        public static void WriteFirst(Span<byte> destination, uint sample) => Write12Lsb(destination, sample);
+
+        public static void WriteY(Span<byte> destination, uint sample) => Write12Lsb(destination[2..], sample);
+
+        public static void WriteSecond(Span<byte> destination, uint sample) => Write12Lsb(destination[4..], sample);
+
+        public static void WriteAlpha(Span<byte> destination, uint sample) => Write12Lsb(destination[6..], sample);
+
+        public static uint GetU(uint first, uint second) => second;
+
+        public static uint GetV(uint first, uint second) => first;
+
+        public static uint GetFirstChromaSample(float u, float v) => ChromaToYuvSample(v, bitsPerSample: 12);
+
+        public static uint GetSecondChromaSample(float u, float v) => ChromaToYuvSample(u, bitsPerSample: 12);
+
+        public static uint UnitToYuvSample(float value) =>
+            PackedYuva444TextureCoder.UnitToYuvSample(value, bitsPerSample: 12);
+
+        public static Rgba32Float YuvToRgba32Float(uint ySample, uint uSample, uint vSample, uint alpha) =>
+            PackedYuva444TextureCoder.YuvToRgba32Float(ySample, uSample, vSample, bitsPerSample: 12, alpha / (float)GetMaxYuvSample(bitsPerSample: 12));
 
         public static Rgba32Float Decode(ReadOnlySpan<byte> source) => DecodeWide<Vyua12LsbTransfer>(source);
 
@@ -273,9 +403,40 @@ public sealed class PackedYuva444TextureCoder : IPitchTextureCoder
     private readonly struct Uyva16Transfer : IWideYuva444Transfer
     {
         public static int BytesPerTexel => 8;
-        public static int BitsPerSample => 16;
-        public static bool VFirst => false;
-        public static bool MsbAligned => false;
+
+        public static uint ReadFirst(ReadOnlySpan<byte> source) => BinaryPrimitives.ReadUInt16LittleEndian(source);
+
+        public static uint ReadY(ReadOnlySpan<byte> source) => BinaryPrimitives.ReadUInt16LittleEndian(source[2..]);
+
+        public static uint ReadSecond(ReadOnlySpan<byte> source) => BinaryPrimitives.ReadUInt16LittleEndian(source[4..]);
+
+        public static uint ReadAlpha(ReadOnlySpan<byte> source) => BinaryPrimitives.ReadUInt16LittleEndian(source[6..]);
+
+        public static void WriteFirst(Span<byte> destination, uint sample) =>
+            BinaryPrimitives.WriteUInt16LittleEndian(destination, checked((ushort)sample));
+
+        public static void WriteY(Span<byte> destination, uint sample) =>
+            BinaryPrimitives.WriteUInt16LittleEndian(destination[2..], checked((ushort)sample));
+
+        public static void WriteSecond(Span<byte> destination, uint sample) =>
+            BinaryPrimitives.WriteUInt16LittleEndian(destination[4..], checked((ushort)sample));
+
+        public static void WriteAlpha(Span<byte> destination, uint sample) =>
+            BinaryPrimitives.WriteUInt16LittleEndian(destination[6..], checked((ushort)sample));
+
+        public static uint GetU(uint first, uint second) => first;
+
+        public static uint GetV(uint first, uint second) => second;
+
+        public static uint GetFirstChromaSample(float u, float v) => ChromaToYuvSample(u, bitsPerSample: 16);
+
+        public static uint GetSecondChromaSample(float u, float v) => ChromaToYuvSample(v, bitsPerSample: 16);
+
+        public static uint UnitToYuvSample(float value) =>
+            PackedYuva444TextureCoder.UnitToYuvSample(value, bitsPerSample: 16);
+
+        public static Rgba32Float YuvToRgba32Float(uint ySample, uint uSample, uint vSample, uint alpha) =>
+            PackedYuva444TextureCoder.YuvToRgba32Float(ySample, uSample, vSample, bitsPerSample: 16, alpha / (float)GetMaxYuvSample(bitsPerSample: 16));
 
         public static Rgba32Float Decode(ReadOnlySpan<byte> source) => DecodeWide<Uyva16Transfer>(source);
 
@@ -283,32 +444,23 @@ public sealed class PackedYuva444TextureCoder : IPitchTextureCoder
     }
 
     private static Rgba32Float DecodeWide<TTransfer>(ReadOnlySpan<byte> source)
-        where TTransfer : IWideYuva444Transfer
+        where TTransfer : struct, IWideYuva444Transfer
     {
-        var maxSample = GetMaxYuvSample(TTransfer.BitsPerSample);
-        var first = ReadYuvSample<TTransfer>(source);
-        var ySample = ReadYuvSample<TTransfer>(source[2..]);
-        var second = ReadYuvSample<TTransfer>(source[4..]);
-        var alpha = ReadYuvSample<TTransfer>(source[6..]);
-        var u = TTransfer.VFirst ? second : first;
-        var v = TTransfer.VFirst ? first : second;
-        return YuvToRgba32Float(ySample, u, v, TTransfer.BitsPerSample, alpha / (float)maxSample);
+        var first = TTransfer.ReadFirst(source);
+        var ySample = TTransfer.ReadY(source);
+        var second = TTransfer.ReadSecond(source);
+        var alpha = TTransfer.ReadAlpha(source);
+        return TTransfer.YuvToRgba32Float(ySample, TTransfer.GetU(first, second), TTransfer.GetV(first, second), alpha);
     }
 
     private static void EncodeWide<TTransfer>(Rgba32Float value, Span<byte> destination)
-        where TTransfer : IWideYuva444Transfer
+        where TTransfer : struct, IWideYuva444Transfer
     {
         RgbaToYuv(value, out var yValue, out var u, out var v);
-        var first = TTransfer.VFirst
-            ? ChromaToYuvSample(v, TTransfer.BitsPerSample)
-            : ChromaToYuvSample(u, TTransfer.BitsPerSample);
-        var second = TTransfer.VFirst
-            ? ChromaToYuvSample(u, TTransfer.BitsPerSample)
-            : ChromaToYuvSample(v, TTransfer.BitsPerSample);
-        WriteYuvSample<TTransfer>(destination, first);
-        WriteYuvSample<TTransfer>(destination[2..], UnitToYuvSample(yValue, TTransfer.BitsPerSample));
-        WriteYuvSample<TTransfer>(destination[4..], second);
-        WriteYuvSample<TTransfer>(destination[6..], UnitToYuvSample(value.Alpha, TTransfer.BitsPerSample));
+        TTransfer.WriteFirst(destination, TTransfer.GetFirstChromaSample(u, v));
+        TTransfer.WriteY(destination, TTransfer.UnitToYuvSample(yValue));
+        TTransfer.WriteSecond(destination, TTransfer.GetSecondChromaSample(u, v));
+        TTransfer.WriteAlpha(destination, TTransfer.UnitToYuvSample(value.Alpha));
     }
 
     private void ValidateSourceLength(int width, int height, ReadOnlySpan<byte> source, int rowPitch)
@@ -343,31 +495,29 @@ public sealed class PackedYuva444TextureCoder : IPitchTextureCoder
         return false;
     }
 
-    private static uint ReadYuvSample<TTransfer>(ReadOnlySpan<byte> source)
-        where TTransfer : IWideYuva444Transfer
-    {
-        var sample = BinaryPrimitives.ReadUInt16LittleEndian(source);
-        return TTransfer.BitsPerSample switch
-        {
-            10 => TTransfer.MsbAligned ? (uint)(sample >> 6) : (uint)(sample & 0x03ff),
-            12 => TTransfer.MsbAligned ? (uint)(sample >> 4) : (uint)(sample & 0x0fff),
-            16 => sample,
-            _ => throw new InvalidOperationException($"Unsupported YUV sample size {TTransfer.BitsPerSample}.")
-        };
-    }
+    private static uint Read10Msb(ReadOnlySpan<byte> source) =>
+        (uint)BinaryPrimitives.ReadUInt16LittleEndian(source) >> 6;
 
-    private static void WriteYuvSample<TTransfer>(Span<byte> destination, uint sample)
-        where TTransfer : IWideYuva444Transfer
-    {
-        var value = TTransfer.BitsPerSample switch
-        {
-            10 => TTransfer.MsbAligned ? sample << 6 : sample,
-            12 => TTransfer.MsbAligned ? sample << 4 : sample,
-            16 => sample,
-            _ => throw new InvalidOperationException($"Unsupported YUV sample size {TTransfer.BitsPerSample}.")
-        };
-        BinaryPrimitives.WriteUInt16LittleEndian(destination, checked((ushort)value));
-    }
+    private static uint Read10Lsb(ReadOnlySpan<byte> source) =>
+        (uint)BinaryPrimitives.ReadUInt16LittleEndian(source) & 0x03ff;
+
+    private static uint Read12Msb(ReadOnlySpan<byte> source) =>
+        (uint)BinaryPrimitives.ReadUInt16LittleEndian(source) >> 4;
+
+    private static uint Read12Lsb(ReadOnlySpan<byte> source) =>
+        (uint)BinaryPrimitives.ReadUInt16LittleEndian(source) & 0x0fff;
+
+    private static void Write10Msb(Span<byte> destination, uint sample) =>
+        BinaryPrimitives.WriteUInt16LittleEndian(destination, checked((ushort)(sample << 6)));
+
+    private static void Write10Lsb(Span<byte> destination, uint sample) =>
+        BinaryPrimitives.WriteUInt16LittleEndian(destination, checked((ushort)sample));
+
+    private static void Write12Msb(Span<byte> destination, uint sample) =>
+        BinaryPrimitives.WriteUInt16LittleEndian(destination, checked((ushort)(sample << 4)));
+
+    private static void Write12Lsb(Span<byte> destination, uint sample) =>
+        BinaryPrimitives.WriteUInt16LittleEndian(destination, checked((ushort)sample));
 
     private static Rgba32Float YuvToRgba32Float(uint ySample, uint uSample, uint vSample, int bitsPerSample, float alpha = 1f)
     {
