@@ -1314,6 +1314,12 @@ public static class TextureFormats
     public static readonly TextureFormat Ctx1 =
         TextureFormat.BlockCompressed("CTX1", TextureComponents.Rg, TextureValueKind.UNorm, 8, 8, 0, 0, 4, 4, 64);
 
+    public static readonly TextureFormat RgbFxt1UNorm =
+        TextureFormat.BlockCompressed("RGB_FXT1_UNORM", TextureComponents.Rgb, TextureValueKind.UNorm, 5, 5, 5, 0, 8, 4, 128);
+
+    public static readonly TextureFormat RgbaFxt1UNorm =
+        TextureFormat.BlockCompressed("RGBA_FXT1_UNORM", TextureComponents.Rgba, TextureValueKind.UNorm, 5, 5, 5, 5, 8, 4, 128);
+
     public static readonly TextureFormat AtcRgb =
         TextureFormat.BlockCompressed(
             "ATC_RGB_UNORM",

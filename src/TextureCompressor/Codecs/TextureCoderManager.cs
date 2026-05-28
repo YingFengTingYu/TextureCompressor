@@ -187,6 +187,12 @@ public sealed class TextureCoderManager
             return true;
         }
 
+        if (FxtcTextureCoder.IsSupported(format))
+        {
+            coder = new FxtcTextureCoder(format);
+            return true;
+        }
+
         if (AtcTextureCoder.IsSupported(format))
         {
             coder = new AtcTextureCoder(format);

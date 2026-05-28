@@ -367,6 +367,8 @@ public sealed class TextureFormatTests
         { TextureFormats.Dxt5A, "DXT5A", TextureFormatKind.BlockCompressed, TextureComponents.Alpha, 1, 64, 8 },
         { TextureFormats.Dxn, "DXN", TextureFormatKind.BlockCompressed, TextureComponents.Rg, 2, 128, 16 },
         { TextureFormats.Ctx1, "CTX1", TextureFormatKind.BlockCompressed, TextureComponents.Rg, 2, 64, 8 },
+        { TextureFormats.RgbFxt1UNorm, "RGB_FXT1_UNORM", TextureFormatKind.BlockCompressed, TextureComponents.Rgb, 3, 128, 16 },
+        { TextureFormats.RgbaFxt1UNorm, "RGBA_FXT1_UNORM", TextureFormatKind.BlockCompressed, TextureComponents.Rgba, 4, 128, 16 },
         { TextureFormats.AtcRgb, "ATC_RGB_UNORM", TextureFormatKind.BlockCompressed, TextureComponents.Rgb, 3, 64, 8 },
         { TextureFormats.AtcRgbaInterpolatedAlpha, "ATC_RGBA_INTERPOLATED_ALPHA_UNORM", TextureFormatKind.BlockCompressed, TextureComponents.Rgba, 4, 128, 16 }
     };
