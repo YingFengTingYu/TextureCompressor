@@ -1331,6 +1331,30 @@ public static class TextureFormats
 
     public static readonly TextureFormat Bc5 = Bc5UNorm;
 
+    public static readonly TextureFormat Bc6HUFloat =
+        TextureFormat.BlockCompressed("BC6H_UFLOAT", TextureComponents.Rgb, TextureValueKind.Float, 16, 16, 16, 0, 4, 4, 128);
+
+    public static readonly TextureFormat Bc6HSFloat =
+        TextureFormat.BlockCompressed("BC6H_SFLOAT", TextureComponents.Rgb, TextureValueKind.Float, 16, 16, 16, 0, 4, 4, 128);
+
+    public static readonly TextureFormat Bc7UNorm =
+        TextureFormat.BlockCompressed("BC7_UNORM", TextureComponents.Rgba, TextureValueKind.UNorm, 8, 8, 8, 8, 4, 4, 128);
+
+    public static readonly TextureFormat Bc7Srgb =
+        TextureFormat.BlockCompressed("BC7_SRGB", TextureComponents.Rgba, TextureValueKind.Srgb, 8, 8, 8, 8, 4, 4, 128);
+
+    public static readonly TextureFormat RgbBptcUFloat =
+        TextureFormat.BlockCompressed("RGB_BPTC_UNSIGNED_FLOAT", TextureComponents.Rgb, TextureValueKind.Float, 16, 16, 16, 0, 4, 4, 128);
+
+    public static readonly TextureFormat RgbBptcSFloat =
+        TextureFormat.BlockCompressed("RGB_BPTC_SIGNED_FLOAT", TextureComponents.Rgb, TextureValueKind.Float, 16, 16, 16, 0, 4, 4, 128);
+
+    public static readonly TextureFormat RgbaBptcUNorm =
+        TextureFormat.BlockCompressed("RGBA_BPTC_UNORM", TextureComponents.Rgba, TextureValueKind.UNorm, 8, 8, 8, 8, 4, 4, 128);
+
+    public static readonly TextureFormat RgbaBptcSrgb =
+        TextureFormat.BlockCompressed("SRGB_ALPHA_BPTC_UNORM", TextureComponents.Rgba, TextureValueKind.Srgb, 8, 8, 8, 8, 4, 4, 128);
+
     public static readonly TextureFormat Ati1UNorm =
         RgtcLatc1("ATI1_UNORM", TextureComponents.R, TextureValueKind.UNorm);
 

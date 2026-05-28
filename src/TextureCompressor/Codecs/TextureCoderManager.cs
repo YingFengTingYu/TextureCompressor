@@ -205,6 +205,12 @@ public sealed class TextureCoderManager
             return true;
         }
 
+        if (BptcTextureCoder.IsSupported(format))
+        {
+            coder = new BptcTextureCoder(format);
+            return true;
+        }
+
         if (EtcTextureCoder.IsSupported(format))
         {
             coder = new EtcTextureCoder(format);
