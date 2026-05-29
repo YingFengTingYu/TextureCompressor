@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <PackageId>TextureCompressor.FileFormats.Astc</PackageId>
+    <Description>ASTC file format encoder and decoder for TextureCompressor textures.</Description>
+    <PackageTags>texture-compression;astc;image;texture</PackageTags>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\TextureCompressor\TextureCompressor.csproj" />
+  </ItemGroup>
+
+</Project>

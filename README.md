@@ -11,6 +11,7 @@ GPU 纹理数据。仓库包含位图基础类型、纹理格式元数据、内�
 - `TextureCompressor.Bitmap`：像素结构体、位图与 view 抽象。
 - `TextureCompressor`：纹理格式定义和纹理编解码器。
 - `TextureCompressor.FileFormats.Png`：面向位图数据的 PNG 解码器和编码器。
+- `TextureCompressor.FileFormats.Astc`：ASTC `.astc` 容器读写，并通过核心 ASTC coder 做编解码。
 - `TextureCompressor.FileFormats.Pvr`：PVR v1/v2/v3 容器读写，并通过核心纹理 coder 做编解码。
 
 ### 功能
@@ -79,6 +80,7 @@ for test fixtures and image I/O.
 - `TextureCompressor.Bitmap`: pixel structs and bitmap/view abstractions.
 - `TextureCompressor`: texture format definitions and texture coders.
 - `TextureCompressor.FileFormats.Png`: PNG decoder and encoder for bitmap data.
+- `TextureCompressor.FileFormats.Astc`: ASTC `.astc` container I/O backed by the core ASTC coder.
 - `TextureCompressor.FileFormats.Pvr`: PVR v1/v2/v3 container I/O backed by the core texture coders.
 
 ### Features
