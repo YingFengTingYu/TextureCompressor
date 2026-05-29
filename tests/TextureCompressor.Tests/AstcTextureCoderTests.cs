@@ -364,15 +364,70 @@ public sealed class AstcTextureCoderTests
         Assert.All(encoded.AsSpan(16, 16).ToArray(), value => Assert.Equal(0xCD, value));
     }
 
-    [Fact]
-    public void EncodeHdrThrows()
+    [Theory]
+    [MemberData(nameof(AstcFloatFormats))]
+    public void EncodeHdrSolidBlockRoundTripsEveryFootprint(TextureFormat format)
     {
+        var color = new Rgba16Float((Half)0.25f, (Half)2f, (Half)8f, (Half)1f);
+        var source = new ArrayTextureBitmap<Rgba16Float>(1, 1, [color]);
+        var decoded = new ArrayTextureBitmap<Rgba16Float>(1, 1);
+        var coder = new AstcTextureCoder(format);
+        var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, coder.GetDefaultPitch(source.Width))];
+
+        coder.Encode(source.AsView(), encoded, coder.GetDefaultPitch(source.Width));
+        coder.Decode(encoded, decoded.AsView(), coder.GetDefaultPitch(decoded.Width));
+
+        Assert.Equal(color, decoded.Pixels[0]);
+    }
+
+    [Fact]
+    public void EncodeHdrNonSolidBlockPreservesEndpointVariation()
+    {
+        var low = new Rgba16Float((Half)1f, (Half)2f, (Half)4f, (Half)1f);
+        var high = new Rgba16Float((Half)3f, (Half)6f, (Half)8f, (Half)1f);
         var source = new ArrayTextureBitmap<Rgba16Float>(4, 4);
+        for (var i = 0; i < source.Pixels.Length; i++)
+        {
+            source.Pixels[i] = (i & 1) == 0 ? low : high;
+        }
+
+        var decoded = new ArrayTextureBitmap<Rgba16Float>(4, 4);
         var coder = new AstcTextureCoder(TextureFormats.RgbaAstc4x4Float);
         var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, coder.GetDefaultPitch(source.Width))];
 
-        var exception = Assert.Throws<NotSupportedException>(() => coder.Encode(source.AsView(), encoded, coder.GetDefaultPitch(source.Width)));
-        Assert.Equal("ASTC HDR encoding is not implemented.", exception.Message);
+        coder.Encode(source.AsView(), encoded, coder.GetDefaultPitch(source.Width));
+        coder.Decode(encoded, decoded.AsView(), coder.GetDefaultPitch(decoded.Width));
+
+        Assert.True(decoded.Pixels[0].Red < decoded.Pixels[1].Red);
+        Assert.True(decoded.Pixels[0].Green < decoded.Pixels[1].Green);
+        Assert.True(decoded.Pixels[0].Blue < decoded.Pixels[1].Blue);
+        Assert.Contains(decoded.Pixels, pixel => pixel.Red > (Half)1f);
+    }
+
+    [Fact]
+    public void EncodeHdrHonorsRowPitch()
+    {
+        var rowPitch = 32;
+        var first = new Rgba16Float((Half)1f, (Half)2f, (Half)4f, (Half)1f);
+        var second = new Rgba16Float((Half)8f, (Half)4f, (Half)2f, (Half)1f);
+        var source = new ArrayTextureBitmap<Rgba16Float>(4, 5);
+        for (var i = 0; i < source.Pixels.Length; i++)
+        {
+            source.Pixels[i] = i < 16 ? first : second;
+        }
+
+        var encoded = new byte[rowPitch * 2];
+        Array.Fill(encoded, (byte)0xCD);
+        var decoded = new ArrayTextureBitmap<Rgba16Float>(4, 5);
+        var coder = new AstcTextureCoder(TextureFormats.RgbaAstc4x4Float);
+
+        coder.Encode(source.AsView(), encoded, rowPitch);
+        coder.Decode(encoded, decoded.AsView(), rowPitch);
+
+        Assert.Equal(first, decoded.Pixels[0]);
+        Assert.Equal(first, decoded.Pixels[15]);
+        Assert.Equal(second, decoded.Pixels[16]);
+        Assert.All(encoded.AsSpan(16, 16).ToArray(), value => Assert.Equal(0xCD, value));
     }
 
     [Fact]
