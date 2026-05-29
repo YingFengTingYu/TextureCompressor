@@ -835,9 +835,6 @@ public static class TextureFormats
     public static readonly TextureFormat V208UNorm =
         PlanarYuv("V208_UNORM", 8);
 
-    public static readonly TextureFormat Yuv420Opaque =
-        PlanarYuv("420_OPAQUE", 8);
-
     public static readonly TextureFormat Yuv14Msb2P420UNorm =
         PlanarYuv("YUV14MSB_2P_420_UNORM", 14);
 

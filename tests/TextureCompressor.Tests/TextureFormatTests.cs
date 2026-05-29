@@ -300,18 +300,6 @@ public sealed class TextureFormatTests
     }
 
     [Fact]
-    public void OpaqueYuv420FormatIsVariableSizeWithoutCpuLayout()
-    {
-        var format = TextureFormats.Yuv420Opaque;
-
-        Assert.Equal("420_OPAQUE", format.Name);
-        Assert.Equal(TextureComponents.Yuv, format.Components);
-        Assert.True(format.IsVariableSize);
-        Assert.Throws<NotSupportedException>(() => format.GetRowByteCount(4));
-        Assert.Throws<NotSupportedException>(() => format.GetByteCount(4, 4));
-    }
-
-    [Fact]
     public void StencilSubByteFormatsDescribePackedBlocks()
     {
         Assert.Equal(8, TextureFormats.StencilIndex1.BlockWidth);

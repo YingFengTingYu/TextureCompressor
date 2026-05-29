@@ -89,14 +89,6 @@ public sealed class TextureCoderManagerTests
     }
 
     [Fact]
-    public void GlobalManagerDoesNotClaimOpaqueYuv420()
-    {
-        Assert.False(Nv11TextureCoder.IsSupported(TextureFormats.Yuv420Opaque));
-        Assert.False(PlanarYuvTextureCoder.IsSupported(TextureFormats.Yuv420Opaque));
-        Assert.Throws<NotSupportedException>(() => TextureCoderManager.Global.GetCoder(TextureFormats.Yuv420Opaque));
-    }
-
-    [Fact]
     public void GlobalManagerFindsPackedSNormCoder()
     {
         var coder = TextureCoderManager.Global.GetCoder(TextureFormats.Bgr10A2RevSNorm);
