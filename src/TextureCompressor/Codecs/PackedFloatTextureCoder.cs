@@ -16,6 +16,12 @@ public sealed class PackedFloatTextureCoder(TextureFormat format) : IPitchTextur
     public static bool IsSupported(TextureFormat format) =>
         format == TextureFormats.R11G11B10Float
         || format == TextureFormats.Rgb9E5
+        || format == TextureFormats.Rgb10FloatA2UNorm
+        || format == TextureFormats.Rgb10FloatA2UNormRev
+        || format == TextureFormats.Bgr10FloatA2UNormRev
+        || format == TextureFormats.Rgb10FloatX2UNormRev
+        || format == TextureFormats.Bgr10FloatX2UNormRev
+        || format == TextureFormats.R32FloatAbs
         || format == TextureFormats.R11G11B10FloatBigEndian;
 
     public int GetDefaultPitch(int width) => Format.GetRowByteCount(width);
@@ -48,6 +54,24 @@ public sealed class PackedFloatTextureCoder(TextureFormat format) : IPitchTextur
             case PackedFloatKind.Rgb9E5:
                 Decode<TPixel, Rgb9E5Transfer>(source, destination, rowPitch);
                 return;
+            case PackedFloatKind.Rgb10FloatA2UNorm:
+                Decode<TPixel, Rgb10FloatA2UNormTransfer>(source, destination, rowPitch);
+                return;
+            case PackedFloatKind.Rgb10FloatA2UNormRev:
+                Decode<TPixel, Rgb10FloatA2UNormRevTransfer>(source, destination, rowPitch);
+                return;
+            case PackedFloatKind.Bgr10FloatA2UNormRev:
+                Decode<TPixel, Bgr10FloatA2UNormRevTransfer>(source, destination, rowPitch);
+                return;
+            case PackedFloatKind.Rgb10FloatX2UNormRev:
+                Decode<TPixel, Rgb10FloatX2UNormRevTransfer>(source, destination, rowPitch);
+                return;
+            case PackedFloatKind.Bgr10FloatX2UNormRev:
+                Decode<TPixel, Bgr10FloatX2UNormRevTransfer>(source, destination, rowPitch);
+                return;
+            case PackedFloatKind.R32FloatAbs:
+                Decode<TPixel, R32FloatAbsTransfer>(source, destination, rowPitch);
+                return;
             default:
                 throw CreateUnsupportedFormatException(Format);
         }
@@ -67,6 +91,24 @@ public sealed class PackedFloatTextureCoder(TextureFormat format) : IPitchTextur
                 return;
             case PackedFloatKind.Rgb9E5:
                 Encode<TPixel, Rgb9E5Transfer>(source, destination, rowPitch);
+                return;
+            case PackedFloatKind.Rgb10FloatA2UNorm:
+                Encode<TPixel, Rgb10FloatA2UNormTransfer>(source, destination, rowPitch);
+                return;
+            case PackedFloatKind.Rgb10FloatA2UNormRev:
+                Encode<TPixel, Rgb10FloatA2UNormRevTransfer>(source, destination, rowPitch);
+                return;
+            case PackedFloatKind.Bgr10FloatA2UNormRev:
+                Encode<TPixel, Bgr10FloatA2UNormRevTransfer>(source, destination, rowPitch);
+                return;
+            case PackedFloatKind.Rgb10FloatX2UNormRev:
+                Encode<TPixel, Rgb10FloatX2UNormRevTransfer>(source, destination, rowPitch);
+                return;
+            case PackedFloatKind.Bgr10FloatX2UNormRev:
+                Encode<TPixel, Bgr10FloatX2UNormRevTransfer>(source, destination, rowPitch);
+                return;
+            case PackedFloatKind.R32FloatAbs:
+                Encode<TPixel, R32FloatAbsTransfer>(source, destination, rowPitch);
                 return;
             default:
                 throw CreateUnsupportedFormatException(Format);
@@ -116,6 +158,129 @@ public sealed class PackedFloatTextureCoder(TextureFormat format) : IPitchTextur
 
         public static void Encode(Rgba32Float value, Span<byte> texel) =>
             BinaryPrimitives.WriteUInt32LittleEndian(texel, EncodeRgb9E5(value));
+    }
+
+    private readonly struct Rgb10FloatA2UNormTransfer : IPackedFloatTransfer
+    {
+        public static Rgba32Float Decode(ReadOnlySpan<byte> texel)
+        {
+            var packed = BinaryPrimitives.ReadUInt32LittleEndian(texel);
+            return new Rgba32Float(
+                DecodeUnsignedFloat((packed >> 22) & 0x03ffu, 5),
+                DecodeUnsignedFloat((packed >> 12) & 0x03ffu, 5),
+                DecodeUnsignedFloat((packed >> 2) & 0x03ffu, 5),
+                DecodeUNorm2(packed & 0x03u));
+        }
+
+        public static void Encode(Rgba32Float value, Span<byte> texel)
+        {
+            var packed = (EncodeUnsignedFloat(value.Red, 5) << 22)
+                | (EncodeUnsignedFloat(value.Green, 5) << 12)
+                | (EncodeUnsignedFloat(value.Blue, 5) << 2)
+                | EncodeUNorm2(value.Alpha);
+            BinaryPrimitives.WriteUInt32LittleEndian(texel, packed);
+        }
+    }
+
+    private readonly struct Rgb10FloatA2UNormRevTransfer : IPackedFloatTransfer
+    {
+        public static Rgba32Float Decode(ReadOnlySpan<byte> texel)
+        {
+            var packed = BinaryPrimitives.ReadUInt32LittleEndian(texel);
+            return new Rgba32Float(
+                DecodeUnsignedFloat(packed & 0x03ffu, 5),
+                DecodeUnsignedFloat((packed >> 10) & 0x03ffu, 5),
+                DecodeUnsignedFloat((packed >> 20) & 0x03ffu, 5),
+                DecodeUNorm2(packed >> 30));
+        }
+
+        public static void Encode(Rgba32Float value, Span<byte> texel)
+        {
+            var packed = EncodeUnsignedFloat(value.Red, 5)
+                | (EncodeUnsignedFloat(value.Green, 5) << 10)
+                | (EncodeUnsignedFloat(value.Blue, 5) << 20)
+                | (EncodeUNorm2(value.Alpha) << 30);
+            BinaryPrimitives.WriteUInt32LittleEndian(texel, packed);
+        }
+    }
+
+    private readonly struct Bgr10FloatA2UNormRevTransfer : IPackedFloatTransfer
+    {
+        public static Rgba32Float Decode(ReadOnlySpan<byte> texel)
+        {
+            var packed = BinaryPrimitives.ReadUInt32LittleEndian(texel);
+            return new Rgba32Float(
+                DecodeUnsignedFloat((packed >> 20) & 0x03ffu, 5),
+                DecodeUnsignedFloat((packed >> 10) & 0x03ffu, 5),
+                DecodeUnsignedFloat(packed & 0x03ffu, 5),
+                DecodeUNorm2(packed >> 30));
+        }
+
+        public static void Encode(Rgba32Float value, Span<byte> texel)
+        {
+            var packed = EncodeUnsignedFloat(value.Blue, 5)
+                | (EncodeUnsignedFloat(value.Green, 5) << 10)
+                | (EncodeUnsignedFloat(value.Red, 5) << 20)
+                | (EncodeUNorm2(value.Alpha) << 30);
+            BinaryPrimitives.WriteUInt32LittleEndian(texel, packed);
+        }
+    }
+
+    private readonly struct Rgb10FloatX2UNormRevTransfer : IPackedFloatTransfer
+    {
+        public static Rgba32Float Decode(ReadOnlySpan<byte> texel)
+        {
+            var packed = BinaryPrimitives.ReadUInt32LittleEndian(texel);
+            return new Rgba32Float(
+                DecodeUnsignedFloat(packed & 0x03ffu, 5),
+                DecodeUnsignedFloat((packed >> 10) & 0x03ffu, 5),
+                DecodeUnsignedFloat((packed >> 20) & 0x03ffu, 5),
+                1f);
+        }
+
+        public static void Encode(Rgba32Float value, Span<byte> texel)
+        {
+            var packed = EncodeUnsignedFloat(value.Red, 5)
+                | (EncodeUnsignedFloat(value.Green, 5) << 10)
+                | (EncodeUnsignedFloat(value.Blue, 5) << 20);
+            BinaryPrimitives.WriteUInt32LittleEndian(texel, packed);
+        }
+    }
+
+    private readonly struct Bgr10FloatX2UNormRevTransfer : IPackedFloatTransfer
+    {
+        public static Rgba32Float Decode(ReadOnlySpan<byte> texel)
+        {
+            var packed = BinaryPrimitives.ReadUInt32LittleEndian(texel);
+            return new Rgba32Float(
+                DecodeUnsignedFloat((packed >> 20) & 0x03ffu, 5),
+                DecodeUnsignedFloat((packed >> 10) & 0x03ffu, 5),
+                DecodeUnsignedFloat(packed & 0x03ffu, 5),
+                1f);
+        }
+
+        public static void Encode(Rgba32Float value, Span<byte> texel)
+        {
+            var packed = EncodeUnsignedFloat(value.Blue, 5)
+                | (EncodeUnsignedFloat(value.Green, 5) << 10)
+                | (EncodeUnsignedFloat(value.Red, 5) << 20);
+            BinaryPrimitives.WriteUInt32LittleEndian(texel, packed);
+        }
+    }
+
+    private readonly struct R32FloatAbsTransfer : IPackedFloatTransfer
+    {
+        public static Rgba32Float Decode(ReadOnlySpan<byte> texel)
+        {
+            var bits = BinaryPrimitives.ReadUInt32LittleEndian(texel) & 0x7fffffffu;
+            return new Rgba32Float(BitConverter.UInt32BitsToSingle(bits), 0f, 0f);
+        }
+
+        public static void Encode(Rgba32Float value, Span<byte> texel)
+        {
+            var bits = BitConverter.SingleToUInt32Bits(value.Red) & 0x7fffffffu;
+            BinaryPrimitives.WriteUInt32LittleEndian(texel, bits);
+        }
     }
 
     private static Rgba32Float DecodeBigEndianTexel<TTransfer>(
@@ -299,6 +464,18 @@ public sealed class PackedFloatTextureCoder(TextureFormat format) : IPitchTextur
     private static uint FloatToRgb9E5Mantissa(float value, float inverseScale) =>
         Math.Min(511u, (uint)MathF.Round(value * inverseScale));
 
+    private static float DecodeUNorm2(uint value) => (value & 0x03u) / 3f;
+
+    private static uint EncodeUNorm2(float value)
+    {
+        if (float.IsNaN(value) || value <= 0f)
+        {
+            return 0;
+        }
+
+        return value >= 1f ? 3u : (uint)MathF.Round(value * 3f);
+    }
+
     private static uint RoundMantissa(uint mantissa, int mantissaBits)
     {
         var shift = 23 - mantissaBits;
@@ -351,6 +528,36 @@ public sealed class PackedFloatTextureCoder(TextureFormat format) : IPitchTextur
             return PackedFloatKind.Rgb9E5;
         }
 
+        if (format == TextureFormats.Rgb10FloatA2UNorm)
+        {
+            return PackedFloatKind.Rgb10FloatA2UNorm;
+        }
+
+        if (format == TextureFormats.Rgb10FloatA2UNormRev)
+        {
+            return PackedFloatKind.Rgb10FloatA2UNormRev;
+        }
+
+        if (format == TextureFormats.Bgr10FloatA2UNormRev)
+        {
+            return PackedFloatKind.Bgr10FloatA2UNormRev;
+        }
+
+        if (format == TextureFormats.Rgb10FloatX2UNormRev)
+        {
+            return PackedFloatKind.Rgb10FloatX2UNormRev;
+        }
+
+        if (format == TextureFormats.Bgr10FloatX2UNormRev)
+        {
+            return PackedFloatKind.Bgr10FloatX2UNormRev;
+        }
+
+        if (format == TextureFormats.R32FloatAbs)
+        {
+            return PackedFloatKind.R32FloatAbs;
+        }
+
         throw CreateUnsupportedFormatException(format);
     }
 
@@ -361,6 +568,12 @@ public sealed class PackedFloatTextureCoder(TextureFormat format) : IPitchTextur
     {
         R11G11B10Float,
         R11G11B10FloatBigEndian,
-        Rgb9E5
+        Rgb9E5,
+        Rgb10FloatA2UNorm,
+        Rgb10FloatA2UNormRev,
+        Bgr10FloatA2UNormRev,
+        Rgb10FloatX2UNormRev,
+        Bgr10FloatX2UNormRev,
+        R32FloatAbs
     }
 }

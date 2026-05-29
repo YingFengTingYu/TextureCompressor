@@ -71,6 +71,27 @@ public sealed class PalettedTextureCoder : IPitchTextureCoder
             case PalettedTransfer.Palette4Rgba8:
                 Decode<TPixel, Palette4IndexTransfer, Rgba8PaletteEntryTransfer>(source, destination, rowPitch);
                 return;
+            case PalettedTransfer.Palette4Abgr8:
+                Decode<TPixel, Palette4IndexTransfer, Abgr8PaletteEntryTransfer>(source, destination, rowPitch);
+                return;
+            case PalettedTransfer.Palette4Argb8:
+                Decode<TPixel, Palette4IndexTransfer, Argb8PaletteEntryTransfer>(source, destination, rowPitch);
+                return;
+            case PalettedTransfer.Palette4Bgra8:
+                Decode<TPixel, Palette4IndexTransfer, Bgra8PaletteEntryTransfer>(source, destination, rowPitch);
+                return;
+            case PalettedTransfer.Palette4Xbgr8:
+                Decode<TPixel, Palette4IndexTransfer, Xbgr8PaletteEntryTransfer>(source, destination, rowPitch);
+                return;
+            case PalettedTransfer.Palette4Xrgb8:
+                Decode<TPixel, Palette4IndexTransfer, Xrgb8PaletteEntryTransfer>(source, destination, rowPitch);
+                return;
+            case PalettedTransfer.Palette4Rgbx8:
+                Decode<TPixel, Palette4IndexTransfer, Rgbx8PaletteEntryTransfer>(source, destination, rowPitch);
+                return;
+            case PalettedTransfer.Palette4Bgrx8:
+                Decode<TPixel, Palette4IndexTransfer, Bgrx8PaletteEntryTransfer>(source, destination, rowPitch);
+                return;
             case PalettedTransfer.Palette4Rgb565:
                 Decode<TPixel, Palette4IndexTransfer, Rgb565PaletteEntryTransfer>(source, destination, rowPitch);
                 return;
@@ -85,6 +106,27 @@ public sealed class PalettedTextureCoder : IPitchTextureCoder
                 return;
             case PalettedTransfer.Palette8Rgba8:
                 Decode<TPixel, Palette8IndexTransfer, Rgba8PaletteEntryTransfer>(source, destination, rowPitch);
+                return;
+            case PalettedTransfer.Palette8Abgr8:
+                Decode<TPixel, Palette8IndexTransfer, Abgr8PaletteEntryTransfer>(source, destination, rowPitch);
+                return;
+            case PalettedTransfer.Palette8Argb8:
+                Decode<TPixel, Palette8IndexTransfer, Argb8PaletteEntryTransfer>(source, destination, rowPitch);
+                return;
+            case PalettedTransfer.Palette8Bgra8:
+                Decode<TPixel, Palette8IndexTransfer, Bgra8PaletteEntryTransfer>(source, destination, rowPitch);
+                return;
+            case PalettedTransfer.Palette8Xbgr8:
+                Decode<TPixel, Palette8IndexTransfer, Xbgr8PaletteEntryTransfer>(source, destination, rowPitch);
+                return;
+            case PalettedTransfer.Palette8Xrgb8:
+                Decode<TPixel, Palette8IndexTransfer, Xrgb8PaletteEntryTransfer>(source, destination, rowPitch);
+                return;
+            case PalettedTransfer.Palette8Rgbx8:
+                Decode<TPixel, Palette8IndexTransfer, Rgbx8PaletteEntryTransfer>(source, destination, rowPitch);
+                return;
+            case PalettedTransfer.Palette8Bgrx8:
+                Decode<TPixel, Palette8IndexTransfer, Bgrx8PaletteEntryTransfer>(source, destination, rowPitch);
                 return;
             case PalettedTransfer.Palette8Rgb565:
                 Decode<TPixel, Palette8IndexTransfer, Rgb565PaletteEntryTransfer>(source, destination, rowPitch);
@@ -111,6 +153,27 @@ public sealed class PalettedTextureCoder : IPitchTextureCoder
             case PalettedTransfer.Palette4Rgba8:
                 Encode<TPixel, Palette4IndexTransfer, Rgba8PaletteEntryTransfer>(source, destination, rowPitch);
                 return;
+            case PalettedTransfer.Palette4Abgr8:
+                Encode<TPixel, Palette4IndexTransfer, Abgr8PaletteEntryTransfer>(source, destination, rowPitch);
+                return;
+            case PalettedTransfer.Palette4Argb8:
+                Encode<TPixel, Palette4IndexTransfer, Argb8PaletteEntryTransfer>(source, destination, rowPitch);
+                return;
+            case PalettedTransfer.Palette4Bgra8:
+                Encode<TPixel, Palette4IndexTransfer, Bgra8PaletteEntryTransfer>(source, destination, rowPitch);
+                return;
+            case PalettedTransfer.Palette4Xbgr8:
+                Encode<TPixel, Palette4IndexTransfer, Xbgr8PaletteEntryTransfer>(source, destination, rowPitch);
+                return;
+            case PalettedTransfer.Palette4Xrgb8:
+                Encode<TPixel, Palette4IndexTransfer, Xrgb8PaletteEntryTransfer>(source, destination, rowPitch);
+                return;
+            case PalettedTransfer.Palette4Rgbx8:
+                Encode<TPixel, Palette4IndexTransfer, Rgbx8PaletteEntryTransfer>(source, destination, rowPitch);
+                return;
+            case PalettedTransfer.Palette4Bgrx8:
+                Encode<TPixel, Palette4IndexTransfer, Bgrx8PaletteEntryTransfer>(source, destination, rowPitch);
+                return;
             case PalettedTransfer.Palette4Rgb565:
                 Encode<TPixel, Palette4IndexTransfer, Rgb565PaletteEntryTransfer>(source, destination, rowPitch);
                 return;
@@ -125,6 +188,27 @@ public sealed class PalettedTextureCoder : IPitchTextureCoder
                 return;
             case PalettedTransfer.Palette8Rgba8:
                 Encode<TPixel, Palette8IndexTransfer, Rgba8PaletteEntryTransfer>(source, destination, rowPitch);
+                return;
+            case PalettedTransfer.Palette8Abgr8:
+                Encode<TPixel, Palette8IndexTransfer, Abgr8PaletteEntryTransfer>(source, destination, rowPitch);
+                return;
+            case PalettedTransfer.Palette8Argb8:
+                Encode<TPixel, Palette8IndexTransfer, Argb8PaletteEntryTransfer>(source, destination, rowPitch);
+                return;
+            case PalettedTransfer.Palette8Bgra8:
+                Encode<TPixel, Palette8IndexTransfer, Bgra8PaletteEntryTransfer>(source, destination, rowPitch);
+                return;
+            case PalettedTransfer.Palette8Xbgr8:
+                Encode<TPixel, Palette8IndexTransfer, Xbgr8PaletteEntryTransfer>(source, destination, rowPitch);
+                return;
+            case PalettedTransfer.Palette8Xrgb8:
+                Encode<TPixel, Palette8IndexTransfer, Xrgb8PaletteEntryTransfer>(source, destination, rowPitch);
+                return;
+            case PalettedTransfer.Palette8Rgbx8:
+                Encode<TPixel, Palette8IndexTransfer, Rgbx8PaletteEntryTransfer>(source, destination, rowPitch);
+                return;
+            case PalettedTransfer.Palette8Bgrx8:
+                Encode<TPixel, Palette8IndexTransfer, Bgrx8PaletteEntryTransfer>(source, destination, rowPitch);
                 return;
             case PalettedTransfer.Palette8Rgb565:
                 Encode<TPixel, Palette8IndexTransfer, Rgb565PaletteEntryTransfer>(source, destination, rowPitch);
@@ -345,6 +429,150 @@ public sealed class PalettedTextureCoder : IPitchTextureCoder
         }
 
         public static Rgba8UNorm Quantize(Rgba8UNorm color) => color;
+    }
+
+    private readonly struct Abgr8PaletteEntryTransfer : IPaletteEntryTransfer
+    {
+        public static int PaletteEntryByteCount => 4;
+
+        public static bool HasAlpha => true;
+
+        public static Rgba8UNorm Decode(ReadOnlySpan<byte> source) =>
+            new(source[0], source[1], source[2], source[3]);
+
+        public static void Encode(Rgba8UNorm color, Span<byte> destination)
+        {
+            destination[0] = color.Red;
+            destination[1] = color.Green;
+            destination[2] = color.Blue;
+            destination[3] = color.Alpha;
+        }
+
+        public static Rgba8UNorm Quantize(Rgba8UNorm color) => color;
+    }
+
+    private readonly struct Argb8PaletteEntryTransfer : IPaletteEntryTransfer
+    {
+        public static int PaletteEntryByteCount => 4;
+
+        public static bool HasAlpha => true;
+
+        public static Rgba8UNorm Decode(ReadOnlySpan<byte> source) =>
+            new(source[2], source[1], source[0], source[3]);
+
+        public static void Encode(Rgba8UNorm color, Span<byte> destination)
+        {
+            destination[0] = color.Blue;
+            destination[1] = color.Green;
+            destination[2] = color.Red;
+            destination[3] = color.Alpha;
+        }
+
+        public static Rgba8UNorm Quantize(Rgba8UNorm color) => color;
+    }
+
+    private readonly struct Bgra8PaletteEntryTransfer : IPaletteEntryTransfer
+    {
+        public static int PaletteEntryByteCount => 4;
+
+        public static bool HasAlpha => true;
+
+        public static Rgba8UNorm Decode(ReadOnlySpan<byte> source) =>
+            new(source[1], source[2], source[3], source[0]);
+
+        public static void Encode(Rgba8UNorm color, Span<byte> destination)
+        {
+            destination[0] = color.Alpha;
+            destination[1] = color.Red;
+            destination[2] = color.Green;
+            destination[3] = color.Blue;
+        }
+
+        public static Rgba8UNorm Quantize(Rgba8UNorm color) => color;
+    }
+
+    private readonly struct Xbgr8PaletteEntryTransfer : IPaletteEntryTransfer
+    {
+        public static int PaletteEntryByteCount => 4;
+
+        public static bool HasAlpha => false;
+
+        public static Rgba8UNorm Decode(ReadOnlySpan<byte> source) =>
+            new(source[0], source[1], source[2]);
+
+        public static void Encode(Rgba8UNorm color, Span<byte> destination)
+        {
+            destination[0] = color.Red;
+            destination[1] = color.Green;
+            destination[2] = color.Blue;
+            destination[3] = 0;
+        }
+
+        public static Rgba8UNorm Quantize(Rgba8UNorm color) =>
+            new(color.Red, color.Green, color.Blue);
+    }
+
+    private readonly struct Xrgb8PaletteEntryTransfer : IPaletteEntryTransfer
+    {
+        public static int PaletteEntryByteCount => 4;
+
+        public static bool HasAlpha => false;
+
+        public static Rgba8UNorm Decode(ReadOnlySpan<byte> source) =>
+            new(source[2], source[1], source[0]);
+
+        public static void Encode(Rgba8UNorm color, Span<byte> destination)
+        {
+            destination[0] = color.Blue;
+            destination[1] = color.Green;
+            destination[2] = color.Red;
+            destination[3] = 0;
+        }
+
+        public static Rgba8UNorm Quantize(Rgba8UNorm color) =>
+            new(color.Red, color.Green, color.Blue);
+    }
+
+    private readonly struct Rgbx8PaletteEntryTransfer : IPaletteEntryTransfer
+    {
+        public static int PaletteEntryByteCount => 4;
+
+        public static bool HasAlpha => false;
+
+        public static Rgba8UNorm Decode(ReadOnlySpan<byte> source) =>
+            new(source[3], source[2], source[1]);
+
+        public static void Encode(Rgba8UNorm color, Span<byte> destination)
+        {
+            destination[0] = 0;
+            destination[1] = color.Blue;
+            destination[2] = color.Green;
+            destination[3] = color.Red;
+        }
+
+        public static Rgba8UNorm Quantize(Rgba8UNorm color) =>
+            new(color.Red, color.Green, color.Blue);
+    }
+
+    private readonly struct Bgrx8PaletteEntryTransfer : IPaletteEntryTransfer
+    {
+        public static int PaletteEntryByteCount => 4;
+
+        public static bool HasAlpha => false;
+
+        public static Rgba8UNorm Decode(ReadOnlySpan<byte> source) =>
+            new(source[1], source[2], source[3]);
+
+        public static void Encode(Rgba8UNorm color, Span<byte> destination)
+        {
+            destination[0] = 0;
+            destination[1] = color.Red;
+            destination[2] = color.Green;
+            destination[3] = color.Blue;
+        }
+
+        public static Rgba8UNorm Quantize(Rgba8UNorm color) =>
+            new(color.Red, color.Green, color.Blue);
     }
 
     private readonly struct Rgb565PaletteEntryTransfer : IPaletteEntryTransfer
@@ -795,6 +1023,14 @@ public sealed class PalettedTextureCoder : IPitchTextureCoder
             return true;
         }
 
+        if (format == TextureFormats.Palette4Abgr8) { transfer = PalettedTransfer.Palette4Abgr8; return true; }
+        if (format == TextureFormats.Palette4Argb8) { transfer = PalettedTransfer.Palette4Argb8; return true; }
+        if (format == TextureFormats.Palette4Bgra8) { transfer = PalettedTransfer.Palette4Bgra8; return true; }
+        if (format == TextureFormats.Palette4Xbgr8) { transfer = PalettedTransfer.Palette4Xbgr8; return true; }
+        if (format == TextureFormats.Palette4Xrgb8) { transfer = PalettedTransfer.Palette4Xrgb8; return true; }
+        if (format == TextureFormats.Palette4Rgbx8) { transfer = PalettedTransfer.Palette4Rgbx8; return true; }
+        if (format == TextureFormats.Palette4Bgrx8) { transfer = PalettedTransfer.Palette4Bgrx8; return true; }
+
         if (format == TextureFormats.Palette4Rgb565)
         {
             transfer = PalettedTransfer.Palette4Rgb565;
@@ -824,6 +1060,14 @@ public sealed class PalettedTextureCoder : IPitchTextureCoder
             transfer = PalettedTransfer.Palette8Rgba8;
             return true;
         }
+
+        if (format == TextureFormats.Palette8Abgr8) { transfer = PalettedTransfer.Palette8Abgr8; return true; }
+        if (format == TextureFormats.Palette8Argb8) { transfer = PalettedTransfer.Palette8Argb8; return true; }
+        if (format == TextureFormats.Palette8Bgra8) { transfer = PalettedTransfer.Palette8Bgra8; return true; }
+        if (format == TextureFormats.Palette8Xbgr8) { transfer = PalettedTransfer.Palette8Xbgr8; return true; }
+        if (format == TextureFormats.Palette8Xrgb8) { transfer = PalettedTransfer.Palette8Xrgb8; return true; }
+        if (format == TextureFormats.Palette8Rgbx8) { transfer = PalettedTransfer.Palette8Rgbx8; return true; }
+        if (format == TextureFormats.Palette8Bgrx8) { transfer = PalettedTransfer.Palette8Bgrx8; return true; }
 
         if (format == TextureFormats.Palette8Rgb565)
         {
@@ -856,11 +1100,25 @@ public sealed class PalettedTextureCoder : IPitchTextureCoder
     {
         Palette4Rgb8,
         Palette4Rgba8,
+        Palette4Abgr8,
+        Palette4Argb8,
+        Palette4Bgra8,
+        Palette4Xbgr8,
+        Palette4Xrgb8,
+        Palette4Rgbx8,
+        Palette4Bgrx8,
         Palette4Rgb565,
         Palette4Rgba4,
         Palette4Rgb5A1,
         Palette8Rgb8,
         Palette8Rgba8,
+        Palette8Abgr8,
+        Palette8Argb8,
+        Palette8Bgra8,
+        Palette8Xbgr8,
+        Palette8Xrgb8,
+        Palette8Rgbx8,
+        Palette8Bgrx8,
         Palette8Rgb565,
         Palette8Rgba4,
         Palette8Rgb5A1

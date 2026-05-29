@@ -42,6 +42,12 @@ public sealed class PackedSNormTextureCoder(TextureFormat format) : IPitchTextur
             case PackedSNormKind.Rg5SNormB6UNormRev:
                 Decode<TPixel, Rg5SNormB6UNormRevTransfer>(source, destination, rowPitch);
                 return;
+            case PackedSNormKind.Rg5SNormB6UNorm:
+                Decode<TPixel, Rg5SNormB6UNormTransfer>(source, destination, rowPitch);
+                return;
+            case PackedSNormKind.B6UNormG5R5SNorm:
+                Decode<TPixel, B6UNormG5R5SNormTransfer>(source, destination, rowPitch);
+                return;
             case PackedSNormKind.Rg5SNormB6UNormRevBigEndian:
                 Decode<TPixel, Rg5SNormB6UNormRevTransferBigEndian>(source, destination, rowPitch);
                 return;
@@ -53,6 +59,12 @@ public sealed class PackedSNormTextureCoder(TextureFormat format) : IPitchTextur
                 return;
             case PackedSNormKind.Rg8SNormB8UNormX8Rev:
                 Decode<TPixel, Rg8SNormB8UNormX8RevTransfer>(source, destination, rowPitch);
+                return;
+            case PackedSNormKind.R8UNormG8B8SNormX8:
+                Decode<TPixel, R8UNormG8B8SNormX8Transfer>(source, destination, rowPitch);
+                return;
+            case PackedSNormKind.B8G8SNormR8UNormX8:
+                Decode<TPixel, B8G8SNormR8UNormX8Transfer>(source, destination, rowPitch);
                 return;
             case PackedSNormKind.Rg8SNormB8UNormX8RevBigEndian:
                 Decode<TPixel, Rg8SNormB8UNormX8RevTransferBigEndian>(source, destination, rowPitch);
@@ -95,6 +107,12 @@ public sealed class PackedSNormTextureCoder(TextureFormat format) : IPitchTextur
             case PackedSNormKind.Rg5SNormB6UNormRev:
                 Encode<TPixel, Rg5SNormB6UNormRevTransfer>(source, destination, rowPitch);
                 return;
+            case PackedSNormKind.Rg5SNormB6UNorm:
+                Encode<TPixel, Rg5SNormB6UNormTransfer>(source, destination, rowPitch);
+                return;
+            case PackedSNormKind.B6UNormG5R5SNorm:
+                Encode<TPixel, B6UNormG5R5SNormTransfer>(source, destination, rowPitch);
+                return;
             case PackedSNormKind.Rg5SNormB6UNormRevBigEndian:
                 Encode<TPixel, Rg5SNormB6UNormRevTransferBigEndian>(source, destination, rowPitch);
                 return;
@@ -106,6 +124,12 @@ public sealed class PackedSNormTextureCoder(TextureFormat format) : IPitchTextur
                 return;
             case PackedSNormKind.Rg8SNormB8UNormX8Rev:
                 Encode<TPixel, Rg8SNormB8UNormX8RevTransfer>(source, destination, rowPitch);
+                return;
+            case PackedSNormKind.R8UNormG8B8SNormX8:
+                Encode<TPixel, R8UNormG8B8SNormX8Transfer>(source, destination, rowPitch);
+                return;
+            case PackedSNormKind.B8G8SNormR8UNormX8:
+                Encode<TPixel, B8G8SNormR8UNormX8Transfer>(source, destination, rowPitch);
                 return;
             case PackedSNormKind.Rg8SNormB8UNormX8RevBigEndian:
                 Encode<TPixel, Rg8SNormB8UNormX8RevTransferBigEndian>(source, destination, rowPitch);
@@ -181,6 +205,50 @@ public sealed class PackedSNormTextureCoder(TextureFormat format) : IPitchTextur
             EncodeBigEndianTexel<Rg5SNormB6UNormRevTransfer>(value, texel, BigEndianByteSwapMode.Swap8In16);
     }
 
+    private readonly struct Rg5SNormB6UNormTransfer : IPackedSNormTransfer
+    {
+        public static int BytesPerTexel => 2;
+
+        public static Rgba16SNorm Decode(ReadOnlySpan<byte> texel)
+        {
+            var packed = BinaryPrimitives.ReadUInt16LittleEndian(texel);
+            return new Rgba16SNorm(
+                DecodeSNorm(((uint)packed >> 11) & 0x1fu, 5),
+                DecodeSNorm(((uint)packed >> 6) & 0x1fu, 5),
+                DecodeUNorm((uint)packed & 0x3fu, 6));
+        }
+
+        public static void Encode(Rgba16SNorm value, Span<byte> texel)
+        {
+            var packed = (ushort)((EncodeSNorm(value.Red, 5) << 11)
+                | (EncodeSNorm(value.Green, 5) << 6)
+                | EncodeUNorm(value.Blue, 6));
+            BinaryPrimitives.WriteUInt16LittleEndian(texel, packed);
+        }
+    }
+
+    private readonly struct B6UNormG5R5SNormTransfer : IPackedSNormTransfer
+    {
+        public static int BytesPerTexel => 2;
+
+        public static Rgba16SNorm Decode(ReadOnlySpan<byte> texel)
+        {
+            var packed = BinaryPrimitives.ReadUInt16LittleEndian(texel);
+            return new Rgba16SNorm(
+                DecodeSNorm((uint)packed & 0x1fu, 5),
+                DecodeSNorm(((uint)packed >> 5) & 0x1fu, 5),
+                DecodeUNorm(((uint)packed >> 10) & 0x3fu, 6));
+        }
+
+        public static void Encode(Rgba16SNorm value, Span<byte> texel)
+        {
+            var packed = (ushort)(EncodeSNorm(value.Red, 5)
+                | (EncodeSNorm(value.Green, 5) << 5)
+                | (EncodeUNorm(value.Blue, 6) << 10));
+            BinaryPrimitives.WriteUInt16LittleEndian(texel, packed);
+        }
+    }
+
     private readonly struct Rgba4RevSNormTransfer : IPackedSNormTransfer
     {
         public static int BytesPerTexel => 2;
@@ -244,6 +312,44 @@ public sealed class PackedSNormTextureCoder(TextureFormat format) : IPitchTextur
 
         public static void Encode(Rgba16SNorm value, Span<byte> texel) =>
             EncodeBigEndianTexel<Rg8SNormB8UNormX8RevTransfer>(value, texel, BigEndianByteSwapMode.Swap8In32);
+    }
+
+    private readonly struct R8UNormG8B8SNormX8Transfer : IPackedSNormTransfer
+    {
+        public static int BytesPerTexel => 4;
+
+        public static Rgba16SNorm Decode(ReadOnlySpan<byte> texel) =>
+            new(
+                DecodeUNorm(texel[0], 8),
+                DecodeSNorm(texel[1], 8),
+                DecodeSNorm(texel[2], 8));
+
+        public static void Encode(Rgba16SNorm value, Span<byte> texel)
+        {
+            texel[0] = (byte)EncodeUNorm(value.Red, 8);
+            texel[1] = (byte)EncodeSNorm(value.Green, 8);
+            texel[2] = (byte)EncodeSNorm(value.Blue, 8);
+            texel[3] = 0;
+        }
+    }
+
+    private readonly struct B8G8SNormR8UNormX8Transfer : IPackedSNormTransfer
+    {
+        public static int BytesPerTexel => 4;
+
+        public static Rgba16SNorm Decode(ReadOnlySpan<byte> texel) =>
+            new(
+                DecodeUNorm(texel[2], 8),
+                DecodeSNorm(texel[1], 8),
+                DecodeSNorm(texel[0], 8));
+
+        public static void Encode(Rgba16SNorm value, Span<byte> texel)
+        {
+            texel[0] = (byte)EncodeSNorm(value.Blue, 8);
+            texel[1] = (byte)EncodeSNorm(value.Green, 8);
+            texel[2] = (byte)EncodeUNorm(value.Red, 8);
+            texel[3] = 0;
+        }
     }
 
     private readonly struct Rgb10SNormA2UNormRevTransfer : IPackedSNormTransfer
@@ -546,6 +652,18 @@ public sealed class PackedSNormTextureCoder(TextureFormat format) : IPitchTextur
             return true;
         }
 
+        if (format == TextureFormats.Rg5SNormB6UNorm)
+        {
+            kind = PackedSNormKind.Rg5SNormB6UNorm;
+            return true;
+        }
+
+        if (format == TextureFormats.B6UNormG5R5SNorm)
+        {
+            kind = PackedSNormKind.B6UNormG5R5SNorm;
+            return true;
+        }
+
         if (format == TextureFormats.Rg5SNormB6UNormRevBigEndian)
         {
             kind = PackedSNormKind.Rg5SNormB6UNormRevBigEndian;
@@ -567,6 +685,18 @@ public sealed class PackedSNormTextureCoder(TextureFormat format) : IPitchTextur
         if (format == TextureFormats.Rg8SNormB8UNormX8Rev)
         {
             kind = PackedSNormKind.Rg8SNormB8UNormX8Rev;
+            return true;
+        }
+
+        if (format == TextureFormats.R8UNormG8B8SNormX8)
+        {
+            kind = PackedSNormKind.R8UNormG8B8SNormX8;
+            return true;
+        }
+
+        if (format == TextureFormats.B8G8SNormR8UNormX8)
+        {
+            kind = PackedSNormKind.B8G8SNormR8UNormX8;
             return true;
         }
 
@@ -634,10 +764,14 @@ public sealed class PackedSNormTextureCoder(TextureFormat format) : IPitchTextur
     private enum PackedSNormKind
     {
         Rg5SNormB6UNormRev,
+        Rg5SNormB6UNorm,
+        B6UNormG5R5SNorm,
         Rg5SNormB6UNormRevBigEndian,
         Rgba4RevSNorm,
         Rgba4RevSNormBigEndian,
         Rg8SNormB8UNormX8Rev,
+        R8UNormG8B8SNormX8,
+        B8G8SNormR8UNormX8,
         Rg8SNormB8UNormX8RevBigEndian,
         Rgb10SNormA2UNormRev,
         Rgb10SNormA2UNormRevBigEndian,
