@@ -643,6 +643,11 @@ public static class PvrCodec
 
         if (options?.TextureFormat is null && options?.PvrLegacyPixelType is { } legacyPixelType)
         {
+            if (SFormatMappings.Value.TextureToExplicitLegacy.TryGetValue(new LegacyExplicitKey(format, legacyPixelType), out var descriptor))
+            {
+                return descriptor;
+            }
+
             var selection = GetLegacyEncodingSelection(legacyPixelType);
             if (selection.TextureFormat != format)
             {
@@ -654,12 +659,19 @@ public static class PvrCodec
             return selection.LegacyDescriptor!.Value;
         }
 
-        return GetLegacyPvrDescriptor(format);
+        return GetLegacyPvrDescriptor(format, options?.LegacyPixelTypePreference ?? PvrLegacyPixelTypePreference.Default);
     }
 
-    private static LegacyFormatDescriptor GetLegacyPvrDescriptor(TextureFormat format)
+    private static LegacyFormatDescriptor GetLegacyPvrDescriptor(TextureFormat format, PvrLegacyPixelTypePreference preference)
     {
-        if (SFormatMappings.Value.TextureToLegacy.TryGetValue(format, out var descriptor))
+        var mappings = SFormatMappings.Value;
+        if (preference != PvrLegacyPixelTypePreference.Default
+            && mappings.TextureToPreferredLegacy.TryGetValue(new LegacyPreferenceKey(format, preference), out var descriptor))
+        {
+            return descriptor;
+        }
+
+        if (mappings.TextureToLegacy.TryGetValue(format, out descriptor))
         {
             return descriptor;
         }
@@ -727,6 +739,8 @@ public static class PvrCodec
         var pvrToTexture = new Dictionary<PvrFormatKey, TextureFormat>();
         var pvrPixelFormatToTexture = new Dictionary<PvrPixelFormatOptionKey, PvrFormatMapping>();
         var textureToLegacy = new Dictionary<TextureFormat, LegacyFormatDescriptor>();
+        var textureToPreferredLegacy = new Dictionary<LegacyPreferenceKey, LegacyFormatDescriptor>();
+        var textureToExplicitLegacy = new Dictionary<LegacyExplicitKey, LegacyFormatDescriptor>();
         var legacyToTexture = new Dictionary<LegacyFormatKey, TextureFormat>();
         var legacyPixelTypeToTexture = new Dictionary<PvrLegacyPixelType, LegacyFormatMapping>();
         var legacyLayoutToTexture = new Dictionary<LegacyLayoutKey, TextureFormat>();
@@ -757,7 +771,8 @@ public static class PvrCodec
             uint greenMask = 0,
             uint blueMask = 0,
             uint alphaMask = 0,
-            bool distinguishAlpha = false)
+            bool distinguishAlpha = false,
+            PvrLegacyPixelTypePreference preference = PvrLegacyPixelTypePreference.Default)
         {
             if (!TextureCoderManager.Global.TryGetCoder(format, out _))
             {
@@ -767,6 +782,12 @@ public static class PvrCodec
             var hasAlpha = alphaMask != 0 || format.AlphaBits > 0;
             var descriptor = new LegacyFormatDescriptor(pixelType, bitCount, redMask, greenMask, blueMask, alphaMask, hasAlpha);
             textureToLegacy.TryAdd(format, descriptor);
+            textureToExplicitLegacy.TryAdd(new LegacyExplicitKey(format, pixelType), descriptor);
+            if (preference != PvrLegacyPixelTypePreference.Default)
+            {
+                textureToPreferredLegacy.TryAdd(new LegacyPreferenceKey(format, preference), descriptor);
+            }
+
             legacyPixelTypeToTexture.TryAdd(pixelType, new LegacyFormatMapping(format, descriptor));
             AddLegacyLayout(format, bitCount, redMask, greenMask, blueMask, alphaMask);
             if (distinguishAlpha)
@@ -940,14 +961,14 @@ public static class PvrCodec
         Add(TextureFormats.Rg11EacUNorm, (uint)PvrPixelFormat.EacRg11, PvrColourSpace.Linear, PvrChannelType.UnsignedShortNorm);
         Add(TextureFormats.Rg11EacSNorm, (uint)PvrPixelFormat.EacRg11, PvrColourSpace.Linear, PvrChannelType.SignedShortNorm);
 
-        Add(TextureFormats.Bc1Rgba, (uint)PvrPixelFormat.Bc1, PvrColourSpace.Linear, PvrChannelType.UnsignedByteNorm);
-        Add(TextureFormats.Bc1RgbaSrgb, (uint)PvrPixelFormat.Bc1, PvrColourSpace.Srgb, PvrChannelType.UnsignedByteNorm);
-        Add(TextureFormats.Bc1Rgb, (uint)PvrPixelFormat.Bc1, PvrColourSpace.Linear, PvrChannelType.UnsignedByteNorm);
-        Add(TextureFormats.Bc1RgbSrgb, (uint)PvrPixelFormat.Bc1, PvrColourSpace.Srgb, PvrChannelType.UnsignedByteNorm);
-        Add(TextureFormats.Dxt1Rgba, (uint)PvrPixelFormat.Bc1, PvrColourSpace.Linear, PvrChannelType.UnsignedByteNorm);
-        Add(TextureFormats.Dxt1RgbaSrgb, (uint)PvrPixelFormat.Bc1, PvrColourSpace.Srgb, PvrChannelType.UnsignedByteNorm);
-        Add(TextureFormats.Dxt1Rgb, (uint)PvrPixelFormat.Bc1, PvrColourSpace.Linear, PvrChannelType.UnsignedByteNorm);
-        Add(TextureFormats.Dxt1RgbSrgb, (uint)PvrPixelFormat.Bc1, PvrColourSpace.Srgb, PvrChannelType.UnsignedByteNorm);
+        Add(TextureFormats.Bc1Rgba, (uint)PvrPixelFormat.Dxt1, PvrColourSpace.Linear, PvrChannelType.UnsignedByteNorm);
+        Add(TextureFormats.Bc1RgbaSrgb, (uint)PvrPixelFormat.Dxt1, PvrColourSpace.Srgb, PvrChannelType.UnsignedByteNorm);
+        Add(TextureFormats.Bc1Rgb, (uint)PvrPixelFormat.Dxt1, PvrColourSpace.Linear, PvrChannelType.UnsignedByteNorm);
+        Add(TextureFormats.Bc1RgbSrgb, (uint)PvrPixelFormat.Dxt1, PvrColourSpace.Srgb, PvrChannelType.UnsignedByteNorm);
+        Add(TextureFormats.Dxt1Rgba, (uint)PvrPixelFormat.Dxt1, PvrColourSpace.Linear, PvrChannelType.UnsignedByteNorm);
+        Add(TextureFormats.Dxt1RgbaSrgb, (uint)PvrPixelFormat.Dxt1, PvrColourSpace.Srgb, PvrChannelType.UnsignedByteNorm);
+        Add(TextureFormats.Dxt1Rgb, (uint)PvrPixelFormat.Dxt1, PvrColourSpace.Linear, PvrChannelType.UnsignedByteNorm);
+        Add(TextureFormats.Dxt1RgbSrgb, (uint)PvrPixelFormat.Dxt1, PvrColourSpace.Srgb, PvrChannelType.UnsignedByteNorm);
         Add(TextureFormats.Dxt2Rgba, (uint)PvrPixelFormat.Dxt2, PvrColourSpace.Linear, PvrChannelType.UnsignedByteNorm);
         Add(TextureFormats.Bc2Rgba, (uint)PvrPixelFormat.Dxt3, PvrColourSpace.Linear, PvrChannelType.UnsignedByteNorm);
         Add(TextureFormats.Bc2RgbaSrgb, (uint)PvrPixelFormat.Dxt3, PvrColourSpace.Srgb, PvrChannelType.UnsignedByteNorm);
@@ -1025,90 +1046,189 @@ public static class PvrCodec
         Add(TextureFormats.Yuyv12Lsb422UNorm, (uint)PvrPixelFormat.Yuyv12Lsb422, PvrColourSpace.Linear, PvrChannelType.UnsignedShortNorm);
         Add(TextureFormats.Uyvy12Msb422UNorm, (uint)PvrPixelFormat.Uyvy12Msb422, PvrColourSpace.Linear, PvrChannelType.UnsignedShortNorm);
         Add(TextureFormats.Uyvy12Lsb422UNorm, (uint)PvrPixelFormat.Uyvy12Lsb422, PvrColourSpace.Linear, PvrChannelType.UnsignedShortNorm);
+        Add(TextureFormats.Yuv3P444UNorm, (uint)PvrPixelFormat.Yuv3P444, PvrColourSpace.Linear, PvrChannelType.UnsignedByteNorm);
+        Add(TextureFormats.Yuv10Msb3P444UNorm, (uint)PvrPixelFormat.Yuv10Msb3P444, PvrColourSpace.Linear, PvrChannelType.UnsignedShortNorm);
+        Add(TextureFormats.Yuv10Lsb3P444UNorm, (uint)PvrPixelFormat.Yuv10Lsb3P444, PvrColourSpace.Linear, PvrChannelType.UnsignedShortNorm);
+        Add(TextureFormats.Yuv12Msb3P444UNorm, (uint)PvrPixelFormat.Yuv12Msb3P444, PvrColourSpace.Linear, PvrChannelType.UnsignedShortNorm);
+        Add(TextureFormats.Yuv12Lsb3P444UNorm, (uint)PvrPixelFormat.Yuv12Lsb3P444, PvrColourSpace.Linear, PvrChannelType.UnsignedShortNorm);
+        Add(TextureFormats.Yuv16_3P444UNorm, (uint)PvrPixelFormat.Yuv16_3P444, PvrColourSpace.Linear, PvrChannelType.UnsignedShortNorm);
+        Add(TextureFormats.Yuv3P422UNorm, (uint)PvrPixelFormat.Yuv3P422, PvrColourSpace.Linear, PvrChannelType.UnsignedByteNorm);
+        Add(TextureFormats.Yuv10Msb3P422UNorm, (uint)PvrPixelFormat.Yuv10Msb3P422, PvrColourSpace.Linear, PvrChannelType.UnsignedShortNorm);
+        Add(TextureFormats.Yuv10Lsb3P422UNorm, (uint)PvrPixelFormat.Yuv10Lsb3P422, PvrColourSpace.Linear, PvrChannelType.UnsignedShortNorm);
+        Add(TextureFormats.Yuv12Msb3P422UNorm, (uint)PvrPixelFormat.Yuv12Msb3P422, PvrColourSpace.Linear, PvrChannelType.UnsignedShortNorm);
+        Add(TextureFormats.Yuv12Lsb3P422UNorm, (uint)PvrPixelFormat.Yuv12Lsb3P422, PvrColourSpace.Linear, PvrChannelType.UnsignedShortNorm);
+        Add(TextureFormats.Yuv16_3P422UNorm, (uint)PvrPixelFormat.Yuv16_3P422, PvrColourSpace.Linear, PvrChannelType.UnsignedShortNorm);
+        Add(TextureFormats.Yuv3P420UNorm, (uint)PvrPixelFormat.Yuv3P420, PvrColourSpace.Linear, PvrChannelType.UnsignedByteNorm);
+        Add(TextureFormats.Yuv10Msb3P420UNorm, (uint)PvrPixelFormat.Yuv10Msb3P420, PvrColourSpace.Linear, PvrChannelType.UnsignedShortNorm);
+        Add(TextureFormats.Yuv10Lsb3P420UNorm, (uint)PvrPixelFormat.Yuv10Lsb3P420, PvrColourSpace.Linear, PvrChannelType.UnsignedShortNorm);
+        Add(TextureFormats.Yuv12Msb3P420UNorm, (uint)PvrPixelFormat.Yuv12Msb3P420, PvrColourSpace.Linear, PvrChannelType.UnsignedShortNorm);
+        Add(TextureFormats.Yuv12Lsb3P420UNorm, (uint)PvrPixelFormat.Yuv12Lsb3P420, PvrColourSpace.Linear, PvrChannelType.UnsignedShortNorm);
+        Add(TextureFormats.Yuv16_3P420UNorm, (uint)PvrPixelFormat.Yuv16_3P420, PvrColourSpace.Linear, PvrChannelType.UnsignedShortNorm);
+        Add(TextureFormats.Yvu3P420UNorm, (uint)PvrPixelFormat.Yvu3P420, PvrColourSpace.Linear, PvrChannelType.UnsignedByteNorm);
+        Add(TextureFormats.Yuv2P422UNorm, (uint)PvrPixelFormat.Yuv2P422, PvrColourSpace.Linear, PvrChannelType.UnsignedByteNorm);
+        Add(TextureFormats.Yuv10Msb2P422UNorm, (uint)PvrPixelFormat.Yuv10Msb2P422, PvrColourSpace.Linear, PvrChannelType.UnsignedShortNorm);
+        Add(TextureFormats.Yuv10Lsb2P422UNorm, (uint)PvrPixelFormat.Yuv10Lsb2P422, PvrColourSpace.Linear, PvrChannelType.UnsignedShortNorm);
+        Add(TextureFormats.Yuv12Msb2P422UNorm, (uint)PvrPixelFormat.Yuv12Msb2P422, PvrColourSpace.Linear, PvrChannelType.UnsignedShortNorm);
+        Add(TextureFormats.Yuv12Lsb2P422UNorm, (uint)PvrPixelFormat.Yuv12Lsb2P422, PvrColourSpace.Linear, PvrChannelType.UnsignedShortNorm);
+        Add(TextureFormats.Yuv16_2P422UNorm, (uint)PvrPixelFormat.Yuv16_2P422, PvrColourSpace.Linear, PvrChannelType.UnsignedShortNorm);
+        Add(TextureFormats.Yuv2P420UNorm, (uint)PvrPixelFormat.Yuv2P420, PvrColourSpace.Linear, PvrChannelType.UnsignedByteNorm);
+        Add(TextureFormats.Yuv10Msb2P420UNorm, (uint)PvrPixelFormat.Yuv10Msb2P420, PvrColourSpace.Linear, PvrChannelType.UnsignedShortNorm);
+        Add(TextureFormats.Yuv10Lsb2P420UNorm, (uint)PvrPixelFormat.Yuv10Lsb2P420, PvrColourSpace.Linear, PvrChannelType.UnsignedShortNorm);
+        Add(TextureFormats.Yuv12Msb2P420UNorm, (uint)PvrPixelFormat.Yuv12Msb2P420, PvrColourSpace.Linear, PvrChannelType.UnsignedShortNorm);
+        Add(TextureFormats.Yuv12Lsb2P420UNorm, (uint)PvrPixelFormat.Yuv12Lsb2P420, PvrColourSpace.Linear, PvrChannelType.UnsignedShortNorm);
+        Add(TextureFormats.Yuv16_2P420UNorm, (uint)PvrPixelFormat.Yuv16_2P420, PvrColourSpace.Linear, PvrChannelType.UnsignedShortNorm);
+        Add(TextureFormats.Yuv2P444UNorm, (uint)PvrPixelFormat.Yuv2P444, PvrColourSpace.Linear, PvrChannelType.UnsignedByteNorm);
+        Add(TextureFormats.Yvu2P444UNorm, (uint)PvrPixelFormat.Yvu2P444, PvrColourSpace.Linear, PvrChannelType.UnsignedByteNorm);
+        Add(TextureFormats.Yuv10Msb2P444UNorm, (uint)PvrPixelFormat.Yuv10Msb2P444, PvrColourSpace.Linear, PvrChannelType.UnsignedShortNorm);
+        Add(TextureFormats.Yuv10Lsb2P444UNorm, (uint)PvrPixelFormat.Yuv10Lsb2P444, PvrColourSpace.Linear, PvrChannelType.UnsignedShortNorm);
+        Add(TextureFormats.Yvu10Msb2P444UNorm, (uint)PvrPixelFormat.Yvu10Msb2P444, PvrColourSpace.Linear, PvrChannelType.UnsignedShortNorm);
+        Add(TextureFormats.Yvu10Lsb2P444UNorm, (uint)PvrPixelFormat.Yvu10Lsb2P444, PvrColourSpace.Linear, PvrChannelType.UnsignedShortNorm);
+        Add(TextureFormats.Yvu2P422UNorm, (uint)PvrPixelFormat.Yvu2P422, PvrColourSpace.Linear, PvrChannelType.UnsignedByteNorm);
+        Add(TextureFormats.Yvu10Msb2P422UNorm, (uint)PvrPixelFormat.Yvu10Msb2P422, PvrColourSpace.Linear, PvrChannelType.UnsignedShortNorm);
+        Add(TextureFormats.Yvu10Lsb2P422UNorm, (uint)PvrPixelFormat.Yvu10Lsb2P422, PvrColourSpace.Linear, PvrChannelType.UnsignedShortNorm);
+        Add(TextureFormats.Yvu2P420UNorm, (uint)PvrPixelFormat.Yvu2P420, PvrColourSpace.Linear, PvrChannelType.UnsignedByteNorm);
+        Add(TextureFormats.Yvu10Msb2P420UNorm, (uint)PvrPixelFormat.Yvu10Msb2P420, PvrColourSpace.Linear, PvrChannelType.UnsignedShortNorm);
+        Add(TextureFormats.Yvu10Lsb2P420UNorm, (uint)PvrPixelFormat.Yvu10Lsb2P420, PvrColourSpace.Linear, PvrChannelType.UnsignedShortNorm);
 
-        AddLegacy(TextureFormats.Rgba4UNorm, PvrLegacyPixelType.GlRgba4444, 16, 0xf000, 0x0f00, 0x00f0, 0x000f);
-        AddLegacy(TextureFormats.Rgb5A1UNorm, PvrLegacyPixelType.GlRgba5551, 16, 0xf800, 0x07c0, 0x003e, 0x0001);
-        AddLegacy(TextureFormats.Rgb565UNorm, PvrLegacyPixelType.GlRgb565, 16, 0xf800, 0x07e0, 0x001f);
-        AddLegacy(TextureFormats.Rgba8UNorm, PvrLegacyPixelType.GlRgba8888, 32, 0x000000ff, 0x0000ff00, 0x00ff0000, 0xff000000);
-        AddLegacy(TextureFormats.Rgb8, PvrLegacyPixelType.GlRgb888, 24, 0x0000ff, 0x00ff00, 0xff0000);
-        AddLegacy(TextureFormats.Luminance8UNorm, PvrLegacyPixelType.GlI8, 8, 0xff, 0xff, 0xff);
-        AddLegacy(TextureFormats.Luminance8Alpha8UNorm, PvrLegacyPixelType.GlAi88, 16, 0x00ff, 0x00ff, 0x00ff, 0xff00);
-        AddLegacy(TextureFormats.Bgra8, PvrLegacyPixelType.GlBgra8888, 32, 0x00ff0000, 0x0000ff00, 0x000000ff, 0xff000000);
-        AddLegacy(TextureFormats.Alpha8UNorm, PvrLegacyPixelType.GlA8, 8, alphaMask: 0xff);
-        AddLegacy(TextureFormats.RgbaPvrtcI2BppUNorm, PvrLegacyPixelType.GlPvrtc2, 2, alphaMask: 0x1, distinguishAlpha: true);
-        AddLegacy(TextureFormats.RgbPvrtcI2BppUNorm, PvrLegacyPixelType.GlPvrtc2, 2, distinguishAlpha: true);
-        AddLegacy(TextureFormats.RgbaPvrtcI4BppUNorm, PvrLegacyPixelType.GlPvrtc4, 4, alphaMask: 0x1, distinguishAlpha: true);
-        AddLegacy(TextureFormats.RgbPvrtcI4BppUNorm, PvrLegacyPixelType.GlPvrtc4, 4, distinguishAlpha: true);
-        AddLegacy(TextureFormats.RgbaPvrtcII4BppUNorm, PvrLegacyPixelType.GlPvrtcII4, 4, alphaMask: 0x1);
-        AddLegacy(TextureFormats.RgbaPvrtcII2BppUNorm, PvrLegacyPixelType.GlPvrtcII2, 2, alphaMask: 0x1);
-        AddLegacy(TextureFormats.Bc1Rgba, PvrLegacyPixelType.D3dDxt1, 4, alphaMask: 0x1, distinguishAlpha: true);
-        AddLegacy(TextureFormats.Bc1Rgb, PvrLegacyPixelType.D3dDxt1, 4, distinguishAlpha: true);
-        AddLegacy(TextureFormats.Dxt1Rgba, PvrLegacyPixelType.D3dDxt1, 4, alphaMask: 0x1, distinguishAlpha: true);
-        AddLegacy(TextureFormats.Dxt1Rgb, PvrLegacyPixelType.D3dDxt1, 4, distinguishAlpha: true);
-        AddLegacy(TextureFormats.Dxt2Rgba, PvrLegacyPixelType.D3dDxt2, 8, alphaMask: 0x1);
-        AddLegacy(TextureFormats.Bc2Rgba, PvrLegacyPixelType.D3dDxt3, 8, alphaMask: 0x1);
-        AddLegacy(TextureFormats.Dxt3Rgba, PvrLegacyPixelType.D3dDxt3, 8, alphaMask: 0x1);
-        AddLegacy(TextureFormats.Dxt4Rgba, PvrLegacyPixelType.D3dDxt4, 8, alphaMask: 0x1);
-        AddLegacy(TextureFormats.Bc3Rgba, PvrLegacyPixelType.D3dDxt5, 8, alphaMask: 0x1);
-        AddLegacy(TextureFormats.Dxt5Rgba, PvrLegacyPixelType.D3dDxt5, 8, alphaMask: 0x1);
+        AddLegacy(TextureFormats.Rgba4UNorm, PvrLegacyPixelType.GlRgba4444, 16, 0xf000, 0x0f00, 0x00f0, 0x000f, preference: PvrLegacyPixelTypePreference.Gl);
+        AddLegacy(TextureFormats.Rgb5A1UNorm, PvrLegacyPixelType.GlRgba5551, 16, 0xf800, 0x07c0, 0x003e, 0x0001, preference: PvrLegacyPixelTypePreference.Gl);
+        AddLegacy(TextureFormats.Rgb565UNorm, PvrLegacyPixelType.GlRgb565, 16, 0xf800, 0x07e0, 0x001f, preference: PvrLegacyPixelTypePreference.Gl);
+        AddLegacy(TextureFormats.Rgb5UNorm, PvrLegacyPixelType.GlRgb555, 16, 0x7c00, 0x03e0, 0x001f, preference: PvrLegacyPixelTypePreference.Gl);
+        AddLegacy(TextureFormats.Rgba8UNorm, PvrLegacyPixelType.GlRgba8888, 32, 0x000000ff, 0x0000ff00, 0x00ff0000, 0xff000000, preference: PvrLegacyPixelTypePreference.Gl);
+        AddLegacy(TextureFormats.Rgb8, PvrLegacyPixelType.GlRgb888, 24, 0x0000ff, 0x00ff00, 0xff0000, preference: PvrLegacyPixelTypePreference.Gl);
+        AddLegacy(TextureFormats.Luminance8UNorm, PvrLegacyPixelType.GlI8, 8, 0xff, 0xff, 0xff, preference: PvrLegacyPixelTypePreference.Gl);
+        AddLegacy(TextureFormats.Luminance8Alpha8UNorm, PvrLegacyPixelType.GlAi88, 16, 0x00ff, 0x00ff, 0x00ff, 0xff00, preference: PvrLegacyPixelTypePreference.Gl);
+        AddLegacy(TextureFormats.Bgra8, PvrLegacyPixelType.GlBgra8888, 32, 0x00ff0000, 0x0000ff00, 0x000000ff, 0xff000000, preference: PvrLegacyPixelTypePreference.Gl);
+        AddLegacy(TextureFormats.Alpha8UNorm, PvrLegacyPixelType.GlA8, 8, alphaMask: 0xff, preference: PvrLegacyPixelTypePreference.Gl);
+        AddLegacy(TextureFormats.RgbaPvrtcI2BppUNorm, PvrLegacyPixelType.GlPvrtc2, 2, alphaMask: 0x1, distinguishAlpha: true, preference: PvrLegacyPixelTypePreference.Gl);
+        AddLegacy(TextureFormats.RgbPvrtcI2BppUNorm, PvrLegacyPixelType.GlPvrtc2, 2, distinguishAlpha: true, preference: PvrLegacyPixelTypePreference.Gl);
+        AddLegacy(TextureFormats.RgbaPvrtcI4BppUNorm, PvrLegacyPixelType.GlPvrtc4, 4, alphaMask: 0x1, distinguishAlpha: true, preference: PvrLegacyPixelTypePreference.Gl);
+        AddLegacy(TextureFormats.RgbPvrtcI4BppUNorm, PvrLegacyPixelType.GlPvrtc4, 4, distinguishAlpha: true, preference: PvrLegacyPixelTypePreference.Gl);
+        AddLegacy(TextureFormats.RgbaPvrtcII4BppUNorm, PvrLegacyPixelType.GlPvrtcII4, 4, alphaMask: 0x1, preference: PvrLegacyPixelTypePreference.Gl);
+        AddLegacy(TextureFormats.RgbaPvrtcII2BppUNorm, PvrLegacyPixelType.GlPvrtcII2, 2, alphaMask: 0x1, preference: PvrLegacyPixelTypePreference.Gl);
+
+        AddLegacy(TextureFormats.Rgba4UNorm, PvrLegacyPixelType.MglArgb4444, 16, preference: PvrLegacyPixelTypePreference.Mgl);
+        AddLegacy(TextureFormats.Rgb5A1UNorm, PvrLegacyPixelType.MglArgb1555, 16, preference: PvrLegacyPixelTypePreference.Mgl);
+        AddLegacy(TextureFormats.Rgb565UNorm, PvrLegacyPixelType.MglRgb565, 16, preference: PvrLegacyPixelTypePreference.Mgl);
+        AddLegacy(TextureFormats.Rgb5UNorm, PvrLegacyPixelType.MglRgb555, 16, preference: PvrLegacyPixelTypePreference.Mgl);
+        AddLegacy(TextureFormats.Rgb8, PvrLegacyPixelType.MglRgb888, 24, preference: PvrLegacyPixelTypePreference.Mgl);
+        AddLegacy(TextureFormats.Rgba8UNorm, PvrLegacyPixelType.MglArgb8888, 32, preference: PvrLegacyPixelTypePreference.Mgl);
+        AddLegacy(TextureFormats.A8Rgb332UNorm, PvrLegacyPixelType.MglArgb8332, 16, preference: PvrLegacyPixelTypePreference.Mgl);
+        AddLegacy(TextureFormats.Luminance8UNorm, PvrLegacyPixelType.MglI8, 8, preference: PvrLegacyPixelTypePreference.Mgl);
+        AddLegacy(TextureFormats.Luminance8Alpha8UNorm, PvrLegacyPixelType.MglAi88, 16, preference: PvrLegacyPixelTypePreference.Mgl);
+        AddLegacy(TextureFormats.Bw1BppUNorm, PvrLegacyPixelType.MglOneBpp, 1, preference: PvrLegacyPixelTypePreference.Mgl);
+        AddLegacy(TextureFormats.Vy1Uy0422UNorm, PvrLegacyPixelType.MglVy1Uy0, 16, preference: PvrLegacyPixelTypePreference.Mgl);
+        AddLegacy(TextureFormats.Y1Vy0U422UNorm, PvrLegacyPixelType.MglY1Vy0U, 16, preference: PvrLegacyPixelTypePreference.Mgl);
+        AddLegacy(TextureFormats.RgbaPvrtcI2BppUNorm, PvrLegacyPixelType.MglPvrtc2, 2, alphaMask: 0x1, distinguishAlpha: true, preference: PvrLegacyPixelTypePreference.Mgl);
+        AddLegacy(TextureFormats.RgbPvrtcI2BppUNorm, PvrLegacyPixelType.MglPvrtc2, 2, distinguishAlpha: true, preference: PvrLegacyPixelTypePreference.Mgl);
+        AddLegacy(TextureFormats.RgbaPvrtcI4BppUNorm, PvrLegacyPixelType.MglPvrtc4, 4, alphaMask: 0x1, distinguishAlpha: true, preference: PvrLegacyPixelTypePreference.Mgl);
+        AddLegacy(TextureFormats.RgbPvrtcI4BppUNorm, PvrLegacyPixelType.MglPvrtc4, 4, distinguishAlpha: true, preference: PvrLegacyPixelTypePreference.Mgl);
+
+        AddLegacy(TextureFormats.Bc1Rgba, PvrLegacyPixelType.D3dDxt1, 4, alphaMask: 0x1, distinguishAlpha: true, preference: PvrLegacyPixelTypePreference.D3d);
+        AddLegacy(TextureFormats.Bc1Rgb, PvrLegacyPixelType.D3dDxt1, 4, distinguishAlpha: true, preference: PvrLegacyPixelTypePreference.D3d);
+        AddLegacy(TextureFormats.Dxt1Rgba, PvrLegacyPixelType.D3dDxt1, 4, alphaMask: 0x1, distinguishAlpha: true, preference: PvrLegacyPixelTypePreference.D3d);
+        AddLegacy(TextureFormats.Dxt1Rgb, PvrLegacyPixelType.D3dDxt1, 4, distinguishAlpha: true, preference: PvrLegacyPixelTypePreference.D3d);
+        AddLegacy(TextureFormats.Dxt2Rgba, PvrLegacyPixelType.D3dDxt2, 8, alphaMask: 0x1, preference: PvrLegacyPixelTypePreference.D3d);
+        AddLegacy(TextureFormats.Bc2Rgba, PvrLegacyPixelType.D3dDxt3, 8, alphaMask: 0x1, preference: PvrLegacyPixelTypePreference.D3d);
+        AddLegacy(TextureFormats.Dxt3Rgba, PvrLegacyPixelType.D3dDxt3, 8, alphaMask: 0x1, preference: PvrLegacyPixelTypePreference.D3d);
+        AddLegacy(TextureFormats.Dxt4Rgba, PvrLegacyPixelType.D3dDxt4, 8, alphaMask: 0x1, preference: PvrLegacyPixelTypePreference.D3d);
+        AddLegacy(TextureFormats.Bc3Rgba, PvrLegacyPixelType.D3dDxt5, 8, alphaMask: 0x1, preference: PvrLegacyPixelTypePreference.D3d);
+        AddLegacy(TextureFormats.Dxt5Rgba, PvrLegacyPixelType.D3dDxt5, 8, alphaMask: 0x1, preference: PvrLegacyPixelTypePreference.D3d);
         AddLegacy(TextureFormats.RgbEtc1UNorm, PvrLegacyPixelType.EtcRgb4Bpp, 4);
-        AddLegacy(TextureFormats.Rgba32Float, PvrLegacyPixelType.DxgiR32G32B32A32Float, 128, 0xffffffff, 0xffffffff, 0xffffffff, 0xffffffff);
-        AddLegacy(TextureFormats.Rgb32Float, PvrLegacyPixelType.DxgiR32G32B32Float, 96, 0xffffffff, 0xffffffff, 0xffffffff);
-        AddLegacy(TextureFormats.Rgba16Float, PvrLegacyPixelType.DxgiR16G16B16A16Float, 64, 0xffff, 0xffff, 0xffff, 0xffff);
-        AddLegacy(TextureFormats.Rgba16UNorm, PvrLegacyPixelType.DxgiR16G16B16A16UNorm, 64, 0xffff, 0xffff, 0xffff, 0xffff);
-        AddLegacy(TextureFormats.Rgba16SNorm, PvrLegacyPixelType.DxgiR16G16B16A16SNorm, 64, 0xffff, 0xffff, 0xffff, 0xffff);
-        AddLegacy(TextureFormats.Rg32Float, PvrLegacyPixelType.DxgiR32G32Float, 64, 0xffffffff, 0xffffffff);
-        AddLegacy(TextureFormats.Rgb10A2RevUNorm, PvrLegacyPixelType.DxgiR10G10B10A2UNorm, 32, 0x000003ff, 0x000ffc00, 0x3ff00000, 0xc0000000);
-        AddLegacy(TextureFormats.R11G11B10Float, PvrLegacyPixelType.DxgiR11G11B10Float, 32, 0x000007ff, 0x003ff800, 0xffc00000);
-        AddLegacy(TextureFormats.Rgba8UNorm, PvrLegacyPixelType.DxgiR8G8B8A8UNorm, 32, 0x000000ff, 0x0000ff00, 0x00ff0000, 0xff000000);
-        AddLegacy(TextureFormats.Rgba8Srgb, PvrLegacyPixelType.DxgiR8G8B8A8UNormSrgb, 32, 0x000000ff, 0x0000ff00, 0x00ff0000, 0xff000000);
-        AddLegacy(TextureFormats.Rgba8SNorm, PvrLegacyPixelType.DxgiR8G8B8A8SNorm, 32, 0x000000ff, 0x0000ff00, 0x00ff0000, 0xff000000);
-        AddLegacy(TextureFormats.Rg16Float, PvrLegacyPixelType.DxgiR16G16Float, 32, 0xffff, 0xffff);
-        AddLegacy(TextureFormats.Rg16UNorm, PvrLegacyPixelType.DxgiR16G16UNorm, 32, 0xffff, 0xffff);
-        AddLegacy(TextureFormats.Rg16SNorm, PvrLegacyPixelType.DxgiR16G16SNorm, 32, 0xffff, 0xffff);
-        AddLegacy(TextureFormats.R32Float, PvrLegacyPixelType.DxgiR32Float, 32, 0xffffffff);
-        AddLegacy(TextureFormats.Rg8, PvrLegacyPixelType.DxgiR8G8UNorm, 16, 0x00ff, 0xff00);
-        AddLegacy(TextureFormats.Rg8SNorm, PvrLegacyPixelType.DxgiR8G8SNorm, 16, 0x00ff, 0xff00);
-        AddLegacy(TextureFormats.R16Float, PvrLegacyPixelType.DxgiR16Float, 16, 0xffff);
-        AddLegacy(TextureFormats.R16UNorm, PvrLegacyPixelType.DxgiR16UNorm, 16, 0xffff);
-        AddLegacy(TextureFormats.R16SNorm, PvrLegacyPixelType.DxgiR16SNorm, 16, 0xffff);
-        AddLegacy(TextureFormats.R8, PvrLegacyPixelType.DxgiR8UNorm, 8, 0xff);
-        AddLegacy(TextureFormats.R8SNorm, PvrLegacyPixelType.DxgiR8SNorm, 8, 0xff);
-        AddLegacy(TextureFormats.Bw1BppUNorm, PvrLegacyPixelType.DxgiR1UNorm, 1, 0x1);
-        AddLegacy(TextureFormats.Rgb9E5, PvrLegacyPixelType.DxgiR9G9B9E5, 32);
-        AddLegacy(TextureFormats.R8G8B8G8_422UNorm, PvrLegacyPixelType.DxgiR8G8B8G8UNorm, 32);
-        AddLegacy(TextureFormats.G8R8G8B8_422UNorm, PvrLegacyPixelType.DxgiG8R8G8B8UNorm, 32);
-        AddLegacy(TextureFormats.Bc1Rgba, PvrLegacyPixelType.DxgiBc1UNorm, 4, alphaMask: 0x1, distinguishAlpha: true);
-        AddLegacy(TextureFormats.Bc1Rgb, PvrLegacyPixelType.DxgiBc1UNorm, 4, distinguishAlpha: true);
-        AddLegacy(TextureFormats.Bc1RgbaSrgb, PvrLegacyPixelType.DxgiBc1UNormSrgb, 4, alphaMask: 0x1, distinguishAlpha: true);
-        AddLegacy(TextureFormats.Bc1RgbSrgb, PvrLegacyPixelType.DxgiBc1UNormSrgb, 4, distinguishAlpha: true);
-        AddLegacy(TextureFormats.Bc2Rgba, PvrLegacyPixelType.DxgiBc2UNorm, 8, alphaMask: 0x1);
-        AddLegacy(TextureFormats.Bc2RgbaSrgb, PvrLegacyPixelType.DxgiBc2UNormSrgb, 8, alphaMask: 0x1);
-        AddLegacy(TextureFormats.Bc3Rgba, PvrLegacyPixelType.DxgiBc3UNorm, 8, alphaMask: 0x1);
-        AddLegacy(TextureFormats.Bc3RgbaSrgb, PvrLegacyPixelType.DxgiBc3UNormSrgb, 8, alphaMask: 0x1);
-        AddLegacy(TextureFormats.Bc4UNorm, PvrLegacyPixelType.DxgiBc4UNorm, 4);
-        AddLegacy(TextureFormats.Bc4SNorm, PvrLegacyPixelType.DxgiBc4SNorm, 4);
-        AddLegacy(TextureFormats.Bc5UNorm, PvrLegacyPixelType.DxgiBc5UNorm, 8);
-        AddLegacy(TextureFormats.Bc5SNorm, PvrLegacyPixelType.DxgiBc5SNorm, 8);
+        AddLegacy(TextureFormats.Alpha8UNorm, PvrLegacyPixelType.D3dA8, 8, alphaMask: 0xff, preference: PvrLegacyPixelTypePreference.D3d);
+        AddLegacy(TextureFormats.Rg8SNorm, PvrLegacyPixelType.D3dV8U8, 16, preference: PvrLegacyPixelTypePreference.D3d);
+        AddLegacy(TextureFormats.Luminance16UNorm, PvrLegacyPixelType.D3dL16, 16, preference: PvrLegacyPixelTypePreference.D3d);
+        AddLegacy(TextureFormats.Luminance8UNorm, PvrLegacyPixelType.D3dL8, 8, preference: PvrLegacyPixelTypePreference.D3d);
+        AddLegacy(TextureFormats.Luminance8Alpha8UNorm, PvrLegacyPixelType.D3dA8L8, 16, preference: PvrLegacyPixelTypePreference.D3d);
+        AddLegacy(TextureFormats.Uyvy422UNorm, PvrLegacyPixelType.D3dUyvy, 16, preference: PvrLegacyPixelTypePreference.D3d);
+        AddLegacy(TextureFormats.Yuy2UNorm, PvrLegacyPixelType.D3dYuy2, 16, preference: PvrLegacyPixelTypePreference.D3d);
+
+        AddLegacy(TextureFormats.Rgba32Float, PvrLegacyPixelType.DxgiR32G32B32A32Float, 128, 0xffffffff, 0xffffffff, 0xffffffff, 0xffffffff, preference: PvrLegacyPixelTypePreference.Dxgi);
+        AddLegacy(TextureFormats.Rgba32UInt, PvrLegacyPixelType.DxgiR32G32B32A32UInt, 128, preference: PvrLegacyPixelTypePreference.Dxgi);
+        AddLegacy(TextureFormats.Rgba32SInt, PvrLegacyPixelType.DxgiR32G32B32A32SInt, 128, preference: PvrLegacyPixelTypePreference.Dxgi);
+        AddLegacy(TextureFormats.Rgb32Float, PvrLegacyPixelType.DxgiR32G32B32Float, 96, 0xffffffff, 0xffffffff, 0xffffffff, preference: PvrLegacyPixelTypePreference.Dxgi);
+        AddLegacy(TextureFormats.Rgb32UInt, PvrLegacyPixelType.DxgiR32G32B32UInt, 96, preference: PvrLegacyPixelTypePreference.Dxgi);
+        AddLegacy(TextureFormats.Rgb32SInt, PvrLegacyPixelType.DxgiR32G32B32SInt, 96, preference: PvrLegacyPixelTypePreference.Dxgi);
+        AddLegacy(TextureFormats.Rgba16Float, PvrLegacyPixelType.DxgiR16G16B16A16Float, 64, 0xffff, 0xffff, 0xffff, 0xffff, preference: PvrLegacyPixelTypePreference.Dxgi);
+        AddLegacy(TextureFormats.Rgba16UNorm, PvrLegacyPixelType.DxgiR16G16B16A16UNorm, 64, 0xffff, 0xffff, 0xffff, 0xffff, preference: PvrLegacyPixelTypePreference.Dxgi);
+        AddLegacy(TextureFormats.Rgba16UInt, PvrLegacyPixelType.DxgiR16G16B16A16UInt, 64, preference: PvrLegacyPixelTypePreference.Dxgi);
+        AddLegacy(TextureFormats.Rgba16SNorm, PvrLegacyPixelType.DxgiR16G16B16A16SNorm, 64, 0xffff, 0xffff, 0xffff, 0xffff, preference: PvrLegacyPixelTypePreference.Dxgi);
+        AddLegacy(TextureFormats.Rgba16SInt, PvrLegacyPixelType.DxgiR16G16B16A16SInt, 64, preference: PvrLegacyPixelTypePreference.Dxgi);
+        AddLegacy(TextureFormats.Rg32Float, PvrLegacyPixelType.DxgiR32G32Float, 64, 0xffffffff, 0xffffffff, preference: PvrLegacyPixelTypePreference.Dxgi);
+        AddLegacy(TextureFormats.Rg32UInt, PvrLegacyPixelType.DxgiR32G32UInt, 64, preference: PvrLegacyPixelTypePreference.Dxgi);
+        AddLegacy(TextureFormats.Rg32SInt, PvrLegacyPixelType.DxgiR32G32SInt, 64, preference: PvrLegacyPixelTypePreference.Dxgi);
+        AddLegacy(TextureFormats.Rgb10A2RevUNorm, PvrLegacyPixelType.DxgiR10G10B10A2UNorm, 32, 0x000003ff, 0x000ffc00, 0x3ff00000, 0xc0000000, preference: PvrLegacyPixelTypePreference.Dxgi);
+        AddLegacy(TextureFormats.Rgb10A2UInt, PvrLegacyPixelType.DxgiR10G10B10A2UInt, 32, preference: PvrLegacyPixelTypePreference.Dxgi);
+        AddLegacy(TextureFormats.R11G11B10Float, PvrLegacyPixelType.DxgiR11G11B10Float, 32, 0x000007ff, 0x003ff800, 0xffc00000, preference: PvrLegacyPixelTypePreference.Dxgi);
+        AddLegacy(TextureFormats.Rgba8UNorm, PvrLegacyPixelType.DxgiR8G8B8A8UNorm, 32, 0x000000ff, 0x0000ff00, 0x00ff0000, 0xff000000, preference: PvrLegacyPixelTypePreference.Dxgi);
+        AddLegacy(TextureFormats.Rgba8Srgb, PvrLegacyPixelType.DxgiR8G8B8A8UNormSrgb, 32, 0x000000ff, 0x0000ff00, 0x00ff0000, 0xff000000, preference: PvrLegacyPixelTypePreference.Dxgi);
+        AddLegacy(TextureFormats.Rgba8UInt, PvrLegacyPixelType.DxgiR8G8B8A8UInt, 32, preference: PvrLegacyPixelTypePreference.Dxgi);
+        AddLegacy(TextureFormats.Rgba8SNorm, PvrLegacyPixelType.DxgiR8G8B8A8SNorm, 32, 0x000000ff, 0x0000ff00, 0x00ff0000, 0xff000000, preference: PvrLegacyPixelTypePreference.Dxgi);
+        AddLegacy(TextureFormats.Rgba8SInt, PvrLegacyPixelType.DxgiR8G8B8A8SInt, 32, preference: PvrLegacyPixelTypePreference.Dxgi);
+        AddLegacy(TextureFormats.Rg16Float, PvrLegacyPixelType.DxgiR16G16Float, 32, 0xffff, 0xffff, preference: PvrLegacyPixelTypePreference.Dxgi);
+        AddLegacy(TextureFormats.Rg16UNorm, PvrLegacyPixelType.DxgiR16G16UNorm, 32, 0xffff, 0xffff, preference: PvrLegacyPixelTypePreference.Dxgi);
+        AddLegacy(TextureFormats.Rg16UInt, PvrLegacyPixelType.DxgiR16G16UInt, 32, preference: PvrLegacyPixelTypePreference.Dxgi);
+        AddLegacy(TextureFormats.Rg16SNorm, PvrLegacyPixelType.DxgiR16G16SNorm, 32, 0xffff, 0xffff, preference: PvrLegacyPixelTypePreference.Dxgi);
+        AddLegacy(TextureFormats.Rg16SInt, PvrLegacyPixelType.DxgiR16G16SInt, 32, preference: PvrLegacyPixelTypePreference.Dxgi);
+        AddLegacy(TextureFormats.R32Float, PvrLegacyPixelType.DxgiR32Float, 32, 0xffffffff, preference: PvrLegacyPixelTypePreference.Dxgi);
+        AddLegacy(TextureFormats.R32UInt, PvrLegacyPixelType.DxgiR32UInt, 32, preference: PvrLegacyPixelTypePreference.Dxgi);
+        AddLegacy(TextureFormats.R32SInt, PvrLegacyPixelType.DxgiR32SInt, 32, preference: PvrLegacyPixelTypePreference.Dxgi);
+        AddLegacy(TextureFormats.Rg8, PvrLegacyPixelType.DxgiR8G8UNorm, 16, 0x00ff, 0xff00, preference: PvrLegacyPixelTypePreference.Dxgi);
+        AddLegacy(TextureFormats.Rg8UInt, PvrLegacyPixelType.DxgiR8G8UInt, 16, preference: PvrLegacyPixelTypePreference.Dxgi);
+        AddLegacy(TextureFormats.Rg8SNorm, PvrLegacyPixelType.DxgiR8G8SNorm, 16, 0x00ff, 0xff00, preference: PvrLegacyPixelTypePreference.Dxgi);
+        AddLegacy(TextureFormats.Rg8SInt, PvrLegacyPixelType.DxgiR8G8SInt, 16, preference: PvrLegacyPixelTypePreference.Dxgi);
+        AddLegacy(TextureFormats.R16Float, PvrLegacyPixelType.DxgiR16Float, 16, 0xffff, preference: PvrLegacyPixelTypePreference.Dxgi);
+        AddLegacy(TextureFormats.R16UNorm, PvrLegacyPixelType.DxgiR16UNorm, 16, 0xffff, preference: PvrLegacyPixelTypePreference.Dxgi);
+        AddLegacy(TextureFormats.R16UInt, PvrLegacyPixelType.DxgiR16UInt, 16, preference: PvrLegacyPixelTypePreference.Dxgi);
+        AddLegacy(TextureFormats.R16SNorm, PvrLegacyPixelType.DxgiR16SNorm, 16, 0xffff, preference: PvrLegacyPixelTypePreference.Dxgi);
+        AddLegacy(TextureFormats.R16SInt, PvrLegacyPixelType.DxgiR16SInt, 16, preference: PvrLegacyPixelTypePreference.Dxgi);
+        AddLegacy(TextureFormats.R8, PvrLegacyPixelType.DxgiR8UNorm, 8, 0xff, preference: PvrLegacyPixelTypePreference.Dxgi);
+        AddLegacy(TextureFormats.R8UInt, PvrLegacyPixelType.DxgiR8UInt, 8, preference: PvrLegacyPixelTypePreference.Dxgi);
+        AddLegacy(TextureFormats.R8SNorm, PvrLegacyPixelType.DxgiR8SNorm, 8, 0xff, preference: PvrLegacyPixelTypePreference.Dxgi);
+        AddLegacy(TextureFormats.R8SInt, PvrLegacyPixelType.DxgiR8SInt, 8, preference: PvrLegacyPixelTypePreference.Dxgi);
+        AddLegacy(TextureFormats.Alpha8UNorm, PvrLegacyPixelType.DxgiA8UNorm, 8, preference: PvrLegacyPixelTypePreference.Dxgi);
+        AddLegacy(TextureFormats.Bw1BppUNorm, PvrLegacyPixelType.DxgiR1UNorm, 1, 0x1, preference: PvrLegacyPixelTypePreference.Dxgi);
+        AddLegacy(TextureFormats.Rgb9E5, PvrLegacyPixelType.DxgiR9G9B9E5, 32, preference: PvrLegacyPixelTypePreference.Dxgi);
+        AddLegacy(TextureFormats.R8G8B8G8_422UNorm, PvrLegacyPixelType.DxgiR8G8B8G8UNorm, 32, preference: PvrLegacyPixelTypePreference.Dxgi);
+        AddLegacy(TextureFormats.G8R8G8B8_422UNorm, PvrLegacyPixelType.DxgiG8R8G8B8UNorm, 32, preference: PvrLegacyPixelTypePreference.Dxgi);
+        AddLegacy(TextureFormats.Bc1Rgba, PvrLegacyPixelType.DxgiBc1UNorm, 4, alphaMask: 0x1, distinguishAlpha: true, preference: PvrLegacyPixelTypePreference.Dxgi);
+        AddLegacy(TextureFormats.Bc1Rgb, PvrLegacyPixelType.DxgiBc1UNorm, 4, distinguishAlpha: true, preference: PvrLegacyPixelTypePreference.Dxgi);
+        AddLegacy(TextureFormats.Bc1RgbaSrgb, PvrLegacyPixelType.DxgiBc1UNormSrgb, 4, alphaMask: 0x1, distinguishAlpha: true, preference: PvrLegacyPixelTypePreference.Dxgi);
+        AddLegacy(TextureFormats.Bc1RgbSrgb, PvrLegacyPixelType.DxgiBc1UNormSrgb, 4, distinguishAlpha: true, preference: PvrLegacyPixelTypePreference.Dxgi);
+        AddLegacy(TextureFormats.Bc2Rgba, PvrLegacyPixelType.DxgiBc2UNorm, 8, alphaMask: 0x1, preference: PvrLegacyPixelTypePreference.Dxgi);
+        AddLegacy(TextureFormats.Bc2RgbaSrgb, PvrLegacyPixelType.DxgiBc2UNormSrgb, 8, alphaMask: 0x1, preference: PvrLegacyPixelTypePreference.Dxgi);
+        AddLegacy(TextureFormats.Bc3Rgba, PvrLegacyPixelType.DxgiBc3UNorm, 8, alphaMask: 0x1, preference: PvrLegacyPixelTypePreference.Dxgi);
+        AddLegacy(TextureFormats.Bc3RgbaSrgb, PvrLegacyPixelType.DxgiBc3UNormSrgb, 8, alphaMask: 0x1, preference: PvrLegacyPixelTypePreference.Dxgi);
+        AddLegacy(TextureFormats.Bc4UNorm, PvrLegacyPixelType.DxgiBc4UNorm, 4, preference: PvrLegacyPixelTypePreference.Dxgi);
+        AddLegacy(TextureFormats.Bc4SNorm, PvrLegacyPixelType.DxgiBc4SNorm, 4, preference: PvrLegacyPixelTypePreference.Dxgi);
+        AddLegacy(TextureFormats.Bc5UNorm, PvrLegacyPixelType.DxgiBc5UNorm, 8, preference: PvrLegacyPixelTypePreference.Dxgi);
+        AddLegacy(TextureFormats.Bc5SNorm, PvrLegacyPixelType.DxgiBc5SNorm, 8, preference: PvrLegacyPixelTypePreference.Dxgi);
 
         AddLegacyRead(TextureFormats.Rgba4UNorm, PvrLegacyPixelType.MglArgb4444, hasAlpha: true);
         AddLegacyRead(TextureFormats.Rgb5A1UNorm, PvrLegacyPixelType.MglArgb1555, hasAlpha: true);
         AddLegacyRead(TextureFormats.Rgb565UNorm, PvrLegacyPixelType.MglRgb565, hasAlpha: false);
+        AddLegacyRead(TextureFormats.Rgb5UNorm, PvrLegacyPixelType.MglRgb555, hasAlpha: false);
         AddLegacyRead(TextureFormats.Rgb8, PvrLegacyPixelType.MglRgb888, hasAlpha: false);
         AddLegacyRead(TextureFormats.Rgba8UNorm, PvrLegacyPixelType.MglArgb8888, hasAlpha: true);
+        AddLegacyRead(TextureFormats.A8Rgb332UNorm, PvrLegacyPixelType.MglArgb8332, hasAlpha: true);
         AddLegacyRead(TextureFormats.Luminance8UNorm, PvrLegacyPixelType.MglI8, hasAlpha: false);
         AddLegacyRead(TextureFormats.Luminance8Alpha8UNorm, PvrLegacyPixelType.MglAi88, hasAlpha: true);
+        AddLegacyRead(TextureFormats.Bw1BppUNorm, PvrLegacyPixelType.MglOneBpp, hasAlpha: false);
+        AddLegacyRead(TextureFormats.Vy1Uy0422UNorm, PvrLegacyPixelType.MglVy1Uy0, hasAlpha: false);
+        AddLegacyRead(TextureFormats.Y1Vy0U422UNorm, PvrLegacyPixelType.MglY1Vy0U, hasAlpha: false);
         AddLegacyRead(TextureFormats.RgbPvrtcI2BppUNorm, PvrLegacyPixelType.MglPvrtc2, hasAlpha: false);
         AddLegacyRead(TextureFormats.RgbaPvrtcI2BppUNorm, PvrLegacyPixelType.MglPvrtc2, hasAlpha: true);
         AddLegacyRead(TextureFormats.RgbPvrtcI4BppUNorm, PvrLegacyPixelType.MglPvrtc4, hasAlpha: false);
         AddLegacyRead(TextureFormats.RgbaPvrtcI4BppUNorm, PvrLegacyPixelType.MglPvrtc4, hasAlpha: true);
         AddLegacyRead(TextureFormats.Alpha8UNorm, PvrLegacyPixelType.D3dA8, hasAlpha: true);
+        AddLegacyRead(TextureFormats.Rg8SNorm, PvrLegacyPixelType.D3dV8U8, hasAlpha: false);
+        AddLegacyRead(TextureFormats.Luminance16UNorm, PvrLegacyPixelType.D3dL16, hasAlpha: false);
         AddLegacyRead(TextureFormats.Luminance8UNorm, PvrLegacyPixelType.D3dL8, hasAlpha: false);
         AddLegacyRead(TextureFormats.Luminance8Alpha8UNorm, PvrLegacyPixelType.D3dA8L8, hasAlpha: true);
         AddLegacyRead(TextureFormats.Uyvy422UNorm, PvrLegacyPixelType.D3dUyvy, hasAlpha: false);
         AddLegacyRead(TextureFormats.Yuy2UNorm, PvrLegacyPixelType.D3dYuy2, hasAlpha: false);
 
-        return new Mappings(textureToPvr, pvrToTexture, pvrPixelFormatToTexture, textureToLegacy, legacyToTexture, legacyPixelTypeToTexture, legacyLayoutToTexture);
+        return new Mappings(textureToPvr, pvrToTexture, pvrPixelFormatToTexture, textureToLegacy, textureToPreferredLegacy, textureToExplicitLegacy, legacyToTexture, legacyPixelTypeToTexture, legacyLayoutToTexture);
     }
 
     private static bool TryGetPvrPixelFormat(ulong pixelFormat, out PvrPixelFormat pvrPixelFormat)
@@ -1211,6 +1331,10 @@ public static class PvrCodec
 
     private readonly record struct LegacyFormatKey(uint PixelType, bool HasAlpha);
 
+    private readonly record struct LegacyPreferenceKey(TextureFormat TextureFormat, PvrLegacyPixelTypePreference Preference);
+
+    private readonly record struct LegacyExplicitKey(TextureFormat TextureFormat, PvrLegacyPixelType PixelType);
+
     private readonly record struct LegacyFormatMapping(TextureFormat TextureFormat, LegacyFormatDescriptor Descriptor);
 
     private readonly record struct LegacyLayoutKey(uint BitCount, uint RedMask, uint GreenMask, uint BlueMask, uint AlphaMask);
@@ -1222,6 +1346,8 @@ public static class PvrCodec
         Dictionary<PvrFormatKey, TextureFormat> PvrToTexture,
         Dictionary<PvrPixelFormatOptionKey, PvrFormatMapping> PvrPixelFormatToTexture,
         Dictionary<TextureFormat, LegacyFormatDescriptor> TextureToLegacy,
+        Dictionary<LegacyPreferenceKey, LegacyFormatDescriptor> TextureToPreferredLegacy,
+        Dictionary<LegacyExplicitKey, LegacyFormatDescriptor> TextureToExplicitLegacy,
         Dictionary<LegacyFormatKey, TextureFormat> LegacyToTexture,
         Dictionary<PvrLegacyPixelType, LegacyFormatMapping> LegacyPixelTypeToTexture,
         Dictionary<LegacyLayoutKey, TextureFormat> LegacyLayoutToTexture);

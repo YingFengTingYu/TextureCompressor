@@ -10,6 +10,8 @@ public sealed class PvrEncodingOptions
 
     public PvrLegacyPixelType? PvrLegacyPixelType { get; init; }
 
+    public PvrLegacyPixelTypePreference LegacyPixelTypePreference { get; init; }
+
     public bool IsSrgb { get; init; }
 
     public int Version { get; init; } = 3;
