@@ -255,6 +255,136 @@ public sealed class AstcTextureCoderTests
         Assert.Equal("source", exception.ParamName);
     }
 
+    [Theory]
+    [MemberData(nameof(AstcUNormFormats))]
+    public void EncodeLdrSolidBlockRoundTripsEveryFootprint(TextureFormat format)
+    {
+        var color = new Rgba8UNorm(0x22, 0x44, 0x88, 0xCC);
+        var source = new ArrayTextureBitmap<Rgba8UNorm>(1, 1, [color]);
+        var decoded = new ArrayTextureBitmap<Rgba8UNorm>(1, 1);
+        var coder = new AstcTextureCoder(format);
+        var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, coder.GetDefaultPitch(source.Width))];
+
+        coder.Encode(source.AsView(), encoded, coder.GetDefaultPitch(source.Width));
+        coder.Decode(encoded, decoded.AsView(), coder.GetDefaultPitch(decoded.Width));
+
+        Assert.Equal(color, decoded.Pixels[0]);
+    }
+
+    [Fact]
+    public void EncodeLdrGradientRoundTripsFastWeightGrid()
+    {
+        var source = new ArrayTextureBitmap<Rgba8UNorm>(4, 4);
+        var values = new byte[] { 0, 84, 171, 255 };
+        for (var y = 0; y < source.Height; y++)
+        {
+            for (var x = 0; x < source.Width; x++)
+            {
+                source.Pixels[(y * source.Width) + x] = new Rgba8UNorm(values[x], values[x], values[x], 255);
+            }
+        }
+
+        var decoded = new ArrayTextureBitmap<Rgba8UNorm>(4, 4);
+        var coder = new AstcTextureCoder(TextureFormats.RgbaAstc4x4UNorm);
+        var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, coder.GetDefaultPitch(source.Width))];
+
+        coder.Encode(source.AsView(), encoded, coder.GetDefaultPitch(source.Width));
+        coder.Decode(encoded, decoded.AsView(), coder.GetDefaultPitch(decoded.Width));
+
+        Assert.Equal(source.Pixels, decoded.Pixels);
+    }
+
+    [Fact]
+    public void EncodeLdrLargeFootprintGradientProducesLegalBlock()
+    {
+        var source = new ArrayTextureBitmap<Rgba8UNorm>(12, 12);
+        for (var y = 0; y < source.Height; y++)
+        {
+            for (var x = 0; x < source.Width; x++)
+            {
+                var value = (byte)Math.Round(x * (255.0 / (source.Width - 1)));
+                source.Pixels[(y * source.Width) + x] = new Rgba8UNorm(value, value, value, 255);
+            }
+        }
+
+        var decoded = new ArrayTextureBitmap<Rgba8UNorm>(12, 12);
+        var coder = new AstcTextureCoder(TextureFormats.RgbaAstc12x12UNorm);
+        var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, coder.GetDefaultPitch(source.Width))];
+
+        coder.Encode(source.AsView(), encoded, coder.GetDefaultPitch(source.Width));
+        coder.Decode(encoded, decoded.AsView(), coder.GetDefaultPitch(decoded.Width));
+
+        Assert.NotEqual(new Rgba8UNorm(255, 0, 255, 255), decoded.Pixels[0]);
+        Assert.True(decoded.Pixels[0].Red < decoded.Pixels[^1].Red);
+    }
+
+    [Fact]
+    public void EncodeSrgbUsesSrgbStorageForRgbOnly()
+    {
+        var sourceColor = new Rgba8UNorm(40, 100, 200, 123);
+        var expected = new Rgba8UNorm(
+            Srgb8ToLinearUNorm8(LinearUNorm8ToSrgb8(sourceColor.Red)),
+            Srgb8ToLinearUNorm8(LinearUNorm8ToSrgb8(sourceColor.Green)),
+            Srgb8ToLinearUNorm8(LinearUNorm8ToSrgb8(sourceColor.Blue)),
+            sourceColor.Alpha);
+        var source = new ArrayTextureBitmap<Rgba8UNorm>(2, 2, [sourceColor, sourceColor, sourceColor, sourceColor]);
+        var decoded = new ArrayTextureBitmap<Rgba8UNorm>(2, 2);
+        var coder = new AstcTextureCoder(TextureFormats.RgbaAstc4x4Srgb);
+        var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, coder.GetDefaultPitch(source.Width))];
+
+        coder.Encode(source.AsView(), encoded, coder.GetDefaultPitch(source.Width));
+        coder.Decode(encoded, decoded.AsView(), coder.GetDefaultPitch(decoded.Width));
+
+        Assert.All(decoded.Pixels, pixel => Assert.Equal(expected, pixel));
+    }
+
+    [Fact]
+    public void EncodeHonorsRowPitch()
+    {
+        var rowPitch = 32;
+        var red = new Rgba8UNorm(255, 0, 0, 255);
+        var green = new Rgba8UNorm(0, 255, 0, 255);
+        var source = new ArrayTextureBitmap<Rgba8UNorm>(4, 5);
+        for (var i = 0; i < source.Pixels.Length; i++)
+        {
+            source.Pixels[i] = i < 16 ? red : green;
+        }
+
+        var encoded = new byte[rowPitch * 2];
+        Array.Fill(encoded, (byte)0xCD);
+        var decoded = new ArrayTextureBitmap<Rgba8UNorm>(4, 5);
+        var coder = new AstcTextureCoder(TextureFormats.RgbaAstc4x4UNorm);
+
+        coder.Encode(source.AsView(), encoded, rowPitch);
+        coder.Decode(encoded, decoded.AsView(), rowPitch);
+
+        Assert.Equal(red, decoded.Pixels[0]);
+        Assert.Equal(red, decoded.Pixels[15]);
+        Assert.Equal(green, decoded.Pixels[16]);
+        Assert.All(encoded.AsSpan(16, 16).ToArray(), value => Assert.Equal(0xCD, value));
+    }
+
+    [Fact]
+    public void EncodeHdrThrows()
+    {
+        var source = new ArrayTextureBitmap<Rgba16Float>(4, 4);
+        var coder = new AstcTextureCoder(TextureFormats.RgbaAstc4x4Float);
+        var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, coder.GetDefaultPitch(source.Width))];
+
+        var exception = Assert.Throws<NotSupportedException>(() => coder.Encode(source.AsView(), encoded, coder.GetDefaultPitch(source.Width)));
+        Assert.Equal("ASTC HDR encoding is not implemented.", exception.Message);
+    }
+
+    [Fact]
+    public void DestinationTooSmallThrows()
+    {
+        var source = new ArrayTextureBitmap<Rgba8UNorm>(4, 4);
+        var coder = new AstcTextureCoder(TextureFormats.RgbaAstc4x4UNorm);
+
+        var exception = Assert.Throws<ArgumentException>(() => coder.Encode(source.AsView(), [], coder.GetDefaultPitch(source.Width)));
+        Assert.Equal("destination", exception.ParamName);
+    }
+
     public static TheoryData<TextureFormat> AstcFormats()
     {
         var formats = new TheoryData<TextureFormat>();
@@ -442,5 +572,14 @@ public sealed class AstcTextureCoderTests
             ? srgb / 12.92
             : Math.Pow((srgb + 0.055) / 1.055, 2.4);
         return (byte)Math.Clamp(Math.Round(linear * 255.0), 0.0, 255.0);
+    }
+
+    private static byte LinearUNorm8ToSrgb8(byte value)
+    {
+        var linear = value / 255.0;
+        var srgb = linear <= 0.0031308
+            ? linear * 12.92
+            : (1.055 * Math.Pow(linear, 1.0 / 2.4)) - 0.055;
+        return (byte)Math.Clamp(Math.Round(srgb * 255.0), 0.0, 255.0);
     }
 }

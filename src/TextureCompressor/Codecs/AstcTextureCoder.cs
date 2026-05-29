@@ -111,7 +111,7 @@ public sealed class AstcTextureCoder : IPitchTextureCoder
         where TPixel : unmanaged, IPixel<TPixel>
     {
         ValidateDestinationLength(source.Width, source.Height, destination, rowPitch);
-        throw new NotSupportedException("ASTC encoding is not implemented.");
+        EncodeByTransfer(source, destination, rowPitch);
     }
 
     private void DecodeByTransfer<TPixel>(ReadOnlySpan<byte> source, ImageView<TPixel> destination, int rowPitch)
@@ -128,6 +128,24 @@ public sealed class AstcTextureCoder : IPitchTextureCoder
             case AstcTransfer.Hdr:
                 DecodeFloat<TPixel, AstcHdrTransfer>(source, destination, rowPitch);
                 return;
+            default:
+                throw CreateUnsupportedFormatException(Format);
+        }
+    }
+
+    private void EncodeByTransfer<TPixel>(ImageView<TPixel> source, Span<byte> destination, int rowPitch)
+        where TPixel : unmanaged, IPixel<TPixel>
+    {
+        switch (_transfer)
+        {
+            case AstcTransfer.Ldr:
+                EncodeUNorm<TPixel, AstcLdrTransfer>(source, destination, rowPitch);
+                return;
+            case AstcTransfer.Srgb:
+                EncodeUNorm<TPixel, AstcSrgbTransfer>(source, destination, rowPitch);
+                return;
+            case AstcTransfer.Hdr:
+                throw new NotSupportedException("ASTC HDR encoding is not implemented.");
             default:
                 throw CreateUnsupportedFormatException(Format);
         }
@@ -179,9 +197,34 @@ public sealed class AstcTextureCoder : IPitchTextureCoder
         }
     }
 
+    private void EncodeUNorm<TPixel, TTransfer>(ImageView<TPixel> source, Span<byte> destination, int rowPitch)
+        where TPixel : unmanaged, IPixel<TPixel>
+        where TTransfer : IAstcUNormTransfer
+    {
+        var blockCountX = GetBlockCount(source.Width, _blockWidth);
+        var blockCountY = GetBlockCount(source.Height, _blockHeight);
+        Span<Rgba8UNorm> block = stackalloc Rgba8UNorm[MaxTexelsPerBlock];
+
+        var rowOffset = 0;
+        for (var blockY = 0; blockY < blockCountY; blockY++)
+        {
+            var blockOffset = rowOffset;
+            for (var blockX = 0; blockX < blockCountX; blockX++)
+            {
+                LoadUNormBlock(source, blockX, blockY, block);
+                TTransfer.EncodeBlock(block, _blockWidth, _blockHeight, destination.Slice(blockOffset, BytesPerBlock));
+                blockOffset = checked(blockOffset + BytesPerBlock);
+            }
+
+            rowOffset = checked(rowOffset + rowPitch);
+        }
+    }
+
     private interface IAstcUNormTransfer
     {
         static abstract void DecodeBlock(ReadOnlySpan<byte> source, int blockWidth, int blockHeight, Span<Rgba8UNorm> destination);
+
+        static abstract void EncodeBlock(ReadOnlySpan<Rgba8UNorm> source, int blockWidth, int blockHeight, Span<byte> destination);
     }
 
     private interface IAstcFloatTransfer
@@ -193,12 +236,18 @@ public sealed class AstcTextureCoder : IPitchTextureCoder
     {
         public static void DecodeBlock(ReadOnlySpan<byte> source, int blockWidth, int blockHeight, Span<Rgba8UNorm> destination) =>
             DecodeLdrBlock(source, blockWidth, blockHeight, srgb: false, destination);
+
+        public static void EncodeBlock(ReadOnlySpan<Rgba8UNorm> source, int blockWidth, int blockHeight, Span<byte> destination) =>
+            EncodeLdrBlock(source, blockWidth, blockHeight, srgb: false, destination);
     }
 
     private readonly struct AstcSrgbTransfer : IAstcUNormTransfer
     {
         public static void DecodeBlock(ReadOnlySpan<byte> source, int blockWidth, int blockHeight, Span<Rgba8UNorm> destination) =>
             DecodeLdrBlock(source, blockWidth, blockHeight, srgb: true, destination);
+
+        public static void EncodeBlock(ReadOnlySpan<Rgba8UNorm> source, int blockWidth, int blockHeight, Span<byte> destination) =>
+            EncodeLdrBlock(source, blockWidth, blockHeight, srgb: true, destination);
     }
 
     private readonly struct AstcHdrTransfer : IAstcFloatTransfer
@@ -307,6 +356,160 @@ public sealed class AstcTextureCoder : IPitchTextureCoder
             }
         }
     }
+
+    private static void EncodeLdrBlock(ReadOnlySpan<Rgba8UNorm> source, int blockWidth, int blockHeight, bool srgb, Span<byte> destination)
+    {
+        var texelCount = blockWidth * blockHeight;
+        Span<Rgba8UNorm> storage = stackalloc Rgba8UNorm[MaxTexelsPerBlock];
+        for (var i = 0; i < texelCount; i++)
+        {
+            storage[i] = EncodeStorageColor(source[i], srgb);
+        }
+
+        if (IsSolidBlock(storage, texelCount, out var solidColor))
+        {
+            WriteLdrVoidExtentBlock(solidColor, destination);
+            return;
+        }
+
+        FindRgbaBounds(storage, texelCount, out var low, out var high);
+
+        Span<int> weightAccumulators = stackalloc int[16];
+        Span<int> weightCounts = stackalloc int[16];
+        for (var y = 0; y < blockHeight; y++)
+        {
+            for (var x = 0; x < blockWidth; x++)
+            {
+                var texelIndex = (y * blockWidth) + x;
+                var gridX = GetEncoderGridCoordinate(x, blockWidth);
+                var gridY = GetEncoderGridCoordinate(y, blockHeight);
+                var gridIndex = (gridY * 4) + gridX;
+                weightAccumulators[gridIndex] += QuantizeWeight(storage[texelIndex], low, high);
+                weightCounts[gridIndex]++;
+            }
+        }
+
+        uint weightStream = 0;
+        for (var i = 0; i < 16; i++)
+        {
+            var weight = weightCounts[i] == 0
+                ? 0
+                : (weightAccumulators[i] + (weightCounts[i] / 2)) / weightCounts[i];
+            weightStream |= (uint)Math.Clamp(weight, 0, 3) << (i * 2);
+        }
+
+        UInt128 bits = 66;
+        bits |= (UInt128)12 << 13;
+        bits |= (UInt128)low.Red << 17;
+        bits |= (UInt128)high.Red << 25;
+        bits |= (UInt128)low.Green << 33;
+        bits |= (UInt128)high.Green << 41;
+        bits |= (UInt128)low.Blue << 49;
+        bits |= (UInt128)high.Blue << 57;
+        bits |= (UInt128)low.Alpha << 65;
+        bits |= (UInt128)high.Alpha << 73;
+        bits |= (UInt128)ReverseBits32(weightStream) << 96;
+
+        WriteBlockBits(bits, destination);
+    }
+
+    private static bool IsSolidBlock(ReadOnlySpan<Rgba8UNorm> source, int texelCount, out Rgba8UNorm color)
+    {
+        color = source[0];
+        for (var i = 1; i < texelCount; i++)
+        {
+            if (!ColorEquals(source[i], color))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static void FindRgbaBounds(ReadOnlySpan<Rgba8UNorm> source, int texelCount, out Rgba8UNorm low, out Rgba8UNorm high)
+    {
+        var minR = 255;
+        var minG = 255;
+        var minB = 255;
+        var minA = 255;
+        var maxR = 0;
+        var maxG = 0;
+        var maxB = 0;
+        var maxA = 0;
+
+        for (var i = 0; i < texelCount; i++)
+        {
+            var color = source[i];
+            minR = Math.Min(minR, color.Red);
+            minG = Math.Min(minG, color.Green);
+            minB = Math.Min(minB, color.Blue);
+            minA = Math.Min(minA, color.Alpha);
+            maxR = Math.Max(maxR, color.Red);
+            maxG = Math.Max(maxG, color.Green);
+            maxB = Math.Max(maxB, color.Blue);
+            maxA = Math.Max(maxA, color.Alpha);
+        }
+
+        low = new Rgba8UNorm((byte)minR, (byte)minG, (byte)minB, (byte)minA);
+        high = new Rgba8UNorm((byte)maxR, (byte)maxG, (byte)maxB, (byte)maxA);
+    }
+
+    private static int QuantizeWeight(Rgba8UNorm color, Rgba8UNorm low, Rgba8UNorm high)
+    {
+        var deltaR = high.Red - low.Red;
+        var deltaG = high.Green - low.Green;
+        var deltaB = high.Blue - low.Blue;
+        var deltaA = high.Alpha - low.Alpha;
+        var denominator =
+            (deltaR * deltaR)
+            + (deltaG * deltaG)
+            + (deltaB * deltaB)
+            + (deltaA * deltaA);
+
+        if (denominator == 0)
+        {
+            return 0;
+        }
+
+        var numerator =
+            ((color.Red - low.Red) * deltaR)
+            + ((color.Green - low.Green) * deltaG)
+            + ((color.Blue - low.Blue) * deltaB)
+            + ((color.Alpha - low.Alpha) * deltaA);
+        var projected = numerator / (double)denominator;
+        return (int)Math.Clamp(Math.Round(projected * 3.0), 0.0, 3.0);
+    }
+
+    private static int GetEncoderGridCoordinate(int coordinate, int blockSize) =>
+        ((coordinate * 3) + ((blockSize - 1) / 2)) / (blockSize - 1);
+
+    private static void WriteLdrVoidExtentBlock(Rgba8UNorm color, Span<byte> destination)
+    {
+        destination.Clear();
+        ReadOnlySpan<byte> header = [0xFC, 0xFD, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF];
+        header.CopyTo(destination);
+        BinaryPrimitives.WriteUInt16LittleEndian(destination[8..], ReplicateByte(color.Red));
+        BinaryPrimitives.WriteUInt16LittleEndian(destination[10..], ReplicateByte(color.Green));
+        BinaryPrimitives.WriteUInt16LittleEndian(destination[12..], ReplicateByte(color.Blue));
+        BinaryPrimitives.WriteUInt16LittleEndian(destination[14..], ReplicateByte(color.Alpha));
+    }
+
+    private static ushort ReplicateByte(byte value) => (ushort)((value << 8) | value);
+
+    private static Rgba8UNorm EncodeStorageColor(Rgba8UNorm color, bool srgb) => srgb
+        ? new Rgba8UNorm(
+            RgbaColorConversions.LinearUNorm8ToSrgb8(color.Red),
+            RgbaColorConversions.LinearUNorm8ToSrgb8(color.Green),
+            RgbaColorConversions.LinearUNorm8ToSrgb8(color.Blue),
+            color.Alpha)
+        : color;
+
+    private static bool ColorEquals(Rgba8UNorm left, Rgba8UNorm right) =>
+        left.Red == right.Red
+        && left.Green == right.Green
+        && left.Blue == right.Blue
+        && left.Alpha == right.Alpha;
 
     private static Rgba8UNorm DecodeLdrTexel(AstcEndpointPair endpoint, int sharedWeight, int redWeight, int greenWeight, int blueWeight, int alphaWeight, bool srgb)
     {
@@ -1748,6 +1951,12 @@ public sealed class AstcTextureCoder : IPitchTextureCoder
         return ((UInt128)high << 64) | low;
     }
 
+    private static void WriteBlockBits(UInt128 bits, Span<byte> destination)
+    {
+        BinaryPrimitives.WriteUInt64LittleEndian(destination, (ulong)bits);
+        BinaryPrimitives.WriteUInt64LittleEndian(destination[8..], (ulong)(bits >> 64));
+    }
+
     private static UInt128 GetBits(UInt128 value, int start, int count) =>
         count <= 0 ? UInt128.Zero : (value >> start) & GetMask(count);
 
@@ -1768,6 +1977,15 @@ public sealed class AstcTextureCoder : IPitchTextureCoder
         return ((UInt128)ReverseBits64(low) << 64) | ReverseBits64(high);
     }
 
+    private static uint ReverseBits32(uint value)
+    {
+        value = ((value & 0x55555555U) << 1) | ((value >> 1) & 0x55555555U);
+        value = ((value & 0x33333333U) << 2) | ((value >> 2) & 0x33333333U);
+        value = ((value & 0x0F0F0F0FU) << 4) | ((value >> 4) & 0x0F0F0F0FU);
+        value = ((value & 0x00FF00FFU) << 8) | ((value >> 8) & 0x00FF00FFU);
+        return (value << 16) | (value >> 16);
+    }
+
     private static ulong ReverseBits64(ulong value)
     {
         value = ((value & 0x5555555555555555UL) << 1) | ((value >> 1) & 0x5555555555555555UL);
@@ -1776,6 +1994,25 @@ public sealed class AstcTextureCoder : IPitchTextureCoder
         value = ((value & 0x00FF00FF00FF00FFUL) << 8) | ((value >> 8) & 0x00FF00FF00FF00FFUL);
         value = ((value & 0x0000FFFF0000FFFFUL) << 16) | ((value >> 16) & 0x0000FFFF0000FFFFUL);
         return (value << 32) | (value >> 32);
+    }
+
+    private void LoadUNormBlock<TPixel>(ImageView<TPixel> source, int blockX, int blockY, Span<Rgba8UNorm> destination)
+        where TPixel : unmanaged, IPixel<TPixel>
+    {
+        var originX = blockX * _blockWidth;
+        var originY = blockY * _blockHeight;
+        var lastSourceX = source.Width - 1;
+        var blockOffset = 0;
+        for (var y = 0; y < _blockHeight; y++)
+        {
+            var sourceY = Math.Min(originY + y, source.Height - 1);
+            var sourceRow = source.GetRowSpan(sourceY);
+            for (var x = 0; x < _blockWidth; x++)
+            {
+                var sourceX = Math.Min(originX + x, lastSourceX);
+                destination[blockOffset++] = TPixel.ToRgba8UNorm(sourceRow[sourceX]);
+            }
+        }
     }
 
     private void StoreUNormBlock<TPixel>(ReadOnlySpan<Rgba8UNorm> block, int blockX, int blockY, ImageView<TPixel> destination)
