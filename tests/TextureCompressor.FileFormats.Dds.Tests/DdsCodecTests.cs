@@ -1,0 +1,207 @@
+using System.Buffers.Binary;
+using TextureCompressor.Bitmaps;
+using TextureCompressor.Colors;
+using TextureCompressor.FileFormats.Dds;
+using TextureCompressor.Formats;
+
+namespace TextureCompressor.FileFormats.Dds.Tests;
+
+public sealed class DdsCodecTests
+{
+    [Fact]
+    public void EncodeRgba8WritesReadableDx10Dds()
+    {
+        var source = new ArrayBitmap<Rgba8UNorm>(
+            2,
+            2,
+            [
+                new Rgba8UNorm(1, 2, 3, 4),
+                new Rgba8UNorm(5, 6, 7, 8),
+                new Rgba8UNorm(9, 10, 11, 12),
+                new Rgba8UNorm(13, 14, 15, 16)
+            ]);
+
+        var dds = DdsCodec.Encode(source);
+        var texture = DdsCodec.Read(dds);
+        var decoded = DdsCodec.Decode(dds);
+
+        AssertDx10Header(dds, DdsDxgiFormat.R8G8B8A8UNorm, width: 2, height: 2, payloadSize: 16);
+        Assert.Equal(TextureFormats.Rgba8UNorm, texture.Format);
+        Assert.Equal(DdsHeaderKind.Dxt10, texture.HeaderKind);
+        Assert.Equal(DdsDxgiFormat.R8G8B8A8UNorm, texture.DxgiFormat);
+        Assert.Equal(source.PixelSpan.ToArray(), decoded.PixelSpan.ToArray());
+    }
+
+    [Fact]
+    public void EncodeWithLegacyHeaderWritesOrdinaryDdsHeader()
+    {
+        var source = new ArrayBitmap<Rgba8UNorm>(
+            2,
+            1,
+            [
+                new Rgba8UNorm(1, 2, 3, 4),
+                new Rgba8UNorm(5, 6, 7, 8)
+            ]);
+
+        var dds = DdsCodec.Encode(source, new DdsEncodingOptions { HeaderKind = DdsHeaderKind.Legacy });
+        var texture = DdsCodec.Read(dds);
+        var decoded = DdsCodec.Decode(dds);
+
+        AssertLegacyRgba8Header(dds, width: 2, height: 1, payloadSize: 8);
+        Assert.Equal(TextureFormats.Rgba8UNorm, texture.Format);
+        Assert.Equal(DdsHeaderKind.Legacy, texture.HeaderKind);
+        Assert.Equal(DdsLegacyPixelFormat.Rgba8UNorm, texture.LegacyPixelFormat);
+        Assert.Equal(source.PixelSpan.ToArray(), decoded.PixelSpan.ToArray());
+    }
+
+    [Fact]
+    public void EncodeWithOptionsDxgiFormatWritesSelectedDx10Format()
+    {
+        var source = new ArrayBitmap<Rgba8UNorm>(
+            4,
+            4,
+            Enumerable.Repeat(new Rgba8UNorm(255, 0, 0, 255), 16).ToArray());
+
+        var dds = DdsCodec.Encode(source, new DdsEncodingOptions { DxgiFormat = DdsDxgiFormat.BC1UNorm });
+        var texture = DdsCodec.Read(dds);
+
+        AssertDx10Header(dds, DdsDxgiFormat.BC1UNorm, width: 4, height: 4, payloadSize: 8);
+        Assert.Equal(TextureFormats.Bc1Rgba, texture.Format);
+    }
+
+    [Fact]
+    public void EncodeWithOptionsLegacyPixelFormatWritesSelectedOrdinaryFormat()
+    {
+        var source = new ArrayBitmap<Rgba8UNorm>(
+            4,
+            4,
+            Enumerable.Repeat(new Rgba8UNorm(64, 128, 255, 255), 16).ToArray());
+
+        var dds = DdsCodec.Encode(source, new DdsEncodingOptions
+        {
+            HeaderKind = DdsHeaderKind.Legacy,
+            LegacyPixelFormat = DdsLegacyPixelFormat.Dxt5
+        });
+        var texture = DdsCodec.Read(dds);
+
+        Assert.Equal(MakeFourCc("DXT5"), BinaryPrimitives.ReadUInt32LittleEndian(dds.AsSpan(84, 4)));
+        Assert.Equal(128 + 16, dds.Length);
+        Assert.Equal(TextureFormats.Bc3Rgba, texture.Format);
+        Assert.Equal(DdsLegacyPixelFormat.Dxt5, texture.LegacyPixelFormat);
+    }
+
+    [Fact]
+    public void EncodeWithOptionsTextureFormatWritesSelectedFormat()
+    {
+        var source = new ArrayBitmap<Rgba8UNorm>(
+            2,
+            1,
+            [
+                new Rgba8UNorm(1, 2, 3, 4),
+                new Rgba8UNorm(5, 6, 7, 8)
+            ]);
+
+        var dds = DdsCodec.Encode(source, new DdsEncodingOptions
+        {
+            HeaderKind = DdsHeaderKind.Legacy,
+            TextureFormat = TextureFormats.Bgra8
+        });
+        var texture = DdsCodec.Read(dds);
+        var decoded = DdsCodec.Decode(dds);
+
+        Assert.Equal(0x00ff0000u, BinaryPrimitives.ReadUInt32LittleEndian(dds.AsSpan(92, 4)));
+        Assert.Equal(0x0000ff00u, BinaryPrimitives.ReadUInt32LittleEndian(dds.AsSpan(96, 4)));
+        Assert.Equal(0x000000ffu, BinaryPrimitives.ReadUInt32LittleEndian(dds.AsSpan(100, 4)));
+        Assert.Equal(0xff000000u, BinaryPrimitives.ReadUInt32LittleEndian(dds.AsSpan(104, 4)));
+        Assert.Equal(TextureFormats.Bgra8, texture.Format);
+        Assert.Equal(source.PixelSpan.ToArray(), decoded.PixelSpan.ToArray());
+    }
+
+    [Fact]
+    public void ReadUnsupportedDxgiFormatThrows()
+    {
+        var dds = CreateDx10Header((DdsDxgiFormat)1, width: 1, height: 1);
+
+        Assert.Throws<NotSupportedException>(() => DdsCodec.Read(dds));
+    }
+
+    [Fact]
+    public void ReadMipMapChainThrows()
+    {
+        var dds = CreateDx10Header(DdsDxgiFormat.R8G8B8A8UNorm, width: 1, height: 1, mipMapCount: 2);
+
+        Assert.Throws<NotSupportedException>(() => DdsCodec.Read(dds));
+    }
+
+    [Fact]
+    public void ReadCubeMapThrows()
+    {
+        var dds = CreateDx10Header(DdsDxgiFormat.R8G8B8A8UNorm, width: 1, height: 1, caps2: 0x00000200);
+
+        Assert.Throws<NotSupportedException>(() => DdsCodec.Read(dds));
+    }
+
+    private static void AssertDx10Header(byte[] dds, DdsDxgiFormat expectedDxgiFormat, int width, int height, int payloadSize)
+    {
+        Assert.Equal(MakeFourCc("DDS "), BinaryPrimitives.ReadUInt32LittleEndian(dds.AsSpan(0, 4)));
+        Assert.Equal(124u, BinaryPrimitives.ReadUInt32LittleEndian(dds.AsSpan(4, 4)));
+        Assert.Equal((uint)height, BinaryPrimitives.ReadUInt32LittleEndian(dds.AsSpan(12, 4)));
+        Assert.Equal((uint)width, BinaryPrimitives.ReadUInt32LittleEndian(dds.AsSpan(16, 4)));
+        Assert.Equal(32u, BinaryPrimitives.ReadUInt32LittleEndian(dds.AsSpan(76, 4)));
+        Assert.Equal(0x00000004u, BinaryPrimitives.ReadUInt32LittleEndian(dds.AsSpan(80, 4)));
+        Assert.Equal(MakeFourCc("DX10"), BinaryPrimitives.ReadUInt32LittleEndian(dds.AsSpan(84, 4)));
+        Assert.Equal((uint)expectedDxgiFormat, BinaryPrimitives.ReadUInt32LittleEndian(dds.AsSpan(128, 4)));
+        Assert.Equal(3u, BinaryPrimitives.ReadUInt32LittleEndian(dds.AsSpan(132, 4)));
+        Assert.Equal(1u, BinaryPrimitives.ReadUInt32LittleEndian(dds.AsSpan(140, 4)));
+        Assert.Equal(128 + 20 + payloadSize, dds.Length);
+    }
+
+    private static void AssertLegacyRgba8Header(byte[] dds, int width, int height, int payloadSize)
+    {
+        Assert.Equal(MakeFourCc("DDS "), BinaryPrimitives.ReadUInt32LittleEndian(dds.AsSpan(0, 4)));
+        Assert.Equal(124u, BinaryPrimitives.ReadUInt32LittleEndian(dds.AsSpan(4, 4)));
+        Assert.Equal((uint)height, BinaryPrimitives.ReadUInt32LittleEndian(dds.AsSpan(12, 4)));
+        Assert.Equal((uint)width, BinaryPrimitives.ReadUInt32LittleEndian(dds.AsSpan(16, 4)));
+        Assert.Equal(32u, BinaryPrimitives.ReadUInt32LittleEndian(dds.AsSpan(76, 4)));
+        Assert.Equal(0x00000041u, BinaryPrimitives.ReadUInt32LittleEndian(dds.AsSpan(80, 4)));
+        Assert.Equal(0u, BinaryPrimitives.ReadUInt32LittleEndian(dds.AsSpan(84, 4)));
+        Assert.Equal(32u, BinaryPrimitives.ReadUInt32LittleEndian(dds.AsSpan(88, 4)));
+        Assert.Equal(0x000000ffu, BinaryPrimitives.ReadUInt32LittleEndian(dds.AsSpan(92, 4)));
+        Assert.Equal(0x0000ff00u, BinaryPrimitives.ReadUInt32LittleEndian(dds.AsSpan(96, 4)));
+        Assert.Equal(0x00ff0000u, BinaryPrimitives.ReadUInt32LittleEndian(dds.AsSpan(100, 4)));
+        Assert.Equal(0xff000000u, BinaryPrimitives.ReadUInt32LittleEndian(dds.AsSpan(104, 4)));
+        Assert.Equal(128 + payloadSize, dds.Length);
+    }
+
+    private static byte[] CreateDx10Header(
+        DdsDxgiFormat dxgiFormat,
+        int width,
+        int height,
+        uint mipMapCount = 0,
+        uint caps2 = 0)
+    {
+        var dds = new byte[148];
+        BinaryPrimitives.WriteUInt32LittleEndian(dds.AsSpan(0, 4), MakeFourCc("DDS "));
+        BinaryPrimitives.WriteUInt32LittleEndian(dds.AsSpan(4, 4), 124);
+        BinaryPrimitives.WriteUInt32LittleEndian(dds.AsSpan(8, 4), 0x00021007);
+        BinaryPrimitives.WriteUInt32LittleEndian(dds.AsSpan(12, 4), checked((uint)height));
+        BinaryPrimitives.WriteUInt32LittleEndian(dds.AsSpan(16, 4), checked((uint)width));
+        BinaryPrimitives.WriteUInt32LittleEndian(dds.AsSpan(20, 4), checked((uint)(width * 4)));
+        BinaryPrimitives.WriteUInt32LittleEndian(dds.AsSpan(28, 4), mipMapCount);
+        BinaryPrimitives.WriteUInt32LittleEndian(dds.AsSpan(76, 4), 32);
+        BinaryPrimitives.WriteUInt32LittleEndian(dds.AsSpan(80, 4), 0x00000004);
+        BinaryPrimitives.WriteUInt32LittleEndian(dds.AsSpan(84, 4), MakeFourCc("DX10"));
+        BinaryPrimitives.WriteUInt32LittleEndian(dds.AsSpan(108, 4), 0x00001000);
+        BinaryPrimitives.WriteUInt32LittleEndian(dds.AsSpan(112, 4), caps2);
+        BinaryPrimitives.WriteUInt32LittleEndian(dds.AsSpan(128, 4), (uint)dxgiFormat);
+        BinaryPrimitives.WriteUInt32LittleEndian(dds.AsSpan(132, 4), 3);
+        BinaryPrimitives.WriteUInt32LittleEndian(dds.AsSpan(140, 4), 1);
+        return dds;
+    }
+
+    private static uint MakeFourCc(string value) =>
+        (byte)value[0]
+        | ((uint)(byte)value[1] << 8)
+        | ((uint)(byte)value[2] << 16)
+        | ((uint)(byte)value[3] << 24);
+}

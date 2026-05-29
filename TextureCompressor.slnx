@@ -1,11 +1,13 @@
 <Solution>
   <Folder Name="/src/">
+    <Project Path="src/TextureCompressor.FileFormats.Dds/TextureCompressor.FileFormats.Dds.csproj" />
     <Project Path="src/TextureCompressor.FileFormats.Pvr/TextureCompressor.FileFormats.Pvr.csproj" />
     <Project Path="src/TextureCompressor.FileFormats.Png/TextureCompressor.FileFormats.Png.csproj" />
     <Project Path="src/TextureCompressor.Bitmap/TextureCompressor.Bitmap.csproj" />
     <Project Path="src/TextureCompressor/TextureCompressor.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/TextureCompressor.FileFormats.Dds.Tests/TextureCompressor.FileFormats.Dds.Tests.csproj" />
     <Project Path="tests/TextureCompressor.FileFormats.Pvr.Tests/TextureCompressor.FileFormats.Pvr.Tests.csproj" />
     <Project Path="tests/TextureCompressor.FileFormats.Png.Tests/TextureCompressor.FileFormats.Png.Tests.csproj" />
     <Project Path="tests/TextureCompressor.Tests/TextureCompressor.Tests.csproj" />
