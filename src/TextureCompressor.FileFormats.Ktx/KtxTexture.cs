@@ -1,0 +1,70 @@
+using TextureCompressor.Formats;
+
+namespace TextureCompressor.FileFormats.Ktx;
+
+public sealed class KtxTexture
+{
+    public KtxTexture(TextureFormat format, int width, int height, byte[] payload)
+        : this(format, width, height, payload, glType: null, glFormat: null, glInternalFormat: null, glBaseInternalFormat: null, vkFormat: null)
+    {
+    }
+
+    public KtxTexture(
+        TextureFormat format,
+        int width,
+        int height,
+        byte[] payload,
+        KtxGlFormat? glType,
+        KtxGlFormat? glFormat,
+        KtxGlFormat? glInternalFormat,
+        KtxGlFormat? glBaseInternalFormat)
+        : this(format, width, height, payload, glType, glFormat, glInternalFormat, glBaseInternalFormat, vkFormat: null)
+    {
+    }
+
+    public KtxTexture(
+        TextureFormat format,
+        int width,
+        int height,
+        byte[] payload,
+        KtxGlFormat? glType,
+        KtxGlFormat? glFormat,
+        KtxGlFormat? glInternalFormat,
+        KtxGlFormat? glBaseInternalFormat,
+        KtxVkFormat? vkFormat)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(width);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(height);
+        ArgumentNullException.ThrowIfNull(payload);
+
+        Format = format;
+        Width = width;
+        Height = height;
+        Payload = payload;
+        GlType = glType;
+        GlFormat = glFormat;
+        GlInternalFormat = glInternalFormat;
+        GlBaseInternalFormat = glBaseInternalFormat;
+        VkFormat = vkFormat;
+    }
+
+    public TextureFormat Format { get; }
+
+    public int Width { get; }
+
+    public int Height { get; }
+
+    public byte[] Payload { get; }
+
+    public byte[] Data => Payload;
+
+    public KtxGlFormat? GlType { get; }
+
+    public KtxGlFormat? GlFormat { get; }
+
+    public KtxGlFormat? GlInternalFormat { get; }
+
+    public KtxGlFormat? GlBaseInternalFormat { get; }
+
+    public KtxVkFormat? VkFormat { get; }
+}
