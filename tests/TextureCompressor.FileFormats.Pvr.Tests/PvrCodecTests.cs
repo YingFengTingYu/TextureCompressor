@@ -341,6 +341,25 @@ public sealed class PvrCodecTests
     }
 
     [Fact]
+    public void ReadKnownImgicPixelFormatThrows()
+    {
+        var pvr = CreateHeader(pixelFormat: (uint)PvrPixelFormat.ImgicR8G8B8A8_8X8, colourSpace: 0, channelType: 0, width: 4, height: 4);
+
+        Assert.Throws<NotSupportedException>(() => PvrCodec.Read(pvr));
+    }
+
+    [Fact]
+    public void EncodeKnownImgicPixelFormatThrows()
+    {
+        var source = new ArrayBitmap<Rgba8UNorm>(1, 1, [new Rgba8UNorm(1, 2, 3, 4)]);
+
+        Assert.Throws<NotSupportedException>(() => PvrCodec.Encode(source, new PvrEncodingOptions
+        {
+            PvrPixelFormat = PvrPixelFormat.ImgicR8G8B8A8_8X8
+        }));
+    }
+
+    [Fact]
     public void ReadMipMapChainThrows()
     {
         var pvr = CreateHeader(pixelFormat: 0x0808080861626772, colourSpace: 0, channelType: 0, width: 2, height: 2, mipMapCount: 2);
