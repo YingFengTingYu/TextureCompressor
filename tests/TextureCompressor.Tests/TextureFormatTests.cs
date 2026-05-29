@@ -437,7 +437,21 @@ public sealed class TextureFormatTests
         { TextureFormats.RgbaPvrtcII4BppSrgb, "RGBA_PVRTC2_4BPP_SRGB" },
         { TextureFormats.RgbEtc2Srgb, "RGB_ETC2_SRGB" },
         { TextureFormats.RgbA1Etc2Srgb, "RGB_A1_ETC2_SRGB" },
-        { TextureFormats.RgbaEtc2EacSrgb, "RGBA_ETC2_EAC_SRGB" }
+        { TextureFormats.RgbaEtc2EacSrgb, "RGBA_ETC2_EAC_SRGB" },
+        { TextureFormats.RgbaAstc4x4Srgb, "RGBA_ASTC_4X4_SRGB" },
+        { TextureFormats.RgbaAstc5x4Srgb, "RGBA_ASTC_5X4_SRGB" },
+        { TextureFormats.RgbaAstc5x5Srgb, "RGBA_ASTC_5X5_SRGB" },
+        { TextureFormats.RgbaAstc6x5Srgb, "RGBA_ASTC_6X5_SRGB" },
+        { TextureFormats.RgbaAstc6x6Srgb, "RGBA_ASTC_6X6_SRGB" },
+        { TextureFormats.RgbaAstc8x5Srgb, "RGBA_ASTC_8X5_SRGB" },
+        { TextureFormats.RgbaAstc8x6Srgb, "RGBA_ASTC_8X6_SRGB" },
+        { TextureFormats.RgbaAstc8x8Srgb, "RGBA_ASTC_8X8_SRGB" },
+        { TextureFormats.RgbaAstc10x5Srgb, "RGBA_ASTC_10X5_SRGB" },
+        { TextureFormats.RgbaAstc10x6Srgb, "RGBA_ASTC_10X6_SRGB" },
+        { TextureFormats.RgbaAstc10x8Srgb, "RGBA_ASTC_10X8_SRGB" },
+        { TextureFormats.RgbaAstc10x10Srgb, "RGBA_ASTC_10X10_SRGB" },
+        { TextureFormats.RgbaAstc12x10Srgb, "RGBA_ASTC_12X10_SRGB" },
+        { TextureFormats.RgbaAstc12x12Srgb, "RGBA_ASTC_12X12_SRGB" }
     };
 
     public static TheoryData<TextureFormat, string, TextureValueKind> EacNormFormats() => new()

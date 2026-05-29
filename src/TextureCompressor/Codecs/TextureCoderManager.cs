@@ -211,6 +211,12 @@ public sealed class TextureCoderManager
             return true;
         }
 
+        if (AstcTextureCoder.IsSupported(format))
+        {
+            coder = new AstcTextureCoder(format);
+            return true;
+        }
+
         if (EtcTextureCoder.IsSupported(format))
         {
             coder = new EtcTextureCoder(format);
