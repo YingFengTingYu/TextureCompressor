@@ -527,6 +527,8 @@ public sealed class TextureFormatTests
     {
         { TextureFormats.Uyvy422UNorm, "UYVY422_UNORM", 32, 4 },
         { TextureFormats.Yuy2UNorm, "YUY2_UNORM", 32, 4 },
+        { TextureFormats.Vy1Uy0422UNorm, "VY1UY0422_UNORM", 32, 4 },
+        { TextureFormats.Y1Vy0U422UNorm, "Y1VY0U422_UNORM", 32, 4 },
         { TextureFormats.Yuyv16_422UNorm, "YUYV16_422_UNORM", 64, 8 },
         { TextureFormats.Uyvy16_422UNorm, "UYVY16_422_UNORM", 64, 8 },
         { TextureFormats.Yuyv10Msb422UNorm, "YUYV10MSB_422_UNORM", 64, 8 },

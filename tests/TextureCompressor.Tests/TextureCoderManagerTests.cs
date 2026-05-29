@@ -2421,6 +2421,8 @@ public sealed class TextureCoderManagerTests
     {
         TextureFormats.Uyvy422UNorm,
         TextureFormats.Yuy2UNorm,
+        TextureFormats.Vy1Uy0422UNorm,
+        TextureFormats.Y1Vy0U422UNorm,
         TextureFormats.Uyvy16_422UNorm,
         TextureFormats.Yuyv10Msb422UNorm
     };

@@ -640,6 +640,32 @@ public static class TextureFormats
         1,
         32);
 
+    public static readonly TextureFormat Vy1Uy0422UNorm = new(
+        "VY1UY0422_UNORM",
+        TextureFormatKind.Uncompressed,
+        TextureComponents.Yuv,
+        TextureValueKind.UNorm,
+        8,
+        8,
+        8,
+        0,
+        2,
+        1,
+        32);
+
+    public static readonly TextureFormat Y1Vy0U422UNorm = new(
+        "Y1VY0U422_UNORM",
+        TextureFormatKind.Uncompressed,
+        TextureComponents.Yuv,
+        TextureValueKind.UNorm,
+        8,
+        8,
+        8,
+        0,
+        2,
+        1,
+        32);
+
     public static readonly TextureFormat Ayuv444UNorm =
         PackedYuva444("AYUV444_UNORM", 8, 8, 8, 8, 32);
 
