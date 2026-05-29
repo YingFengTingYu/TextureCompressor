@@ -1,17 +1,16 @@
 using System.Runtime.InteropServices;
 using TextureCompressor.Colors;
-using TextureCompressor.Images;
 
 namespace TextureCompressor.Bitmaps;
 
-public sealed unsafe class NativeMemoryTextureBitmap<TPixel> : IBitmap<TPixel>, IDisposable
+public sealed unsafe class NativeMemoryBitmap<TPixel> : IBitmap<TPixel>, IDisposable
     where TPixel : unmanaged, IPixel<TPixel>
 {
     private readonly int _pixelCount;
     private TPixel* _pixels;
     private bool _disposed;
 
-    public NativeMemoryTextureBitmap(int width, int height, nuint alignment = 4096, bool clear = true)
+    public NativeMemoryBitmap(int width, int height, nuint alignment = 4096, bool clear = true)
     {
         if (alignment == 0 || (alignment & (alignment - 1)) != 0)
         {
@@ -40,7 +39,7 @@ public sealed unsafe class NativeMemoryTextureBitmap<TPixel> : IBitmap<TPixel>, 
         Alignment = alignment;
     }
 
-    ~NativeMemoryTextureBitmap()
+    ~NativeMemoryBitmap()
     {
         Free();
     }
@@ -71,7 +70,7 @@ public sealed unsafe class NativeMemoryTextureBitmap<TPixel> : IBitmap<TPixel>, 
         }
     }
 
-    public ImageView<TPixel> AsView() => new(PixelSpan, Width, Height);
+    public BitmapView<TPixel> AsView() => new(PixelSpan, Width, Height);
 
     public void Dispose()
     {

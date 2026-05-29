@@ -1,7 +1,7 @@
 using System.Buffers.Binary;
 using TextureCompressor.Colors;
 using TextureCompressor.Formats;
-using TextureCompressor.Images;
+using TextureCompressor.Bitmaps;
 
 namespace TextureCompressor.Codecs;
 
@@ -39,21 +39,21 @@ public sealed class PlanarYuvTextureCoder : IPitchTextureCoder
         return GetPlanarYuvByteCount(width, height);
     }
 
-    public void Decode<TPixel>(ReadOnlySpan<byte> source, ImageView<TPixel> destination, int rowPitch)
+    public void Decode<TPixel>(ReadOnlySpan<byte> source, BitmapView<TPixel> destination, int rowPitch)
         where TPixel : unmanaged, IPixel<TPixel>
     {
         ValidateSourceLength(destination.Width, destination.Height, source, rowPitch);
         DecodeBySample(source, destination);
     }
 
-    public void Encode<TPixel>(ImageView<TPixel> source, Span<byte> destination, int rowPitch)
+    public void Encode<TPixel>(BitmapView<TPixel> source, Span<byte> destination, int rowPitch)
         where TPixel : unmanaged, IPixel<TPixel>
     {
         ValidateDestinationLength(source.Width, source.Height, destination, rowPitch);
         EncodeBySample(source, destination);
     }
 
-    private void DecodeBySample<TPixel>(ReadOnlySpan<byte> source, ImageView<TPixel> destination)
+    private void DecodeBySample<TPixel>(ReadOnlySpan<byte> source, BitmapView<TPixel> destination)
         where TPixel : unmanaged, IPixel<TPixel>
     {
         switch (_layout.BitsPerSample)
@@ -84,7 +84,7 @@ public sealed class PlanarYuvTextureCoder : IPitchTextureCoder
         }
     }
 
-    private void EncodeBySample<TPixel>(ImageView<TPixel> source, Span<byte> destination)
+    private void EncodeBySample<TPixel>(BitmapView<TPixel> source, Span<byte> destination)
         where TPixel : unmanaged, IPixel<TPixel>
     {
         switch (_layout.BitsPerSample)
@@ -115,7 +115,7 @@ public sealed class PlanarYuvTextureCoder : IPitchTextureCoder
         }
     }
 
-    private void DecodeByLayout<TPixel, TSample>(ReadOnlySpan<byte> source, ImageView<TPixel> destination)
+    private void DecodeByLayout<TPixel, TSample>(ReadOnlySpan<byte> source, BitmapView<TPixel> destination)
         where TPixel : unmanaged, IPixel<TPixel>
         where TSample : struct, IPlanarYuvSampleTransfer
     {
@@ -143,7 +143,7 @@ public sealed class PlanarYuvTextureCoder : IPitchTextureCoder
         }
     }
 
-    private void EncodeByLayout<TPixel, TSample>(ImageView<TPixel> source, Span<byte> destination)
+    private void EncodeByLayout<TPixel, TSample>(BitmapView<TPixel> source, Span<byte> destination)
         where TPixel : unmanaged, IPixel<TPixel>
         where TSample : struct, IPlanarYuvSampleTransfer
     {
@@ -171,7 +171,7 @@ public sealed class PlanarYuvTextureCoder : IPitchTextureCoder
         }
     }
 
-    private void DecodeBySubsample<TPixel, TSample, TPlane, TOrder>(ReadOnlySpan<byte> source, ImageView<TPixel> destination)
+    private void DecodeBySubsample<TPixel, TSample, TPlane, TOrder>(ReadOnlySpan<byte> source, BitmapView<TPixel> destination)
         where TPixel : unmanaged, IPixel<TPixel>
         where TSample : struct, IPlanarYuvSampleTransfer
         where TPlane : struct, IPlanarYuvPlaneLayout
@@ -196,7 +196,7 @@ public sealed class PlanarYuvTextureCoder : IPitchTextureCoder
         }
     }
 
-    private void EncodeBySubsample<TPixel, TSample, TPlane, TOrder>(ImageView<TPixel> source, Span<byte> destination)
+    private void EncodeBySubsample<TPixel, TSample, TPlane, TOrder>(BitmapView<TPixel> source, Span<byte> destination)
         where TPixel : unmanaged, IPixel<TPixel>
         where TSample : struct, IPlanarYuvSampleTransfer
         where TPlane : struct, IPlanarYuvPlaneLayout
@@ -221,7 +221,7 @@ public sealed class PlanarYuvTextureCoder : IPitchTextureCoder
         }
     }
 
-    private static void Decode<TPixel, TSample, TPlane, TOrder, TSubsample>(ReadOnlySpan<byte> source, ImageView<TPixel> destination)
+    private static void Decode<TPixel, TSample, TPlane, TOrder, TSubsample>(ReadOnlySpan<byte> source, BitmapView<TPixel> destination)
         where TPixel : unmanaged, IPixel<TPixel>
         where TSample : struct, IPlanarYuvSampleTransfer
         where TPlane : struct, IPlanarYuvPlaneLayout
@@ -265,7 +265,7 @@ public sealed class PlanarYuvTextureCoder : IPitchTextureCoder
         }
     }
 
-    private static void Encode<TPixel, TSample, TPlane, TOrder, TSubsample>(ImageView<TPixel> source, Span<byte> destination)
+    private static void Encode<TPixel, TSample, TPlane, TOrder, TSubsample>(BitmapView<TPixel> source, Span<byte> destination)
         where TPixel : unmanaged, IPixel<TPixel>
         where TSample : struct, IPlanarYuvSampleTransfer
         where TPlane : struct, IPlanarYuvPlaneLayout

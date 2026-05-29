@@ -21,7 +21,7 @@ public sealed class BptcTextureCoderTests
     public void Bc7InvalidModeDecodesToTransparentRgba8()
     {
         var encoded = new byte[TextureFormats.Bc7UNorm.GetByteCount(4, 4)];
-        var decoded = new ArrayTextureBitmap<Rgba8UNorm>(4, 4);
+        var decoded = new ArrayBitmap<Rgba8UNorm>(4, 4);
         var coder = new BptcTextureCoder(TextureFormats.Bc7UNorm);
 
         coder.Decode(encoded, decoded.AsView(), coder.GetDefaultPitch(decoded.Width));
@@ -32,11 +32,11 @@ public sealed class BptcTextureCoderTests
     [Fact]
     public void EncodeAndDecodeBc7UNormRoundTripsSolidRgba8()
     {
-        var source = new ArrayTextureBitmap<Rgba8UNorm>(
+        var source = new ArrayBitmap<Rgba8UNorm>(
             4,
             4,
             Enumerable.Repeat(new Rgba8UNorm(34, 101, 202, 77), 16).ToArray());
-        var decoded = new ArrayTextureBitmap<Rgba8UNorm>(4, 4);
+        var decoded = new ArrayBitmap<Rgba8UNorm>(4, 4);
         var coder = new BptcTextureCoder(TextureFormats.Bc7UNorm);
         var rowPitch = coder.GetDefaultPitch(source.Width);
         var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
@@ -56,11 +56,11 @@ public sealed class BptcTextureCoderTests
     [Fact]
     public void EncodeAndDecodeBc7SrgbRoundTripsLinearRgba8ThroughStorageGamma()
     {
-        var source = new ArrayTextureBitmap<Rgba8UNorm>(
+        var source = new ArrayBitmap<Rgba8UNorm>(
             4,
             4,
             Enumerable.Repeat(new Rgba8UNorm(128, 32, 224, 200), 16).ToArray());
-        var decoded = new ArrayTextureBitmap<Rgba8UNorm>(4, 4);
+        var decoded = new ArrayBitmap<Rgba8UNorm>(4, 4);
         var coder = new BptcTextureCoder(TextureFormats.Bc7Srgb);
         var rowPitch = coder.GetDefaultPitch(source.Width);
         var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
@@ -80,11 +80,11 @@ public sealed class BptcTextureCoderTests
     [Fact]
     public void EncodeAndDecodeBc6HUFloatRoundTripsHdrRgbaFloat()
     {
-        var source = new ArrayTextureBitmap<Rgba32Float>(
+        var source = new ArrayBitmap<Rgba32Float>(
             4,
             4,
             Enumerable.Repeat(new Rgba32Float(2f, 0.5f, 8f, 0.25f), 16).ToArray());
-        var decoded = new ArrayTextureBitmap<Rgba32Float>(4, 4);
+        var decoded = new ArrayBitmap<Rgba32Float>(4, 4);
         var coder = new BptcTextureCoder(TextureFormats.Bc6HUFloat);
         var rowPitch = coder.GetDefaultPitch(source.Width);
         var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
@@ -104,11 +104,11 @@ public sealed class BptcTextureCoderTests
     [Fact]
     public void EncodeAndDecodeBc6HSFloatRoundTripsNegativeRgbaFloat()
     {
-        var source = new ArrayTextureBitmap<Rgba32Float>(
+        var source = new ArrayBitmap<Rgba32Float>(
             4,
             4,
             Enumerable.Repeat(new Rgba32Float(-2f, 0.5f, 3f, 1f), 16).ToArray());
-        var decoded = new ArrayTextureBitmap<Rgba32Float>(4, 4);
+        var decoded = new ArrayBitmap<Rgba32Float>(4, 4);
         var coder = new BptcTextureCoder(TextureFormats.Bc6HSFloat);
         var rowPitch = coder.GetDefaultPitch(source.Width);
         var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
@@ -128,7 +128,7 @@ public sealed class BptcTextureCoderTests
     [Fact]
     public void EncodeAndDecodeBc7HonorsBlockRowPitch()
     {
-        var source = new ArrayTextureBitmap<Rgba8UNorm>(
+        var source = new ArrayBitmap<Rgba8UNorm>(
             5,
             5,
             Enumerable.Repeat(new Rgba8UNorm(12, 34, 56, 78), 25).ToArray());
@@ -142,7 +142,7 @@ public sealed class BptcTextureCoderTests
         Assert.All(encoded[32..36], value => Assert.Equal(0xcc, value));
         Assert.All(encoded[68..72], value => Assert.Equal(0xcc, value));
 
-        var decoded = new ArrayTextureBitmap<Rgba8UNorm>(5, 5);
+        var decoded = new ArrayBitmap<Rgba8UNorm>(5, 5);
         coder.Decode(encoded, decoded.AsView(), rowPitch);
 
         Assert.All(decoded.Pixels, pixel => Assert.Equal(new Rgba8UNorm(12, 34, 56, 78), pixel));

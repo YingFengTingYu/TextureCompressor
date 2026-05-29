@@ -26,7 +26,7 @@ public sealed unsafe class EtcTextureCoderPvrtTexLibTests
         var source = CreateColorSource(format, Width, Height);
         var payload = EncodeColorWithPvrtTexLib(format, Width, Height, source);
         var expected = DecodeColorWithPvrtTexLib(format, Width, Height, payload);
-        var actual = new ArrayTextureBitmap<Rgba8UNorm>(Width, Height);
+        var actual = new ArrayBitmap<Rgba8UNorm>(Width, Height);
         var coder = new EtcTextureCoder(format);
 
         coder.Decode(payload, actual.AsView(), coder.GetDefaultPitch(Width));
@@ -40,11 +40,11 @@ public sealed unsafe class EtcTextureCoderPvrtTexLibTests
     public void EncodeColorPayloadIsDecodableByPvrtTexLib(TextureFormat format)
     {
         var sourcePixels = CreateColorSource(format, Width, Height);
-        var source = new ArrayTextureBitmap<Rgba8UNorm>(Width, Height, sourcePixels);
+        var source = new ArrayBitmap<Rgba8UNorm>(Width, Height, sourcePixels);
         var coder = new EtcTextureCoder(format);
         var rowPitch = coder.GetDefaultPitch(Width);
         var payload = new byte[coder.GetEncodedByteCount(Width, Height, rowPitch)];
-        var actual = new ArrayTextureBitmap<Rgba8UNorm>(Width, Height);
+        var actual = new ArrayBitmap<Rgba8UNorm>(Width, Height);
 
         coder.Encode(source.AsView(), payload, rowPitch);
         var expected = DecodeColorWithPvrtTexLib(format, Width, Height, payload);
@@ -59,7 +59,7 @@ public sealed unsafe class EtcTextureCoderPvrtTexLibTests
     public void DecodeEtc2ExtendedModeBlockMatchesPvrtTexLib(TextureFormat format, byte[] payload)
     {
         var expected = DecodeColorWithPvrtTexLib(format, 4, 4, payload);
-        var actual = new ArrayTextureBitmap<Rgba8UNorm>(4, 4);
+        var actual = new ArrayBitmap<Rgba8UNorm>(4, 4);
         var coder = new EtcTextureCoder(format);
 
         coder.Decode(payload, actual.AsView(), coder.GetDefaultPitch(4));
@@ -76,7 +76,7 @@ public sealed unsafe class EtcTextureCoderPvrtTexLibTests
         var source = CreateUnsignedEacSource(format, Width, Height);
         var payload = EncodeUnsignedEacWithPvrtTexLib(format, Width, Height, source);
         var expected = DecodeUnsignedEacWithPvrtTexLib(format, Width, Height, payload);
-        var actual = new ArrayTextureBitmap<Rgba16UNorm>(Width, Height);
+        var actual = new ArrayBitmap<Rgba16UNorm>(Width, Height);
         var coder = new EtcTextureCoder(format);
 
         coder.Decode(payload, actual.AsView(), coder.GetDefaultPitch(Width));
@@ -94,7 +94,7 @@ public sealed unsafe class EtcTextureCoderPvrtTexLibTests
         var source = CreateSignedEacSource(format, Width, Height);
         var payload = EncodeSignedEacWithPvrtTexLib(format, Width, Height, source);
         var expected = DecodeSignedEacWithPvrtTexLib(format, Width, Height, payload);
-        var actual = new ArrayTextureBitmap<Rgba16SNorm>(Width, Height);
+        var actual = new ArrayBitmap<Rgba16SNorm>(Width, Height);
         var coder = new EtcTextureCoder(format);
 
         coder.Decode(payload, actual.AsView(), coder.GetDefaultPitch(Width));
@@ -112,7 +112,7 @@ public sealed unsafe class EtcTextureCoderPvrtTexLibTests
         if (format.ValueKind == TextureValueKind.SNorm)
         {
             var expected = DecodeSignedEacWithPvrtTexLib(format, 4, 4, payload);
-            var actual = new ArrayTextureBitmap<Rgba16SNorm>(4, 4);
+            var actual = new ArrayBitmap<Rgba16SNorm>(4, 4);
 
             coder.Decode(payload, actual.AsView(), coder.GetDefaultPitch(4));
 
@@ -121,7 +121,7 @@ public sealed unsafe class EtcTextureCoderPvrtTexLibTests
         }
 
         var unsignedExpected = DecodeUnsignedEacWithPvrtTexLib(format, 4, 4, payload);
-        var unsignedActual = new ArrayTextureBitmap<Rgba16UNorm>(4, 4);
+        var unsignedActual = new ArrayBitmap<Rgba16UNorm>(4, 4);
 
         coder.Decode(payload, unsignedActual.AsView(), coder.GetDefaultPitch(4));
 
@@ -135,11 +135,11 @@ public sealed unsafe class EtcTextureCoderPvrtTexLibTests
     {
         var format = GetFormat(formatName);
         var sourcePixels = CreateUnsignedEacSource(format, Width, Height);
-        var source = new ArrayTextureBitmap<Rgba16UNorm>(Width, Height, sourcePixels);
+        var source = new ArrayBitmap<Rgba16UNorm>(Width, Height, sourcePixels);
         var coder = new EtcTextureCoder(format);
         var rowPitch = coder.GetDefaultPitch(Width);
         var payload = new byte[coder.GetEncodedByteCount(Width, Height, rowPitch)];
-        var actual = new ArrayTextureBitmap<Rgba16UNorm>(Width, Height);
+        var actual = new ArrayBitmap<Rgba16UNorm>(Width, Height);
 
         coder.Encode(source.AsView(), payload, rowPitch);
         var expected = DecodeUnsignedEacWithPvrtTexLib(format, Width, Height, payload);
@@ -156,11 +156,11 @@ public sealed unsafe class EtcTextureCoderPvrtTexLibTests
     {
         var format = GetFormat(formatName);
         var sourcePixels = CreateSignedEacSource(format, Width, Height);
-        var source = new ArrayTextureBitmap<Rgba16SNorm>(Width, Height, sourcePixels);
+        var source = new ArrayBitmap<Rgba16SNorm>(Width, Height, sourcePixels);
         var coder = new EtcTextureCoder(format);
         var rowPitch = coder.GetDefaultPitch(Width);
         var payload = new byte[coder.GetEncodedByteCount(Width, Height, rowPitch)];
-        var actual = new ArrayTextureBitmap<Rgba16SNorm>(Width, Height);
+        var actual = new ArrayBitmap<Rgba16SNorm>(Width, Height);
 
         coder.Encode(source.AsView(), payload, rowPitch);
         var expected = DecodeSignedEacWithPvrtTexLib(format, Width, Height, payload);

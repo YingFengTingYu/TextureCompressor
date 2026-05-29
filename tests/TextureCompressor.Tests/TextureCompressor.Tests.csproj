@@ -21,6 +21,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\src\TextureCompressor.Bitmap\TextureCompressor.Bitmap.csproj" />
     <ProjectReference Include="..\..\src\TextureCompressor\TextureCompressor.csproj" />
   </ItemGroup>
 

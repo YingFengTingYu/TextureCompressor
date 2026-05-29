@@ -1,5 +1,4 @@
 using TextureCompressor.Colors;
-using TextureCompressor.Images;
 
 namespace TextureCompressor.Bitmaps;
 
@@ -12,5 +11,5 @@ public interface IBitmap<TPixel>
 
     Span<TPixel> PixelSpan { get; }
 
-    ImageView<TPixel> AsView() => new(PixelSpan, Width, Height);
+    BitmapView<TPixel> AsView() => new(PixelSpan, Width, Height);
 }

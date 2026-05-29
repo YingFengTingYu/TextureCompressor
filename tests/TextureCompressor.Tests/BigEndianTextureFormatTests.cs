@@ -22,7 +22,7 @@ public sealed class BigEndianTextureFormatTests
     public void Bgra8DecodesAndEncodesWith8In32Swap()
     {
         var encoded = new byte[] { 0x44, 0x11, 0x22, 0x33 };
-        var decoded = new ArrayTextureBitmap<Rgba8UNorm>(1, 1);
+        var decoded = new ArrayBitmap<Rgba8UNorm>(1, 1);
         var coder = new SequentialUncompressedTextureCoder(TextureFormats.Bgra8BigEndian);
 
         coder.Decode(encoded, decoded.AsView(), coder.GetDefaultPitch(1));
@@ -39,7 +39,7 @@ public sealed class BigEndianTextureFormatTests
     public void R5G6B5DecodesAndEncodesWith8In16Swap()
     {
         var encoded = new byte[] { 0xf8, 0x00 };
-        var decoded = new ArrayTextureBitmap<Rgba8UNorm>(1, 1);
+        var decoded = new ArrayBitmap<Rgba8UNorm>(1, 1);
         var coder = new PackedUNormTextureCoder(TextureFormats.Rgb565UNormBigEndian);
 
         coder.Decode(encoded, decoded.AsView(), coder.GetDefaultPitch(1));
@@ -56,7 +56,7 @@ public sealed class BigEndianTextureFormatTests
     public void G8R8DecodesAndEncodesWith8In16Swap()
     {
         var encoded = new byte[] { 0x34, 0x12 };
-        var decoded = new ArrayTextureBitmap<Rgba8UNorm>(1, 1);
+        var decoded = new ArrayBitmap<Rgba8UNorm>(1, 1);
         var coder = new SequentialUncompressedTextureCoder(TextureFormats.Rg8UNormBigEndian);
 
         coder.Decode(encoded, decoded.AsView(), coder.GetDefaultPitch(1));
@@ -73,7 +73,7 @@ public sealed class BigEndianTextureFormatTests
     public void Q8W8V8U8DecodesAndEncodesWith8In32Swap()
     {
         var encoded = new byte[] { 0x40, 0x30, 0x20, 0x10 };
-        var decoded = new ArrayTextureBitmap<Rgba8SNorm>(1, 1);
+        var decoded = new ArrayBitmap<Rgba8SNorm>(1, 1);
         var coder = new SequentialUncompressedTextureCoder(TextureFormats.Rgba8SNormBigEndian);
 
         coder.Decode(encoded, decoded.AsView(), coder.GetDefaultPitch(1));
@@ -90,7 +90,7 @@ public sealed class BigEndianTextureFormatTests
     public void G16R16DecodesAndEncodesWith8In32Swap()
     {
         var encoded = new byte[] { 0x33, 0x44, 0x11, 0x22 };
-        var decoded = new ArrayTextureBitmap<Rgba16UNorm>(1, 1);
+        var decoded = new ArrayBitmap<Rgba16UNorm>(1, 1);
         var coder = new SequentialUncompressedTextureCoder(TextureFormats.Rg16UNormBigEndian);
 
         coder.Decode(encoded, decoded.AsView(), coder.GetDefaultPitch(1));
@@ -107,7 +107,7 @@ public sealed class BigEndianTextureFormatTests
     public void V16U16DecodesAndEncodesWith8In32Swap()
     {
         var encoded = new byte[] { 0x33, 0x44, 0x11, 0x22 };
-        var decoded = new ArrayTextureBitmap<Rgba16SNorm>(1, 1);
+        var decoded = new ArrayBitmap<Rgba16SNorm>(1, 1);
         var coder = new SequentialUncompressedTextureCoder(TextureFormats.Rg16SNormBigEndian);
 
         coder.Decode(encoded, decoded.AsView(), coder.GetDefaultPitch(1));
@@ -124,7 +124,7 @@ public sealed class BigEndianTextureFormatTests
     public void A16L16DecodesAndEncodesWith8In32Swap()
     {
         var encoded = new byte[] { 0x33, 0x44, 0x11, 0x22 };
-        var decoded = new ArrayTextureBitmap<Rgba16UNorm>(1, 1);
+        var decoded = new ArrayBitmap<Rgba16UNorm>(1, 1);
         var coder = new SequentialUncompressedTextureCoder(TextureFormats.Luminance16Alpha16UNormBigEndian);
 
         coder.Decode(encoded, decoded.AsView(), coder.GetDefaultPitch(1));
@@ -141,7 +141,7 @@ public sealed class BigEndianTextureFormatTests
     public void Q16W16V16U16DecodesAndEncodesWith8In16Swap()
     {
         var encoded = new byte[] { 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08 };
-        var decoded = new ArrayTextureBitmap<Rgba16SNorm>(1, 1);
+        var decoded = new ArrayBitmap<Rgba16SNorm>(1, 1);
         var coder = new SequentialUncompressedTextureCoder(TextureFormats.Rgba16SNormBigEndian);
 
         coder.Decode(encoded, decoded.AsView(), coder.GetDefaultPitch(1));
@@ -158,7 +158,7 @@ public sealed class BigEndianTextureFormatTests
     public void G16R16FDecodesAndEncodesWith8In32Swap()
     {
         var encoded = new byte[] { 0x40, 0x00, 0x3c, 0x00 };
-        var decoded = new ArrayTextureBitmap<Rgba16Float>(1, 1);
+        var decoded = new ArrayBitmap<Rgba16Float>(1, 1);
         var coder = new SequentialUncompressedTextureCoder(TextureFormats.Rg16FloatBigEndian);
 
         coder.Decode(encoded, decoded.AsView(), coder.GetDefaultPitch(1));
@@ -176,7 +176,7 @@ public sealed class BigEndianTextureFormatTests
     public void R10Gb11DecodesRedFromHighBits()
     {
         var encoded = new byte[] { 0xff, 0xc0, 0x00, 0x00 };
-        var decoded = new ArrayTextureBitmap<Rgba16UNorm>(1, 1);
+        var decoded = new ArrayBitmap<Rgba16UNorm>(1, 1);
         var coder = new PackedUNormTextureCoder(TextureFormats.R10Gb11UNormBigEndian);
 
         coder.Decode(encoded, decoded.AsView(), coder.GetDefaultPitch(1));
@@ -193,7 +193,7 @@ public sealed class BigEndianTextureFormatTests
     public void Rg11B10DecodesRedFromHighBits()
     {
         var encoded = new byte[] { 0xff, 0xe0, 0x00, 0x00 };
-        var decoded = new ArrayTextureBitmap<Rgba16UNorm>(1, 1);
+        var decoded = new ArrayBitmap<Rgba16UNorm>(1, 1);
         var coder = new PackedUNormTextureCoder(TextureFormats.Rg11B10UNormBigEndian);
 
         coder.Decode(encoded, decoded.AsView(), coder.GetDefaultPitch(1));
@@ -210,7 +210,7 @@ public sealed class BigEndianTextureFormatTests
     public void G32R32DecodesAndEncodesWith8In16Swap()
     {
         var encoded = new byte[] { 0x33, 0x44, 0x11, 0x22, 0x77, 0x88, 0x55, 0x66 };
-        var decoded = new ArrayTextureBitmap<Rgba32UNorm>(1, 1);
+        var decoded = new ArrayBitmap<Rgba32UNorm>(1, 1);
         var coder = new SequentialUncompressedTextureCoder(TextureFormats.Rg32UNormBigEndian);
 
         coder.Decode(encoded, decoded.AsView(), coder.GetDefaultPitch(1));
@@ -227,7 +227,7 @@ public sealed class BigEndianTextureFormatTests
     public void A32L32DecodesAndEncodesWith8In16Swap()
     {
         var encoded = new byte[] { 0x33, 0x44, 0x11, 0x22, 0x77, 0x88, 0x55, 0x66 };
-        var decoded = new ArrayTextureBitmap<Rgba32UNorm>(1, 1);
+        var decoded = new ArrayBitmap<Rgba32UNorm>(1, 1);
         var coder = new SequentialUncompressedTextureCoder(TextureFormats.Luminance32Alpha32UNormBigEndian);
 
         coder.Decode(encoded, decoded.AsView(), coder.GetDefaultPitch(1));
@@ -250,7 +250,7 @@ public sealed class BigEndianTextureFormatTests
             0x09, 0x0a, 0x0b, 0x0c,
             0x0d, 0x0e, 0x0f, 0x10
         };
-        var decoded = new ArrayTextureBitmap<Rgba32UNorm>(1, 1);
+        var decoded = new ArrayBitmap<Rgba32UNorm>(1, 1);
         var coder = new SequentialUncompressedTextureCoder(TextureFormats.Rgba32UNormBigEndian);
 
         coder.Decode(encoded, decoded.AsView(), coder.GetDefaultPitch(1));
@@ -270,7 +270,7 @@ public sealed class BigEndianTextureFormatTests
         BinaryPrimitives.WriteUInt16BigEndian(encoded, 0xf800);
         BinaryPrimitives.WriteUInt16BigEndian(encoded.AsSpan(2), 0xf800);
 
-        var decoded = new ArrayTextureBitmap<Rgba8UNorm>(4, 4);
+        var decoded = new ArrayBitmap<Rgba8UNorm>(4, 4);
         var coder = new S3tcTextureCoder(TextureFormats.Dxt1RgbaBigEndian);
 
         coder.Decode(encoded, decoded.AsView(), coder.GetDefaultPitch(4));
@@ -282,7 +282,7 @@ public sealed class BigEndianTextureFormatTests
     public void D16DecodesAndEncodesWith8In16Swap()
     {
         var encoded = new byte[] { 0x80, 0x00 };
-        var decoded = new ArrayTextureBitmap<Rgba32Float>(1, 1);
+        var decoded = new ArrayBitmap<Rgba32Float>(1, 1);
         var coder = new DepthStencilTextureCoder(TextureFormats.DepthComponent16BigEndian);
 
         coder.Decode(encoded, decoded.AsView(), coder.GetDefaultPitch(1));
@@ -299,7 +299,7 @@ public sealed class BigEndianTextureFormatTests
     public void Rgb655DecodesAndEncodesWith8In16Swap()
     {
         var encoded = new byte[] { 0xfc, 0x1f };
-        var decoded = new ArrayTextureBitmap<Rgba32Float>(1, 1);
+        var decoded = new ArrayBitmap<Rgba32Float>(1, 1);
         var coder = new PackedUNormTextureCoder(TextureFormats.Rgb655UNormBigEndian);
 
         coder.Decode(encoded, decoded.AsView(), coder.GetDefaultPitch(1));
@@ -318,7 +318,7 @@ public sealed class BigEndianTextureFormatTests
     public void D24FS8DecodesAndEncodesWith8In32Swap()
     {
         var encoded = new byte[] { 0xf0, 0x00, 0x00, 0xff };
-        var decoded = new ArrayTextureBitmap<Rgba32Float>(1, 1);
+        var decoded = new ArrayBitmap<Rgba32Float>(1, 1);
         var coder = new DepthStencilTextureCoder(TextureFormats.Depth24FloatStencil8BigEndian);
 
         coder.Decode(encoded, decoded.AsView(), coder.GetDefaultPitch(1));

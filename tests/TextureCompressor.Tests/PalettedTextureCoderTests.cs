@@ -20,7 +20,7 @@ public sealed class PalettedTextureCoderTests
     [Fact]
     public void Palette4Rgba8EncodesPaletteHeaderAndPackedIndices()
     {
-        var source = new ArrayTextureBitmap<Rgba8UNorm>(
+        var source = new ArrayBitmap<Rgba8UNorm>(
             2,
             1,
             [
@@ -56,7 +56,7 @@ public sealed class PalettedTextureCoderTests
         encoded[TextureFormats.Palette4Rgba8.HeaderByteCount] = 0x01;
 
         var coder = new PalettedTextureCoder(TextureFormats.Palette4Rgba8);
-        var decoded = new ArrayTextureBitmap<Rgba8UNorm>(2, 1);
+        var decoded = new ArrayBitmap<Rgba8UNorm>(2, 1);
 
         coder.Decode(encoded, decoded.AsView(), coder.GetDefaultPitch(decoded.Width));
 
@@ -67,7 +67,7 @@ public sealed class PalettedTextureCoderTests
     [Fact]
     public void Palette8Rgb565EncodesPaletteHeaderAndByteIndices()
     {
-        var source = new ArrayTextureBitmap<Rgba8UNorm>(
+        var source = new ArrayBitmap<Rgba8UNorm>(
             2,
             1,
             [
@@ -100,7 +100,7 @@ public sealed class PalettedTextureCoderTests
         encoded[TextureFormats.Palette8Rgb565.HeaderByteCount + 1] = 1;
 
         var coder = new PalettedTextureCoder(TextureFormats.Palette8Rgb565);
-        var decoded = new ArrayTextureBitmap<Rgba8UNorm>(2, 1);
+        var decoded = new ArrayBitmap<Rgba8UNorm>(2, 1);
 
         coder.Decode(encoded, decoded.AsView(), coder.GetDefaultPitch(decoded.Width));
 

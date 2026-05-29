@@ -3,7 +3,7 @@ using System.Buffers.Binary;
 using System.Diagnostics;
 using TextureCompressor.Colors;
 using TextureCompressor.Formats;
-using TextureCompressor.Images;
+using TextureCompressor.Bitmaps;
 
 namespace TextureCompressor.Codecs;
 
@@ -44,7 +44,7 @@ public sealed class PalettedTextureCoder : IPitchTextureCoder
         return checked(Format.HeaderByteCount + (rowPitch * height));
     }
 
-    public void Decode<TPixel>(ReadOnlySpan<byte> source, ImageView<TPixel> destination, int rowPitch)
+    public void Decode<TPixel>(ReadOnlySpan<byte> source, BitmapView<TPixel> destination, int rowPitch)
         where TPixel : unmanaged, IPixel<TPixel>
     {
         ValidateSourceLength(destination.Width, destination.Height, source, rowPitch);
@@ -52,7 +52,7 @@ public sealed class PalettedTextureCoder : IPitchTextureCoder
         DecodeByTransfer(source, destination, rowPitch);
     }
 
-    public void Encode<TPixel>(ImageView<TPixel> source, Span<byte> destination, int rowPitch)
+    public void Encode<TPixel>(BitmapView<TPixel> source, Span<byte> destination, int rowPitch)
         where TPixel : unmanaged, IPixel<TPixel>
     {
         ValidateDestinationLength(source.Width, source.Height, destination, rowPitch);
@@ -60,7 +60,7 @@ public sealed class PalettedTextureCoder : IPitchTextureCoder
         EncodeByTransfer(source, destination, rowPitch);
     }
 
-    private void DecodeByTransfer<TPixel>(ReadOnlySpan<byte> source, ImageView<TPixel> destination, int rowPitch)
+    private void DecodeByTransfer<TPixel>(ReadOnlySpan<byte> source, BitmapView<TPixel> destination, int rowPitch)
         where TPixel : unmanaged, IPixel<TPixel>
     {
         switch (_transfer)
@@ -100,7 +100,7 @@ public sealed class PalettedTextureCoder : IPitchTextureCoder
         }
     }
 
-    private void EncodeByTransfer<TPixel>(ImageView<TPixel> source, Span<byte> destination, int rowPitch)
+    private void EncodeByTransfer<TPixel>(BitmapView<TPixel> source, Span<byte> destination, int rowPitch)
         where TPixel : unmanaged, IPixel<TPixel>
     {
         switch (_transfer)
@@ -140,7 +140,7 @@ public sealed class PalettedTextureCoder : IPitchTextureCoder
         }
     }
 
-    private void Decode<TPixel, TIndexTransfer, TEntryTransfer>(ReadOnlySpan<byte> source, ImageView<TPixel> destination, int rowPitch)
+    private void Decode<TPixel, TIndexTransfer, TEntryTransfer>(ReadOnlySpan<byte> source, BitmapView<TPixel> destination, int rowPitch)
         where TPixel : unmanaged, IPixel<TPixel>
         where TIndexTransfer : struct, IPaletteIndexTransfer
         where TEntryTransfer : struct, IPaletteEntryTransfer
@@ -166,7 +166,7 @@ public sealed class PalettedTextureCoder : IPitchTextureCoder
         }
     }
 
-    private void Encode<TPixel, TIndexTransfer, TEntryTransfer>(ImageView<TPixel> source, Span<byte> destination, int rowPitch)
+    private void Encode<TPixel, TIndexTransfer, TEntryTransfer>(BitmapView<TPixel> source, Span<byte> destination, int rowPitch)
         where TPixel : unmanaged, IPixel<TPixel>
         where TIndexTransfer : struct, IPaletteIndexTransfer
         where TEntryTransfer : struct, IPaletteEntryTransfer

@@ -267,7 +267,7 @@ public sealed class TextureCoderManagerTests
     [Fact]
     public void EncodeAndDecodeDepth16Stencil8UsesDepthStencilCoder()
     {
-        var source = new ArrayTextureBitmap<Rgba32Float>(
+        var source = new ArrayBitmap<Rgba32Float>(
             1,
             1,
             [new Rgba32Float(0.5f, 0xab / 255f, 0f)]);
@@ -277,7 +277,7 @@ public sealed class TextureCoderManagerTests
         var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
         coder.Encode(source.AsView(), encoded, rowPitch);
 
-        var decoded = new ArrayTextureBitmap<Rgba32Float>(1, 1);
+        var decoded = new ArrayBitmap<Rgba32Float>(1, 1);
         coder.Decode(encoded, decoded.AsView(), rowPitch);
 
         Assert.Equal([0xab, 0x00, 0x80], encoded);
@@ -290,7 +290,7 @@ public sealed class TextureCoderManagerTests
     [Fact]
     public void EncodeAndDecodeD24FS8UsesFloat24DepthAndStencil()
     {
-        var source = new ArrayTextureBitmap<Rgba32Float>(
+        var source = new ArrayBitmap<Rgba32Float>(
             1,
             1,
             [new Rgba32Float(1f, 1f, 0f)]);
@@ -300,7 +300,7 @@ public sealed class TextureCoderManagerTests
         var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
         coder.Encode(source.AsView(), encoded, rowPitch);
 
-        var decoded = new ArrayTextureBitmap<Rgba32Float>(1, 1);
+        var decoded = new ArrayBitmap<Rgba32Float>(1, 1);
         coder.Decode(encoded, decoded.AsView(), rowPitch);
 
         Assert.Equal([0xff, 0x00, 0x00, 0xf0], encoded);
@@ -313,7 +313,7 @@ public sealed class TextureCoderManagerTests
     [Fact]
     public void EncodeAndDecodeDepth24X8StoresDepthInHighBits()
     {
-        var source = new ArrayTextureBitmap<Rgba32Float>(
+        var source = new ArrayBitmap<Rgba32Float>(
             1,
             1,
             [new Rgba32Float(0.5f, 0f, 0f)]);
@@ -323,7 +323,7 @@ public sealed class TextureCoderManagerTests
         var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
         coder.Encode(source.AsView(), encoded, rowPitch);
 
-        var decoded = new ArrayTextureBitmap<Rgba32Float>(1, 1);
+        var decoded = new ArrayBitmap<Rgba32Float>(1, 1);
         coder.Decode(encoded, decoded.AsView(), rowPitch);
 
         Assert.Equal([0x00, 0x00, 0x00, 0x80], encoded);
@@ -379,7 +379,7 @@ public sealed class TextureCoderManagerTests
     [Fact]
     public void EncodeAndDecodeBgr10XRUsesPackedBgrOrder()
     {
-        var source = new ArrayTextureBitmap<Rgba32Float>(
+        var source = new ArrayBitmap<Rgba32Float>(
             1,
             1,
             [new Rgba32Float(1f, 0.5f, 0f)]);
@@ -389,7 +389,7 @@ public sealed class TextureCoderManagerTests
         var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
         coder.Encode(source.AsView(), encoded, rowPitch);
 
-        var decoded = new ArrayTextureBitmap<Rgba32Float>(1, 1);
+        var decoded = new ArrayBitmap<Rgba32Float>(1, 1);
         coder.Decode(encoded, decoded.AsView(), rowPitch);
 
         Assert.Equal([0x80, 0xfd, 0xe9, 0x37], encoded);
@@ -402,7 +402,7 @@ public sealed class TextureCoderManagerTests
     [Fact]
     public void EncodeAndDecodeBgra10XRUsesPaddedWords()
     {
-        var source = new ArrayTextureBitmap<Rgba32Float>(
+        var source = new ArrayBitmap<Rgba32Float>(
             1,
             1,
             [new Rgba32Float(1f, 0.5f, 0f, 1f)]);
@@ -412,7 +412,7 @@ public sealed class TextureCoderManagerTests
         var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
         coder.Encode(source.AsView(), encoded, rowPitch);
 
-        var decoded = new ArrayTextureBitmap<Rgba32Float>(1, 1);
+        var decoded = new ArrayBitmap<Rgba32Float>(1, 1);
         coder.Decode(encoded, decoded.AsView(), rowPitch);
 
         Assert.Equal([0x00, 0x60, 0xc0, 0x9f, 0x80, 0xdf, 0x80, 0xdf], encoded);
@@ -425,7 +425,7 @@ public sealed class TextureCoderManagerTests
     [Fact]
     public void EncodeAndDecodeBgr10XRSrgbAppliesSrgbTransfer()
     {
-        var source = new ArrayTextureBitmap<Rgba32Float>(
+        var source = new ArrayBitmap<Rgba32Float>(
             1,
             1,
             [new Rgba32Float(0.25f, 0.5f, 1f)]);
@@ -435,7 +435,7 @@ public sealed class TextureCoderManagerTests
         var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
         coder.Encode(source.AsView(), encoded, rowPitch);
 
-        var decoded = new ArrayTextureBitmap<Rgba32Float>(1, 1);
+        var decoded = new ArrayBitmap<Rgba32Float>(1, 1);
         coder.Decode(encoded, decoded.AsView(), rowPitch);
 
         AssertClose(0.25f, decoded.Pixels[0].Red, 0.002f);
@@ -446,7 +446,7 @@ public sealed class TextureCoderManagerTests
     [Fact]
     public void EncodeAndDecodeRgb10XRA2UsesDxgiBitOrder()
     {
-        var source = new ArrayTextureBitmap<Rgba32Float>(
+        var source = new ArrayBitmap<Rgba32Float>(
             1,
             1,
             [new Rgba32Float(1f, 0.5f, 0f, 1f)]);
@@ -456,7 +456,7 @@ public sealed class TextureCoderManagerTests
         var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
         coder.Encode(source.AsView(), encoded, rowPitch);
 
-        var decoded = new ArrayTextureBitmap<Rgba32Float>(1, 1);
+        var decoded = new ArrayBitmap<Rgba32Float>(1, 1);
         coder.Decode(encoded, decoded.AsView(), rowPitch);
 
         Assert.Equal([0x7e, 0xff, 0x09, 0xd8], encoded);
@@ -469,7 +469,7 @@ public sealed class TextureCoderManagerTests
     [Fact]
     public void EncodeAndDecodeBgra8SwizzlesChannels()
     {
-        var source = new ArrayTextureBitmap<Rgba8UNorm>(
+        var source = new ArrayBitmap<Rgba8UNorm>(
             1,
             1,
             [new Rgba8UNorm(1, 2, 3, 4)]);
@@ -479,7 +479,7 @@ public sealed class TextureCoderManagerTests
         var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
         coder.Encode(source.AsView(), encoded, rowPitch);
 
-        var decoded = new ArrayTextureBitmap<Rgba8UNorm>(1, 1);
+        var decoded = new ArrayBitmap<Rgba8UNorm>(1, 1);
         coder.Decode(encoded, decoded.AsView(), rowPitch);
 
         Assert.Equal([3, 2, 1, 4], encoded);
@@ -489,7 +489,7 @@ public sealed class TextureCoderManagerTests
     [Fact]
     public void EncodeAndDecodeAlpha8UsesAlphaChannel()
     {
-        var source = new ArrayTextureBitmap<Rgba8UNorm>(
+        var source = new ArrayBitmap<Rgba8UNorm>(
             1,
             1,
             [new Rgba8UNorm(1, 2, 3, 4)]);
@@ -499,7 +499,7 @@ public sealed class TextureCoderManagerTests
         var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
         coder.Encode(source.AsView(), encoded, rowPitch);
 
-        var decoded = new ArrayTextureBitmap<Rgba8UNorm>(1, 1);
+        var decoded = new ArrayBitmap<Rgba8UNorm>(1, 1);
         coder.Decode(encoded, decoded.AsView(), rowPitch);
 
         Assert.Equal([4], encoded);
@@ -512,7 +512,7 @@ public sealed class TextureCoderManagerTests
     [Fact]
     public void EncodeAndDecodeLuminance8UsesRedForRgb()
     {
-        var source = new ArrayTextureBitmap<Rgba8UNorm>(
+        var source = new ArrayBitmap<Rgba8UNorm>(
             1,
             1,
             [new Rgba8UNorm(9, 20, 30, 40)]);
@@ -522,7 +522,7 @@ public sealed class TextureCoderManagerTests
         var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
         coder.Encode(source.AsView(), encoded, rowPitch);
 
-        var decoded = new ArrayTextureBitmap<Rgba8UNorm>(1, 1);
+        var decoded = new ArrayBitmap<Rgba8UNorm>(1, 1);
         coder.Decode(encoded, decoded.AsView(), rowPitch);
 
         Assert.Equal([9], encoded);
@@ -535,7 +535,7 @@ public sealed class TextureCoderManagerTests
     [Fact]
     public void EncodeAndDecodeIntensity16UsesRedForAllChannels()
     {
-        var source = new ArrayTextureBitmap<Rgba16UNorm>(
+        var source = new ArrayBitmap<Rgba16UNorm>(
             1,
             1,
             [new Rgba16UNorm(0x1234, 0x5678, 0x9abc, 0xdef0)]);
@@ -545,7 +545,7 @@ public sealed class TextureCoderManagerTests
         var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
         coder.Encode(source.AsView(), encoded, rowPitch);
 
-        var decoded = new ArrayTextureBitmap<Rgba16UNorm>(1, 1);
+        var decoded = new ArrayBitmap<Rgba16UNorm>(1, 1);
         coder.Decode(encoded, decoded.AsView(), rowPitch);
 
         Assert.Equal([0x34, 0x12], encoded);
@@ -558,7 +558,7 @@ public sealed class TextureCoderManagerTests
     [Fact]
     public void EncodeAndDecodeBgra8SNormSwizzlesChannels()
     {
-        var source = new ArrayTextureBitmap<Rgba8SNorm>(
+        var source = new ArrayBitmap<Rgba8SNorm>(
             1,
             1,
             [new Rgba8SNorm(-1, 2, -3, 4)]);
@@ -568,7 +568,7 @@ public sealed class TextureCoderManagerTests
         var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
         coder.Encode(source.AsView(), encoded, rowPitch);
 
-        var decoded = new ArrayTextureBitmap<Rgba8SNorm>(1, 1);
+        var decoded = new ArrayBitmap<Rgba8SNorm>(1, 1);
         coder.Decode(encoded, decoded.AsView(), rowPitch);
 
         Assert.Equal([0xfd, 0x02, 0xff, 0x04], encoded);
@@ -581,7 +581,7 @@ public sealed class TextureCoderManagerTests
     [Fact]
     public void EncodeAndDecodeRg32FloatStoresRedAndGreen()
     {
-        var source = new ArrayTextureBitmap<Rgba32Float>(
+        var source = new ArrayBitmap<Rgba32Float>(
             1,
             1,
             [new Rgba32Float(1f, 2f, 4f, 8f)]);
@@ -591,7 +591,7 @@ public sealed class TextureCoderManagerTests
         var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
         coder.Encode(source.AsView(), encoded, rowPitch);
 
-        var decoded = new ArrayTextureBitmap<Rgba32Float>(1, 1);
+        var decoded = new ArrayBitmap<Rgba32Float>(1, 1);
         coder.Decode(encoded, decoded.AsView(), rowPitch);
 
         Assert.Equal([0x00, 0x00, 0x80, 0x3f, 0x00, 0x00, 0x00, 0x40], encoded);
@@ -604,7 +604,7 @@ public sealed class TextureCoderManagerTests
     [Fact]
     public void EncodeAndDecodeLuminance8Alpha8StoresLuminanceAndAlpha()
     {
-        var source = new ArrayTextureBitmap<Rgba8UNorm>(
+        var source = new ArrayBitmap<Rgba8UNorm>(
             1,
             1,
             [new Rgba8UNorm(9, 20, 30, 40)]);
@@ -614,7 +614,7 @@ public sealed class TextureCoderManagerTests
         var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
         coder.Encode(source.AsView(), encoded, rowPitch);
 
-        var decoded = new ArrayTextureBitmap<Rgba8UNorm>(1, 1);
+        var decoded = new ArrayBitmap<Rgba8UNorm>(1, 1);
         coder.Decode(encoded, decoded.AsView(), rowPitch);
 
         Assert.Equal([9, 40], encoded);
@@ -627,7 +627,7 @@ public sealed class TextureCoderManagerTests
     [Fact]
     public void EncodeAndDecodeLuminance16Alpha16SNormStoresLuminanceAndAlpha()
     {
-        var source = new ArrayTextureBitmap<Rgba16SNorm>(
+        var source = new ArrayBitmap<Rgba16SNorm>(
             1,
             1,
             [new Rgba16SNorm(-1000, 2000, -3000, 4000)]);
@@ -637,7 +637,7 @@ public sealed class TextureCoderManagerTests
         var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
         coder.Encode(source.AsView(), encoded, rowPitch);
 
-        var decoded = new ArrayTextureBitmap<Rgba16SNorm>(1, 1);
+        var decoded = new ArrayBitmap<Rgba16SNorm>(1, 1);
         coder.Decode(encoded, decoded.AsView(), rowPitch);
 
         Assert.Equal([0x18, 0xfc, 0xa0, 0x0f], encoded);
@@ -650,7 +650,7 @@ public sealed class TextureCoderManagerTests
     [Fact]
     public void EncodeAndDecodeLuminance32Alpha32FloatStoresLuminanceAndAlpha()
     {
-        var source = new ArrayTextureBitmap<Rgba32Float>(
+        var source = new ArrayBitmap<Rgba32Float>(
             1,
             1,
             [new Rgba32Float(1f, 2f, 4f, 8f)]);
@@ -660,7 +660,7 @@ public sealed class TextureCoderManagerTests
         var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
         coder.Encode(source.AsView(), encoded, rowPitch);
 
-        var decoded = new ArrayTextureBitmap<Rgba32Float>(1, 1);
+        var decoded = new ArrayBitmap<Rgba32Float>(1, 1);
         coder.Decode(encoded, decoded.AsView(), rowPitch);
 
         Assert.Equal([0x00, 0x00, 0x80, 0x3f, 0x00, 0x00, 0x00, 0x41], encoded);
@@ -673,7 +673,7 @@ public sealed class TextureCoderManagerTests
     [Fact]
     public void EncodeAndDecodeBgr8SwizzlesChannels()
     {
-        var source = new ArrayTextureBitmap<Rgba8UNorm>(
+        var source = new ArrayBitmap<Rgba8UNorm>(
             1,
             1,
             [new Rgba8UNorm(1, 2, 3, 4)]);
@@ -683,7 +683,7 @@ public sealed class TextureCoderManagerTests
         var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
         coder.Encode(source.AsView(), encoded, rowPitch);
 
-        var decoded = new ArrayTextureBitmap<Rgba8UNorm>(1, 1);
+        var decoded = new ArrayBitmap<Rgba8UNorm>(1, 1);
         coder.Decode(encoded, decoded.AsView(), rowPitch);
 
         Assert.Equal([3, 2, 1], encoded);
@@ -696,7 +696,7 @@ public sealed class TextureCoderManagerTests
     [Fact]
     public void EncodeAndDecodeBgr16FloatSwizzlesChannels()
     {
-        var source = new ArrayTextureBitmap<Rgba16Float>(
+        var source = new ArrayBitmap<Rgba16Float>(
             1,
             1,
             [new Rgba16Float(1f, 2f, 4f, 8f)]);
@@ -706,7 +706,7 @@ public sealed class TextureCoderManagerTests
         var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
         coder.Encode(source.AsView(), encoded, rowPitch);
 
-        var decoded = new ArrayTextureBitmap<Rgba16Float>(1, 1);
+        var decoded = new ArrayBitmap<Rgba16Float>(1, 1);
         coder.Decode(encoded, decoded.AsView(), rowPitch);
 
         Assert.Equal([0x00, 0x44, 0x00, 0x40, 0x00, 0x3c], encoded);
@@ -719,7 +719,7 @@ public sealed class TextureCoderManagerTests
     [Fact]
     public void EncodeAndDecodeAbgr8StoresAlphaFirstAndSwizzlesChannels()
     {
-        var source = new ArrayTextureBitmap<Rgba8UNorm>(
+        var source = new ArrayBitmap<Rgba8UNorm>(
             1,
             1,
             [new Rgba8UNorm(1, 2, 3, 4)]);
@@ -729,7 +729,7 @@ public sealed class TextureCoderManagerTests
         var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
         coder.Encode(source.AsView(), encoded, rowPitch);
 
-        var decoded = new ArrayTextureBitmap<Rgba8UNorm>(1, 1);
+        var decoded = new ArrayBitmap<Rgba8UNorm>(1, 1);
         coder.Decode(encoded, decoded.AsView(), rowPitch);
 
         Assert.Equal([4, 3, 2, 1], encoded);
@@ -739,7 +739,7 @@ public sealed class TextureCoderManagerTests
     [Fact]
     public void EncodeAndDecodeBgrx8WritesZeroPaddingAndRestoresOpaqueAlpha()
     {
-        var source = new ArrayTextureBitmap<Rgba8UNorm>(
+        var source = new ArrayBitmap<Rgba8UNorm>(
             1,
             1,
             [new Rgba8UNorm(1, 2, 3, 4)]);
@@ -749,7 +749,7 @@ public sealed class TextureCoderManagerTests
         var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
         coder.Encode(source.AsView(), encoded, rowPitch);
 
-        var decoded = new ArrayTextureBitmap<Rgba8UNorm>(1, 1);
+        var decoded = new ArrayBitmap<Rgba8UNorm>(1, 1);
         coder.Decode(encoded, decoded.AsView(), rowPitch);
 
         Assert.Equal([3, 2, 1, 0], encoded);
@@ -762,7 +762,7 @@ public sealed class TextureCoderManagerTests
     [Fact]
     public void EncodeAndDecodeRgba8SrgbAppliesGammaToRgbAndUNormToAlpha()
     {
-        var source = new ArrayTextureBitmap<Rgba32Float>(
+        var source = new ArrayBitmap<Rgba32Float>(
             1,
             1,
             [new Rgba32Float(1f, 0f, 0.5f, 0.25f)]);
@@ -772,7 +772,7 @@ public sealed class TextureCoderManagerTests
         var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
         coder.Encode(source.AsView(), encoded, rowPitch);
 
-        var decoded = new ArrayTextureBitmap<Rgba32Float>(1, 1);
+        var decoded = new ArrayBitmap<Rgba32Float>(1, 1);
         coder.Decode(encoded, decoded.AsView(), rowPitch);
 
         Assert.Equal([255, 0, 188, 64], encoded);
@@ -785,7 +785,7 @@ public sealed class TextureCoderManagerTests
     [Fact]
     public void EncodeAndDecodeBgr8SrgbSwizzlesChannels()
     {
-        var source = new ArrayTextureBitmap<Rgba32Float>(
+        var source = new ArrayBitmap<Rgba32Float>(
             1,
             1,
             [new Rgba32Float(1f, 0.5f, 0f, 0.25f)]);
@@ -795,7 +795,7 @@ public sealed class TextureCoderManagerTests
         var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
         coder.Encode(source.AsView(), encoded, rowPitch);
 
-        var decoded = new ArrayTextureBitmap<Rgba32Float>(1, 1);
+        var decoded = new ArrayBitmap<Rgba32Float>(1, 1);
         coder.Decode(encoded, decoded.AsView(), rowPitch);
 
         Assert.Equal([0, 188, 255], encoded);
@@ -808,7 +808,7 @@ public sealed class TextureCoderManagerTests
     [Fact]
     public void EncodeAndDecodeBgrx8SrgbWritesZeroPaddingAndRestoresOpaqueAlpha()
     {
-        var source = new ArrayTextureBitmap<Rgba32Float>(
+        var source = new ArrayBitmap<Rgba32Float>(
             1,
             1,
             [new Rgba32Float(0f, 0.5f, 1f, 0.25f)]);
@@ -818,7 +818,7 @@ public sealed class TextureCoderManagerTests
         var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
         coder.Encode(source.AsView(), encoded, rowPitch);
 
-        var decoded = new ArrayTextureBitmap<Rgba32Float>(1, 1);
+        var decoded = new ArrayBitmap<Rgba32Float>(1, 1);
         coder.Decode(encoded, decoded.AsView(), rowPitch);
 
         Assert.Equal([255, 188, 0, 0], encoded);
@@ -831,7 +831,7 @@ public sealed class TextureCoderManagerTests
     [Fact]
     public void EncodeAndDecodeLuminance8Alpha8SrgbStoresGammaLuminanceAndLinearAlpha()
     {
-        var source = new ArrayTextureBitmap<Rgba32Float>(
+        var source = new ArrayBitmap<Rgba32Float>(
             1,
             1,
             [new Rgba32Float(0.5f, 0.25f, 0f, 0.25f)]);
@@ -841,7 +841,7 @@ public sealed class TextureCoderManagerTests
         var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
         coder.Encode(source.AsView(), encoded, rowPitch);
 
-        var decoded = new ArrayTextureBitmap<Rgba32Float>(1, 1);
+        var decoded = new ArrayBitmap<Rgba32Float>(1, 1);
         coder.Decode(encoded, decoded.AsView(), rowPitch);
 
         Assert.Equal([188, 64], encoded);
@@ -854,7 +854,7 @@ public sealed class TextureCoderManagerTests
     [Fact]
     public void EncodeAndDecodeRgba8UIntUsesUnsignedCarrier()
     {
-        var source = new ArrayTextureBitmap<Rgba8UNorm>(
+        var source = new ArrayBitmap<Rgba8UNorm>(
             1,
             1,
             [new Rgba8UNorm(1, 2, 3, 4)]);
@@ -864,7 +864,7 @@ public sealed class TextureCoderManagerTests
         var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
         coder.Encode(source.AsView(), encoded, rowPitch);
 
-        var decoded = new ArrayTextureBitmap<Rgba8UNorm>(1, 1);
+        var decoded = new ArrayBitmap<Rgba8UNorm>(1, 1);
         coder.Decode(encoded, decoded.AsView(), rowPitch);
 
         Assert.Equal([1, 2, 3, 4], encoded);
@@ -874,7 +874,7 @@ public sealed class TextureCoderManagerTests
     [Fact]
     public void EncodeAndDecodeRgba16SIntUsesSignedCarrier()
     {
-        var source = new ArrayTextureBitmap<Rgba16SNorm>(
+        var source = new ArrayBitmap<Rgba16SNorm>(
             1,
             1,
             [new Rgba16SNorm(-1, 2, -3, 4)]);
@@ -884,7 +884,7 @@ public sealed class TextureCoderManagerTests
         var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
         coder.Encode(source.AsView(), encoded, rowPitch);
 
-        var decoded = new ArrayTextureBitmap<Rgba16SNorm>(1, 1);
+        var decoded = new ArrayBitmap<Rgba16SNorm>(1, 1);
         coder.Decode(encoded, decoded.AsView(), rowPitch);
 
         Assert.Equal([0xff, 0xff, 0x02, 0x00, 0xfd, 0xff, 0x04, 0x00], encoded);
@@ -894,7 +894,7 @@ public sealed class TextureCoderManagerTests
     [Fact]
     public void EncodeAndDecodeLuminance8SIntStoresSignedLuminance()
     {
-        var source = new ArrayTextureBitmap<Rgba8SNorm>(
+        var source = new ArrayBitmap<Rgba8SNorm>(
             1,
             1,
             [new Rgba8SNorm(-9, 20, 30, 40)]);
@@ -904,7 +904,7 @@ public sealed class TextureCoderManagerTests
         var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
         coder.Encode(source.AsView(), encoded, rowPitch);
 
-        var decoded = new ArrayTextureBitmap<Rgba8SNorm>(1, 1);
+        var decoded = new ArrayBitmap<Rgba8SNorm>(1, 1);
         coder.Decode(encoded, decoded.AsView(), rowPitch);
 
         Assert.Equal([0xf7], encoded);
@@ -917,7 +917,7 @@ public sealed class TextureCoderManagerTests
     [Fact]
     public void EncodeAndDecodeLuminance8Alpha8SIntStoresSignedLuminanceAndAlpha()
     {
-        var source = new ArrayTextureBitmap<Rgba8SNorm>(
+        var source = new ArrayBitmap<Rgba8SNorm>(
             1,
             1,
             [new Rgba8SNorm(-9, 20, 30, -40)]);
@@ -927,7 +927,7 @@ public sealed class TextureCoderManagerTests
         var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
         coder.Encode(source.AsView(), encoded, rowPitch);
 
-        var decoded = new ArrayTextureBitmap<Rgba8SNorm>(1, 1);
+        var decoded = new ArrayBitmap<Rgba8SNorm>(1, 1);
         coder.Decode(encoded, decoded.AsView(), rowPitch);
 
         Assert.Equal([0xf7, 0xd8], encoded);
@@ -940,7 +940,7 @@ public sealed class TextureCoderManagerTests
     [Fact]
     public void EncodeAndDecodeBgr32UIntSwizzlesChannels()
     {
-        var source = new ArrayTextureBitmap<Rgba32UNorm>(
+        var source = new ArrayBitmap<Rgba32UNorm>(
             1,
             1,
             [new Rgba32UNorm(1, 2, 3, 4)]);
@@ -950,7 +950,7 @@ public sealed class TextureCoderManagerTests
         var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
         coder.Encode(source.AsView(), encoded, rowPitch);
 
-        var decoded = new ArrayTextureBitmap<Rgba32UNorm>(1, 1);
+        var decoded = new ArrayBitmap<Rgba32UNorm>(1, 1);
         coder.Decode(encoded, decoded.AsView(), rowPitch);
 
         Assert.Equal([0x03, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00], encoded);
@@ -963,7 +963,7 @@ public sealed class TextureCoderManagerTests
     [Fact]
     public void EncodeAndDecodeAbgr8SIntStoresAlphaFirstAndSwizzlesChannels()
     {
-        var source = new ArrayTextureBitmap<Rgba8SNorm>(
+        var source = new ArrayBitmap<Rgba8SNorm>(
             1,
             1,
             [new Rgba8SNorm(-1, 2, -3, 4)]);
@@ -973,7 +973,7 @@ public sealed class TextureCoderManagerTests
         var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
         coder.Encode(source.AsView(), encoded, rowPitch);
 
-        var decoded = new ArrayTextureBitmap<Rgba8SNorm>(1, 1);
+        var decoded = new ArrayBitmap<Rgba8SNorm>(1, 1);
         coder.Decode(encoded, decoded.AsView(), rowPitch);
 
         Assert.Equal([0x04, 0xfd, 0x02, 0xff], encoded);
@@ -983,7 +983,7 @@ public sealed class TextureCoderManagerTests
     [Fact]
     public void EncodeAndDecodeBgra16FloatSwizzlesChannels()
     {
-        var source = new ArrayTextureBitmap<Rgba16Float>(
+        var source = new ArrayBitmap<Rgba16Float>(
             1,
             1,
             [new Rgba16Float(1f, 2f, 4f, 8f)]);
@@ -993,7 +993,7 @@ public sealed class TextureCoderManagerTests
         var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
         coder.Encode(source.AsView(), encoded, rowPitch);
 
-        var decoded = new ArrayTextureBitmap<Rgba16Float>(1, 1);
+        var decoded = new ArrayBitmap<Rgba16Float>(1, 1);
         coder.Decode(encoded, decoded.AsView(), rowPitch);
 
         Assert.Equal([0x00, 0x44, 0x00, 0x40, 0x00, 0x3c, 0x00, 0x48], encoded);
@@ -1006,7 +1006,7 @@ public sealed class TextureCoderManagerTests
     [Fact]
     public void EncodeAndDecodeRgba64UIntUsesUNormCarrier()
     {
-        var source = new ArrayTextureBitmap<Rgba64UNorm>(
+        var source = new ArrayBitmap<Rgba64UNorm>(
             1,
             1,
             [new Rgba64UNorm(1, 2, 0x0102030405060708ul, ulong.MaxValue)]);
@@ -1016,7 +1016,7 @@ public sealed class TextureCoderManagerTests
         var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
         coder.Encode(source.AsView(), encoded, rowPitch);
 
-        var decoded = new ArrayTextureBitmap<Rgba64UNorm>(1, 1);
+        var decoded = new ArrayBitmap<Rgba64UNorm>(1, 1);
         coder.Decode(encoded, decoded.AsView(), rowPitch);
 
         Assert.Equal(
@@ -1033,7 +1033,7 @@ public sealed class TextureCoderManagerTests
     [Fact]
     public void EncodeAndDecodeRgba64SIntUsesSNormCarrier()
     {
-        var source = new ArrayTextureBitmap<Rgba64SNorm>(
+        var source = new ArrayBitmap<Rgba64SNorm>(
             1,
             1,
             [new Rgba64SNorm(-1, 2, -3, 4)]);
@@ -1043,7 +1043,7 @@ public sealed class TextureCoderManagerTests
         var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
         coder.Encode(source.AsView(), encoded, rowPitch);
 
-        var decoded = new ArrayTextureBitmap<Rgba64SNorm>(1, 1);
+        var decoded = new ArrayBitmap<Rgba64SNorm>(1, 1);
         coder.Decode(encoded, decoded.AsView(), rowPitch);
 
         Assert.Equal(
@@ -1060,7 +1060,7 @@ public sealed class TextureCoderManagerTests
     [Fact]
     public void EncodeAndDecodeRgba64FloatUsesDoubleCarrier()
     {
-        var source = new ArrayTextureBitmap<Rgba64Float>(
+        var source = new ArrayBitmap<Rgba64Float>(
             1,
             1,
             [new Rgba64Float(1d, 2d, 4d, 8d)]);
@@ -1070,7 +1070,7 @@ public sealed class TextureCoderManagerTests
         var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
         coder.Encode(source.AsView(), encoded, rowPitch);
 
-        var decoded = new ArrayTextureBitmap<Rgba64Float>(1, 1);
+        var decoded = new ArrayBitmap<Rgba64Float>(1, 1);
         coder.Decode(encoded, decoded.AsView(), rowPitch);
 
         Assert.Equal(
@@ -1087,7 +1087,7 @@ public sealed class TextureCoderManagerTests
     [Fact]
     public void EncodeAndDecodeRgb565UsesPackedUNormCoder()
     {
-        var source = new ArrayTextureBitmap<Rgba8UNorm>(
+        var source = new ArrayBitmap<Rgba8UNorm>(
             2,
             1,
             [
@@ -1100,7 +1100,7 @@ public sealed class TextureCoderManagerTests
         var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
         coder.Encode(source.AsView(), encoded, rowPitch);
 
-        var decoded = new ArrayTextureBitmap<Rgba8UNorm>(2, 1);
+        var decoded = new ArrayBitmap<Rgba8UNorm>(2, 1);
         coder.Decode(encoded, decoded.AsView(), rowPitch);
 
         Assert.Equal([0x00, 0xf8, 0xe0, 0x07], encoded);
@@ -1115,7 +1115,7 @@ public sealed class TextureCoderManagerTests
     [Fact]
     public void EncodeAndDecodePackedUNormHonorsRowPitch()
     {
-        var source = new ArrayTextureBitmap<Rgba8UNorm>(
+        var source = new ArrayBitmap<Rgba8UNorm>(
             2,
             2,
             [
@@ -1131,7 +1131,7 @@ public sealed class TextureCoderManagerTests
         Array.Fill<byte>(encoded, 0x7e);
         coder.Encode(source.AsView(), encoded, rowPitch);
 
-        var decoded = new ArrayTextureBitmap<Rgba8UNorm>(2, 2);
+        var decoded = new ArrayBitmap<Rgba8UNorm>(2, 2);
         coder.Decode(encoded, decoded.AsView(), rowPitch);
 
         Assert.Equal([0x00, 0xf8, 0xe0, 0x07, 0x7e, 0x7e, 0x1f, 0x00, 0xff, 0xff, 0x7e, 0x7e], encoded);
@@ -1144,7 +1144,7 @@ public sealed class TextureCoderManagerTests
     [Fact]
     public void EncodeAndDecodeRgba4UsesPackedUNormCoder()
     {
-        var source = new ArrayTextureBitmap<Rgba8UNorm>(
+        var source = new ArrayBitmap<Rgba8UNorm>(
             1,
             1,
             [new Rgba8UNorm(255, 0, 170, 255)]);
@@ -1154,7 +1154,7 @@ public sealed class TextureCoderManagerTests
         var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
         coder.Encode(source.AsView(), encoded, rowPitch);
 
-        var decoded = new ArrayTextureBitmap<Rgba8UNorm>(1, 1);
+        var decoded = new ArrayBitmap<Rgba8UNorm>(1, 1);
         coder.Decode(encoded, decoded.AsView(), rowPitch);
 
         Assert.Equal([0xaf, 0xf0], encoded);
@@ -1167,7 +1167,7 @@ public sealed class TextureCoderManagerTests
     [Fact]
     public void EncodeAndDecodeRgb5A1UsesPackedUNormCoder()
     {
-        var source = new ArrayTextureBitmap<Rgba8UNorm>(
+        var source = new ArrayBitmap<Rgba8UNorm>(
             1,
             1,
             [new Rgba8UNorm(0, 255, 0, 255)]);
@@ -1177,7 +1177,7 @@ public sealed class TextureCoderManagerTests
         var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
         coder.Encode(source.AsView(), encoded, rowPitch);
 
-        var decoded = new ArrayTextureBitmap<Rgba8UNorm>(1, 1);
+        var decoded = new ArrayBitmap<Rgba8UNorm>(1, 1);
         coder.Decode(encoded, decoded.AsView(), rowPitch);
 
         Assert.Equal([0xc1, 0x07], encoded);
@@ -1190,7 +1190,7 @@ public sealed class TextureCoderManagerTests
     [Fact]
     public void EncodeAndDecodeBgra4SwizzlesChannels()
     {
-        var source = new ArrayTextureBitmap<Rgba8UNorm>(
+        var source = new ArrayBitmap<Rgba8UNorm>(
             1,
             1,
             [new Rgba8UNorm(255, 0, 170, 255)]);
@@ -1200,7 +1200,7 @@ public sealed class TextureCoderManagerTests
         var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
         coder.Encode(source.AsView(), encoded, rowPitch);
 
-        var decoded = new ArrayTextureBitmap<Rgba8UNorm>(1, 1);
+        var decoded = new ArrayBitmap<Rgba8UNorm>(1, 1);
         coder.Decode(encoded, decoded.AsView(), rowPitch);
 
         Assert.Equal([0xff, 0xa0], encoded);
@@ -1213,7 +1213,7 @@ public sealed class TextureCoderManagerTests
     [Fact]
     public void EncodeAndDecodeLuminance4DoesNotPackAcrossRows()
     {
-        var source = new ArrayTextureBitmap<Rgba8UNorm>(
+        var source = new ArrayBitmap<Rgba8UNorm>(
             5,
             2,
             [
@@ -1234,7 +1234,7 @@ public sealed class TextureCoderManagerTests
         var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
         coder.Encode(source.AsView(), encoded, rowPitch);
 
-        var decoded = new ArrayTextureBitmap<Rgba8UNorm>(5, 2);
+        var decoded = new ArrayBitmap<Rgba8UNorm>(5, 2);
         coder.Decode(encoded, decoded.AsView(), rowPitch);
 
         Assert.Equal(3, rowPitch);
@@ -1248,7 +1248,7 @@ public sealed class TextureCoderManagerTests
     [Fact]
     public void EncodeAndDecodeLuminance4HonorsRowPitchPadding()
     {
-        var source = new ArrayTextureBitmap<Rgba8UNorm>(
+        var source = new ArrayBitmap<Rgba8UNorm>(
             5,
             2,
             [
@@ -1270,7 +1270,7 @@ public sealed class TextureCoderManagerTests
         Array.Fill<byte>(encoded, 0x7e);
         coder.Encode(source.AsView(), encoded, rowPitch);
 
-        var decoded = new ArrayTextureBitmap<Rgba8UNorm>(5, 2);
+        var decoded = new ArrayBitmap<Rgba8UNorm>(5, 2);
         coder.Decode(encoded, decoded.AsView(), rowPitch);
 
         Assert.Equal([0x01, 0x23, 0x40, 0x7e, 0x56, 0x78, 0x90, 0x7e], encoded);
@@ -1283,7 +1283,7 @@ public sealed class TextureCoderManagerTests
     [Fact]
     public void EncodeAndDecodeAlpha4UsesAlphaChannel()
     {
-        var source = new ArrayTextureBitmap<Rgba8UNorm>(
+        var source = new ArrayBitmap<Rgba8UNorm>(
             2,
             1,
             [
@@ -1296,7 +1296,7 @@ public sealed class TextureCoderManagerTests
         var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
         coder.Encode(source.AsView(), encoded, rowPitch);
 
-        var decoded = new ArrayTextureBitmap<Rgba8UNorm>(2, 1);
+        var decoded = new ArrayBitmap<Rgba8UNorm>(2, 1);
         coder.Decode(encoded, decoded.AsView(), rowPitch);
 
         Assert.Equal([0x0f], encoded);
@@ -1313,7 +1313,7 @@ public sealed class TextureCoderManagerTests
     [Fact]
     public void EncodeAndDecodeIntensity4UsesRedForAllChannels()
     {
-        var source = new ArrayTextureBitmap<Rgba8UNorm>(
+        var source = new ArrayBitmap<Rgba8UNorm>(
             2,
             1,
             [
@@ -1326,7 +1326,7 @@ public sealed class TextureCoderManagerTests
         var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
         coder.Encode(source.AsView(), encoded, rowPitch);
 
-        var decoded = new ArrayTextureBitmap<Rgba8UNorm>(2, 1);
+        var decoded = new ArrayBitmap<Rgba8UNorm>(2, 1);
         coder.Decode(encoded, decoded.AsView(), rowPitch);
 
         Assert.Equal([0x2d], encoded);
@@ -1337,7 +1337,7 @@ public sealed class TextureCoderManagerTests
     [Fact]
     public void EncodeAndDecodeBw1UsesRedAndHonorsRowPitchPadding()
     {
-        var source = new ArrayTextureBitmap<Rgba32Float>(
+        var source = new ArrayBitmap<Rgba32Float>(
             9,
             2,
             [
@@ -1367,7 +1367,7 @@ public sealed class TextureCoderManagerTests
         Array.Fill<byte>(encoded, 0x7e);
         coder.Encode(source.AsView(), encoded, rowPitch);
 
-        var decoded = new ArrayTextureBitmap<Rgba8UNorm>(9, 2);
+        var decoded = new ArrayBitmap<Rgba8UNorm>(9, 2);
         coder.Decode(encoded, decoded.AsView(), rowPitch);
 
         Assert.Equal(2, coder.GetDefaultPitch(source.Width));
@@ -1389,7 +1389,7 @@ public sealed class TextureCoderManagerTests
         var format = formatName == nameof(TextureFormats.Ai44)
             ? TextureFormats.Ai44
             : TextureFormats.Ia44;
-        var source = new ArrayTextureBitmap<Rgba8UNorm>(
+        var source = new ArrayBitmap<Rgba8UNorm>(
             1,
             1,
             [new Rgba8UNorm(0x55, 0x55, 0x55, 0xaa)]);
@@ -1399,7 +1399,7 @@ public sealed class TextureCoderManagerTests
         var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
         coder.Encode(source.AsView(), encoded, rowPitch);
 
-        var decoded = new ArrayTextureBitmap<Rgba8UNorm>(1, 1);
+        var decoded = new ArrayBitmap<Rgba8UNorm>(1, 1);
         coder.Decode(encoded, decoded.AsView(), rowPitch);
 
         Assert.Equal(expected, encoded);
@@ -1414,7 +1414,7 @@ public sealed class TextureCoderManagerTests
         var format = formatName == nameof(TextureFormats.P8)
             ? TextureFormats.P8
             : TextureFormats.A8P8;
-        var source = new ArrayTextureBitmap<Rgba8UNorm>(
+        var source = new ArrayBitmap<Rgba8UNorm>(
             1,
             1,
             [new Rgba8UNorm(0x7f, 0x7f, 0x7f, format == TextureFormats.A8P8 ? (byte)0xee : byte.MaxValue)]);
@@ -1424,7 +1424,7 @@ public sealed class TextureCoderManagerTests
         var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
         coder.Encode(source.AsView(), encoded, rowPitch);
 
-        var decoded = new ArrayTextureBitmap<Rgba8UNorm>(1, 1);
+        var decoded = new ArrayBitmap<Rgba8UNorm>(1, 1);
         coder.Decode(encoded, decoded.AsView(), rowPitch);
 
         Assert.Equal(expected, encoded);
@@ -1439,7 +1439,7 @@ public sealed class TextureCoderManagerTests
         var format = formatName == nameof(TextureFormats.Uyvy422UNorm)
             ? TextureFormats.Uyvy422UNorm
             : TextureFormats.Yuy2UNorm;
-        var source = new ArrayTextureBitmap<Rgba8UNorm>(
+        var source = new ArrayBitmap<Rgba8UNorm>(
             2,
             1,
             [
@@ -1452,7 +1452,7 @@ public sealed class TextureCoderManagerTests
         var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
         coder.Encode(source.AsView(), encoded, rowPitch);
 
-        var decoded = new ArrayTextureBitmap<Rgba8UNorm>(2, 1);
+        var decoded = new ArrayBitmap<Rgba8UNorm>(2, 1);
         coder.Decode(encoded, decoded.AsView(), rowPitch);
 
         Assert.Equal(expected, encoded);
@@ -1463,7 +1463,7 @@ public sealed class TextureCoderManagerTests
     [Fact]
     public void EncodeAndDecodePackedYuv4228BitHonorsRowPitchPadding()
     {
-        var source = new ArrayTextureBitmap<Rgba8UNorm>(
+        var source = new ArrayBitmap<Rgba8UNorm>(
             2,
             2,
             [
@@ -1479,7 +1479,7 @@ public sealed class TextureCoderManagerTests
         Array.Fill<byte>(encoded, 0x7e);
         coder.Encode(source.AsView(), encoded, rowPitch);
 
-        var decoded = new ArrayTextureBitmap<Rgba8UNorm>(2, 2);
+        var decoded = new ArrayBitmap<Rgba8UNorm>(2, 2);
         coder.Decode(encoded, decoded.AsView(), rowPitch);
 
         Assert.Equal([128, 0, 128, 255, 0x7e, 0x7e, 128, 255, 128, 0, 0x7e, 0x7e], encoded);
@@ -1501,7 +1501,7 @@ public sealed class TextureCoderManagerTests
     [Fact]
     public void EncodeAndDecodeAyuv444UsesDxgiViewByteOrder()
     {
-        var source = new ArrayTextureBitmap<Rgba8UNorm>(
+        var source = new ArrayBitmap<Rgba8UNorm>(
             1,
             1,
             [new Rgba8UNorm(255, 255, 255, 128)]);
@@ -1511,7 +1511,7 @@ public sealed class TextureCoderManagerTests
         var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
         coder.Encode(source.AsView(), encoded, rowPitch);
 
-        var decoded = new ArrayTextureBitmap<Rgba8UNorm>(1, 1);
+        var decoded = new ArrayBitmap<Rgba8UNorm>(1, 1);
         coder.Decode(encoded, decoded.AsView(), rowPitch);
 
         Assert.Equal([128, 128, 255, 128], encoded);
@@ -1521,7 +1521,7 @@ public sealed class TextureCoderManagerTests
     [Fact]
     public void EncodeAndDecodePackedYuv42216BitUsesSharedChroma()
     {
-        var source = new ArrayTextureBitmap<Rgba16UNorm>(
+        var source = new ArrayBitmap<Rgba16UNorm>(
             2,
             1,
             [
@@ -1534,7 +1534,7 @@ public sealed class TextureCoderManagerTests
         var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
         coder.Encode(source.AsView(), encoded, rowPitch);
 
-        var decoded = new ArrayTextureBitmap<Rgba16UNorm>(2, 1);
+        var decoded = new ArrayBitmap<Rgba16UNorm>(2, 1);
         coder.Decode(encoded, decoded.AsView(), rowPitch);
 
         Assert.Equal([0x00, 0x80, 0x00, 0x00, 0x00, 0x80, 0xff, 0xff], encoded);
@@ -1545,7 +1545,7 @@ public sealed class TextureCoderManagerTests
     [Fact]
     public void EncodeAndDecodePlanarYuv420UsesVariablePayload()
     {
-        var source = new ArrayTextureBitmap<Rgba8UNorm>(
+        var source = new ArrayBitmap<Rgba8UNorm>(
             2,
             2,
             [
@@ -1560,7 +1560,7 @@ public sealed class TextureCoderManagerTests
         var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
         coder.Encode(source.AsView(), encoded, rowPitch);
 
-        var decoded = new ArrayTextureBitmap<Rgba8UNorm>(2, 2);
+        var decoded = new ArrayBitmap<Rgba8UNorm>(2, 2);
         coder.Decode(encoded, decoded.AsView(), rowPitch);
 
         Assert.Equal(2, rowPitch);
@@ -1574,7 +1574,7 @@ public sealed class TextureCoderManagerTests
     [Fact]
     public void EncodeAndDecodeV208UsesPlanarYuv440Layout()
     {
-        var source = new ArrayTextureBitmap<Rgba8UNorm>(
+        var source = new ArrayBitmap<Rgba8UNorm>(
             2,
             2,
             [
@@ -1589,7 +1589,7 @@ public sealed class TextureCoderManagerTests
         var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
         coder.Encode(source.AsView(), encoded, rowPitch);
 
-        var decoded = new ArrayTextureBitmap<Rgba8UNorm>(2, 2);
+        var decoded = new ArrayBitmap<Rgba8UNorm>(2, 2);
         coder.Decode(encoded, decoded.AsView(), rowPitch);
 
         Assert.Equal(2, rowPitch);
@@ -1603,7 +1603,7 @@ public sealed class TextureCoderManagerTests
     [Fact]
     public void EncodeAndDecodeV408UsesPlanarYuv444Layout()
     {
-        var source = new ArrayTextureBitmap<Rgba8UNorm>(
+        var source = new ArrayBitmap<Rgba8UNorm>(
             2,
             2,
             [
@@ -1618,7 +1618,7 @@ public sealed class TextureCoderManagerTests
         var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
         coder.Encode(source.AsView(), encoded, rowPitch);
 
-        var decoded = new ArrayTextureBitmap<Rgba8UNorm>(2, 2);
+        var decoded = new ArrayBitmap<Rgba8UNorm>(2, 2);
         coder.Decode(encoded, decoded.AsView(), rowPitch);
 
         Assert.Equal(2, rowPitch);
@@ -1632,7 +1632,7 @@ public sealed class TextureCoderManagerTests
     [Fact]
     public void EncodeAndDecodeNv11UsesDxgiPadded411Layout()
     {
-        var source = new ArrayTextureBitmap<Rgba8UNorm>(
+        var source = new ArrayBitmap<Rgba8UNorm>(
             4,
             1,
             [
@@ -1647,7 +1647,7 @@ public sealed class TextureCoderManagerTests
         var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
         coder.Encode(source.AsView(), encoded, rowPitch);
 
-        var decoded = new ArrayTextureBitmap<Rgba8UNorm>(4, 1);
+        var decoded = new ArrayBitmap<Rgba8UNorm>(4, 1);
         coder.Decode(encoded, decoded.AsView(), rowPitch);
 
         Assert.Equal(4, rowPitch);
@@ -1670,7 +1670,7 @@ public sealed class TextureCoderManagerTests
     [Fact]
     public void EncodeAndDecodePlanarYuv12Msb2P444UsesInterleavedChroma()
     {
-        var source = new ArrayTextureBitmap<Rgba16UNorm>(
+        var source = new ArrayBitmap<Rgba16UNorm>(
             1,
             1,
             [new Rgba16UNorm(ushort.MaxValue, ushort.MaxValue, ushort.MaxValue)]);
@@ -1680,7 +1680,7 @@ public sealed class TextureCoderManagerTests
         var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
         coder.Encode(source.AsView(), encoded, rowPitch);
 
-        var decoded = new ArrayTextureBitmap<Rgba16UNorm>(1, 1);
+        var decoded = new ArrayBitmap<Rgba16UNorm>(1, 1);
         coder.Decode(encoded, decoded.AsView(), rowPitch);
 
         Assert.Equal(2, rowPitch);
@@ -1691,7 +1691,7 @@ public sealed class TextureCoderManagerTests
     [Fact]
     public void EncodeAndDecodePlanarYuv14Msb2P420UsesInterleavedChroma()
     {
-        var source = new ArrayTextureBitmap<Rgba16UNorm>(
+        var source = new ArrayBitmap<Rgba16UNorm>(
             2,
             2,
             [
@@ -1706,7 +1706,7 @@ public sealed class TextureCoderManagerTests
         var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
         coder.Encode(source.AsView(), encoded, rowPitch);
 
-        var decoded = new ArrayTextureBitmap<Rgba16UNorm>(2, 2);
+        var decoded = new ArrayBitmap<Rgba16UNorm>(2, 2);
         coder.Decode(encoded, decoded.AsView(), rowPitch);
 
         Assert.Equal(4, rowPitch);
@@ -1729,7 +1729,7 @@ public sealed class TextureCoderManagerTests
     [Fact]
     public void EncodeAndDecodeRgb10A2UsesRgba16Carrier()
     {
-        var source = new ArrayTextureBitmap<Rgba16UNorm>(
+        var source = new ArrayBitmap<Rgba16UNorm>(
             1,
             1,
             [new Rgba16UNorm(ushort.MaxValue, 0, ushort.MaxValue, ushort.MaxValue)]);
@@ -1739,7 +1739,7 @@ public sealed class TextureCoderManagerTests
         var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
         coder.Encode(source.AsView(), encoded, rowPitch);
 
-        var decoded = new ArrayTextureBitmap<Rgba16UNorm>(1, 1);
+        var decoded = new ArrayBitmap<Rgba16UNorm>(1, 1);
         coder.Decode(encoded, decoded.AsView(), rowPitch);
 
         Assert.Equal([0xff, 0x0f, 0xc0, 0xff], encoded);
@@ -1752,7 +1752,7 @@ public sealed class TextureCoderManagerTests
     [Fact]
     public void EncodeAndDecodeRg4StoresRedAndGreen()
     {
-        var source = new ArrayTextureBitmap<Rgba8UNorm>(
+        var source = new ArrayBitmap<Rgba8UNorm>(
             1,
             1,
             [new Rgba8UNorm(255, 170, 85, 34)]);
@@ -1762,7 +1762,7 @@ public sealed class TextureCoderManagerTests
         var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
         coder.Encode(source.AsView(), encoded, rowPitch);
 
-        var decoded = new ArrayTextureBitmap<Rgba8UNorm>(1, 1);
+        var decoded = new ArrayBitmap<Rgba8UNorm>(1, 1);
         coder.Decode(encoded, decoded.AsView(), rowPitch);
 
         Assert.Equal([0xfa], encoded);
@@ -1775,7 +1775,7 @@ public sealed class TextureCoderManagerTests
     [Fact]
     public void EncodeAndDecodeAlpha12UsesAlphaChannel()
     {
-        var source = new ArrayTextureBitmap<Rgba16UNorm>(
+        var source = new ArrayBitmap<Rgba16UNorm>(
             1,
             1,
             [new Rgba16UNorm(1, 2, 3, ushort.MaxValue)]);
@@ -1785,7 +1785,7 @@ public sealed class TextureCoderManagerTests
         var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
         coder.Encode(source.AsView(), encoded, rowPitch);
 
-        var decoded = new ArrayTextureBitmap<Rgba16UNorm>(1, 1);
+        var decoded = new ArrayBitmap<Rgba16UNorm>(1, 1);
         coder.Decode(encoded, decoded.AsView(), rowPitch);
 
         Assert.Equal([0xff, 0x0f], encoded);
@@ -1798,7 +1798,7 @@ public sealed class TextureCoderManagerTests
     [Fact]
     public void EncodeAndDecodeIntensity12UsesRedForAllChannels()
     {
-        var source = new ArrayTextureBitmap<Rgba16UNorm>(
+        var source = new ArrayBitmap<Rgba16UNorm>(
             1,
             1,
             [new Rgba16UNorm(ushort.MaxValue, 0, 0, 0)]);
@@ -1808,7 +1808,7 @@ public sealed class TextureCoderManagerTests
         var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
         coder.Encode(source.AsView(), encoded, rowPitch);
 
-        var decoded = new ArrayTextureBitmap<Rgba16UNorm>(1, 1);
+        var decoded = new ArrayBitmap<Rgba16UNorm>(1, 1);
         coder.Decode(encoded, decoded.AsView(), rowPitch);
 
         Assert.Equal([0xff, 0x0f], encoded);
@@ -1821,7 +1821,7 @@ public sealed class TextureCoderManagerTests
     [Fact]
     public void EncodeAndDecodeLuminance4Alpha4StoresLuminanceAndAlpha()
     {
-        var source = new ArrayTextureBitmap<Rgba8UNorm>(
+        var source = new ArrayBitmap<Rgba8UNorm>(
             1,
             1,
             [new Rgba8UNorm(170, 0, 0, 85)]);
@@ -1831,7 +1831,7 @@ public sealed class TextureCoderManagerTests
         var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
         coder.Encode(source.AsView(), encoded, rowPitch);
 
-        var decoded = new ArrayTextureBitmap<Rgba8UNorm>(1, 1);
+        var decoded = new ArrayBitmap<Rgba8UNorm>(1, 1);
         coder.Decode(encoded, decoded.AsView(), rowPitch);
 
         Assert.Equal([0xa5], encoded);
@@ -1844,7 +1844,7 @@ public sealed class TextureCoderManagerTests
     [Fact]
     public void EncodeAndDecodeRgb565RevReversesBitOrder()
     {
-        var source = new ArrayTextureBitmap<Rgba8UNorm>(
+        var source = new ArrayBitmap<Rgba8UNorm>(
             1,
             1,
             [new Rgba8UNorm(255, 0, 0)]);
@@ -1854,7 +1854,7 @@ public sealed class TextureCoderManagerTests
         var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
         coder.Encode(source.AsView(), encoded, rowPitch);
 
-        var decoded = new ArrayTextureBitmap<Rgba8UNorm>(1, 1);
+        var decoded = new ArrayBitmap<Rgba8UNorm>(1, 1);
         coder.Decode(encoded, decoded.AsView(), rowPitch);
 
         Assert.Equal([0x1f, 0x00], encoded);
@@ -1866,7 +1866,7 @@ public sealed class TextureCoderManagerTests
     [Fact]
     public void EncodeAndDecodeBgr565SwizzlesChannels()
     {
-        var source = new ArrayTextureBitmap<Rgba8UNorm>(
+        var source = new ArrayBitmap<Rgba8UNorm>(
             1,
             1,
             [new Rgba8UNorm(255, 0, 0)]);
@@ -1876,7 +1876,7 @@ public sealed class TextureCoderManagerTests
         var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
         coder.Encode(source.AsView(), encoded, rowPitch);
 
-        var decoded = new ArrayTextureBitmap<Rgba8UNorm>(1, 1);
+        var decoded = new ArrayBitmap<Rgba8UNorm>(1, 1);
         coder.Decode(encoded, decoded.AsView(), rowPitch);
 
         Assert.Equal([0x1f, 0x00], encoded);
@@ -1888,7 +1888,7 @@ public sealed class TextureCoderManagerTests
     [Fact]
     public void EncodeAndDecodeArgb4StoresAlphaFirst()
     {
-        var source = new ArrayTextureBitmap<Rgba8UNorm>(
+        var source = new ArrayBitmap<Rgba8UNorm>(
             1,
             1,
             [NibbleRgba(1, 2, 3, 4)]);
@@ -1898,7 +1898,7 @@ public sealed class TextureCoderManagerTests
         var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
         coder.Encode(source.AsView(), encoded, rowPitch);
 
-        var decoded = new ArrayTextureBitmap<Rgba8UNorm>(1, 1);
+        var decoded = new ArrayBitmap<Rgba8UNorm>(1, 1);
         coder.Decode(encoded, decoded.AsView(), rowPitch);
 
         Assert.Equal([0x23, 0x41], encoded);
@@ -1908,7 +1908,7 @@ public sealed class TextureCoderManagerTests
     [Fact]
     public void EncodeAndDecodeAbgr4RevStoresAlphaFirstAndReversesBitOrder()
     {
-        var source = new ArrayTextureBitmap<Rgba8UNorm>(
+        var source = new ArrayBitmap<Rgba8UNorm>(
             1,
             1,
             [NibbleRgba(1, 2, 3, 4)]);
@@ -1918,7 +1918,7 @@ public sealed class TextureCoderManagerTests
         var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
         coder.Encode(source.AsView(), encoded, rowPitch);
 
-        var decoded = new ArrayTextureBitmap<Rgba8UNorm>(1, 1);
+        var decoded = new ArrayBitmap<Rgba8UNorm>(1, 1);
         coder.Decode(encoded, decoded.AsView(), rowPitch);
 
         Assert.Equal([0x34, 0x12], encoded);
@@ -1928,7 +1928,7 @@ public sealed class TextureCoderManagerTests
     [Fact]
     public void EncodeAndDecodeBgr10A2RevUNormUsesRgba16Carrier()
     {
-        var source = new ArrayTextureBitmap<Rgba16UNorm>(
+        var source = new ArrayBitmap<Rgba16UNorm>(
             1,
             1,
             [new Rgba16UNorm(ushort.MaxValue, 0, ushort.MaxValue, ushort.MaxValue)]);
@@ -1938,7 +1938,7 @@ public sealed class TextureCoderManagerTests
         var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
         coder.Encode(source.AsView(), encoded, rowPitch);
 
-        var decoded = new ArrayTextureBitmap<Rgba16UNorm>(1, 1);
+        var decoded = new ArrayBitmap<Rgba16UNorm>(1, 1);
         coder.Decode(encoded, decoded.AsView(), rowPitch);
 
         Assert.Equal([0xff, 0x03, 0xf0, 0xff], encoded);
@@ -1951,7 +1951,7 @@ public sealed class TextureCoderManagerTests
     [Fact]
     public void EncodeAndDecodeRgba12UsesSixBytes()
     {
-        var source = new ArrayTextureBitmap<Rgba16UNorm>(
+        var source = new ArrayBitmap<Rgba16UNorm>(
             1,
             1,
             [new Rgba16UNorm(ushort.MaxValue, 0, 0)]);
@@ -1961,7 +1961,7 @@ public sealed class TextureCoderManagerTests
         var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
         coder.Encode(source.AsView(), encoded, rowPitch);
 
-        var decoded = new ArrayTextureBitmap<Rgba16UNorm>(1, 1);
+        var decoded = new ArrayBitmap<Rgba16UNorm>(1, 1);
         coder.Decode(encoded, decoded.AsView(), rowPitch);
 
         Assert.Equal([0xff, 0x0f, 0x00, 0x00, 0xf0, 0xff], encoded);
@@ -1974,7 +1974,7 @@ public sealed class TextureCoderManagerTests
     [Fact]
     public void EncodeAndDecodeR11G11B10FloatUsesPackedFloatCoder()
     {
-        var source = new ArrayTextureBitmap<Rgba32Float>(
+        var source = new ArrayBitmap<Rgba32Float>(
             1,
             1,
             [new Rgba32Float(1f, 2f, 4f)]);
@@ -1984,7 +1984,7 @@ public sealed class TextureCoderManagerTests
         var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
         coder.Encode(source.AsView(), encoded, rowPitch);
 
-        var decoded = new ArrayTextureBitmap<Rgba32Float>(1, 1);
+        var decoded = new ArrayBitmap<Rgba32Float>(1, 1);
         coder.Decode(encoded, decoded.AsView(), rowPitch);
 
         Assert.Equal([0xc0, 0x03, 0x20, 0x88], encoded);
@@ -1997,7 +1997,7 @@ public sealed class TextureCoderManagerTests
     [Fact]
     public void EncodeAndDecodeRgb9E5UsesSharedExponent()
     {
-        var source = new ArrayTextureBitmap<Rgba32Float>(
+        var source = new ArrayBitmap<Rgba32Float>(
             1,
             1,
             [new Rgba32Float(1f, 1f, 1f)]);
@@ -2007,7 +2007,7 @@ public sealed class TextureCoderManagerTests
         var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
         coder.Encode(source.AsView(), encoded, rowPitch);
 
-        var decoded = new ArrayTextureBitmap<Rgba32Float>(1, 1);
+        var decoded = new ArrayBitmap<Rgba32Float>(1, 1);
         coder.Decode(encoded, decoded.AsView(), rowPitch);
 
         Assert.Equal([0x00, 0x01, 0x02, 0x84], encoded);
@@ -2020,7 +2020,7 @@ public sealed class TextureCoderManagerTests
     [Fact]
     public void EncodeAndDecodeRgb10A2UIntUsesPackedIntegerCoder()
     {
-        var source = new ArrayTextureBitmap<Rgba16UNorm>(
+        var source = new ArrayBitmap<Rgba16UNorm>(
             1,
             1,
             [new Rgba16UNorm(1023, 0, 512, 3)]);
@@ -2030,7 +2030,7 @@ public sealed class TextureCoderManagerTests
         var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
         coder.Encode(source.AsView(), encoded, rowPitch);
 
-        var decoded = new ArrayTextureBitmap<Rgba16UNorm>(1, 1);
+        var decoded = new ArrayBitmap<Rgba16UNorm>(1, 1);
         coder.Decode(encoded, decoded.AsView(), rowPitch);
 
         Assert.Equal([0x03, 0x08, 0xc0, 0xff], encoded);
@@ -2043,7 +2043,7 @@ public sealed class TextureCoderManagerTests
     [Fact]
     public void EncodeAndDecodeRgb10A2RevUIntReversesBitOrder()
     {
-        var source = new ArrayTextureBitmap<Rgba16UNorm>(
+        var source = new ArrayBitmap<Rgba16UNorm>(
             1,
             1,
             [new Rgba16UNorm(1, 2, 3, 3)]);
@@ -2053,7 +2053,7 @@ public sealed class TextureCoderManagerTests
         var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
         coder.Encode(source.AsView(), encoded, rowPitch);
 
-        var decoded = new ArrayTextureBitmap<Rgba16UNorm>(1, 1);
+        var decoded = new ArrayBitmap<Rgba16UNorm>(1, 1);
         coder.Decode(encoded, decoded.AsView(), rowPitch);
 
         Assert.Equal([0x01, 0x08, 0x30, 0xc0], encoded);
@@ -2066,7 +2066,7 @@ public sealed class TextureCoderManagerTests
     [Fact]
     public void EncodeAndDecodeBgr10A2RevUIntSwizzlesChannels()
     {
-        var source = new ArrayTextureBitmap<Rgba16UNorm>(
+        var source = new ArrayBitmap<Rgba16UNorm>(
             1,
             1,
             [new Rgba16UNorm(1023, 1, 512, 3)]);
@@ -2076,7 +2076,7 @@ public sealed class TextureCoderManagerTests
         var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
         coder.Encode(source.AsView(), encoded, rowPitch);
 
-        var decoded = new ArrayTextureBitmap<Rgba16UNorm>(1, 1);
+        var decoded = new ArrayBitmap<Rgba16UNorm>(1, 1);
         coder.Decode(encoded, decoded.AsView(), rowPitch);
 
         Assert.Equal([0x00, 0x06, 0xf0, 0xff], encoded);
@@ -2089,7 +2089,7 @@ public sealed class TextureCoderManagerTests
     [Fact]
     public void EncodeAndDecodeBgr10A2RevSNormUsesPackedSNormCoder()
     {
-        var source = new ArrayTextureBitmap<Rgba16SNorm>(
+        var source = new ArrayBitmap<Rgba16SNorm>(
             1,
             1,
             [new Rgba16SNorm(short.MaxValue, 0, -short.MaxValue, -short.MaxValue)]);
@@ -2099,7 +2099,7 @@ public sealed class TextureCoderManagerTests
         var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
         coder.Encode(source.AsView(), encoded, rowPitch);
 
-        var decoded = new ArrayTextureBitmap<Rgba16SNorm>(1, 1);
+        var decoded = new ArrayBitmap<Rgba16SNorm>(1, 1);
         coder.Decode(encoded, decoded.AsView(), rowPitch);
 
         Assert.Equal([0x01, 0x02, 0xf0, 0xdf], encoded);
@@ -2113,14 +2113,14 @@ public sealed class TextureCoderManagerTests
     [MemberData(nameof(ConsolePackedRoundTripCases))]
     public void EncodeAndDecodeConsolePackedFormats(TextureFormat format, Rgba32Float sourcePixel, byte[] expected, Rgba32Float expectedPixel)
     {
-        var source = new ArrayTextureBitmap<Rgba32Float>(1, 1, [sourcePixel]);
+        var source = new ArrayBitmap<Rgba32Float>(1, 1, [sourcePixel]);
 
         var coder = Assert.IsAssignableFrom<IPitchTextureCoder>(TextureCoderManager.Global.GetCoder(format));
         var rowPitch = coder.GetDefaultPitch(source.Width);
         var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
         coder.Encode(source.AsView(), encoded, rowPitch);
 
-        var decoded = new ArrayTextureBitmap<Rgba32Float>(1, 1);
+        var decoded = new ArrayBitmap<Rgba32Float>(1, 1);
         coder.Decode(encoded, decoded.AsView(), rowPitch);
 
         Assert.Equal(expected, encoded);
@@ -2134,7 +2134,7 @@ public sealed class TextureCoderManagerTests
     [MemberData(nameof(ConsolePackedRevRedLowBitCases))]
     public void EncodeConsolePackedRevFormatsStoreRedInLowBits(TextureFormat format, Rgba32Float sourcePixel, byte[] expected)
     {
-        var source = new ArrayTextureBitmap<Rgba32Float>(1, 1, [sourcePixel]);
+        var source = new ArrayBitmap<Rgba32Float>(1, 1, [sourcePixel]);
 
         var coder = Assert.IsAssignableFrom<IPitchTextureCoder>(TextureCoderManager.Global.GetCoder(format));
         var rowPitch = coder.GetDefaultPitch(source.Width);
@@ -2148,7 +2148,7 @@ public sealed class TextureCoderManagerTests
     [MemberData(nameof(ConsolePackedNonRevRedHighBitCases))]
     public void EncodeConsolePackedNonRevFormatsStoreRedInHighBits(TextureFormat format, Rgba32Float sourcePixel, byte[] expected)
     {
-        var source = new ArrayTextureBitmap<Rgba32Float>(1, 1, [sourcePixel]);
+        var source = new ArrayBitmap<Rgba32Float>(1, 1, [sourcePixel]);
 
         var coder = Assert.IsAssignableFrom<IPitchTextureCoder>(TextureCoderManager.Global.GetCoder(format));
         var rowPitch = coder.GetDefaultPitch(source.Width);
@@ -2162,7 +2162,7 @@ public sealed class TextureCoderManagerTests
     [MemberData(nameof(ConsolePackedBigEndianRoundTripCases))]
     public void EncodeAndDecodeConsolePackedBigEndianFormats(TextureFormat format, Rgba32Float sourcePixel, byte[] littleEndianExpected, Rgba32Float expectedPixel)
     {
-        var source = new ArrayTextureBitmap<Rgba32Float>(1, 1, [sourcePixel]);
+        var source = new ArrayBitmap<Rgba32Float>(1, 1, [sourcePixel]);
         var expected = (byte[])littleEndianExpected.Clone();
         Array.Reverse(expected);
 
@@ -2171,7 +2171,7 @@ public sealed class TextureCoderManagerTests
         var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
         coder.Encode(source.AsView(), encoded, rowPitch);
 
-        var decoded = new ArrayTextureBitmap<Rgba32Float>(1, 1);
+        var decoded = new ArrayBitmap<Rgba32Float>(1, 1);
         coder.Decode(encoded, decoded.AsView(), rowPitch);
 
         Assert.Equal(expected, encoded);
@@ -2184,7 +2184,7 @@ public sealed class TextureCoderManagerTests
     [Fact]
     public void EncodeAndDecodeRgb10A2RevSIntUsesPackedIntegerCoder()
     {
-        var source = new ArrayTextureBitmap<Rgba16SNorm>(
+        var source = new ArrayBitmap<Rgba16SNorm>(
             1,
             1,
             [new Rgba16SNorm(-1, 2, -3, -1)]);
@@ -2194,7 +2194,7 @@ public sealed class TextureCoderManagerTests
         var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
         coder.Encode(source.AsView(), encoded, rowPitch);
 
-        var decoded = new ArrayTextureBitmap<Rgba16SNorm>(1, 1);
+        var decoded = new ArrayBitmap<Rgba16SNorm>(1, 1);
         coder.Decode(encoded, decoded.AsView(), rowPitch);
 
         Assert.Equal([0xff, 0x0b, 0xd0, 0xff], encoded);
@@ -2204,7 +2204,7 @@ public sealed class TextureCoderManagerTests
     [Fact]
     public void EncodeAndDecodeR10X6UNormStoresComponentInTopBits()
     {
-        var source = new ArrayTextureBitmap<Rgba16UNorm>(
+        var source = new ArrayBitmap<Rgba16UNorm>(
             1,
             1,
             [new Rgba16UNorm(ushort.MaxValue, 0, 0)]);
@@ -2214,7 +2214,7 @@ public sealed class TextureCoderManagerTests
         var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
         coder.Encode(source.AsView(), encoded, rowPitch);
 
-        var decoded = new ArrayTextureBitmap<Rgba16UNorm>(1, 1);
+        var decoded = new ArrayBitmap<Rgba16UNorm>(1, 1);
         coder.Decode(encoded, decoded.AsView(), rowPitch);
 
         Assert.Equal([0xc0, 0xff], encoded);
@@ -2224,7 +2224,7 @@ public sealed class TextureCoderManagerTests
     [Fact]
     public void EncodeAndDecodeRgba12X4UNormStoresComponentsInTopBits()
     {
-        var source = new ArrayTextureBitmap<Rgba16UNorm>(
+        var source = new ArrayBitmap<Rgba16UNorm>(
             1,
             1,
             [new Rgba16UNorm(ushort.MaxValue, 0, 0, ushort.MaxValue)]);
@@ -2234,7 +2234,7 @@ public sealed class TextureCoderManagerTests
         var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
         coder.Encode(source.AsView(), encoded, rowPitch);
 
-        var decoded = new ArrayTextureBitmap<Rgba16UNorm>(1, 1);
+        var decoded = new ArrayBitmap<Rgba16UNorm>(1, 1);
         coder.Decode(encoded, decoded.AsView(), rowPitch);
 
         Assert.Equal([0xf0, 0xff, 0x00, 0x00, 0x00, 0x00, 0xf0, 0xff], encoded);
@@ -2244,7 +2244,7 @@ public sealed class TextureCoderManagerTests
     [Fact]
     public void EncodeAndDecodeRgba12X4UIntStoresComponentsInTopBits()
     {
-        var source = new ArrayTextureBitmap<Rgba16UNorm>(
+        var source = new ArrayBitmap<Rgba16UNorm>(
             1,
             1,
             [new Rgba16UNorm(4095, 1, 2, 3)]);
@@ -2254,7 +2254,7 @@ public sealed class TextureCoderManagerTests
         var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
         coder.Encode(source.AsView(), encoded, rowPitch);
 
-        var decoded = new ArrayTextureBitmap<Rgba16UNorm>(1, 1);
+        var decoded = new ArrayBitmap<Rgba16UNorm>(1, 1);
         coder.Decode(encoded, decoded.AsView(), rowPitch);
 
         Assert.Equal([0xf0, 0xff, 0x10, 0x00, 0x20, 0x00, 0x30, 0x00], encoded);
@@ -2264,7 +2264,7 @@ public sealed class TextureCoderManagerTests
     [Fact]
     public void EncodeAndDecodeRgba14X2UNormStoresComponentsInTopBits()
     {
-        var source = new ArrayTextureBitmap<Rgba16UNorm>(
+        var source = new ArrayBitmap<Rgba16UNorm>(
             1,
             1,
             [new Rgba16UNorm(ushort.MaxValue, 0, 0, ushort.MaxValue)]);
@@ -2274,7 +2274,7 @@ public sealed class TextureCoderManagerTests
         var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
         coder.Encode(source.AsView(), encoded, rowPitch);
 
-        var decoded = new ArrayTextureBitmap<Rgba16UNorm>(1, 1);
+        var decoded = new ArrayBitmap<Rgba16UNorm>(1, 1);
         coder.Decode(encoded, decoded.AsView(), rowPitch);
 
         Assert.Equal([0xfc, 0xff, 0x00, 0x00, 0x00, 0x00, 0xfc, 0xff], encoded);

@@ -3,12 +3,12 @@ using TextureCompressor.Colors;
 
 namespace TextureCompressor.Tests;
 
-public sealed class NativeMemoryTextureBitmapTests
+public sealed class NativeMemoryBitmapTests
 {
     [Fact]
     public void ConstructorAllocatesAlignedPixelSpan()
     {
-        using var bitmap = new NativeMemoryTextureBitmap<Rgba8UNorm>(2, 2);
+        using var bitmap = new NativeMemoryBitmap<Rgba8UNorm>(2, 2);
 
         bitmap.PixelSpan[1] = new Rgba8UNorm(20, 21, 22);
 
@@ -23,7 +23,7 @@ public sealed class NativeMemoryTextureBitmapTests
     [Fact]
     public void PixelSpanRejectsAccessAfterDispose()
     {
-        var bitmap = new NativeMemoryTextureBitmap<Rgba8UNorm>(1, 1);
+        var bitmap = new NativeMemoryBitmap<Rgba8UNorm>(1, 1);
 
         bitmap.Dispose();
 

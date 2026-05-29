@@ -1,7 +1,7 @@
 using System.Buffers.Binary;
 using TextureCompressor.Colors;
 using TextureCompressor.Formats;
-using TextureCompressor.Images;
+using TextureCompressor.Bitmaps;
 
 namespace TextureCompressor.Codecs;
 
@@ -41,21 +41,21 @@ public sealed class PackedYuva444TextureCoder : IPitchTextureCoder
         return checked(rowPitch * height);
     }
 
-    public void Decode<TPixel>(ReadOnlySpan<byte> source, ImageView<TPixel> destination, int rowPitch)
+    public void Decode<TPixel>(ReadOnlySpan<byte> source, BitmapView<TPixel> destination, int rowPitch)
         where TPixel : unmanaged, IPixel<TPixel>
     {
         ValidateSourceLength(destination.Width, destination.Height, source, rowPitch);
         DecodeByTransfer(source, destination, rowPitch);
     }
 
-    public void Encode<TPixel>(ImageView<TPixel> source, Span<byte> destination, int rowPitch)
+    public void Encode<TPixel>(BitmapView<TPixel> source, Span<byte> destination, int rowPitch)
         where TPixel : unmanaged, IPixel<TPixel>
     {
         ValidateDestinationLength(source.Width, source.Height, destination, rowPitch);
         EncodeByTransfer(source, destination, rowPitch);
     }
 
-    private void DecodeByTransfer<TPixel>(ReadOnlySpan<byte> source, ImageView<TPixel> destination, int rowPitch)
+    private void DecodeByTransfer<TPixel>(ReadOnlySpan<byte> source, BitmapView<TPixel> destination, int rowPitch)
         where TPixel : unmanaged, IPixel<TPixel>
     {
         switch (_transfer)
@@ -86,7 +86,7 @@ public sealed class PackedYuva444TextureCoder : IPitchTextureCoder
         }
     }
 
-    private void EncodeByTransfer<TPixel>(ImageView<TPixel> source, Span<byte> destination, int rowPitch)
+    private void EncodeByTransfer<TPixel>(BitmapView<TPixel> source, Span<byte> destination, int rowPitch)
         where TPixel : unmanaged, IPixel<TPixel>
     {
         switch (_transfer)
@@ -117,7 +117,7 @@ public sealed class PackedYuva444TextureCoder : IPitchTextureCoder
         }
     }
 
-    private static void Decode<TPixel, TTransfer>(ReadOnlySpan<byte> source, ImageView<TPixel> destination, int rowPitch)
+    private static void Decode<TPixel, TTransfer>(ReadOnlySpan<byte> source, BitmapView<TPixel> destination, int rowPitch)
         where TPixel : unmanaged, IPixel<TPixel>
         where TTransfer : struct, IPackedYuva444Transfer
     {
@@ -136,7 +136,7 @@ public sealed class PackedYuva444TextureCoder : IPitchTextureCoder
         }
     }
 
-    private static void Encode<TPixel, TTransfer>(ImageView<TPixel> source, Span<byte> destination, int rowPitch)
+    private static void Encode<TPixel, TTransfer>(BitmapView<TPixel> source, Span<byte> destination, int rowPitch)
         where TPixel : unmanaged, IPixel<TPixel>
         where TTransfer : struct, IPackedYuva444Transfer
     {

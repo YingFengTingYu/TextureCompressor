@@ -26,7 +26,7 @@ public sealed class S3tcTextureCoderTests
         BinaryPrimitives.WriteUInt16LittleEndian(encoded.AsSpan(2), 0xffff);
         BinaryPrimitives.WriteUInt32LittleEndian(encoded.AsSpan(4), 0xffffffff);
 
-        var decoded = new ArrayTextureBitmap<Rgba8UNorm>(4, 4);
+        var decoded = new ArrayBitmap<Rgba8UNorm>(4, 4);
         var coder = new S3tcTextureCoder(TextureFormats.Dxt1Rgba);
 
         coder.Decode(encoded, decoded.AsView(), coder.GetDefaultPitch(decoded.Width));
@@ -42,7 +42,7 @@ public sealed class S3tcTextureCoderTests
         BinaryPrimitives.WriteUInt16LittleEndian(encoded.AsSpan(2), 0xffff);
         BinaryPrimitives.WriteUInt32LittleEndian(encoded.AsSpan(4), 0xffffffff);
 
-        var decoded = new ArrayTextureBitmap<Rgba8UNorm>(4, 4);
+        var decoded = new ArrayBitmap<Rgba8UNorm>(4, 4);
         var coder = new S3tcTextureCoder(TextureFormats.Dxt1Rgb);
 
         coder.Decode(encoded, decoded.AsView(), coder.GetDefaultPitch(decoded.Width));
@@ -57,7 +57,7 @@ public sealed class S3tcTextureCoderTests
         encoded[0] = 0x0f;
         WriteColorBlock(encoded.AsSpan(8), 0xf800, 0xf800, 0);
 
-        var decoded = new ArrayTextureBitmap<Rgba8UNorm>(4, 4);
+        var decoded = new ArrayBitmap<Rgba8UNorm>(4, 4);
         var coder = new S3tcTextureCoder(TextureFormats.Dxt3Rgba);
 
         coder.Decode(encoded, decoded.AsView(), coder.GetDefaultPitch(decoded.Width));
@@ -75,7 +75,7 @@ public sealed class S3tcTextureCoderTests
         encoded[2] = 0x01;
         WriteColorBlock(encoded.AsSpan(8), 0x07e0, 0x07e0, 0);
 
-        var decoded = new ArrayTextureBitmap<Rgba8UNorm>(4, 4);
+        var decoded = new ArrayBitmap<Rgba8UNorm>(4, 4);
         var coder = new S3tcTextureCoder(TextureFormats.Dxt5Rgba);
 
         coder.Decode(encoded, decoded.AsView(), coder.GetDefaultPitch(decoded.Width));
@@ -90,7 +90,7 @@ public sealed class S3tcTextureCoderTests
         var encoded = new byte[TextureFormats.Dxt3A.GetByteCount(4, 4)];
         encoded[0] = 0x0f;
 
-        var decoded = new ArrayTextureBitmap<Rgba8UNorm>(4, 4);
+        var decoded = new ArrayBitmap<Rgba8UNorm>(4, 4);
         var coder = new S3tcTextureCoder(TextureFormats.Dxt3A);
 
         coder.Decode(encoded, decoded.AsView(), coder.GetDefaultPitch(decoded.Width));
@@ -105,7 +105,7 @@ public sealed class S3tcTextureCoderTests
         var encoded = new byte[TextureFormats.Dxt3A1111.GetByteCount(4, 4)];
         encoded[0] = 0x1e;
 
-        var decoded = new ArrayTextureBitmap<Rgba8UNorm>(4, 4);
+        var decoded = new ArrayBitmap<Rgba8UNorm>(4, 4);
         var coder = new S3tcTextureCoder(TextureFormats.Dxt3A1111);
 
         coder.Decode(encoded, decoded.AsView(), coder.GetDefaultPitch(decoded.Width));
@@ -121,7 +121,7 @@ public sealed class S3tcTextureCoderTests
         littleEndian[0] = 0x1e;
         var encoded = Swap8In16(littleEndian);
 
-        var decoded = new ArrayTextureBitmap<Rgba8UNorm>(4, 4);
+        var decoded = new ArrayBitmap<Rgba8UNorm>(4, 4);
         var coder = new S3tcTextureCoder(TextureFormats.Dxt3A1111BigEndian);
 
         coder.Decode(encoded, decoded.AsView(), coder.GetDefaultPitch(decoded.Width));
@@ -133,11 +133,11 @@ public sealed class S3tcTextureCoderTests
     [Fact]
     public void EncodeAndDecodeDxt3A1111RoundTripsSolidOneBitRgba()
     {
-        var source = new ArrayTextureBitmap<Rgba8UNorm>(
+        var source = new ArrayBitmap<Rgba8UNorm>(
             4,
             4,
             Enumerable.Repeat(new Rgba8UNorm(255, 0, 255, 0), 16).ToArray());
-        var decoded = new ArrayTextureBitmap<Rgba8UNorm>(4, 4);
+        var decoded = new ArrayBitmap<Rgba8UNorm>(4, 4);
         var coder = new S3tcTextureCoder(TextureFormats.Dxt3A1111);
         var rowPitch = coder.GetDefaultPitch(source.Width);
         var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
@@ -155,7 +155,7 @@ public sealed class S3tcTextureCoderTests
         var encoded = new byte[TextureFormats.Dxt5A.GetByteCount(4, 4)];
         WriteAlphaBlock(encoded, 255, 0, 1);
 
-        var decoded = new ArrayTextureBitmap<Rgba8UNorm>(4, 4);
+        var decoded = new ArrayBitmap<Rgba8UNorm>(4, 4);
         var coder = new S3tcTextureCoder(TextureFormats.Dxt5A);
 
         coder.Decode(encoded, decoded.AsView(), coder.GetDefaultPitch(decoded.Width));
@@ -167,11 +167,11 @@ public sealed class S3tcTextureCoderTests
     [Fact]
     public void EncodeAndDecodeDxt5ARoundTripsSolidAlpha()
     {
-        var source = new ArrayTextureBitmap<Rgba8UNorm>(
+        var source = new ArrayBitmap<Rgba8UNorm>(
             4,
             4,
             Enumerable.Repeat(new Rgba8UNorm(17, 34, 51, 128), 16).ToArray());
-        var decoded = new ArrayTextureBitmap<Rgba8UNorm>(4, 4);
+        var decoded = new ArrayBitmap<Rgba8UNorm>(4, 4);
         var coder = new S3tcTextureCoder(TextureFormats.Dxt5A);
         var rowPitch = coder.GetDefaultPitch(source.Width);
         var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
@@ -189,7 +189,7 @@ public sealed class S3tcTextureCoderTests
         WriteAlphaBlock(encoded, 255, 0, 1);
         WriteAlphaBlock(encoded.AsSpan(8), 64, 192, 1);
 
-        var decoded = new ArrayTextureBitmap<Rgba8UNorm>(4, 4);
+        var decoded = new ArrayBitmap<Rgba8UNorm>(4, 4);
         var coder = new S3tcTextureCoder(TextureFormats.Dxn);
 
         coder.Decode(encoded, decoded.AsView(), coder.GetDefaultPitch(decoded.Width));
@@ -201,11 +201,11 @@ public sealed class S3tcTextureCoderTests
     [Fact]
     public void EncodeAndDecodeDxnRoundTripsSolidRedGreen()
     {
-        var source = new ArrayTextureBitmap<Rgba8UNorm>(
+        var source = new ArrayBitmap<Rgba8UNorm>(
             4,
             4,
             Enumerable.Repeat(new Rgba8UNorm(34, 200, 123, 64), 16).ToArray());
-        var decoded = new ArrayTextureBitmap<Rgba8UNorm>(4, 4);
+        var decoded = new ArrayBitmap<Rgba8UNorm>(4, 4);
         var coder = new S3tcTextureCoder(TextureFormats.Dxn);
         var rowPitch = coder.GetDefaultPitch(source.Width);
         var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
@@ -224,7 +224,7 @@ public sealed class S3tcTextureCoderTests
         WriteAlphaBlock(littleEndian.AsSpan(8), 64, 192, 1);
         var encoded = Swap8In16(littleEndian);
 
-        var decoded = new ArrayTextureBitmap<Rgba8UNorm>(4, 4);
+        var decoded = new ArrayBitmap<Rgba8UNorm>(4, 4);
         var coder = new S3tcTextureCoder(TextureFormats.DxnBigEndian);
 
         coder.Decode(encoded, decoded.AsView(), coder.GetDefaultPitch(decoded.Width));
@@ -239,7 +239,7 @@ public sealed class S3tcTextureCoderTests
         var encoded = new byte[TextureFormats.Ctx1.GetByteCount(4, 4)];
         WriteCtx1Block(encoded, 255, 0, 64, 192, 1);
 
-        var decoded = new ArrayTextureBitmap<Rgba8UNorm>(4, 4);
+        var decoded = new ArrayBitmap<Rgba8UNorm>(4, 4);
         var coder = new S3tcTextureCoder(TextureFormats.Ctx1);
 
         coder.Decode(encoded, decoded.AsView(), coder.GetDefaultPitch(decoded.Width));
@@ -255,7 +255,7 @@ public sealed class S3tcTextureCoderTests
         WriteCtx1Block(littleEndian, 255, 0, 64, 192, 1);
         var encoded = Swap8In16(littleEndian);
 
-        var decoded = new ArrayTextureBitmap<Rgba8UNorm>(4, 4);
+        var decoded = new ArrayBitmap<Rgba8UNorm>(4, 4);
         var coder = new S3tcTextureCoder(TextureFormats.Ctx1BigEndian);
 
         coder.Decode(encoded, decoded.AsView(), coder.GetDefaultPitch(decoded.Width));
@@ -267,11 +267,11 @@ public sealed class S3tcTextureCoderTests
     [Fact]
     public void EncodeAndDecodeCtx1RoundTripsSolidRedGreen()
     {
-        var source = new ArrayTextureBitmap<Rgba8UNorm>(
+        var source = new ArrayBitmap<Rgba8UNorm>(
             4,
             4,
             Enumerable.Repeat(new Rgba8UNorm(34, 200, 123, 64), 16).ToArray());
-        var decoded = new ArrayTextureBitmap<Rgba8UNorm>(4, 4);
+        var decoded = new ArrayBitmap<Rgba8UNorm>(4, 4);
         var coder = new S3tcTextureCoder(TextureFormats.Ctx1);
         var rowPitch = coder.GetDefaultPitch(source.Width);
         var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
@@ -287,7 +287,7 @@ public sealed class S3tcTextureCoderTests
     {
         var encoded = new byte[TextureFormats.Dxt1RgbaSrgb.GetByteCount(4, 4)];
         WriteColorBlock(encoded, 0xf800, 0x7800, 0xaaaaaaaa);
-        var decoded = new ArrayTextureBitmap<Rgba8UNorm>(4, 4);
+        var decoded = new ArrayBitmap<Rgba8UNorm>(4, 4);
         var coder = new S3tcTextureCoder(TextureFormats.Dxt1RgbaSrgb);
 
         coder.Decode(encoded, decoded.AsView(), coder.GetDefaultPitch(decoded.Width));
@@ -304,11 +304,11 @@ public sealed class S3tcTextureCoderTests
     [Fact]
     public void EncodeAndDecodeDxt5RgbaSrgbAppliesGammaToRgbAndUNormToAlpha()
     {
-        var source = new ArrayTextureBitmap<Rgba32Float>(
+        var source = new ArrayBitmap<Rgba32Float>(
             4,
             4,
             Enumerable.Repeat(new Rgba32Float(0.5f, 0f, 0f, 0.25f), 16).ToArray());
-        var decoded = new ArrayTextureBitmap<Rgba32Float>(4, 4);
+        var decoded = new ArrayBitmap<Rgba32Float>(4, 4);
         var coder = new S3tcTextureCoder(TextureFormats.Dxt5RgbaSrgb);
         var rowPitch = coder.GetDefaultPitch(source.Width);
         var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
@@ -331,7 +331,7 @@ public sealed class S3tcTextureCoderTests
         var encoded = new byte[TextureFormats.Dxt1Rgba.GetByteCount(5, 1)];
         WriteColorBlock(encoded, 0xf800, 0xf800, 0);
         WriteColorBlock(encoded.AsSpan(8), 0x07e0, 0x07e0, 0);
-        var decoded = new ArrayTextureBitmap<Rgba8UNorm>(5, 1);
+        var decoded = new ArrayBitmap<Rgba8UNorm>(5, 1);
         var coder = new S3tcTextureCoder(TextureFormats.Dxt1Rgba);
 
         coder.Decode(encoded, decoded.AsView(), coder.GetDefaultPitch(decoded.Width));
@@ -346,7 +346,7 @@ public sealed class S3tcTextureCoderTests
         var encoded = new byte[TextureFormats.Dxt1Rgba.GetByteCount(1, 5)];
         WriteColorBlock(encoded, 0xf800, 0xf800, 0);
         WriteColorBlock(encoded.AsSpan(8), 0x001f, 0x001f, 0);
-        var decoded = new ArrayTextureBitmap<Rgba8UNorm>(1, 5);
+        var decoded = new ArrayBitmap<Rgba8UNorm>(1, 5);
         var coder = new S3tcTextureCoder(TextureFormats.Dxt1Rgba);
 
         coder.Decode(encoded, decoded.AsView(), coder.GetDefaultPitch(decoded.Width));
@@ -360,8 +360,8 @@ public sealed class S3tcTextureCoderTests
     {
         var pixels = Enumerable.Repeat(new Rgba8UNorm(255, 0, 0, 255), 16).ToArray();
         pixels[0] = new Rgba8UNorm(0, 0, 0, 0);
-        var source = new ArrayTextureBitmap<Rgba8UNorm>(4, 4, pixels);
-        var decoded = new ArrayTextureBitmap<Rgba8UNorm>(4, 4);
+        var source = new ArrayBitmap<Rgba8UNorm>(4, 4, pixels);
+        var decoded = new ArrayBitmap<Rgba8UNorm>(4, 4);
         var coder = new S3tcTextureCoder(TextureFormats.Dxt1Rgba);
         var rowPitch = coder.GetDefaultPitch(source.Width);
         var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
@@ -377,11 +377,11 @@ public sealed class S3tcTextureCoderTests
     [Fact]
     public void EncodeAndDecodeDxt5RgbaRoundTripsSolidRgba8WithinQuantization()
     {
-        var source = new ArrayTextureBitmap<Rgba8UNorm>(
+        var source = new ArrayBitmap<Rgba8UNorm>(
             4,
             4,
             Enumerable.Repeat(new Rgba8UNorm(17, 34, 51, 128), 16).ToArray());
-        var decoded = new ArrayTextureBitmap<Rgba8UNorm>(4, 4);
+        var decoded = new ArrayBitmap<Rgba8UNorm>(4, 4);
         var coder = new S3tcTextureCoder(TextureFormats.Dxt5Rgba);
         var rowPitch = coder.GetDefaultPitch(source.Width);
         var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
@@ -408,7 +408,7 @@ public sealed class S3tcTextureCoderTests
         }
 
         WriteColorBlock(encoded.AsSpan(8), 0x6000, 0x6000, 0);
-        var decoded = new ArrayTextureBitmap<Rgba8UNorm>(4, 4);
+        var decoded = new ArrayBitmap<Rgba8UNorm>(4, 4);
         var coder = new S3tcTextureCoder(TextureFormats.Dxt2Rgba);
 
         coder.Decode(encoded, decoded.AsView(), coder.GetDefaultPitch(decoded.Width));
@@ -422,7 +422,7 @@ public sealed class S3tcTextureCoderTests
     [Fact]
     public void EncodeAndDecodeHonorsBlockRowPitch()
     {
-        var source = new ArrayTextureBitmap<Rgba8UNorm>(
+        var source = new ArrayBitmap<Rgba8UNorm>(
             5,
             5,
             Enumerable.Repeat(new Rgba8UNorm(255, 0, 0, 255), 25).ToArray());
@@ -436,7 +436,7 @@ public sealed class S3tcTextureCoderTests
         Assert.All(encoded[16..20], value => Assert.Equal(0xcc, value));
         Assert.All(encoded[36..40], value => Assert.Equal(0xcc, value));
 
-        var decoded = new ArrayTextureBitmap<Rgba8UNorm>(5, 5);
+        var decoded = new ArrayBitmap<Rgba8UNorm>(5, 5);
         coder.Decode(encoded, decoded.AsView(), rowPitch);
 
         Assert.All(decoded.Pixels, pixel =>

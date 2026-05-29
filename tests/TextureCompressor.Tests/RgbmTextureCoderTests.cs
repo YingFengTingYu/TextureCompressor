@@ -21,7 +21,7 @@ public sealed class RgbmTextureCoderTests
     public void DecodeRgbmAppliesAlphaMultiplierAndMaxRange()
     {
         var encoded = new byte[] { 128, 64, 255, 128 };
-        var decoded = new ArrayTextureBitmap<Rgba32Float>(1, 1);
+        var decoded = new ArrayBitmap<Rgba32Float>(1, 1);
 
         var coder = new RgbmTextureCoder(TextureFormats.Rgbm, maxRange: 8f);
         coder.Decode(encoded, decoded.AsView(), coder.GetDefaultPitch(decoded.Width));
@@ -36,7 +36,7 @@ public sealed class RgbmTextureCoderTests
     public void DecodeRgbdAppliesInverseAlphaDivisorAndMaxRange()
     {
         var encoded = new byte[] { 255, 128, 64, 2 };
-        var decoded = new ArrayTextureBitmap<Rgba32Float>(1, 1);
+        var decoded = new ArrayBitmap<Rgba32Float>(1, 1);
 
         var coder = new RgbmTextureCoder(TextureFormats.Rgbd, maxRange: 8f);
         coder.Decode(encoded, decoded.AsView(), coder.GetDefaultPitch(decoded.Width));
@@ -51,7 +51,7 @@ public sealed class RgbmTextureCoderTests
     [MemberData(nameof(RgbmFormats))]
     public void EncodeAndDecodeRoundTripsHdrRgbWithinQuantization(TextureFormat format)
     {
-        var source = new ArrayTextureBitmap<Rgba32Float>(
+        var source = new ArrayBitmap<Rgba32Float>(
             2,
             1,
             [
@@ -64,7 +64,7 @@ public sealed class RgbmTextureCoderTests
         var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
         coder.Encode(source.AsView(), encoded, rowPitch);
 
-        var decoded = new ArrayTextureBitmap<Rgba32Float>(2, 1);
+        var decoded = new ArrayBitmap<Rgba32Float>(2, 1);
         coder.Decode(encoded, decoded.AsView(), rowPitch);
 
         Assert.InRange(decoded.Pixels[0].Red, source.Pixels[0].Red - 0.04f, source.Pixels[0].Red + 0.04f);
@@ -80,7 +80,7 @@ public sealed class RgbmTextureCoderTests
     [Fact]
     public void EncodeRgbmBlackWritesZeroMultiplier()
     {
-        var source = new ArrayTextureBitmap<Rgba32Float>(
+        var source = new ArrayBitmap<Rgba32Float>(
             1,
             1,
             [new Rgba32Float(0f, 0f, 0f)]);
@@ -96,7 +96,7 @@ public sealed class RgbmTextureCoderTests
     [Fact]
     public void EncodeRgbdBlackWritesMaxDivisor()
     {
-        var source = new ArrayTextureBitmap<Rgba32Float>(
+        var source = new ArrayBitmap<Rgba32Float>(
             1,
             1,
             [new Rgba32Float(0f, 0f, 0f)]);
@@ -112,7 +112,7 @@ public sealed class RgbmTextureCoderTests
     [Fact]
     public void EncodeAndDecodeHonorsRowPitch()
     {
-        var source = new ArrayTextureBitmap<Rgba32Float>(
+        var source = new ArrayBitmap<Rgba32Float>(
             2,
             2,
             [
@@ -127,7 +127,7 @@ public sealed class RgbmTextureCoderTests
         var encoded = Enumerable.Repeat((byte)0xcc, coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)).ToArray();
         coder.Encode(source.AsView(), encoded, rowPitch);
 
-        var decoded = new ArrayTextureBitmap<Rgba32Float>(2, 2);
+        var decoded = new ArrayBitmap<Rgba32Float>(2, 2);
         coder.Decode(encoded, decoded.AsView(), rowPitch);
 
         Assert.Equal(0xcc, encoded[8]);

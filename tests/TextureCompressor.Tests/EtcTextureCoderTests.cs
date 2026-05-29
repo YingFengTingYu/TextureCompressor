@@ -25,7 +25,7 @@ public sealed class EtcTextureCoderTests
     {
         var format = GetFormat(formatName);
         var encoded = new byte[format.GetByteCount(4, 4)];
-        var decoded = new ArrayTextureBitmap<Rgba8UNorm>(4, 4);
+        var decoded = new ArrayBitmap<Rgba8UNorm>(4, 4);
         var coder = new EtcTextureCoder(format);
 
         coder.Decode(encoded, decoded.AsView(), coder.GetDefaultPitch(decoded.Width));
@@ -37,7 +37,7 @@ public sealed class EtcTextureCoderTests
     public void Etc2SrgbDecodesStorageRgbToLinearRgba8()
     {
         var encoded = new byte[TextureFormats.RgbEtc2Srgb.GetByteCount(4, 4)];
-        var decoded = new ArrayTextureBitmap<Rgba8UNorm>(4, 4);
+        var decoded = new ArrayBitmap<Rgba8UNorm>(4, 4);
         var coder = new EtcTextureCoder(TextureFormats.RgbEtc2Srgb);
 
         coder.Decode(encoded, decoded.AsView(), coder.GetDefaultPitch(decoded.Width));
@@ -50,7 +50,7 @@ public sealed class EtcTextureCoderTests
     {
         var encoded = new byte[TextureFormats.RgbA1Etc2UNorm.GetByteCount(4, 4)];
         WriteEtcRawIndices(encoded.AsSpan(4), rawIndex: 2);
-        var decoded = new ArrayTextureBitmap<Rgba8UNorm>(4, 4);
+        var decoded = new ArrayBitmap<Rgba8UNorm>(4, 4);
         var coder = new EtcTextureCoder(TextureFormats.RgbA1Etc2UNorm);
 
         coder.Decode(encoded, decoded.AsView(), coder.GetDefaultPitch(decoded.Width));
@@ -63,7 +63,7 @@ public sealed class EtcTextureCoderTests
     {
         var encoded = new byte[TextureFormats.RgbaEtc2EacUNorm.GetByteCount(4, 4)];
         WriteEacBlock(encoded, 255, 0, 7);
-        var decoded = new ArrayTextureBitmap<Rgba8UNorm>(4, 4);
+        var decoded = new ArrayBitmap<Rgba8UNorm>(4, 4);
         var coder = new EtcTextureCoder(TextureFormats.RgbaEtc2EacUNorm);
 
         coder.Decode(encoded, decoded.AsView(), coder.GetDefaultPitch(decoded.Width));
@@ -76,7 +76,7 @@ public sealed class EtcTextureCoderTests
     {
         var encoded = new byte[TextureFormats.R11EacUNorm.GetByteCount(4, 4)];
         WriteEacBlock(encoded, 255, 0, 7);
-        var decoded = new ArrayTextureBitmap<Rgba8UNorm>(4, 4);
+        var decoded = new ArrayBitmap<Rgba8UNorm>(4, 4);
         var coder = new EtcTextureCoder(TextureFormats.R11EacUNorm);
 
         coder.Decode(encoded, decoded.AsView(), coder.GetDefaultPitch(decoded.Width));
@@ -90,7 +90,7 @@ public sealed class EtcTextureCoderTests
         var encoded = new byte[TextureFormats.Rg11EacSNorm.GetByteCount(4, 4)];
         WriteEacBlock(encoded, unchecked((byte)(sbyte)-127), 0, 3);
         WriteEacBlock(encoded.AsSpan(8), 127, 0, 7);
-        var decoded = new ArrayTextureBitmap<Rgba8SNorm>(4, 4);
+        var decoded = new ArrayBitmap<Rgba8SNorm>(4, 4);
         var coder = new EtcTextureCoder(TextureFormats.Rg11EacSNorm);
 
         coder.Decode(encoded, decoded.AsView(), coder.GetDefaultPitch(decoded.Width));
@@ -101,11 +101,11 @@ public sealed class EtcTextureCoderTests
     [Fact]
     public void EncodeAndDecodeEtc2RgbRoundTripsSolidRgba8WithinQuantization()
     {
-        var source = new ArrayTextureBitmap<Rgba8UNorm>(
+        var source = new ArrayBitmap<Rgba8UNorm>(
             4,
             4,
             Enumerable.Repeat(new Rgba8UNorm(120, 64, 220, 32), 16).ToArray());
-        var decoded = new ArrayTextureBitmap<Rgba8UNorm>(4, 4);
+        var decoded = new ArrayBitmap<Rgba8UNorm>(4, 4);
         var coder = new EtcTextureCoder(TextureFormats.RgbEtc2UNorm);
         var rowPitch = coder.GetDefaultPitch(source.Width);
         var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
@@ -125,11 +125,11 @@ public sealed class EtcTextureCoderTests
     [Fact]
     public void EncodeAndDecodeEtc2RgbaEacRoundTripsSolidAlpha()
     {
-        var source = new ArrayTextureBitmap<Rgba8UNorm>(
+        var source = new ArrayBitmap<Rgba8UNorm>(
             4,
             4,
             Enumerable.Repeat(new Rgba8UNorm(50, 80, 110, 180), 16).ToArray());
-        var decoded = new ArrayTextureBitmap<Rgba8UNorm>(4, 4);
+        var decoded = new ArrayBitmap<Rgba8UNorm>(4, 4);
         var coder = new EtcTextureCoder(TextureFormats.RgbaEtc2EacUNorm);
         var rowPitch = coder.GetDefaultPitch(source.Width);
         var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
@@ -149,11 +149,11 @@ public sealed class EtcTextureCoderTests
     [Fact]
     public void EncodeAndDecodeEacRg11UNormRoundTripsFloatRg()
     {
-        var source = new ArrayTextureBitmap<Rgba32Float>(
+        var source = new ArrayBitmap<Rgba32Float>(
             4,
             4,
             Enumerable.Repeat(new Rgba32Float(0.25f, 0.75f, 0.5f, 0.25f), 16).ToArray());
-        var decoded = new ArrayTextureBitmap<Rgba32Float>(4, 4);
+        var decoded = new ArrayBitmap<Rgba32Float>(4, 4);
         var coder = new EtcTextureCoder(TextureFormats.Rg11EacUNorm);
         var rowPitch = coder.GetDefaultPitch(source.Width);
         var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
@@ -183,11 +183,11 @@ public sealed class EtcTextureCoderTests
         var sourcePixels = targets
             .Select(value => new Rgba16UNorm(Unsigned11ToUNorm16(value), 0, 0, ushort.MaxValue))
             .ToArray();
-        var source = new ArrayTextureBitmap<Rgba16UNorm>(
+        var source = new ArrayBitmap<Rgba16UNorm>(
             4,
             4,
             sourcePixels);
-        var decoded = new ArrayTextureBitmap<Rgba16UNorm>(4, 4);
+        var decoded = new ArrayBitmap<Rgba16UNorm>(4, 4);
         var coder = new EtcTextureCoder(TextureFormats.R11EacUNorm);
         var rowPitch = coder.GetDefaultPitch(source.Width);
         var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
@@ -215,11 +215,11 @@ public sealed class EtcTextureCoderTests
         var sourcePixels = targets
             .Select(value => new Rgba16SNorm(Signed11ToSNorm16(value), 0, 0, short.MaxValue))
             .ToArray();
-        var source = new ArrayTextureBitmap<Rgba16SNorm>(
+        var source = new ArrayBitmap<Rgba16SNorm>(
             4,
             4,
             sourcePixels);
-        var decoded = new ArrayTextureBitmap<Rgba16SNorm>(4, 4);
+        var decoded = new ArrayBitmap<Rgba16SNorm>(4, 4);
         var coder = new EtcTextureCoder(TextureFormats.R11EacSNorm);
         var rowPitch = coder.GetDefaultPitch(source.Width);
         var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
@@ -237,7 +237,7 @@ public sealed class EtcTextureCoderTests
     [Fact]
     public void EncodeAndDecodeHonorsBlockRowPitch()
     {
-        var source = new ArrayTextureBitmap<Rgba8UNorm>(
+        var source = new ArrayBitmap<Rgba8UNorm>(
             5,
             5,
             Enumerable.Repeat(new Rgba8UNorm(255, 0, 0, 255), 25).ToArray());
@@ -251,7 +251,7 @@ public sealed class EtcTextureCoderTests
         Assert.All(encoded[16..20], value => Assert.Equal(0xcc, value));
         Assert.All(encoded[36..40], value => Assert.Equal(0xcc, value));
 
-        var decoded = new ArrayTextureBitmap<Rgba8UNorm>(5, 5);
+        var decoded = new ArrayBitmap<Rgba8UNorm>(5, 5);
         coder.Decode(encoded, decoded.AsView(), rowPitch);
 
         Assert.All(decoded.Pixels, pixel => Assert.InRange(pixel.Red, 247, 255));

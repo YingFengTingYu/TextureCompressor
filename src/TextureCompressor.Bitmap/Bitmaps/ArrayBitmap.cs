@@ -1,14 +1,13 @@
 using TextureCompressor.Colors;
-using TextureCompressor.Images;
 
 namespace TextureCompressor.Bitmaps;
 
-public sealed class ArrayTextureBitmap<TPixel> : IBitmap<TPixel>
+public sealed class ArrayBitmap<TPixel> : IBitmap<TPixel>
     where TPixel : unmanaged, IPixel<TPixel>
 {
     private readonly int _pixelCount;
 
-    public ArrayTextureBitmap(int width, int height)
+    public ArrayBitmap(int width, int height)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(width);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(height);
@@ -21,7 +20,7 @@ public sealed class ArrayTextureBitmap<TPixel> : IBitmap<TPixel>
         Pixels = new TPixel[requiredLength];
     }
 
-    public ArrayTextureBitmap(int width, int height, TPixel[] pixels)
+    public ArrayBitmap(int width, int height, TPixel[] pixels)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(width);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(height);
@@ -48,5 +47,5 @@ public sealed class ArrayTextureBitmap<TPixel> : IBitmap<TPixel>
 
     public Span<TPixel> PixelSpan => Pixels.AsSpan(0, _pixelCount);
 
-    public ImageView<TPixel> AsView() => new(PixelSpan, Width, Height);
+    public BitmapView<TPixel> AsView() => new(PixelSpan, Width, Height);
 }

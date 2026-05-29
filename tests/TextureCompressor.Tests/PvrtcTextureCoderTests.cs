@@ -32,7 +32,7 @@ public sealed unsafe class PvrtcTextureCoderTests
         var source = CreateSource(format);
         var payload = EncodeWithPvrTexLib(format, Width, Height, source);
         var expected = DecodeWithPvrTexLib(format, Width, Height, payload);
-        var actual = new ArrayTextureBitmap<Rgba8UNorm>(Width, Height);
+        var actual = new ArrayBitmap<Rgba8UNorm>(Width, Height);
         var coder = new PvrtcTextureCoder(format);
 
         coder.Decode(payload, actual.AsView());
@@ -44,10 +44,10 @@ public sealed unsafe class PvrtcTextureCoderTests
     [MemberData(nameof(PvrtcFormats))]
     public void EncodePayloadIsDecodableByPvrtTexLib(TextureFormat format)
     {
-        var source = new ArrayTextureBitmap<Rgba8UNorm>(Width, Height, CreateSource(format));
+        var source = new ArrayBitmap<Rgba8UNorm>(Width, Height, CreateSource(format));
         var coder = new PvrtcTextureCoder(format);
         var payload = new byte[coder.GetEncodedByteCount(Width, Height)];
-        var actual = new ArrayTextureBitmap<Rgba8UNorm>(Width, Height);
+        var actual = new ArrayBitmap<Rgba8UNorm>(Width, Height);
 
         coder.Encode(source.AsView(), payload);
         var expected = DecodeWithPvrTexLib(format, Width, Height, payload);
@@ -70,8 +70,8 @@ public sealed unsafe class PvrtcTextureCoderTests
             variedAlphaPixels[i] = color;
         }
 
-        var opaque = new ArrayTextureBitmap<Rgba8UNorm>(Width, Height, opaquePixels);
-        var variedAlpha = new ArrayTextureBitmap<Rgba8UNorm>(Width, Height, variedAlphaPixels);
+        var opaque = new ArrayBitmap<Rgba8UNorm>(Width, Height, opaquePixels);
+        var variedAlpha = new ArrayBitmap<Rgba8UNorm>(Width, Height, variedAlphaPixels);
         var coder = new PvrtcTextureCoder(format);
         var opaquePayload = new byte[coder.GetEncodedByteCount(Width, Height)];
         var variedAlphaPayload = new byte[opaquePayload.Length];
@@ -86,7 +86,7 @@ public sealed unsafe class PvrtcTextureCoderTests
     public void PvrtcIRejectsNonPowerOfTwoDimensions()
     {
         var coder = new PvrtcTextureCoder(TextureFormats.RgbPvrtcI4BppUNorm);
-        var pixels = new ArrayTextureBitmap<Rgba8UNorm>(12, 8);
+        var pixels = new ArrayBitmap<Rgba8UNorm>(12, 8);
         var payload = new byte[12 * 8 / 2];
 
         Assert.Throws<ArgumentException>(() => coder.Encode(pixels.AsView(), payload));
@@ -111,7 +111,7 @@ public sealed unsafe class PvrtcTextureCoderTests
         var source = CreateSource(format, width, height);
         var payload = EncodeWithPvrTexLib(format, width, height, source);
         var expected = DecodeWithPvrTexLib(format, width, height, payload);
-        var actual = new ArrayTextureBitmap<Rgba8UNorm>(width, height);
+        var actual = new ArrayBitmap<Rgba8UNorm>(width, height);
         var coder = new PvrtcTextureCoder(format);
 
         coder.Decode(payload, actual.AsView());
@@ -125,7 +125,7 @@ public sealed unsafe class PvrtcTextureCoderTests
     public void EncodeEdgePayloadIsDecodableByPvrtTexLib(TextureFormat format, int width, int height)
     {
         var pixels = CreateSource(format, width, height);
-        var source = new ArrayTextureBitmap<Rgba8UNorm>(width, height, pixels);
+        var source = new ArrayBitmap<Rgba8UNorm>(width, height, pixels);
         var coder = new PvrtcTextureCoder(format);
         var payload = new byte[coder.GetEncodedByteCount(width, height)];
 
@@ -140,7 +140,7 @@ public sealed unsafe class PvrtcTextureCoderTests
     {
         var format = TextureFormats.RgbaPvrtcI4BppSrgb;
         var payload = EncodeWithPvrTexLib(format, Width, Height, CreateSource(format));
-        var decoded = new ArrayTextureBitmap<Rgba8OnlyPixel>(Width, Height);
+        var decoded = new ArrayBitmap<Rgba8OnlyPixel>(Width, Height);
         var coder = new PvrtcTextureCoder(format);
 
         coder.Decode(payload, decoded.AsView());
@@ -159,7 +159,7 @@ public sealed unsafe class PvrtcTextureCoderTests
             source[i] = Rgba8OnlyPixel.FromRgba8UNorm(pixels[i]);
         }
 
-        var bitmap = new ArrayTextureBitmap<Rgba8OnlyPixel>(Width, Height, source);
+        var bitmap = new ArrayBitmap<Rgba8OnlyPixel>(Width, Height, source);
         var coder = new PvrtcTextureCoder(format);
         var payload = new byte[coder.GetEncodedByteCount(Width, Height)];
 

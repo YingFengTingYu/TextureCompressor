@@ -1,6 +1,6 @@
 using TextureCompressor.Colors;
 using TextureCompressor.Formats;
-using TextureCompressor.Images;
+using TextureCompressor.Bitmaps;
 
 namespace TextureCompressor.Codecs;
 
@@ -51,7 +51,7 @@ public sealed class FxtcTextureCoder : IPitchTextureCoder
         return checked(rowPitch * GetBlockCountY(height));
     }
 
-    public void Decode<TPixel>(ReadOnlySpan<byte> source, ImageView<TPixel> destination, int rowPitch)
+    public void Decode<TPixel>(ReadOnlySpan<byte> source, BitmapView<TPixel> destination, int rowPitch)
         where TPixel : unmanaged, IPixel<TPixel>
     {
         ValidateSourceLength(destination.Width, destination.Height, source, rowPitch);
@@ -75,7 +75,7 @@ public sealed class FxtcTextureCoder : IPitchTextureCoder
         }
     }
 
-    public void Encode<TPixel>(ImageView<TPixel> source, Span<byte> destination, int rowPitch)
+    public void Encode<TPixel>(BitmapView<TPixel> source, Span<byte> destination, int rowPitch)
         where TPixel : unmanaged, IPixel<TPixel>
     {
         ValidateDestinationLength(source.Width, source.Height, destination, rowPitch);
@@ -872,7 +872,7 @@ public sealed class FxtcTextureCoder : IPitchTextureCoder
 
     private static bool IsTransparent(Rgba8UNorm color) => color.Alpha < AlphaCutoff;
 
-    private static void LoadBlock<TPixel>(ImageView<TPixel> source, int blockX, int blockY, Span<Rgba8UNorm> destination)
+    private static void LoadBlock<TPixel>(BitmapView<TPixel> source, int blockX, int blockY, Span<Rgba8UNorm> destination)
         where TPixel : unmanaged, IPixel<TPixel>
     {
         var originX = blockX * BlockWidth;
@@ -895,7 +895,7 @@ public sealed class FxtcTextureCoder : IPitchTextureCoder
         ReadOnlySpan<Rgba8UNorm> block,
         int blockX,
         int blockY,
-        ImageView<TPixel> destination)
+        BitmapView<TPixel> destination)
         where TPixel : unmanaged, IPixel<TPixel>
     {
         var originX = blockX * BlockWidth;

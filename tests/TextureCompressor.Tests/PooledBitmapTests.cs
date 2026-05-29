@@ -4,13 +4,13 @@ using TextureCompressor.Colors;
 
 namespace TextureCompressor.Tests;
 
-public sealed class PooledTextureBitmapTests
+public sealed class PooledBitmapTests
 {
     [Fact]
     public void ArrayPoolConstructorRentsAndReturnsBuffer()
     {
         var pool = new TrackingArrayPool<Rgba8UNorm>();
-        var bitmap = new PooledTextureBitmap<Rgba8UNorm>(
+        var bitmap = new PooledBitmap<Rgba8UNorm>(
             2,
             2,
             pool,
@@ -34,7 +34,7 @@ public sealed class PooledTextureBitmapTests
     public void MemoryPoolConstructorDisposesOwner()
     {
         var pool = new TrackingMemoryPool<Rgba8UNorm>();
-        var bitmap = new PooledTextureBitmap<Rgba8UNorm>(
+        var bitmap = new PooledBitmap<Rgba8UNorm>(
             2,
             2,
             pool,

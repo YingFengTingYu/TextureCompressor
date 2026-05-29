@@ -35,7 +35,7 @@ public sealed class FxtcTextureCoderTests
         WriteBits(block, 9, 7, 3);
         WriteBits(block, 96, PackRgb555(255, 0, 0), 15);
         WriteBits(block, 111, PackRgb555(0, 0, 255), 15);
-        var decoded = new ArrayTextureBitmap<Rgba8UNorm>(8, 4);
+        var decoded = new ArrayBitmap<Rgba8UNorm>(8, 4);
         var coder = new FxtcTextureCoder(TextureFormats.RgbaFxt1UNorm);
 
         coder.Decode(block, decoded.AsView(), coder.GetDefaultPitch(decoded.Width));
@@ -51,7 +51,7 @@ public sealed class FxtcTextureCoderTests
     {
         Span<byte> block = stackalloc byte[16];
         WriteBits(block, 0, 7, 3);
-        var decoded = new ArrayTextureBitmap<Rgba8UNorm>(8, 4);
+        var decoded = new ArrayBitmap<Rgba8UNorm>(8, 4);
         var coder = new FxtcTextureCoder(TextureFormats.RgbFxt1UNorm);
 
         coder.Decode(block, decoded.AsView(), coder.GetDefaultPitch(decoded.Width));
@@ -72,7 +72,7 @@ public sealed class FxtcTextureCoderTests
         WriteBits(block, 94, PackRgb555(0, 0, 255), 15);
         WriteBits(block, 109, PackRgb555(255, 255, 255), 15);
         WriteBits(block, 125, 0b010, 3);
-        var decoded = new ArrayTextureBitmap<Rgba8UNorm>(8, 4);
+        var decoded = new ArrayBitmap<Rgba8UNorm>(8, 4);
         var coder = new FxtcTextureCoder(TextureFormats.RgbaFxt1UNorm);
 
         coder.Decode(block, decoded.AsView(), coder.GetDefaultPitch(decoded.Width));
@@ -100,7 +100,7 @@ public sealed class FxtcTextureCoderTests
         WriteBits(block, 125, 0, 1);
         WriteBits(block, 126, 1, 1);
         WriteBits(block, 127, 1, 1);
-        var decoded = new ArrayTextureBitmap<Rgba8UNorm>(8, 4);
+        var decoded = new ArrayBitmap<Rgba8UNorm>(8, 4);
         var coder = new FxtcTextureCoder(TextureFormats.RgbaFxt1UNorm);
 
         coder.Decode(block, decoded.AsView(), coder.GetDefaultPitch(decoded.Width));
@@ -131,7 +131,7 @@ public sealed class FxtcTextureCoderTests
         WriteBits(block, 125, 0, 1);
         WriteBits(block, 126, 1, 1);
         WriteBits(block, 127, 1, 1);
-        var decoded = new ArrayTextureBitmap<Rgba8UNorm>(8, 4);
+        var decoded = new ArrayBitmap<Rgba8UNorm>(8, 4);
         var coder = new FxtcTextureCoder(TextureFormats.RgbaFxt1UNorm);
 
         coder.Decode(block, decoded.AsView(), coder.GetDefaultPitch(decoded.Width));
@@ -162,7 +162,7 @@ public sealed class FxtcTextureCoderTests
         WriteBits(block, 119, 0, 5);
         WriteBits(block, 124, 1, 1);
         WriteBits(block, 125, 0b011, 3);
-        var decoded = new ArrayTextureBitmap<Rgba8UNorm>(8, 4);
+        var decoded = new ArrayBitmap<Rgba8UNorm>(8, 4);
         var coder = new FxtcTextureCoder(TextureFormats.RgbaFxt1UNorm);
 
         coder.Decode(block, decoded.AsView(), coder.GetDefaultPitch(decoded.Width));
@@ -181,12 +181,12 @@ public sealed class FxtcTextureCoderTests
     {
         const int width = 19;
         const int height = 11;
-        var source = new ArrayTextureBitmap<Rgba8UNorm>(width, height, CreateGradient(width, height, includeAlpha: format == TextureFormats.RgbaFxt1UNorm));
+        var source = new ArrayBitmap<Rgba8UNorm>(width, height, CreateGradient(width, height, includeAlpha: format == TextureFormats.RgbaFxt1UNorm));
         var coder = new FxtcTextureCoder(format);
         var rowByteCount = coder.GetDefaultPitch(width);
         var rowPitch = rowByteCount + 16;
         var encoded = new byte[coder.GetEncodedByteCount(width, height, rowPitch)];
-        var decoded = new ArrayTextureBitmap<Rgba8UNorm>(width, height);
+        var decoded = new ArrayBitmap<Rgba8UNorm>(width, height);
 
         coder.Encode(source.AsView(), encoded, rowPitch);
         coder.Decode(encoded, decoded.AsView(), rowPitch);
@@ -205,8 +205,8 @@ public sealed class FxtcTextureCoderTests
         const int width = 11;
         const int height = 7;
         var expected = new Rgba8UNorm(255, 0, 0, 255);
-        var source = new ArrayTextureBitmap<Rgba8UNorm>(width, height, Enumerable.Repeat(expected, width * height).ToArray());
-        var decoded = new ArrayTextureBitmap<Rgba8UNorm>(width, height);
+        var source = new ArrayBitmap<Rgba8UNorm>(width, height, Enumerable.Repeat(expected, width * height).ToArray());
+        var decoded = new ArrayBitmap<Rgba8UNorm>(width, height);
         var coder = new FxtcTextureCoder(format);
         var rowPitch = coder.GetDefaultPitch(width);
         var encoded = new byte[coder.GetEncodedByteCount(width, height, rowPitch)];

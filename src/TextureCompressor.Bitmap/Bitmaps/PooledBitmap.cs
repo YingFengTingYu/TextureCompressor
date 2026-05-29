@@ -1,10 +1,9 @@
 using System.Buffers;
 using TextureCompressor.Colors;
-using TextureCompressor.Images;
 
 namespace TextureCompressor.Bitmaps;
 
-public sealed class PooledTextureBitmap<TPixel> : IBitmap<TPixel>, IDisposable
+public sealed class PooledBitmap<TPixel> : IBitmap<TPixel>, IDisposable
     where TPixel : unmanaged, IPixel<TPixel>
 {
     private readonly ArrayPool<TPixel>? _arrayPool;
@@ -14,12 +13,12 @@ public sealed class PooledTextureBitmap<TPixel> : IBitmap<TPixel>, IDisposable
     private readonly TPixel[]? _rentedArray;
     private bool _disposed;
 
-    public PooledTextureBitmap(int width, int height)
+    public PooledBitmap(int width, int height)
         : this(width, height, ArrayPool<TPixel>.Shared)
     {
     }
 
-    public PooledTextureBitmap(
+    public PooledBitmap(
         int width,
         int height,
         ArrayPool<TPixel> arrayPool,
@@ -44,7 +43,7 @@ public sealed class PooledTextureBitmap<TPixel> : IBitmap<TPixel>, IDisposable
         Height = height;
     }
 
-    public PooledTextureBitmap(
+    public PooledBitmap(
         int width,
         int height,
         MemoryPool<TPixel> memoryPool,
@@ -98,7 +97,7 @@ public sealed class PooledTextureBitmap<TPixel> : IBitmap<TPixel>, IDisposable
 
     public Span<TPixel> PixelSpan => Memory.Span;
 
-    public ImageView<TPixel> AsView() => new(PixelSpan, Width, Height);
+    public BitmapView<TPixel> AsView() => new(PixelSpan, Width, Height);
 
     public void Dispose()
     {

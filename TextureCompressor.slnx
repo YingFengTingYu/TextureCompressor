@@ -1,5 +1,6 @@
 <Solution>
   <Folder Name="/src/">
+    <Project Path="src/TextureCompressor.Bitmap/TextureCompressor.Bitmap.csproj" />
     <Project Path="src/TextureCompressor/TextureCompressor.csproj" />
   </Folder>
   <Folder Name="/tests/">

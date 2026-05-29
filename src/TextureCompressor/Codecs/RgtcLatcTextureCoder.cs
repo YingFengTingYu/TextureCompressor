@@ -1,6 +1,6 @@
 using TextureCompressor.Colors;
 using TextureCompressor.Formats;
-using TextureCompressor.Images;
+using TextureCompressor.Bitmaps;
 
 namespace TextureCompressor.Codecs;
 
@@ -41,7 +41,7 @@ public sealed class RgtcLatcTextureCoder : IPitchTextureCoder
         return checked(rowPitch * GetBlockCount(height));
     }
 
-    public void Decode<TPixel>(ReadOnlySpan<byte> source, ImageView<TPixel> destination, int rowPitch)
+    public void Decode<TPixel>(ReadOnlySpan<byte> source, BitmapView<TPixel> destination, int rowPitch)
         where TPixel : unmanaged, IPixel<TPixel>
     {
         ValidateSourceLength(destination.Width, destination.Height, source, rowPitch);
@@ -56,7 +56,7 @@ public sealed class RgtcLatcTextureCoder : IPitchTextureCoder
         }
     }
 
-    public void Encode<TPixel>(ImageView<TPixel> source, Span<byte> destination, int rowPitch)
+    public void Encode<TPixel>(BitmapView<TPixel> source, Span<byte> destination, int rowPitch)
         where TPixel : unmanaged, IPixel<TPixel>
     {
         ValidateDestinationLength(source.Width, source.Height, destination, rowPitch);
@@ -71,7 +71,7 @@ public sealed class RgtcLatcTextureCoder : IPitchTextureCoder
         }
     }
 
-    private void DecodeUnsigned<TPixel>(ReadOnlySpan<byte> source, ImageView<TPixel> destination, int rowPitch)
+    private void DecodeUnsigned<TPixel>(ReadOnlySpan<byte> source, BitmapView<TPixel> destination, int rowPitch)
         where TPixel : unmanaged, IPixel<TPixel>
     {
         switch (_layout)
@@ -93,7 +93,7 @@ public sealed class RgtcLatcTextureCoder : IPitchTextureCoder
         }
     }
 
-    private void DecodeUnsigned<TPixel, TLayout>(ReadOnlySpan<byte> source, ImageView<TPixel> destination, int rowPitch)
+    private void DecodeUnsigned<TPixel, TLayout>(ReadOnlySpan<byte> source, BitmapView<TPixel> destination, int rowPitch)
         where TPixel : unmanaged, IPixel<TPixel>
         where TLayout : IRgtcLatcLayoutTransfer
     {
@@ -118,7 +118,7 @@ public sealed class RgtcLatcTextureCoder : IPitchTextureCoder
         }
     }
 
-    private void DecodeSigned<TPixel>(ReadOnlySpan<byte> source, ImageView<TPixel> destination, int rowPitch)
+    private void DecodeSigned<TPixel>(ReadOnlySpan<byte> source, BitmapView<TPixel> destination, int rowPitch)
         where TPixel : unmanaged, IPixel<TPixel>
     {
         switch (_layout)
@@ -140,7 +140,7 @@ public sealed class RgtcLatcTextureCoder : IPitchTextureCoder
         }
     }
 
-    private void DecodeSigned<TPixel, TLayout>(ReadOnlySpan<byte> source, ImageView<TPixel> destination, int rowPitch)
+    private void DecodeSigned<TPixel, TLayout>(ReadOnlySpan<byte> source, BitmapView<TPixel> destination, int rowPitch)
         where TPixel : unmanaged, IPixel<TPixel>
         where TLayout : IRgtcLatcLayoutTransfer
     {
@@ -165,7 +165,7 @@ public sealed class RgtcLatcTextureCoder : IPitchTextureCoder
         }
     }
 
-    private void EncodeUnsigned<TPixel>(ImageView<TPixel> source, Span<byte> destination, int rowPitch)
+    private void EncodeUnsigned<TPixel>(BitmapView<TPixel> source, Span<byte> destination, int rowPitch)
         where TPixel : unmanaged, IPixel<TPixel>
     {
         switch (_layout)
@@ -187,7 +187,7 @@ public sealed class RgtcLatcTextureCoder : IPitchTextureCoder
         }
     }
 
-    private void EncodeUnsigned<TPixel, TLayout>(ImageView<TPixel> source, Span<byte> destination, int rowPitch)
+    private void EncodeUnsigned<TPixel, TLayout>(BitmapView<TPixel> source, Span<byte> destination, int rowPitch)
         where TPixel : unmanaged, IPixel<TPixel>
         where TLayout : IRgtcLatcLayoutTransfer
     {
@@ -212,7 +212,7 @@ public sealed class RgtcLatcTextureCoder : IPitchTextureCoder
         }
     }
 
-    private void EncodeSigned<TPixel>(ImageView<TPixel> source, Span<byte> destination, int rowPitch)
+    private void EncodeSigned<TPixel>(BitmapView<TPixel> source, Span<byte> destination, int rowPitch)
         where TPixel : unmanaged, IPixel<TPixel>
     {
         switch (_layout)
@@ -234,7 +234,7 @@ public sealed class RgtcLatcTextureCoder : IPitchTextureCoder
         }
     }
 
-    private void EncodeSigned<TPixel, TLayout>(ImageView<TPixel> source, Span<byte> destination, int rowPitch)
+    private void EncodeSigned<TPixel, TLayout>(BitmapView<TPixel> source, Span<byte> destination, int rowPitch)
         where TPixel : unmanaged, IPixel<TPixel>
         where TLayout : IRgtcLatcLayoutTransfer
     {
@@ -627,7 +627,7 @@ public sealed class RgtcLatcTextureCoder : IPitchTextureCoder
         value == sbyte.MinValue ? (sbyte)-sbyte.MaxValue : value;
 
     private static void LoadUnsignedBlock<TPixel>(
-        ImageView<TPixel> source,
+        BitmapView<TPixel> source,
         int blockX,
         int blockY,
         Span<Rgba8UNorm> destination)
@@ -651,7 +651,7 @@ public sealed class RgtcLatcTextureCoder : IPitchTextureCoder
     }
 
     private static void LoadSignedBlock<TPixel>(
-        ImageView<TPixel> source,
+        BitmapView<TPixel> source,
         int blockX,
         int blockY,
         Span<Rgba8SNorm> destination)
@@ -678,7 +678,7 @@ public sealed class RgtcLatcTextureCoder : IPitchTextureCoder
         ReadOnlySpan<Rgba8UNorm> block,
         int blockX,
         int blockY,
-        ImageView<TPixel> destination)
+        BitmapView<TPixel> destination)
         where TPixel : unmanaged, IPixel<TPixel>
     {
         var originX = blockX * BlockSize;
@@ -714,7 +714,7 @@ public sealed class RgtcLatcTextureCoder : IPitchTextureCoder
         ReadOnlySpan<Rgba8SNorm> block,
         int blockX,
         int blockY,
-        ImageView<TPixel> destination)
+        BitmapView<TPixel> destination)
         where TPixel : unmanaged, IPixel<TPixel>
     {
         var originX = blockX * BlockSize;

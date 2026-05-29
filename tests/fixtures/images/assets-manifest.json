@@ -1,6 +1,10 @@
 {
   "version": 1,
-  "processedDimensions": {
+  "testDimensions": {
+    "width": 1254,
+    "height": 1254
+  },
+  "normalizedDimensions": {
     "width": 512,
     "height": 512
   },
@@ -8,25 +12,29 @@
     {
       "id": "hard-edges",
       "source": "source/hard-edges-source.png",
-      "processed": "normalized/hard-edges-512.png",
+      "test": "source/hard-edges-source.png",
+      "normalized": "normalized/hard-edges-512.png",
       "purpose": "channel order, hard transitions, checkerboards, line detail, block boundaries"
     },
     {
       "id": "gradients",
       "source": "source/gradients-source.png",
-      "processed": "normalized/gradients-512.png",
+      "test": "source/gradients-source.png",
+      "normalized": "normalized/gradients-512.png",
       "purpose": "banding, quantization, smooth chromatic ramps, grayscale ramps"
     },
     {
       "id": "fine-detail",
       "source": "source/fine-detail-source.png",
-      "processed": "normalized/fine-detail-512.png",
+      "test": "source/fine-detail-source.png",
+      "normalized": "normalized/fine-detail-512.png",
       "purpose": "high-frequency detail, repeated texture, speckle retention, local contrast"
     },
     {
       "id": "natural-scene",
       "source": "source/natural-scene-source.png",
-      "processed": "normalized/natural-scene-512.png",
+      "test": "source/natural-scene-source.png",
+      "normalized": "normalized/natural-scene-512.png",
       "purpose": "realistic visual regression, skin-like warm tones, saturated fruit colors, shadows"
     }
   ]

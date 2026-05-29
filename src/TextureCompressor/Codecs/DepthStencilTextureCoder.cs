@@ -2,7 +2,7 @@ using System.Buffers.Binary;
 using System.Numerics;
 using TextureCompressor.Colors;
 using TextureCompressor.Formats;
-using TextureCompressor.Images;
+using TextureCompressor.Bitmaps;
 
 namespace TextureCompressor.Codecs;
 
@@ -39,7 +39,7 @@ public sealed class DepthStencilTextureCoder : IPitchTextureCoder
         return checked(rowPitch * height);
     }
 
-    public void Decode<TPixel>(ReadOnlySpan<byte> source, ImageView<TPixel> destination, int rowPitch)
+    public void Decode<TPixel>(ReadOnlySpan<byte> source, BitmapView<TPixel> destination, int rowPitch)
         where TPixel : unmanaged, IPixel<TPixel>
     {
         ValidateSourceLength(destination.Width, destination.Height, source, rowPitch);
@@ -53,7 +53,7 @@ public sealed class DepthStencilTextureCoder : IPitchTextureCoder
         DecodeTexels(source, destination, rowPitch);
     }
 
-    public void Encode<TPixel>(ImageView<TPixel> source, Span<byte> destination, int rowPitch)
+    public void Encode<TPixel>(BitmapView<TPixel> source, Span<byte> destination, int rowPitch)
         where TPixel : unmanaged, IPixel<TPixel>
     {
         ValidateDestinationLength(source.Width, source.Height, destination, rowPitch);
@@ -740,7 +740,7 @@ public sealed class DepthStencilTextureCoder : IPitchTextureCoder
             _ => throw new InvalidOperationException($"Unsupported packed stencil size {TTransfer.Bits}.")
         };
 
-    private void DecodeTexels<TPixel>(ReadOnlySpan<byte> source, ImageView<TPixel> destination, int rowPitch)
+    private void DecodeTexels<TPixel>(ReadOnlySpan<byte> source, BitmapView<TPixel> destination, int rowPitch)
         where TPixel : unmanaged, IPixel<TPixel>
     {
         switch (_transfer)
@@ -807,7 +807,7 @@ public sealed class DepthStencilTextureCoder : IPitchTextureCoder
         }
     }
 
-    private void EncodeTexels<TPixel>(ImageView<TPixel> source, Span<byte> destination, int rowPitch)
+    private void EncodeTexels<TPixel>(BitmapView<TPixel> source, Span<byte> destination, int rowPitch)
         where TPixel : unmanaged, IPixel<TPixel>
     {
         switch (_transfer)
@@ -874,7 +874,7 @@ public sealed class DepthStencilTextureCoder : IPitchTextureCoder
         }
     }
 
-    private void DecodeTexels<TPixel, TTransfer>(ReadOnlySpan<byte> source, ImageView<TPixel> destination, int rowPitch)
+    private void DecodeTexels<TPixel, TTransfer>(ReadOnlySpan<byte> source, BitmapView<TPixel> destination, int rowPitch)
         where TPixel : unmanaged, IPixel<TPixel>
         where TTransfer : IDepthStencilPixelTransfer
     {
@@ -894,7 +894,7 @@ public sealed class DepthStencilTextureCoder : IPitchTextureCoder
         }
     }
 
-    private void EncodeTexels<TPixel, TTransfer>(ImageView<TPixel> source, Span<byte> destination, int rowPitch)
+    private void EncodeTexels<TPixel, TTransfer>(BitmapView<TPixel> source, Span<byte> destination, int rowPitch)
         where TPixel : unmanaged, IPixel<TPixel>
         where TTransfer : IDepthStencilPixelTransfer
     {
@@ -1190,7 +1190,7 @@ public sealed class DepthStencilTextureCoder : IPitchTextureCoder
         }
     }
 
-    private void DecodePackedStencil<TPixel>(ReadOnlySpan<byte> source, ImageView<TPixel> destination, int rowPitch)
+    private void DecodePackedStencil<TPixel>(ReadOnlySpan<byte> source, BitmapView<TPixel> destination, int rowPitch)
         where TPixel : unmanaged, IPixel<TPixel>
     {
         switch (_transfer)
@@ -1206,7 +1206,7 @@ public sealed class DepthStencilTextureCoder : IPitchTextureCoder
         }
     }
 
-    private void EncodePackedStencil<TPixel>(ImageView<TPixel> source, Span<byte> destination, int rowPitch)
+    private void EncodePackedStencil<TPixel>(BitmapView<TPixel> source, Span<byte> destination, int rowPitch)
         where TPixel : unmanaged, IPixel<TPixel>
     {
         switch (_transfer)
@@ -1222,7 +1222,7 @@ public sealed class DepthStencilTextureCoder : IPitchTextureCoder
         }
     }
 
-    private static void DecodePackedStencil<TPixel, TTransfer>(ReadOnlySpan<byte> source, ImageView<TPixel> destination, int rowPitch)
+    private static void DecodePackedStencil<TPixel, TTransfer>(ReadOnlySpan<byte> source, BitmapView<TPixel> destination, int rowPitch)
         where TPixel : unmanaged, IPixel<TPixel>
         where TTransfer : IPackedStencilDirectTransfer
     {
@@ -1242,7 +1242,7 @@ public sealed class DepthStencilTextureCoder : IPitchTextureCoder
         }
     }
 
-    private static void EncodePackedStencil<TPixel, TTransfer>(ImageView<TPixel> source, Span<byte> destination, int rowPitch)
+    private static void EncodePackedStencil<TPixel, TTransfer>(BitmapView<TPixel> source, Span<byte> destination, int rowPitch)
         where TPixel : unmanaged, IPixel<TPixel>
         where TTransfer : IPackedStencilDirectTransfer
     {

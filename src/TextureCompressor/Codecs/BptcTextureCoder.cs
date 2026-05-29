@@ -1,7 +1,7 @@
 using System.Runtime.CompilerServices;
 using TextureCompressor.Colors;
 using TextureCompressor.Formats;
-using TextureCompressor.Images;
+using TextureCompressor.Bitmaps;
 
 namespace TextureCompressor.Codecs;
 
@@ -57,21 +57,21 @@ public sealed class BptcTextureCoder : IPitchTextureCoder
         return checked(rowPitch * GetBlockCount(height));
     }
 
-    public void Decode<TPixel>(ReadOnlySpan<byte> source, ImageView<TPixel> destination, int rowPitch)
+    public void Decode<TPixel>(ReadOnlySpan<byte> source, BitmapView<TPixel> destination, int rowPitch)
         where TPixel : unmanaged, IPixel<TPixel>
     {
         ValidateSourceLength(destination.Width, destination.Height, source, rowPitch);
         DecodeByTransfer(source, destination, rowPitch);
     }
 
-    public void Encode<TPixel>(ImageView<TPixel> source, Span<byte> destination, int rowPitch)
+    public void Encode<TPixel>(BitmapView<TPixel> source, Span<byte> destination, int rowPitch)
         where TPixel : unmanaged, IPixel<TPixel>
     {
         ValidateDestinationLength(source.Width, source.Height, destination, rowPitch);
         EncodeByTransfer(source, destination, rowPitch);
     }
 
-    private void DecodeByTransfer<TPixel>(ReadOnlySpan<byte> source, ImageView<TPixel> destination, int rowPitch)
+    private void DecodeByTransfer<TPixel>(ReadOnlySpan<byte> source, BitmapView<TPixel> destination, int rowPitch)
         where TPixel : unmanaged, IPixel<TPixel>
     {
         switch (_transfer)
@@ -93,7 +93,7 @@ public sealed class BptcTextureCoder : IPitchTextureCoder
         }
     }
 
-    private void EncodeByTransfer<TPixel>(ImageView<TPixel> source, Span<byte> destination, int rowPitch)
+    private void EncodeByTransfer<TPixel>(BitmapView<TPixel> source, Span<byte> destination, int rowPitch)
         where TPixel : unmanaged, IPixel<TPixel>
     {
         switch (_transfer)
@@ -115,7 +115,7 @@ public sealed class BptcTextureCoder : IPitchTextureCoder
         }
     }
 
-    private static void DecodeBc6H<TPixel, TTransfer>(ReadOnlySpan<byte> source, ImageView<TPixel> destination, int rowPitch)
+    private static void DecodeBc6H<TPixel, TTransfer>(ReadOnlySpan<byte> source, BitmapView<TPixel> destination, int rowPitch)
         where TPixel : unmanaged, IPixel<TPixel>
         where TTransfer : IBc6HTransfer
     {
@@ -138,7 +138,7 @@ public sealed class BptcTextureCoder : IPitchTextureCoder
         }
     }
 
-    private static void EncodeBc6H<TPixel, TTransfer>(ImageView<TPixel> source, Span<byte> destination, int rowPitch)
+    private static void EncodeBc6H<TPixel, TTransfer>(BitmapView<TPixel> source, Span<byte> destination, int rowPitch)
         where TPixel : unmanaged, IPixel<TPixel>
         where TTransfer : IBc6HTransfer
     {
@@ -161,7 +161,7 @@ public sealed class BptcTextureCoder : IPitchTextureCoder
         }
     }
 
-    private static void DecodeBc7<TPixel, TTransfer>(ReadOnlySpan<byte> source, ImageView<TPixel> destination, int rowPitch)
+    private static void DecodeBc7<TPixel, TTransfer>(ReadOnlySpan<byte> source, BitmapView<TPixel> destination, int rowPitch)
         where TPixel : unmanaged, IPixel<TPixel>
         where TTransfer : IBc7Transfer
     {
@@ -184,7 +184,7 @@ public sealed class BptcTextureCoder : IPitchTextureCoder
         }
     }
 
-    private static void EncodeBc7<TPixel, TTransfer>(ImageView<TPixel> source, Span<byte> destination, int rowPitch)
+    private static void EncodeBc7<TPixel, TTransfer>(BitmapView<TPixel> source, Span<byte> destination, int rowPitch)
         where TPixel : unmanaged, IPixel<TPixel>
         where TTransfer : IBc7Transfer
     {
@@ -1311,7 +1311,7 @@ public sealed class BptcTextureCoder : IPitchTextureCoder
     private static byte EncodeStorageByte(byte value, bool srgb) =>
         srgb ? RgbaColorConversions.LinearUNorm8ToSrgb8(value) : value;
 
-    private static void LoadFloatBlock<TPixel>(ImageView<TPixel> source, int blockX, int blockY, Span<Rgba32Float> destination)
+    private static void LoadFloatBlock<TPixel>(BitmapView<TPixel> source, int blockX, int blockY, Span<Rgba32Float> destination)
         where TPixel : unmanaged, IPixel<TPixel>
     {
         var originX = blockX * BlockSize;
@@ -1335,7 +1335,7 @@ public sealed class BptcTextureCoder : IPitchTextureCoder
         ReadOnlySpan<Rgba32Float> block,
         int blockX,
         int blockY,
-        ImageView<TPixel> destination)
+        BitmapView<TPixel> destination)
         where TPixel : unmanaged, IPixel<TPixel>
     {
         var originX = blockX * BlockSize;
@@ -1367,7 +1367,7 @@ public sealed class BptcTextureCoder : IPitchTextureCoder
         }
     }
 
-    private static void LoadUNormBlock<TPixel>(ImageView<TPixel> source, int blockX, int blockY, Span<Rgba8UNorm> destination)
+    private static void LoadUNormBlock<TPixel>(BitmapView<TPixel> source, int blockX, int blockY, Span<Rgba8UNorm> destination)
         where TPixel : unmanaged, IPixel<TPixel>
     {
         var originX = blockX * BlockSize;
@@ -1391,7 +1391,7 @@ public sealed class BptcTextureCoder : IPitchTextureCoder
         ReadOnlySpan<Rgba8UNorm> block,
         int blockX,
         int blockY,
-        ImageView<TPixel> destination)
+        BitmapView<TPixel> destination)
         where TPixel : unmanaged, IPixel<TPixel>
     {
         var originX = blockX * BlockSize;

@@ -1,6 +1,6 @@
 namespace TextureCompressor.Colors;
 
-internal static class RgbaColorConversions
+public static class RgbaColorConversions
 {
     public static byte ToUNorm8(byte value) => value;
 

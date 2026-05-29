@@ -1,13 +1,13 @@
 using TextureCompressor.Colors;
 
-namespace TextureCompressor.Images;
+namespace TextureCompressor.Bitmaps;
 
-public ref struct ImageView<TPixel>
+public ref struct BitmapView<TPixel>
     where TPixel : unmanaged, IPixel<TPixel>
 {
     private Span<TPixel> _pixels;
 
-    public ImageView(Span<TPixel> pixels, int width, int height)
+    public BitmapView(Span<TPixel> pixels, int width, int height)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(width);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(height);
@@ -15,7 +15,7 @@ public ref struct ImageView<TPixel>
         var requiredLength = checked(width * height);
         if (pixels.Length < requiredLength)
         {
-            throw new ArgumentException("Pixel span is too small for the image dimensions.", nameof(pixels));
+            throw new ArgumentException("Pixel span is too small for the bitmap dimensions.", nameof(pixels));
         }
 
         _pixels = pixels[..requiredLength];

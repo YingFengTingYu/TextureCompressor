@@ -4,7 +4,7 @@ using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using TextureCompressor.Colors;
 using TextureCompressor.Formats;
-using TextureCompressor.Images;
+using TextureCompressor.Bitmaps;
 
 namespace TextureCompressor.Codecs;
 
@@ -77,7 +77,7 @@ public sealed class PvrtcTextureCoder : ITextureCoder
     /// Decodes a PVRTC payload into <typeparamref name="TPixel"/> pixels. sRGB PVRTC formats are converted
     /// from sRGB storage bytes to the destination pixel type's normal color space.
     /// </summary>
-    public void Decode<TPixel>(ReadOnlySpan<byte> source, ImageView<TPixel> destination)
+    public void Decode<TPixel>(ReadOnlySpan<byte> source, BitmapView<TPixel> destination)
         where TPixel : unmanaged, IPixel<TPixel>
     {
         var info = GetFormatInfo(Format);
@@ -147,7 +147,7 @@ public sealed class PvrtcTextureCoder : ITextureCoder
     /// Encodes <typeparamref name="TPixel"/> pixels into PVRTC. sRGB PVRTC formats convert normalized source
     /// colors to sRGB storage bytes before compression.
     /// </summary>
-    public void Encode<TPixel>(ImageView<TPixel> source, Span<byte> destination)
+    public void Encode<TPixel>(BitmapView<TPixel> source, Span<byte> destination)
         where TPixel : unmanaged, IPixel<TPixel>
     {
         var info = GetFormatInfo(Format);
@@ -432,7 +432,7 @@ public sealed class PvrtcTextureCoder : ITextureCoder
         }
     }
 
-    private static void CopyFromLinear<TPixel>(ReadOnlySpan<Rgba32Float> source, ImageView<TPixel> destination)
+    private static void CopyFromLinear<TPixel>(ReadOnlySpan<Rgba32Float> source, BitmapView<TPixel> destination)
         where TPixel : unmanaged, IPixel<TPixel>
     {
         var pixelIndex = 0;
@@ -472,7 +472,7 @@ public sealed class PvrtcTextureCoder : ITextureCoder
             ? color
             : new Rgba8UNorm(color.Red, color.Green, color.Blue, byte.MaxValue);
 
-    private static void CopyToLinear<TPixel>(ImageView<TPixel> source, Span<Rgba32Float> destination)
+    private static void CopyToLinear<TPixel>(BitmapView<TPixel> source, Span<Rgba32Float> destination)
         where TPixel : unmanaged, IPixel<TPixel>
     {
         var pixelIndex = 0;

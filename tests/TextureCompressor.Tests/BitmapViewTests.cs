@@ -1,12 +1,12 @@
 using TextureCompressor.Colors;
-using TextureCompressor.Images;
+using TextureCompressor.Bitmaps;
 
 namespace TextureCompressor.Tests;
 
-public sealed class ImageViewTests
+public sealed class BitmapViewTests
 {
     [Fact]
-    public void ConstructorTrimsPixelsToImageDimensions()
+    public void ConstructorTrimsPixelsToBitmapDimensions()
     {
         var pixels = new[]
         {
@@ -17,14 +17,14 @@ public sealed class ImageViewTests
             new Rgba8UNorm(13, 14, 15)
         };
 
-        var view = new ImageView<Rgba8UNorm>(pixels, 2, 2);
+        var view = new BitmapView<Rgba8UNorm>(pixels, 2, 2);
 
         Assert.Equal(4, view.Pixels.Length);
         Assert.Equal(new Rgba8UNorm(10, 11, 12), view.Pixels[3]);
     }
 
     [Fact]
-    public void PixelsReturnsMutableImageSpan()
+    public void PixelsReturnsMutableBitmapSpan()
     {
         var pixels = new[]
         {
@@ -33,7 +33,7 @@ public sealed class ImageViewTests
             new Rgba8UNorm(7, 8, 9),
             new Rgba8UNorm(10, 11, 12)
         };
-        var view = new ImageView<Rgba8UNorm>(pixels, 2, 2);
+        var view = new BitmapView<Rgba8UNorm>(pixels, 2, 2);
 
         view.Pixels[2] = new Rgba8UNorm(20, 21, 22);
 
@@ -50,7 +50,7 @@ public sealed class ImageViewTests
             new Rgba8UNorm(7, 8, 9),
             new Rgba8UNorm(10, 11, 12)
         };
-        var view = new ImageView<Rgba8UNorm>(pixels, 2, 2);
+        var view = new BitmapView<Rgba8UNorm>(pixels, 2, 2);
 
         var row = view.GetRowSpan(1);
         row[1] = new Rgba8UNorm(20, 21, 22);
@@ -69,7 +69,7 @@ public sealed class ImageViewTests
             new Rgba8UNorm(7, 8, 9),
             new Rgba8UNorm(10, 11, 12)
         };
-        var view = new ImageView<Rgba8UNorm>(pixels, 2, 2);
+        var view = new BitmapView<Rgba8UNorm>(pixels, 2, 2);
 
         var row = view[1];
         row[0] = new Rgba8UNorm(20, 21, 22);
@@ -83,7 +83,7 @@ public sealed class ImageViewTests
     {
         static void Act()
         {
-            var view = new ImageView<Rgba8UNorm>(new Rgba8UNorm[4], 2, 2);
+            var view = new BitmapView<Rgba8UNorm>(new Rgba8UNorm[4], 2, 2);
             view.GetRowSpan(2);
         }
 
