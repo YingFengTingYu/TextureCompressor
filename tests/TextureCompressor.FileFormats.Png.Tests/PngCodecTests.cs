@@ -80,6 +80,54 @@ public sealed class PngCodecTests
         Assert.Equal(new Rgba8UNorm(255, 128, 0, 255), decoded.PixelSpan[0]);
     }
 
+    [Fact]
+    public void EncodeWithAppleCgbiWritesCgbiPng()
+    {
+        var source = new ArrayBitmap<Rgba8UNorm>(
+            2,
+            1,
+            [
+                new Rgba8UNorm(10, 20, 30, 255),
+                new Rgba8UNorm(100, 50, 0, 128)
+            ]);
+
+        var png = PngCodec.Encode(source, new PngEncodingOptions { UseAppleCgbi = true });
+        var chunks = ReadChunks(png);
+        var decoded = PngCodec.Decode(png);
+
+        Assert.Equal("CgBI", chunks[0].Type);
+        Assert.Equal([0x50, 0x00, 0x20, 0x02], chunks[0].Data);
+        Assert.Equal("IHDR", chunks[1].Type);
+        AssertHeaderData(chunks[1].Data, 2, 1, bitDepth: 8, PngColorType.TruecolorAlpha);
+        Assert.Equal(source.PixelSpan.ToArray(), decoded.PixelSpan.ToArray());
+    }
+
+    [Fact]
+    public void EncodeWithMaxIdatChunkDataLengthSplitsIdatChunks()
+    {
+        var pixels = Enumerable.Range(0, 16)
+            .Select(i => new Rgba8UNorm((byte)(i * 11), (byte)(255 - (i * 7)), (byte)(i * 3), 255))
+            .ToArray();
+        var source = new ArrayBitmap<Rgba8UNorm>(4, 4, pixels);
+
+        var png = PngCodec.Encode(source, new PngEncodingOptions { MaxIdatChunkDataLength = 1 });
+        var idatChunks = ReadChunks(png).Where(chunk => chunk.Type == "IDAT").ToArray();
+        var decoded = PngCodec.Decode(png);
+
+        Assert.True(idatChunks.Length > 1);
+        Assert.All(idatChunks, chunk => Assert.True(chunk.Data.Length <= 1));
+        Assert.Equal(source.PixelSpan.ToArray(), decoded.PixelSpan.ToArray());
+    }
+
+    [Fact]
+    public void EncodeWithInvalidMaxIdatChunkDataLengthThrows()
+    {
+        var source = new ArrayBitmap<Rgba8UNorm>(1, 1, [new Rgba8UNorm(1, 2, 3, 4)]);
+
+        Assert.Throws<ArgumentOutOfRangeException>(() =>
+            PngCodec.Encode(source, new PngEncodingOptions { MaxIdatChunkDataLength = 0 }));
+    }
+
     [Theory]
     [InlineData("normalized/fine-detail-512.png", 512, 512)]
     [InlineData("normalized/gradients-512.png", 512, 512)]
@@ -108,10 +156,31 @@ public sealed class PngCodecTests
     {
         Assert.Equal([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a], png.AsSpan(0, 8).ToArray());
         Assert.Equal("IHDR", ToAscii(png.AsSpan(12, 4)));
-        Assert.Equal(width, checked((int)BinaryPrimitives.ReadUInt32BigEndian(png.AsSpan(16, 4))));
-        Assert.Equal(height, checked((int)BinaryPrimitives.ReadUInt32BigEndian(png.AsSpan(20, 4))));
-        Assert.Equal(bitDepth, png[24]);
-        Assert.Equal((byte)colorType, png[25]);
+        AssertHeaderData(png.AsSpan(16, 13), width, height, bitDepth, colorType);
+    }
+
+    private static void AssertHeaderData(ReadOnlySpan<byte> header, int width, int height, byte bitDepth, PngColorType colorType)
+    {
+        Assert.Equal(width, checked((int)BinaryPrimitives.ReadUInt32BigEndian(header[..4])));
+        Assert.Equal(height, checked((int)BinaryPrimitives.ReadUInt32BigEndian(header.Slice(4, 4))));
+        Assert.Equal(bitDepth, header[8]);
+        Assert.Equal((byte)colorType, header[9]);
+    }
+
+    private static List<PngChunk> ReadChunks(byte[] png)
+    {
+        var chunks = new List<PngChunk>();
+        var offset = 8;
+        while (offset < png.Length)
+        {
+            var length = checked((int)BinaryPrimitives.ReadUInt32BigEndian(png.AsSpan(offset, 4)));
+            var type = ToAscii(png.AsSpan(offset + 4, 4));
+            var data = png.AsSpan(offset + 8, length).ToArray();
+            chunks.Add(new PngChunk(type, data));
+            offset += 12 + length;
+        }
+
+        return chunks;
     }
 
     private static byte[] CreatePng(
@@ -203,4 +272,6 @@ public sealed class PngCodecTests
                 chars[i] = (char)source[i];
             }
         });
+
+    private readonly record struct PngChunk(string Type, byte[] Data);
 }

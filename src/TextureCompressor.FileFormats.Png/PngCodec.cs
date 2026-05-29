@@ -9,7 +9,8 @@ namespace TextureCompressor.FileFormats.Png;
 
 public static class PngCodec
 {
-    private const int MaxIdatChunkDataLength = 0x7fff;
+    private const int DefaultMaxIdatChunkDataLength = 0x7fff;
+    private static readonly byte[] CgbiChunkData = [0x50, 0x00, 0x20, 0x02];
 
     private static readonly byte[] Signature = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
 
@@ -175,14 +176,25 @@ public static class PngCodec
         where TPixel : unmanaged, IPixel<TPixel>
     {
         ArgumentNullException.ThrowIfNull(bitmap);
-        return Encode(bitmap.AsView());
+        return Encode(bitmap.AsView(), options: null);
+    }
+
+    public static byte[] Encode<TPixel>(IBitmap<TPixel> bitmap, PngEncodingOptions? options)
+        where TPixel : unmanaged, IPixel<TPixel>
+    {
+        ArgumentNullException.ThrowIfNull(bitmap);
+        return Encode(bitmap.AsView(), options);
     }
 
     public static byte[] Encode<TPixel>(BitmapView<TPixel> bitmap)
         where TPixel : unmanaged, IPixel<TPixel>
+        => Encode(bitmap, options: null);
+
+    public static byte[] Encode<TPixel>(BitmapView<TPixel> bitmap, PngEncodingOptions? options)
+        where TPixel : unmanaged, IPixel<TPixel>
     {
         using var stream = new MemoryStream();
-        Encode(bitmap, stream);
+        Encode(bitmap, stream, options);
         return stream.ToArray();
     }
 
@@ -191,36 +203,65 @@ public static class PngCodec
     {
         ArgumentNullException.ThrowIfNull(bitmap);
         using var stream = File.Create(path);
-        Encode(bitmap.AsView(), stream);
+        Encode(bitmap.AsView(), stream, options: null);
+    }
+
+    public static void Encode<TPixel>(IBitmap<TPixel> bitmap, string path, PngEncodingOptions? options)
+        where TPixel : unmanaged, IPixel<TPixel>
+    {
+        ArgumentNullException.ThrowIfNull(bitmap);
+        using var stream = File.Create(path);
+        Encode(bitmap.AsView(), stream, options);
     }
 
     public static void Encode<TPixel>(BitmapView<TPixel> bitmap, string path)
         where TPixel : unmanaged, IPixel<TPixel>
+        => Encode(bitmap, path, options: null);
+
+    public static void Encode<TPixel>(BitmapView<TPixel> bitmap, string path, PngEncodingOptions? options)
+        where TPixel : unmanaged, IPixel<TPixel>
     {
         using var stream = File.Create(path);
-        Encode(bitmap, stream);
+        Encode(bitmap, stream, options);
     }
 
     public static void Encode<TPixel>(IBitmap<TPixel> bitmap, Stream stream)
         where TPixel : unmanaged, IPixel<TPixel>
     {
         ArgumentNullException.ThrowIfNull(bitmap);
-        Encode(bitmap.AsView(), stream);
+        Encode(bitmap.AsView(), stream, options: null);
+    }
+
+    public static void Encode<TPixel>(IBitmap<TPixel> bitmap, Stream stream, PngEncodingOptions? options)
+        where TPixel : unmanaged, IPixel<TPixel>
+    {
+        ArgumentNullException.ThrowIfNull(bitmap);
+        Encode(bitmap.AsView(), stream, options);
     }
 
     public static void Encode<TPixel>(BitmapView<TPixel> bitmap, Stream stream)
         where TPixel : unmanaged, IPixel<TPixel>
+        => Encode(bitmap, stream, options: null);
+
+    public static void Encode<TPixel>(BitmapView<TPixel> bitmap, Stream stream, PngEncodingOptions? options)
+        where TPixel : unmanaged, IPixel<TPixel>
     {
         ArgumentNullException.ThrowIfNull(stream);
 
-        var layout = GetEncodingLayout<TPixel>();
+        ValidateEncodingOptions(options);
+        var layout = GetEncodingLayout<TPixel>(options);
         stream.Write(Signature);
+        if (layout.UseAppleCgbi)
+        {
+            WriteChunk(stream, "CgBI", CgbiChunkData);
+        }
+
         WriteHeader(stream, bitmap.Width, bitmap.Height, layout);
 
-        using var idatStream = new IdatChunkStream(stream);
-        using (var zlib = new ZLibStream(idatStream, CompressionLevel.SmallestSize, leaveOpen: true))
+        using var idatStream = new IdatChunkStream(stream, options?.MaxIdatChunkDataLength ?? DefaultMaxIdatChunkDataLength);
+        using (var compressed = CreateCompressedStream(idatStream, layout.UseAppleCgbi, options?.CompressionLevel ?? CompressionLevel.SmallestSize))
         {
-            WriteScanlines(bitmap, layout, zlib);
+            WriteScanlines(bitmap, layout, compressed);
         }
 
         idatStream.Finish();
@@ -510,6 +551,21 @@ public static class PngCodec
         Span<byte> destination)
         where TPixel : unmanaged, IPixel<TPixel>
     {
+        if (layout.UseAppleCgbi)
+        {
+            for (var x = 0; x < width; x++)
+            {
+                var pixel = TPixel.ToRgba8UNorm(pixels[pixelOffset + x]);
+                var offset = x * 4;
+                destination[offset] = Premultiply(pixel.Blue, pixel.Alpha);
+                destination[offset + 1] = Premultiply(pixel.Green, pixel.Alpha);
+                destination[offset + 2] = Premultiply(pixel.Red, pixel.Alpha);
+                destination[offset + 3] = pixel.Alpha;
+            }
+
+            return;
+        }
+
         if (layout.BitDepth == 16)
         {
             for (var x = 0; x < width; x++)
@@ -536,17 +592,26 @@ public static class PngCodec
         }
     }
 
-    private static PngEncodingLayout GetEncodingLayout<TPixel>()
+    private static PngEncodingLayout GetEncodingLayout<TPixel>(PngEncodingOptions? options)
         where TPixel : unmanaged, IPixel<TPixel>
     {
+        if (options?.UseAppleCgbi == true)
+        {
+            return new PngEncodingLayout(PngColorType.TruecolorAlpha, 8, 4, UseAppleCgbi: true);
+        }
+
         return typeof(TPixel) == typeof(Rgba16UNorm)
-            ? new PngEncodingLayout(PngColorType.TruecolorAlpha, 16, 8)
-            : new PngEncodingLayout(PngColorType.TruecolorAlpha, 8, 4);
+            ? new PngEncodingLayout(PngColorType.TruecolorAlpha, 16, 8, UseAppleCgbi: false)
+            : new PngEncodingLayout(PngColorType.TruecolorAlpha, 8, 4, UseAppleCgbi: false);
     }
 
     private static Stream CreateCompressedStream(Stream input, bool rawDeflate) => rawDeflate
         ? new DeflateStream(input, CompressionMode.Decompress)
         : new ZLibStream(input, CompressionMode.Decompress);
+
+    private static Stream CreateCompressedStream(Stream output, bool rawDeflate, CompressionLevel compressionLevel) => rawDeflate
+        ? new DeflateStream(output, compressionLevel, leaveOpen: true)
+        : new ZLibStream(output, compressionLevel, leaveOpen: true);
 
     private static void ReadExactlyOrThrow(Stream stream, Span<byte> destination, string message)
     {
@@ -598,6 +663,9 @@ public static class PngCodec
 
         return (byte)Math.Min(byte.MaxValue, ((value * byte.MaxValue) + (alpha / 2)) / alpha);
     }
+
+    private static byte Premultiply(byte value, byte alpha) =>
+        (byte)(((value * alpha) + (byte.MaxValue / 2)) / byte.MaxValue);
 
     private static byte[] DecodeNonInterlaced(
         Stream compressed,
@@ -911,6 +979,22 @@ public static class PngCodec
         }
     }
 
+    private static void ValidateEncodingOptions(PngEncodingOptions? options)
+    {
+        if (options is null)
+        {
+            return;
+        }
+
+        if (options.MaxIdatChunkDataLength <= 0)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(options),
+                options.MaxIdatChunkDataLength,
+                "PNG IDAT chunk data length must be positive.");
+        }
+    }
+
     private static PngHeader ReadHeader(byte[] data)
     {
         if (data.Length != 13)
@@ -1033,7 +1117,7 @@ public static class PngCodec
         byte FilterMethod,
         byte InterlaceMethod);
 
-    private readonly record struct PngEncodingLayout(PngColorType ColorType, byte BitDepth, int BytesPerPixel);
+    private readonly record struct PngEncodingLayout(PngColorType ColorType, byte BitDepth, int BytesPerPixel, bool UseAppleCgbi);
 
     private readonly record struct Adam7Pass(int StartX, int StartY, int StepX, int StepY);
 
@@ -1061,11 +1145,18 @@ public static class PngCodec
         private byte _element0;
     }
 
-    private sealed class IdatChunkStream(Stream destination) : Stream
+    private sealed class IdatChunkStream : Stream
     {
-        private readonly byte[] _buffer = new byte[MaxIdatChunkDataLength];
+        private readonly Stream _destination;
+        private readonly byte[] _buffer;
         private int _bufferedLength;
         private bool _finished;
+
+        public IdatChunkStream(Stream destination, int maxChunkDataLength)
+        {
+            _destination = destination;
+            _buffer = new byte[maxChunkDataLength];
+        }
 
         public override bool CanRead => false;
 
@@ -1084,7 +1175,7 @@ public static class PngCodec
         public override void Flush()
         {
             WriteBufferedChunk();
-            destination.Flush();
+            _destination.Flush();
         }
 
         public void Finish()
@@ -1148,7 +1239,7 @@ public static class PngCodec
                 return;
             }
 
-            WriteChunk(destination, "IDAT", _buffer.AsSpan(0, _bufferedLength));
+            WriteChunk(_destination, "IDAT", _buffer.AsSpan(0, _bufferedLength));
             _bufferedLength = 0;
         }
     }
