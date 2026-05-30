@@ -104,7 +104,41 @@ coder.Decode(encoded, decoded.AsView());
 PngCodec.Encode(decoded, "roundtrip.png");
 ```
 
-`TextureCoderManager.Global` creates built-in coders by format. Register an external coder when you need a different implementation or higher production compression quality.
+`TextureCoderManager.Global` creates built-in coders by format. Built-in S3TC, ETC/EAC, and PVRTC coders also expose compression-mode options when you construct and register them yourself; see the next section. Register an external coder when you need a different implementation or higher production compression quality.
+
+## Use Built-In High-Quality Encoding Modes
+
+The default built-in coders favor fast, predictable baseline conversion. The built-in S3TC, ETC/EAC, and PVRTC implementations expose higher-quality search modes. Register an optioned coder with `TextureCoderManager`, and later `TextureCoderManager.Global.GetCoder(...)`, `DdsCodec.Encode(...)`, `KtxCodec.Encode(...)`, or `PvrCodec.Encode(...)` calls will prefer your registered coder. The default behavior is restored when the `using var` registration is disposed.
+
+```csharp
+using TextureCompressor.Codecs;
+using TextureCompressor.Formats;
+
+var s3tcFormat = TextureFormats.Bc3Rgba;
+using var highQualityS3tc = TextureCoderManager.Global.Register(
+    s3tcFormat,
+    new S3tcTextureCoder(
+        s3tcFormat,
+        new S3tcCoderOptions { CompressionMode = S3tcCompressionMode.High }));
+
+var etcFormat = TextureFormats.RgbaEtc2EacUNorm;
+using var highQualityEtc = TextureCoderManager.Global.Register(
+    etcFormat,
+    new EtcTextureCoder(
+        etcFormat,
+        new EtcCoderOptions { CompressionMode = EtcCompressionMode.High }));
+
+var pvrtcFormat = TextureFormats.RgbaPvrtcI4BppUNorm;
+using var exhaustivePvrtc = TextureCoderManager.Global.Register(
+    pvrtcFormat,
+    new PvrtcTextureCoder(
+        pvrtcFormat,
+        new PvrtcCoderOptions { CompressionMode = PvrtcCompressionMode.Exhaustive }));
+
+var coder = TextureCoderManager.Global.GetCoder(s3tcFormat);
+```
+
+These built-in quality modes currently cover S3TC, ETC/EAC, and PVRTC. For production-quality BC6H/BC7, ASTC, and other formats, use the optional third-party encoder adapters below.
 
 ## Read And Write PNG
 
@@ -349,7 +383,7 @@ Common commands:
 - `convert <input> <output>`: convert between image and texture containers. The output container is inferred from the extension unless `--container` is passed explicitly.
 - `quality <expected> <actual>`: decode two image/texture files and print MSE, RMSE, and PSNR; add `--ignore-alpha` to ignore alpha.
 
-Image containers support PNG, JPEG, and GIF. `convert` provides `--png-color-space`, `--jpg-color-space`, and `--gif-color-space` conversions between Linear and Srgb. JPEG output quality is controlled with `--jpeg-quality`.
+Image containers support PNG, JPEG, and GIF. `convert` provides `--png-color-space`, `--jpg-color-space`, and `--gif-color-space` conversions between Linear and Srgb. JPEG output quality is controlled with `--jpeg-quality`; S3TC, ETC/EAC, and PVRTC built-in texture encoding quality can be selected with `--s3tc-quality`, `--etc-quality`, and `--pvrtc-quality`.
 
 ## Common Workflows
 
