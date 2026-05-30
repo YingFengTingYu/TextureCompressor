@@ -134,6 +134,11 @@ internal static class Cli
             Description = "PVRTC encoding quality.",
             DefaultValueFactory = _ => PvrtcCompressionMode.Normal
         };
+        var astcQualityOption = new Option<AstcCompressionMode>("--astc-quality")
+        {
+            Description = "ASTC encoding quality.",
+            DefaultValueFactory = _ => AstcCompressionMode.Fast
+        };
 
         var command = new Command("convert", "Convert between supported texture and image containers.");
         command.Arguments.Add(inputArgument);
@@ -153,6 +158,7 @@ internal static class Cli
         command.Options.Add(rgtcQualityOption);
         command.Options.Add(bptcQualityOption);
         command.Options.Add(pvrtcQualityOption);
+        command.Options.Add(astcQualityOption);
         command.SetAction(parseResult => RunCommand(() =>
         {
             var inputPath = RequireFile(parseResult.GetValue(inputArgument), "input").FullName;
@@ -168,6 +174,7 @@ internal static class Cli
             var rgtcQuality = parseResult.GetValue(rgtcQualityOption);
             var bptcQuality = parseResult.GetValue(bptcQualityOption);
             var pvrtcQuality = parseResult.GetValue(pvrtcQualityOption);
+            var astcQuality = parseResult.GetValue(astcQualityOption);
             var colorSpaces = new ImageColorSpaces(
                 parseResult.GetValue(pngColorSpaceOption),
                 parseResult.GetValue(jpgColorSpaceOption),
@@ -175,7 +182,7 @@ internal static class Cli
             var printMetrics = parseResult.GetValue(metricsOption);
 
             var source = Decode(inputPath, colorSpaces);
-            Encode(source, outputPath, outputKind, format, ktxVersion, jpegQuality, s3tcQuality, fxtcQuality, etcQuality, atcQuality, rgtcQuality, bptcQuality, pvrtcQuality, colorSpaces);
+            Encode(source, outputPath, outputKind, format, ktxVersion, jpegQuality, s3tcQuality, fxtcQuality, etcQuality, atcQuality, rgtcQuality, bptcQuality, pvrtcQuality, astcQuality, colorSpaces);
             Console.WriteLine($"wrote {outputPath}");
 
             if (printMetrics)
@@ -331,6 +338,7 @@ internal static class Cli
         RgtcLatcCompressionMode rgtcQuality,
         BptcCompressionMode bptcQuality,
         PvrtcCompressionMode pvrtcQuality,
+        AstcCompressionMode astcQuality,
         ImageColorSpaces? imageColorSpaces)
     {
         var imageColorSpace = GetImageColorSpace(container, imageColorSpaces);
@@ -346,6 +354,7 @@ internal static class Cli
         using var rgtcRegistration = CreateRgtcRegistration(format, rgtcQuality);
         using var bptcRegistration = CreateBptcRegistration(format, bptcQuality);
         using var pvrtcRegistration = CreatePvrtcRegistration(format, pvrtcQuality);
+        using var astcRegistration = CreateAstcRegistration(format, astcQuality);
 
         switch (container)
         {
@@ -454,6 +463,17 @@ internal static class Cli
 
         var options = new PvrtcCoderOptions { CompressionMode = compressionMode };
         return TextureCoderManager.Global.Register(format, new PvrtcTextureCoder(format, options));
+    }
+
+    private static IDisposable? CreateAstcRegistration(TextureFormat format, AstcCompressionMode compressionMode)
+    {
+        if (compressionMode == AstcCompressionMode.Fast || !AstcTextureCoder.IsSupported(format))
+        {
+            return null;
+        }
+
+        var options = new AstcCoderOptions { CompressionMode = compressionMode };
+        return TextureCoderManager.Global.Register(format, new AstcTextureCoder(format, options));
     }
 
     private static ArrayBitmap<Rgba8UNorm> ApplyInputImageColorSpace(

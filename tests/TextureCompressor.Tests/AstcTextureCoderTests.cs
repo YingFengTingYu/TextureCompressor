@@ -319,6 +319,87 @@ public sealed class AstcTextureCoderTests
     }
 
     [Fact]
+    public void EncodeLdrHighQualityFitsColorClustersInsteadOfRgbaBounds()
+    {
+        var pixels = Enumerable.Range(0, 16)
+            .Select(i => (i & 1) == 0
+                ? new Rgba8UNorm(255, 0, 0, 255)
+                : new Rgba8UNorm(0, 255, 0, 255))
+            .ToArray();
+        var source = new ArrayBitmap<Rgba8UNorm>(4, 4, pixels);
+        var fastCoder = new AstcTextureCoder(TextureFormats.RgbaAstc4x4UNorm);
+        var highCoder = new AstcTextureCoder(
+            TextureFormats.RgbaAstc4x4UNorm,
+            new AstcCoderOptions { CompressionMode = AstcCompressionMode.High });
+        var rowPitch = fastCoder.GetDefaultPitch(source.Width);
+        var fastEncoded = new byte[fastCoder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
+        var highEncoded = new byte[highCoder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
+        var fastDecoded = new ArrayBitmap<Rgba8UNorm>(4, 4);
+        var highDecoded = new ArrayBitmap<Rgba8UNorm>(4, 4);
+
+        fastCoder.Encode(source.AsView(), fastEncoded, rowPitch);
+        highCoder.Encode(source.AsView(), highEncoded, rowPitch);
+        fastCoder.Decode(fastEncoded, fastDecoded.AsView(), rowPitch);
+        highCoder.Decode(highEncoded, highDecoded.AsView(), rowPitch);
+
+        Assert.Equal(0, RgbaSquaredError(source, highDecoded));
+        Assert.True(RgbaSquaredError(source, highDecoded) < RgbaSquaredError(source, fastDecoded));
+    }
+
+    [Theory]
+    [MemberData(nameof(AstcCompressionModes))]
+    public void EncodeAndDecodeAstcSupportsCompressionMode(AstcCompressionMode compressionMode)
+    {
+        var source = new ArrayBitmap<Rgba8UNorm>(8, 8);
+        for (var y = 0; y < source.Height; y++)
+        {
+            for (var x = 0; x < source.Width; x++)
+            {
+                source.Pixels[(y * source.Width) + x] = new Rgba8UNorm(
+                    (byte)(16 + (x * 23)),
+                    (byte)(240 - (y * 19)),
+                    (byte)(32 + ((x * 11 + y * 17) % 180)),
+                    (byte)(96 + ((x + y) * 7)));
+            }
+        }
+
+        var decoded = new ArrayBitmap<Rgba8UNorm>(8, 8);
+        var coder = new AstcTextureCoder(
+            TextureFormats.RgbaAstc8x8UNorm,
+            new AstcCoderOptions { CompressionMode = compressionMode });
+        var rowPitch = coder.GetDefaultPitch(source.Width);
+        var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
+
+        coder.Encode(source.AsView(), encoded, rowPitch);
+        coder.Decode(encoded, decoded.AsView(), rowPitch);
+
+        Assert.Contains(encoded, value => value != 0);
+        Assert.Contains(decoded.Pixels, pixel => pixel.Red != 0 || pixel.Green != 0 || pixel.Blue != 0);
+    }
+
+    [Fact]
+    public void EncodeLdrExhaustiveIsNoWorseThanHighQualitySearch()
+    {
+        var source = new ArrayBitmap<Rgba8UNorm>(8, 8);
+        for (var y = 0; y < source.Height; y++)
+        {
+            for (var x = 0; x < source.Width; x++)
+            {
+                source.Pixels[(y * source.Width) + x] = new Rgba8UNorm(
+                    (byte)((x * 31) + ((y & 1) * 9)),
+                    (byte)((y * 29) + ((x & 1) * 13)),
+                    (byte)(255 - (x * 17) - (y * 7)),
+                    255);
+            }
+        }
+
+        var highError = EncodeAndDecodeAstcError(source, AstcCompressionMode.High);
+        var exhaustiveError = EncodeAndDecodeAstcError(source, AstcCompressionMode.Exhaustive);
+
+        Assert.True(exhaustiveError <= highError);
+    }
+
+    [Fact]
     public void EncodeSrgbUsesSrgbStorageForRgbOnly()
     {
         var sourceColor = new Rgba8UNorm(40, 100, 200, 123);
@@ -404,6 +485,47 @@ public sealed class AstcTextureCoderTests
         Assert.Contains(decoded.Pixels, pixel => pixel.Red > (Half)1f);
     }
 
+    [Theory]
+    [MemberData(nameof(AstcCompressionModes))]
+    public void EncodeAndDecodeHdrAstcSupportsCompressionMode(AstcCompressionMode compressionMode)
+    {
+        var source = CreateHdrGradientSource(8, 8);
+        var decoded = new ArrayBitmap<Rgba16Float>(8, 8);
+        var coder = new AstcTextureCoder(
+            TextureFormats.RgbaAstc8x8Float,
+            new AstcCoderOptions { CompressionMode = compressionMode });
+        var rowPitch = coder.GetDefaultPitch(source.Width);
+        var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
+
+        coder.Encode(source.AsView(), encoded, rowPitch);
+        coder.Decode(encoded, decoded.AsView(), rowPitch);
+
+        Assert.Contains(encoded, value => value != 0);
+        Assert.Contains(decoded.Pixels, pixel => pixel.Red > (Half)0f || pixel.Green > (Half)0f || pixel.Blue > (Half)0f);
+    }
+
+    [Fact]
+    public void EncodeHdrHighQualityIsNoWorseThanFastSearch()
+    {
+        var source = CreateHdrGradientSource(8, 8);
+
+        var fastError = EncodeAndDecodeHdrAstcError(source, AstcCompressionMode.Fast);
+        var highError = EncodeAndDecodeHdrAstcError(source, AstcCompressionMode.High);
+
+        Assert.True(highError <= fastError);
+    }
+
+    [Fact]
+    public void EncodeHdrExhaustiveIsNoWorseThanHighQualitySearch()
+    {
+        var source = CreateHdrGradientSource(8, 8);
+
+        var highError = EncodeAndDecodeHdrAstcError(source, AstcCompressionMode.High);
+        var exhaustiveError = EncodeAndDecodeHdrAstcError(source, AstcCompressionMode.Exhaustive);
+
+        Assert.True(exhaustiveError <= highError);
+    }
+
     [Fact]
     public void EncodeHdrHonorsRowPitch()
     {
@@ -486,6 +608,94 @@ public sealed class AstcTextureCoderTests
         TextureFormats.RgbaAstc12x10Float,
         TextureFormats.RgbaAstc12x12Float
     };
+
+    public static TheoryData<AstcCompressionMode> AstcCompressionModes() => new()
+    {
+        AstcCompressionMode.Fast,
+        AstcCompressionMode.Normal,
+        AstcCompressionMode.High,
+        AstcCompressionMode.Exhaustive
+    };
+
+    private static long EncodeAndDecodeAstcError(ArrayBitmap<Rgba8UNorm> source, AstcCompressionMode compressionMode)
+    {
+        var coder = new AstcTextureCoder(
+            TextureFormats.RgbaAstc8x8UNorm,
+            new AstcCoderOptions { CompressionMode = compressionMode });
+        var rowPitch = coder.GetDefaultPitch(source.Width);
+        var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
+        var decoded = new ArrayBitmap<Rgba8UNorm>(source.Width, source.Height);
+
+        coder.Encode(source.AsView(), encoded, rowPitch);
+        coder.Decode(encoded, decoded.AsView(), rowPitch);
+
+        return RgbaSquaredError(source, decoded);
+    }
+
+    private static double EncodeAndDecodeHdrAstcError(ArrayBitmap<Rgba16Float> source, AstcCompressionMode compressionMode)
+    {
+        var coder = new AstcTextureCoder(
+            TextureFormats.RgbaAstc8x8Float,
+            new AstcCoderOptions { CompressionMode = compressionMode });
+        var rowPitch = coder.GetDefaultPitch(source.Width);
+        var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
+        var decoded = new ArrayBitmap<Rgba16Float>(source.Width, source.Height);
+
+        coder.Encode(source.AsView(), encoded, rowPitch);
+        coder.Decode(encoded, decoded.AsView(), rowPitch);
+
+        return HdrSquaredError(source, decoded);
+    }
+
+    private static ArrayBitmap<Rgba16Float> CreateHdrGradientSource(int width, int height)
+    {
+        var source = new ArrayBitmap<Rgba16Float>(width, height);
+        for (var y = 0; y < source.Height; y++)
+        {
+            for (var x = 0; x < source.Width; x++)
+            {
+                source.Pixels[(y * source.Width) + x] = new Rgba16Float(
+                    (Half)(0.25f + (x * 0.25f) + ((y & 1) * 0.05f)),
+                    (Half)(0.5f + (y * 0.2f) + ((x & 1) * 0.04f)),
+                    (Half)(1.0f + ((x + y) * 0.15f)),
+                    (Half)(0.35f + ((x + y) * 0.04f)));
+            }
+        }
+
+        return source;
+    }
+
+    private static long RgbaSquaredError(ArrayBitmap<Rgba8UNorm> expected, ArrayBitmap<Rgba8UNorm> actual)
+    {
+        long error = 0;
+        for (var i = 0; i < expected.Pixels.Length; i++)
+        {
+            error += Squared(expected.Pixels[i].Red - actual.Pixels[i].Red);
+            error += Squared(expected.Pixels[i].Green - actual.Pixels[i].Green);
+            error += Squared(expected.Pixels[i].Blue - actual.Pixels[i].Blue);
+            error += Squared(expected.Pixels[i].Alpha - actual.Pixels[i].Alpha);
+        }
+
+        return error;
+    }
+
+    private static double HdrSquaredError(ArrayBitmap<Rgba16Float> expected, ArrayBitmap<Rgba16Float> actual)
+    {
+        var error = 0.0;
+        for (var i = 0; i < expected.Pixels.Length; i++)
+        {
+            error += Squared((double)expected.Pixels[i].Red - (double)actual.Pixels[i].Red);
+            error += Squared((double)expected.Pixels[i].Green - (double)actual.Pixels[i].Green);
+            error += Squared((double)expected.Pixels[i].Blue - (double)actual.Pixels[i].Blue);
+            error += Squared((double)expected.Pixels[i].Alpha - (double)actual.Pixels[i].Alpha);
+        }
+
+        return error;
+    }
+
+    private static int Squared(int value) => value * value;
+
+    private static double Squared(double value) => value * value;
 
     private static byte[] CreateVoidExtentBlock(bool hdr, ushort red, ushort green, ushort blue, ushort alpha)
     {

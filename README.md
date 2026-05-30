@@ -104,11 +104,11 @@ coder.Decode(encoded, decoded.AsView());
 PngCodec.Encode(decoded, "roundtrip.png");
 ```
 
-`TextureCoderManager.Global` creates built-in coders by format. Built-in S3TC, FXT1, ETC/EAC, ATC, RGTC/LATC, BPTC, and PVRTC coders also expose compression-mode options when you construct and register them yourself; see the next section. Register an external coder when you need a different implementation or higher production compression quality.
+`TextureCoderManager.Global` creates built-in coders by format. Built-in S3TC, FXT1, ETC/EAC, ASTC, ATC, RGTC/LATC, BPTC, and PVRTC coders also expose compression-mode options when you construct and register them yourself; see the next section. Register an external coder when you need a different implementation or higher production compression quality.
 
 ## Use Built-In High-Quality Encoding Modes
 
-The default built-in coders favor fast, predictable baseline conversion. The built-in S3TC, FXT1, ETC/EAC, ATC, RGTC/LATC, BPTC, and PVRTC implementations expose higher-quality search modes. Register an optioned coder with `TextureCoderManager`, and later `TextureCoderManager.Global.GetCoder(...)`, `DdsCodec.Encode(...)`, `KtxCodec.Encode(...)`, or `PvrCodec.Encode(...)` calls will prefer your registered coder. The default behavior is restored when the `using var` registration is disposed.
+The default built-in coders favor fast, predictable baseline conversion. The built-in S3TC, FXT1, ETC/EAC, ASTC, ATC, RGTC/LATC, BPTC, and PVRTC implementations expose higher-quality search modes. Register an optioned coder with `TextureCoderManager`, and later `TextureCoderManager.Global.GetCoder(...)`, `DdsCodec.Encode(...)`, `KtxCodec.Encode(...)`, `PvrCodec.Encode(...)`, or `AstcCodec.Encode(...)` calls will prefer your registered coder. The default behavior is restored when the `using var` registration is disposed.
 
 ```csharp
 using TextureCompressor.Codecs;
@@ -156,6 +156,13 @@ using var highQualityBptc = TextureCoderManager.Global.Register(
         bptcFormat,
         new BptcCoderOptions { CompressionMode = BptcCompressionMode.High }));
 
+var astcFormat = TextureFormats.RgbaAstc8x8UNorm;
+using var highQualityAstc = TextureCoderManager.Global.Register(
+    astcFormat,
+    new AstcTextureCoder(
+        astcFormat,
+        new AstcCoderOptions { CompressionMode = AstcCompressionMode.High }));
+
 var pvrtcFormat = TextureFormats.RgbaPvrtcI4BppUNorm;
 using var exhaustivePvrtc = TextureCoderManager.Global.Register(
     pvrtcFormat,
@@ -166,7 +173,7 @@ using var exhaustivePvrtc = TextureCoderManager.Global.Register(
 var coder = TextureCoderManager.Global.GetCoder(s3tcFormat);
 ```
 
-These built-in quality modes currently cover S3TC, FXT1, ETC/EAC, ATC, RGTC/LATC, BPTC/BC6H/BC7, and PVRTC. For specialized production encoders, ASTC quality modes, and other formats, use the optional third-party encoder adapters below.
+These built-in quality modes currently cover S3TC, FXT1, ETC/EAC, ASTC, ATC, RGTC/LATC, BPTC/BC6H/BC7, and PVRTC. For specialized production encoders and other formats, use the optional third-party encoder adapters below.
 
 ## Read And Write PNG
 
@@ -411,7 +418,7 @@ Common commands:
 - `convert <input> <output>`: convert between image and texture containers. The output container is inferred from the extension unless `--container` is passed explicitly.
 - `quality <expected> <actual>`: decode two image/texture files and print MSE, RMSE, and PSNR; add `--ignore-alpha` to ignore alpha.
 
-Image containers support PNG, JPEG, and GIF. `convert` provides `--png-color-space`, `--jpg-color-space`, and `--gif-color-space` conversions between Linear and Srgb. JPEG output quality is controlled with `--jpeg-quality`; S3TC, FXT1, ETC/EAC, ATC, RGTC/LATC, BPTC, and PVRTC built-in texture encoding quality can be selected with `--s3tc-quality`, `--fxtc-quality`, `--etc-quality`, `--atc-quality`, `--rgtc-quality`, `--bptc-quality`, and `--pvrtc-quality`.
+Image containers support PNG, JPEG, and GIF. `convert` provides `--png-color-space`, `--jpg-color-space`, and `--gif-color-space` conversions between Linear and Srgb. JPEG output quality is controlled with `--jpeg-quality`; S3TC, FXT1, ETC/EAC, ASTC, ATC, RGTC/LATC, BPTC, and PVRTC built-in texture encoding quality can be selected with `--s3tc-quality`, `--fxtc-quality`, `--etc-quality`, `--astc-quality`, `--atc-quality`, `--rgtc-quality`, `--bptc-quality`, and `--pvrtc-quality`.
 
 ## Common Workflows
 

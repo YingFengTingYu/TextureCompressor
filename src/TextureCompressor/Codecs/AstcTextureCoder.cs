@@ -15,6 +15,9 @@ public sealed class AstcTextureCoder : IPitchTextureCoder
     private const int MaxWeightValues = 64;
     private const ushort LnsOne = 0x7800;
 
+    private static readonly int[] STritEncodings = CreateTritEncodings();
+    private static readonly int[] SQuintEncodings = CreateQuintEncodings();
+
     private static readonly AstcFormatInfo[] SSupportedFormatInfo =
     [
         new(TextureFormats.RgbaAstc4x4UNorm, 4, 4, AstcTransfer.Ldr),
@@ -66,8 +69,9 @@ public sealed class AstcTextureCoder : IPitchTextureCoder
     private readonly AstcTransfer _transfer;
     private readonly int _blockWidth;
     private readonly int _blockHeight;
+    private readonly AstcCoderOptions _options;
 
-    public AstcTextureCoder(TextureFormat format)
+    public AstcTextureCoder(TextureFormat format, AstcCoderOptions? options = null)
     {
         if (!TryGetFormatInfo(format, out var info))
         {
@@ -78,6 +82,7 @@ public sealed class AstcTextureCoder : IPitchTextureCoder
         _transfer = info.Transfer;
         _blockWidth = info.BlockWidth;
         _blockHeight = info.BlockHeight;
+        _options = options ?? new AstcCoderOptions();
     }
 
     public TextureFormat Format { get; }
@@ -191,7 +196,7 @@ public sealed class AstcTextureCoder : IPitchTextureCoder
             for (var blockX = 0; blockX < blockCountX; blockX++)
             {
                 LoadFloatBlock(source, blockX, blockY, block);
-                TTransfer.EncodeBlock(block, _blockWidth, _blockHeight, destination.Slice(blockOffset, BytesPerBlock));
+                TTransfer.EncodeBlock(block, _blockWidth, _blockHeight, _options.CompressionMode, destination.Slice(blockOffset, BytesPerBlock));
                 blockOffset = checked(blockOffset + BytesPerBlock);
             }
 
@@ -237,7 +242,7 @@ public sealed class AstcTextureCoder : IPitchTextureCoder
             for (var blockX = 0; blockX < blockCountX; blockX++)
             {
                 LoadUNormBlock(source, blockX, blockY, block);
-                TTransfer.EncodeBlock(block, _blockWidth, _blockHeight, destination.Slice(blockOffset, BytesPerBlock));
+                TTransfer.EncodeBlock(block, _blockWidth, _blockHeight, _options.CompressionMode, destination.Slice(blockOffset, BytesPerBlock));
                 blockOffset = checked(blockOffset + BytesPerBlock);
             }
 
@@ -249,14 +254,14 @@ public sealed class AstcTextureCoder : IPitchTextureCoder
     {
         static abstract void DecodeBlock(ReadOnlySpan<byte> source, int blockWidth, int blockHeight, Span<Rgba8UNorm> destination);
 
-        static abstract void EncodeBlock(ReadOnlySpan<Rgba8UNorm> source, int blockWidth, int blockHeight, Span<byte> destination);
+        static abstract void EncodeBlock(ReadOnlySpan<Rgba8UNorm> source, int blockWidth, int blockHeight, AstcCompressionMode compressionMode, Span<byte> destination);
     }
 
     private interface IAstcFloatTransfer
     {
         static abstract void DecodeBlock(ReadOnlySpan<byte> source, int blockWidth, int blockHeight, Span<Rgba16Float> destination);
 
-        static abstract void EncodeBlock(ReadOnlySpan<Rgba16Float> source, int blockWidth, int blockHeight, Span<byte> destination);
+        static abstract void EncodeBlock(ReadOnlySpan<Rgba16Float> source, int blockWidth, int blockHeight, AstcCompressionMode compressionMode, Span<byte> destination);
     }
 
     private readonly struct AstcLdrTransfer : IAstcUNormTransfer
@@ -264,8 +269,8 @@ public sealed class AstcTextureCoder : IPitchTextureCoder
         public static void DecodeBlock(ReadOnlySpan<byte> source, int blockWidth, int blockHeight, Span<Rgba8UNorm> destination) =>
             DecodeLdrBlock(source, blockWidth, blockHeight, srgb: false, destination);
 
-        public static void EncodeBlock(ReadOnlySpan<Rgba8UNorm> source, int blockWidth, int blockHeight, Span<byte> destination) =>
-            EncodeLdrBlock(source, blockWidth, blockHeight, srgb: false, destination);
+        public static void EncodeBlock(ReadOnlySpan<Rgba8UNorm> source, int blockWidth, int blockHeight, AstcCompressionMode compressionMode, Span<byte> destination) =>
+            EncodeLdrBlock(source, blockWidth, blockHeight, srgb: false, compressionMode, destination);
     }
 
     private readonly struct AstcSrgbTransfer : IAstcUNormTransfer
@@ -273,8 +278,8 @@ public sealed class AstcTextureCoder : IPitchTextureCoder
         public static void DecodeBlock(ReadOnlySpan<byte> source, int blockWidth, int blockHeight, Span<Rgba8UNorm> destination) =>
             DecodeLdrBlock(source, blockWidth, blockHeight, srgb: true, destination);
 
-        public static void EncodeBlock(ReadOnlySpan<Rgba8UNorm> source, int blockWidth, int blockHeight, Span<byte> destination) =>
-            EncodeLdrBlock(source, blockWidth, blockHeight, srgb: true, destination);
+        public static void EncodeBlock(ReadOnlySpan<Rgba8UNorm> source, int blockWidth, int blockHeight, AstcCompressionMode compressionMode, Span<byte> destination) =>
+            EncodeLdrBlock(source, blockWidth, blockHeight, srgb: true, compressionMode, destination);
     }
 
     private readonly struct AstcHdrTransfer : IAstcFloatTransfer
@@ -282,8 +287,8 @@ public sealed class AstcTextureCoder : IPitchTextureCoder
         public static void DecodeBlock(ReadOnlySpan<byte> source, int blockWidth, int blockHeight, Span<Rgba16Float> destination) =>
             DecodeHdrBlock(source, blockWidth, blockHeight, destination);
 
-        public static void EncodeBlock(ReadOnlySpan<Rgba16Float> source, int blockWidth, int blockHeight, Span<byte> destination) =>
-            EncodeHdrBlock(source, blockWidth, blockHeight, destination);
+        public static void EncodeBlock(ReadOnlySpan<Rgba16Float> source, int blockWidth, int blockHeight, AstcCompressionMode compressionMode, Span<byte> destination) =>
+            EncodeHdrBlock(source, blockWidth, blockHeight, compressionMode, destination);
     }
 
     private static void DecodeLdrBlock(ReadOnlySpan<byte> source, int blockWidth, int blockHeight, bool srgb, Span<Rgba8UNorm> destination)
@@ -387,7 +392,13 @@ public sealed class AstcTextureCoder : IPitchTextureCoder
         }
     }
 
-    private static void EncodeLdrBlock(ReadOnlySpan<Rgba8UNorm> source, int blockWidth, int blockHeight, bool srgb, Span<byte> destination)
+    private static void EncodeLdrBlock(
+        ReadOnlySpan<Rgba8UNorm> source,
+        int blockWidth,
+        int blockHeight,
+        bool srgb,
+        AstcCompressionMode compressionMode,
+        Span<byte> destination)
     {
         var texelCount = blockWidth * blockHeight;
         var storage = new Rgba8UNormTexelBlock();
@@ -402,6 +413,31 @@ public sealed class AstcTextureCoder : IPitchTextureCoder
             return;
         }
 
+        switch (compressionMode)
+        {
+            case AstcCompressionMode.Fast:
+                EncodeLdrBlockFast(storage, blockWidth, blockHeight, texelCount, destination);
+                return;
+            case AstcCompressionMode.Normal:
+            case AstcCompressionMode.High:
+            case AstcCompressionMode.Exhaustive:
+                EncodeLdrBlockOptimized(storage, blockWidth, blockHeight, texelCount, compressionMode, destination);
+                return;
+            default:
+                throw new ArgumentOutOfRangeException(
+                    nameof(compressionMode),
+                    compressionMode,
+                    "Unsupported ASTC compression mode.");
+        }
+    }
+
+    private static void EncodeLdrBlockFast(
+        ReadOnlySpan<Rgba8UNorm> storage,
+        int blockWidth,
+        int blockHeight,
+        int texelCount,
+        Span<byte> destination)
+    {
         FindRgbaBounds(storage, texelCount, out var low, out var high);
 
         var weightAccumulators = new InlineArray16<int>();
@@ -443,15 +479,2155 @@ public sealed class AstcTextureCoder : IPitchTextureCoder
         WriteBlockBits(bits, destination);
     }
 
-    private static void EncodeHdrBlock(ReadOnlySpan<Rgba16Float> source, int blockWidth, int blockHeight, Span<byte> destination)
+    private static void EncodeLdrBlockOptimized(
+        ReadOnlySpan<Rgba8UNorm> storage,
+        int blockWidth,
+        int blockHeight,
+        int texelCount,
+        AstcCompressionMode compressionMode,
+        Span<byte> destination)
+    {
+        Span<AstcWeightGridCandidate> candidates = stackalloc AstcWeightGridCandidate[128];
+        var candidateCount = GetWeightGridCandidates(blockWidth, blockHeight, compressionMode, candidates);
+        if (candidateCount == 0)
+        {
+            EncodeLdrBlockFast(storage, blockWidth, blockHeight, texelCount, destination);
+            return;
+        }
+
+        FindRgbaBounds(storage, texelCount, out var boundsLow, out var boundsHigh);
+        var best = new AstcLdrEncodingResult(UInt128.Zero, long.MaxValue);
+        var iterationLimit = GetLdrEndpointOptimizationIterationLimit(compressionMode);
+        var hasPrincipalEndpoints = TryFindPrincipalRgbaEndpoints(storage, texelCount, out var principalLow, out var principalHigh);
+        var isOpaque = IsOpaqueLdrBlock(storage, texelCount);
+
+        for (var i = 0; i < candidateCount; i++)
+        {
+            TryEncodeLdrRgbaCandidate(
+                storage,
+                blockWidth,
+                blockHeight,
+                texelCount,
+                candidates[i],
+                boundsLow,
+                boundsHigh,
+                iterationLimit,
+                ref best);
+
+            if (isOpaque)
+            {
+                TryEncodeLdrRgbCandidate(
+                    storage,
+                    blockWidth,
+                    blockHeight,
+                    texelCount,
+                    candidates[i],
+                    boundsLow,
+                    boundsHigh,
+                    iterationLimit,
+                    ref best);
+            }
+
+            if (hasPrincipalEndpoints)
+            {
+                TryEncodeLdrRgbaCandidate(
+                    storage,
+                    blockWidth,
+                    blockHeight,
+                    texelCount,
+                    candidates[i],
+                    principalLow,
+                    principalHigh,
+                    iterationLimit,
+                    ref best);
+
+                if (isOpaque)
+                {
+                    TryEncodeLdrRgbCandidate(
+                        storage,
+                        blockWidth,
+                        blockHeight,
+                        texelCount,
+                        candidates[i],
+                        principalLow,
+                        principalHigh,
+                        iterationLimit,
+                        ref best);
+                }
+            }
+        }
+
+        if (compressionMode is AstcCompressionMode.High or AstcCompressionMode.Exhaustive)
+        {
+            if (isOpaque && compressionMode == AstcCompressionMode.Exhaustive)
+            {
+                TryEncodeLdrDualPlaneRgbCandidates(
+                    storage,
+                    blockWidth,
+                    blockHeight,
+                    texelCount,
+                    compressionMode,
+                    boundsLow,
+                    boundsHigh,
+                    hasPrincipalEndpoints,
+                    principalLow,
+                    principalHigh,
+                    iterationLimit,
+                    ref best);
+            }
+
+            TryEncodeLdrTwoPartitionCandidates(
+                storage,
+                blockWidth,
+                blockHeight,
+                texelCount,
+                candidates[..candidateCount],
+                compressionMode,
+                isOpaque,
+                iterationLimit,
+                ref best);
+
+            if (isOpaque)
+            {
+                TryEncodeLdrThreePartitionRgbCandidates(
+                    storage,
+                    blockWidth,
+                    blockHeight,
+                    texelCount,
+                    candidates[..candidateCount],
+                    compressionMode,
+                    iterationLimit,
+                    ref best);
+            }
+        }
+
+        if (best.Error == long.MaxValue)
+        {
+            EncodeLdrBlockFast(storage, blockWidth, blockHeight, texelCount, destination);
+            return;
+        }
+
+        WriteBlockBits(best.Bits, destination);
+    }
+
+    private static void TryEncodeLdrRgbaCandidate(
+        ReadOnlySpan<Rgba8UNorm> storage,
+        int blockWidth,
+        int blockHeight,
+        int texelCount,
+        AstcWeightGridCandidate candidate,
+        Rgba8UNorm initialLow,
+        Rgba8UNorm initialHigh,
+        int iterationLimit,
+        ref AstcLdrEncodingResult best)
+    {
+        if (!TryGetColorRange(candidate, colorValueCount: 8, out var colorRange))
+        {
+            return;
+        }
+
+        var low = initialLow;
+        var high = initialHigh;
+        NormalizeLdrEndpointOrder(ref low, ref high);
+
+        var rawWeights = new IntWeightBlock();
+        var texelWeights = new IntTexelBlock();
+        Span<int> endpointValues = stackalloc int[8];
+        Rgba8UNorm quantizedLow = default;
+        Rgba8UNorm quantizedHigh = default;
+
+        for (var pass = 0; pass <= iterationLimit; pass++)
+        {
+            QuantizeLdrEndpoints(low, high, colorRange, endpointValues, out quantizedLow, out quantizedHigh);
+            BuildLdrRawWeights(storage, blockWidth, blockHeight, candidate, quantizedLow, quantizedHigh, rawWeights);
+            InfillLdrWeights(rawWeights, candidate, blockWidth, blockHeight, texelWeights);
+
+            if (pass == iterationLimit
+                || !TryOptimizeLdrEndpoints(storage, texelCount, texelWeights, out low, out high))
+            {
+                break;
+            }
+
+            NormalizeLdrEndpointOrder(ref low, ref high);
+        }
+
+        var error = GetLdrSquaredError(storage, texelCount, texelWeights, quantizedLow, quantizedHigh);
+        if (error >= best.Error)
+        {
+            return;
+        }
+
+        if (ShouldRefineLdrWeights(iterationLimit))
+        {
+            error = RefineLdrRawWeights(
+                storage,
+                blockWidth,
+                blockHeight,
+                texelCount,
+                candidate,
+                quantizedLow,
+                quantizedHigh,
+                rawWeights,
+                texelWeights,
+                error);
+        }
+
+        var bits = EncodeLdrSinglePartitionBlock(candidate, endpointMode: 12, endpointValues, endpointValueCount: 8, colorRange, rawWeights);
+        best = new AstcLdrEncodingResult(bits, error);
+    }
+
+    private static void TryEncodeLdrRgbCandidate(
+        ReadOnlySpan<Rgba8UNorm> storage,
+        int blockWidth,
+        int blockHeight,
+        int texelCount,
+        AstcWeightGridCandidate candidate,
+        Rgba8UNorm initialLow,
+        Rgba8UNorm initialHigh,
+        int iterationLimit,
+        ref AstcLdrEncodingResult best)
+    {
+        if (!TryGetColorRange(candidate, colorValueCount: 6, out var colorRange))
+        {
+            return;
+        }
+
+        var low = new Rgba8UNorm(initialLow.Red, initialLow.Green, initialLow.Blue, 255);
+        var high = new Rgba8UNorm(initialHigh.Red, initialHigh.Green, initialHigh.Blue, 255);
+        NormalizeLdrEndpointOrder(ref low, ref high);
+
+        var rawWeights = new IntWeightBlock();
+        var texelWeights = new IntTexelBlock();
+        Span<int> endpointValues = stackalloc int[6];
+        Rgba8UNorm quantizedLow = default;
+        Rgba8UNorm quantizedHigh = default;
+
+        for (var pass = 0; pass <= iterationLimit; pass++)
+        {
+            QuantizeLdrRgbEndpoints(low, high, colorRange, endpointValues, out quantizedLow, out quantizedHigh);
+            BuildLdrRawWeights(storage, blockWidth, blockHeight, candidate, quantizedLow, quantizedHigh, rawWeights);
+            InfillLdrWeights(rawWeights, candidate, blockWidth, blockHeight, texelWeights);
+
+            if (pass == iterationLimit
+                || !TryOptimizeLdrRgbEndpoints(storage, texelCount, texelWeights, out low, out high))
+            {
+                break;
+            }
+
+            NormalizeLdrEndpointOrder(ref low, ref high);
+        }
+
+        var error = GetLdrSquaredError(storage, texelCount, texelWeights, quantizedLow, quantizedHigh);
+        if (error >= best.Error)
+        {
+            return;
+        }
+
+        if (ShouldRefineLdrWeights(iterationLimit))
+        {
+            error = RefineLdrRawWeights(
+                storage,
+                blockWidth,
+                blockHeight,
+                texelCount,
+                candidate,
+                quantizedLow,
+                quantizedHigh,
+                rawWeights,
+                texelWeights,
+                error);
+        }
+
+        var bits = EncodeLdrSinglePartitionBlock(candidate, endpointMode: 8, endpointValues, endpointValueCount: 6, colorRange, rawWeights);
+        best = new AstcLdrEncodingResult(bits, error);
+    }
+
+    private static void TryEncodeLdrDualPlaneRgbCandidates(
+        ReadOnlySpan<Rgba8UNorm> storage,
+        int blockWidth,
+        int blockHeight,
+        int texelCount,
+        AstcCompressionMode compressionMode,
+        Rgba8UNorm boundsLow,
+        Rgba8UNorm boundsHigh,
+        bool hasPrincipalEndpoints,
+        Rgba8UNorm principalLow,
+        Rgba8UNorm principalHigh,
+        int iterationLimit,
+        ref AstcLdrEncodingResult best)
+    {
+        Span<AstcWeightGridCandidate> candidates = stackalloc AstcWeightGridCandidate[128];
+        var candidateCount = GetDualPlaneWeightGridCandidates(blockWidth, blockHeight, compressionMode, candidates);
+        var candidateLimit = compressionMode == AstcCompressionMode.Exhaustive ? 32 : 4;
+
+        for (var i = 0; i < candidateCount && i < candidateLimit; i++)
+        {
+            var candidate = candidates[i];
+            for (var dualPlaneChannel = 0; dualPlaneChannel < 3; dualPlaneChannel++)
+            {
+                TryEncodeLdrDualPlaneRgbCandidate(
+                    storage,
+                    blockWidth,
+                    blockHeight,
+                    texelCount,
+                    candidate,
+                    boundsLow,
+                    boundsHigh,
+                    dualPlaneChannel,
+                    iterationLimit,
+                    ref best);
+
+                if (hasPrincipalEndpoints)
+                {
+                    TryEncodeLdrDualPlaneRgbCandidate(
+                        storage,
+                        blockWidth,
+                        blockHeight,
+                        texelCount,
+                        candidate,
+                        principalLow,
+                        principalHigh,
+                        dualPlaneChannel,
+                        iterationLimit,
+                        ref best);
+                }
+            }
+        }
+    }
+
+    private static void TryEncodeLdrDualPlaneRgbCandidate(
+        ReadOnlySpan<Rgba8UNorm> storage,
+        int blockWidth,
+        int blockHeight,
+        int texelCount,
+        AstcWeightGridCandidate candidate,
+        Rgba8UNorm initialLow,
+        Rgba8UNorm initialHigh,
+        int dualPlaneChannel,
+        int iterationLimit,
+        ref AstcLdrEncodingResult best)
+    {
+        if (!TryGetColorRange(candidate, colorValueCount: 6, out var colorRange))
+        {
+            return;
+        }
+
+        var low = new Rgba8UNorm(initialLow.Red, initialLow.Green, initialLow.Blue, 255);
+        var high = new Rgba8UNorm(initialHigh.Red, initialHigh.Green, initialHigh.Blue, 255);
+        NormalizeLdrEndpointOrder(ref low, ref high);
+
+        var rawWeights = new IntWeightBlock();
+        var sharedTexelWeights = new IntTexelBlock();
+        var planeTexelWeights = new IntTexelBlock();
+        Span<int> endpointValues = stackalloc int[6];
+        Rgba8UNorm quantizedLow = default;
+        Rgba8UNorm quantizedHigh = default;
+
+        for (var pass = 0; pass <= iterationLimit; pass++)
+        {
+            QuantizeLdrRgbEndpoints(low, high, colorRange, endpointValues, out quantizedLow, out quantizedHigh);
+            BuildLdrDualPlaneRawWeights(
+                storage,
+                blockWidth,
+                blockHeight,
+                candidate,
+                quantizedLow,
+                quantizedHigh,
+                dualPlaneChannel,
+                rawWeights);
+            InfillLdrDualPlaneWeights(rawWeights, candidate, blockWidth, blockHeight, sharedTexelWeights, planeTexelWeights);
+
+            if (pass == iterationLimit
+                || !TryOptimizeLdrDualPlaneRgbEndpoints(storage, texelCount, sharedTexelWeights, planeTexelWeights, dualPlaneChannel, out low, out high))
+            {
+                break;
+            }
+
+            NormalizeLdrEndpointOrder(ref low, ref high);
+        }
+
+        var error = GetLdrDualPlaneSquaredError(
+            storage,
+            texelCount,
+            sharedTexelWeights,
+            planeTexelWeights,
+            quantizedLow,
+            quantizedHigh,
+            dualPlaneChannel);
+        if (error >= best.Error)
+        {
+            return;
+        }
+
+        if (ShouldRefineLdrWeights(iterationLimit))
+        {
+            error = RefineLdrDualPlaneRawWeights(
+                storage,
+                blockWidth,
+                blockHeight,
+                texelCount,
+                candidate,
+                quantizedLow,
+                quantizedHigh,
+                dualPlaneChannel,
+                rawWeights,
+                sharedTexelWeights,
+                planeTexelWeights,
+                error);
+        }
+
+        var bits = EncodeLdrDualPlaneSinglePartitionBlock(
+            candidate,
+            endpointMode: 8,
+            endpointValues,
+            endpointValueCount: 6,
+            colorRange,
+            rawWeights,
+            dualPlaneChannel);
+        best = new AstcLdrEncodingResult(bits, error);
+    }
+
+    private static void TryEncodeLdrTwoPartitionCandidates(
+        ReadOnlySpan<Rgba8UNorm> storage,
+        int blockWidth,
+        int blockHeight,
+        int texelCount,
+        ReadOnlySpan<AstcWeightGridCandidate> candidates,
+        AstcCompressionMode compressionMode,
+        bool isOpaque,
+        int iterationLimit,
+        ref AstcLdrEncodingResult best)
+    {
+        Span<int> partitionSeeds = stackalloc int[32];
+        var seedCount = GetLdrPartitionSeedCandidates(storage, blockWidth, blockHeight, texelCount, partitionCount: 2, compressionMode, partitionSeeds);
+        var candidateLimit = GetTwoPartitionWeightCandidateLimit(compressionMode);
+        var endpointMode = isOpaque ? 8 : 12;
+        var endpointValueCount = isOpaque ? 6 : 8;
+
+        for (var seedIndex = 0; seedIndex < seedCount; seedIndex++)
+        {
+            var partitionSeed = partitionSeeds[seedIndex];
+            for (var candidateIndex = 0; candidateIndex < candidates.Length && candidateIndex < candidateLimit; candidateIndex++)
+            {
+                var candidate = candidates[candidateIndex];
+                if (!TryGetColorRange(candidate, partitionCount: 2, colorValueCount: endpointValueCount * 2, out var colorRange))
+                {
+                    continue;
+                }
+
+                TryEncodeLdrTwoPartitionCandidate(
+                    storage,
+                    blockWidth,
+                    blockHeight,
+                    texelCount,
+                    candidate,
+                    partitionSeed,
+                    endpointMode,
+                    endpointValueCount,
+                    colorRange,
+                    isOpaque,
+                    iterationLimit,
+                    ref best);
+            }
+        }
+    }
+
+    private static void TryEncodeLdrThreePartitionRgbCandidates(
+        ReadOnlySpan<Rgba8UNorm> storage,
+        int blockWidth,
+        int blockHeight,
+        int texelCount,
+        ReadOnlySpan<AstcWeightGridCandidate> candidates,
+        AstcCompressionMode compressionMode,
+        int iterationLimit,
+        ref AstcLdrEncodingResult best)
+    {
+        const int PartitionCount = 3;
+        const int EndpointMode = 8;
+        const int EndpointValueCount = 6;
+
+        Span<int> partitionSeeds = stackalloc int[32];
+        var seedCount = GetLdrPartitionSeedCandidates(storage, blockWidth, blockHeight, texelCount, PartitionCount, compressionMode, partitionSeeds);
+        var candidateLimit = GetThreePartitionWeightCandidateLimit(compressionMode);
+
+        for (var seedIndex = 0; seedIndex < seedCount; seedIndex++)
+        {
+            var partitionSeed = partitionSeeds[seedIndex];
+            for (var candidateIndex = 0; candidateIndex < candidates.Length && candidateIndex < candidateLimit; candidateIndex++)
+            {
+                var candidate = candidates[candidateIndex];
+                if (!TryGetColorRange(candidate, PartitionCount, colorValueCount: EndpointValueCount * PartitionCount, out var colorRange))
+                {
+                    continue;
+                }
+
+                TryEncodeLdrThreePartitionRgbCandidate(
+                    storage,
+                    blockWidth,
+                    blockHeight,
+                    texelCount,
+                    candidate,
+                    partitionSeed,
+                    EndpointMode,
+                    EndpointValueCount,
+                    colorRange,
+                    iterationLimit,
+                    ref best);
+            }
+        }
+    }
+
+    private static void TryEncodeLdrTwoPartitionCandidate(
+        ReadOnlySpan<Rgba8UNorm> storage,
+        int blockWidth,
+        int blockHeight,
+        int texelCount,
+        AstcWeightGridCandidate candidate,
+        int partitionSeed,
+        int endpointMode,
+        int endpointValueCount,
+        int colorRange,
+        bool rgbOnly,
+        int iterationLimit,
+        ref AstcLdrEncodingResult best)
+    {
+        var partitions = new IntTexelBlock();
+        if (!TryBuildPartitionAssignments(partitionSeed, blockWidth, blockHeight, partitions))
+        {
+            return;
+        }
+
+        FindLdrPartitionBounds(storage, texelCount, partitions, partition: 0, rgbOnly, out var low0, out var high0);
+        FindLdrPartitionBounds(storage, texelCount, partitions, partition: 1, rgbOnly, out var low1, out var high1);
+
+        var rawWeights = new IntWeightBlock();
+        var texelWeights = new IntTexelBlock();
+        Span<int> endpointValues = stackalloc int[16];
+        Rgba8UNorm quantizedLow0 = default;
+        Rgba8UNorm quantizedHigh0 = default;
+        Rgba8UNorm quantizedLow1 = default;
+        Rgba8UNorm quantizedHigh1 = default;
+
+        for (var pass = 0; pass <= iterationLimit; pass++)
+        {
+            if (rgbOnly)
+            {
+                QuantizeLdrRgbEndpoints(low0, high0, colorRange, endpointValues[..endpointValueCount], out quantizedLow0, out quantizedHigh0);
+                QuantizeLdrRgbEndpoints(low1, high1, colorRange, endpointValues.Slice(endpointValueCount, endpointValueCount), out quantizedLow1, out quantizedHigh1);
+            }
+            else
+            {
+                QuantizeLdrEndpoints(low0, high0, colorRange, endpointValues[..endpointValueCount], out quantizedLow0, out quantizedHigh0);
+                QuantizeLdrEndpoints(low1, high1, colorRange, endpointValues.Slice(endpointValueCount, endpointValueCount), out quantizedLow1, out quantizedHigh1);
+            }
+
+            BuildLdrPartitionedRawWeights(
+                storage,
+                blockWidth,
+                blockHeight,
+                candidate,
+                partitions,
+                quantizedLow0,
+                quantizedHigh0,
+                quantizedLow1,
+                quantizedHigh1,
+                rawWeights);
+            InfillLdrWeights(rawWeights, candidate, blockWidth, blockHeight, texelWeights);
+
+            if (pass == iterationLimit
+                || !TryOptimizeLdrPartitionEndpoints(storage, texelCount, partitions, texelWeights, partition: 0, rgbOnly, out low0, out high0)
+                || !TryOptimizeLdrPartitionEndpoints(storage, texelCount, partitions, texelWeights, partition: 1, rgbOnly, out low1, out high1))
+            {
+                break;
+            }
+
+            NormalizeLdrEndpointOrder(ref low0, ref high0);
+            NormalizeLdrEndpointOrder(ref low1, ref high1);
+        }
+
+        var error = GetLdrPartitionedSquaredError(
+            storage,
+            texelCount,
+            partitions,
+            texelWeights,
+            quantizedLow0,
+            quantizedHigh0,
+            quantizedLow1,
+            quantizedHigh1);
+        if (error >= best.Error)
+        {
+            return;
+        }
+
+        if (ShouldRefineLdrWeights(iterationLimit))
+        {
+            Span<Rgba8UNorm> lows = stackalloc Rgba8UNorm[2];
+            Span<Rgba8UNorm> highs = stackalloc Rgba8UNorm[2];
+            lows[0] = quantizedLow0;
+            lows[1] = quantizedLow1;
+            highs[0] = quantizedHigh0;
+            highs[1] = quantizedHigh1;
+            error = RefineLdrPartitionedRawWeights(
+                storage,
+                blockWidth,
+                blockHeight,
+                texelCount,
+                candidate,
+                partitions,
+                lows,
+                highs,
+                rawWeights,
+                texelWeights,
+                error);
+        }
+
+        var bits = EncodeLdrTwoPartitionBlock(
+            candidate,
+            partitionSeed,
+            endpointMode,
+            endpointValues,
+            endpointValueCount * 2,
+            colorRange,
+            rawWeights);
+        best = new AstcLdrEncodingResult(bits, error);
+    }
+
+    private static void TryEncodeLdrThreePartitionRgbCandidate(
+        ReadOnlySpan<Rgba8UNorm> storage,
+        int blockWidth,
+        int blockHeight,
+        int texelCount,
+        AstcWeightGridCandidate candidate,
+        int partitionSeed,
+        int endpointMode,
+        int endpointValueCount,
+        int colorRange,
+        int iterationLimit,
+        ref AstcLdrEncodingResult best)
+    {
+        const int PartitionCount = 3;
+
+        var partitions = new IntTexelBlock();
+        if (!TryBuildPartitionAssignments(PartitionCount, partitionSeed, blockWidth, blockHeight, partitions))
+        {
+            return;
+        }
+
+        Span<Rgba8UNorm> lows = stackalloc Rgba8UNorm[PartitionCount];
+        Span<Rgba8UNorm> highs = stackalloc Rgba8UNorm[PartitionCount];
+        Span<Rgba8UNorm> quantizedLows = stackalloc Rgba8UNorm[PartitionCount];
+        Span<Rgba8UNorm> quantizedHighs = stackalloc Rgba8UNorm[PartitionCount];
+        for (var partition = 0; partition < PartitionCount; partition++)
+        {
+            FindLdrPartitionBounds(storage, texelCount, partitions, partition, rgbOnly: true, out lows[partition], out highs[partition]);
+        }
+
+        var rawWeights = new IntWeightBlock();
+        var texelWeights = new IntTexelBlock();
+        Span<int> endpointValues = stackalloc int[18];
+
+        for (var pass = 0; pass <= iterationLimit; pass++)
+        {
+            for (var partition = 0; partition < PartitionCount; partition++)
+            {
+                QuantizeLdrRgbEndpoints(
+                    lows[partition],
+                    highs[partition],
+                    colorRange,
+                    endpointValues.Slice(partition * endpointValueCount, endpointValueCount),
+                    out quantizedLows[partition],
+                    out quantizedHighs[partition]);
+            }
+
+            BuildLdrPartitionedRawWeights(
+                storage,
+                blockWidth,
+                blockHeight,
+                candidate,
+                partitions,
+                quantizedLows,
+                quantizedHighs,
+                rawWeights);
+            InfillLdrWeights(rawWeights, candidate, blockWidth, blockHeight, texelWeights);
+
+            if (pass == iterationLimit)
+            {
+                break;
+            }
+
+            var optimized = true;
+            for (var partition = 0; partition < PartitionCount; partition++)
+            {
+                if (!TryOptimizeLdrPartitionEndpoints(
+                    storage,
+                    texelCount,
+                    partitions,
+                    texelWeights,
+                    partition,
+                    rgbOnly: true,
+                    out lows[partition],
+                    out highs[partition]))
+                {
+                    optimized = false;
+                    break;
+                }
+
+                NormalizeLdrEndpointOrder(ref lows[partition], ref highs[partition]);
+            }
+
+            if (!optimized)
+            {
+                break;
+            }
+        }
+
+        var error = GetLdrPartitionedSquaredError(
+            storage,
+            texelCount,
+            partitions,
+            texelWeights,
+            quantizedLows,
+            quantizedHighs);
+        if (error >= best.Error)
+        {
+            return;
+        }
+
+        if (ShouldRefineLdrWeights(iterationLimit))
+        {
+            error = RefineLdrPartitionedRawWeights(
+                storage,
+                blockWidth,
+                blockHeight,
+                texelCount,
+                candidate,
+                partitions,
+                quantizedLows,
+                quantizedHighs,
+                rawWeights,
+                texelWeights,
+                error);
+        }
+
+        var bits = EncodeLdrMultiPartitionBlock(
+            candidate,
+            partitionCount: PartitionCount,
+            partitionSeed,
+            endpointMode,
+            endpointValues,
+            endpointValueCount * PartitionCount,
+            colorRange,
+            rawWeights);
+        best = new AstcLdrEncodingResult(bits, error);
+    }
+
+    private static UInt128 EncodeLdrSinglePartitionBlock(
+        AstcWeightGridCandidate candidate,
+        int endpointMode,
+        ReadOnlySpan<int> endpointValues,
+        int endpointValueCount,
+        int colorRange,
+        ReadOnlySpan<int> rawWeights)
+    {
+        var endpointBits = EncodeBiseSequence(endpointValues, endpointValueCount, colorRange);
+        var weightValueCount = candidate.Width * candidate.Height;
+        var weightBits = EncodeBiseSequence(rawWeights, weightValueCount, candidate.WeightRange);
+
+        var bits = (UInt128)(uint)candidate.BlockMode;
+        bits |= (UInt128)endpointMode << 13;
+        bits |= endpointBits << 17;
+        bits |= ReverseLowBits(weightBits, candidate.WeightBitCount) << (128 - candidate.WeightBitCount);
+        return bits;
+    }
+
+    private static UInt128 EncodeLdrDualPlaneSinglePartitionBlock(
+        AstcWeightGridCandidate candidate,
+        int endpointMode,
+        ReadOnlySpan<int> endpointValues,
+        int endpointValueCount,
+        int colorRange,
+        ReadOnlySpan<int> rawWeights,
+        int dualPlaneChannel)
+    {
+        var endpointBits = EncodeBiseSequence(endpointValues, endpointValueCount, colorRange);
+        var weightValueCount = candidate.Width * candidate.Height * 2;
+        var weightBits = EncodeBiseSequence(rawWeights, weightValueCount, candidate.WeightRange);
+        var dualPlaneBitStart = 128 - candidate.WeightBitCount - 2;
+
+        var bits = (UInt128)(uint)candidate.BlockMode;
+        bits |= (UInt128)endpointMode << 13;
+        bits |= endpointBits << 17;
+        bits |= (UInt128)(dualPlaneChannel & 0x3) << dualPlaneBitStart;
+        bits |= ReverseLowBits(weightBits, candidate.WeightBitCount) << (128 - candidate.WeightBitCount);
+        return bits;
+    }
+
+    private static UInt128 EncodeLdrTwoPartitionBlock(
+        AstcWeightGridCandidate candidate,
+        int partitionSeed,
+        int endpointMode,
+        ReadOnlySpan<int> endpointValues,
+        int endpointValueCount,
+        int colorRange,
+        ReadOnlySpan<int> rawWeights)
+    {
+        return EncodeLdrMultiPartitionBlock(
+            candidate,
+            partitionCount: 2,
+            partitionSeed,
+            endpointMode,
+            endpointValues,
+            endpointValueCount,
+            colorRange,
+            rawWeights);
+    }
+
+    private static UInt128 EncodeLdrMultiPartitionBlock(
+        AstcWeightGridCandidate candidate,
+        int partitionCount,
+        int partitionSeed,
+        int endpointMode,
+        ReadOnlySpan<int> endpointValues,
+        int endpointValueCount,
+        int colorRange,
+        ReadOnlySpan<int> rawWeights)
+    {
+        var endpointBits = EncodeBiseSequence(endpointValues, endpointValueCount, colorRange);
+        var weightValueCount = candidate.Width * candidate.Height;
+        var weightBits = EncodeBiseSequence(rawWeights, weightValueCount, candidate.WeightRange);
+
+        var bits = (UInt128)(uint)candidate.BlockMode;
+        bits |= (UInt128)(partitionCount - 1) << 11;
+        bits |= (UInt128)(partitionSeed & 0x3FF) << 13;
+        bits |= (UInt128)endpointMode << 25;
+        bits |= endpointBits << 29;
+        bits |= ReverseLowBits(weightBits, candidate.WeightBitCount) << (128 - candidate.WeightBitCount);
+        return bits;
+    }
+
+    private static int GetWeightGridCandidates(
+        int blockWidth,
+        int blockHeight,
+        AstcCompressionMode compressionMode,
+        Span<AstcWeightGridCandidate> candidates)
+    {
+        ValidateCompressionMode(compressionMode);
+
+        var count = 0;
+        AddWeightGridCandidate(blockWidth, blockHeight, 4, 4, 3, candidates, ref count);
+
+        if (compressionMode == AstcCompressionMode.Normal)
+        {
+            return count;
+        }
+
+        if (compressionMode == AstcCompressionMode.Exhaustive)
+        {
+            for (var blockMode = 0; blockMode < 2048; blockMode++)
+            {
+                if (TryCreateWeightGridCandidate(blockMode, blockWidth, blockHeight, out var candidate))
+                {
+                    AddUniqueWeightGridCandidate(candidate, candidates, ref count);
+                }
+            }
+
+            return count;
+        }
+
+        AddWeightGridCandidate(blockWidth, blockHeight, 4, 4, 7, candidates, ref count);
+        AddWeightGridCandidate(blockWidth, blockHeight, 5, 4, 3, candidates, ref count);
+        AddWeightGridCandidate(blockWidth, blockHeight, 4, 5, 3, candidates, ref count);
+        AddWeightGridCandidate(blockWidth, blockHeight, 5, 5, 3, candidates, ref count);
+        AddWeightGridCandidate(blockWidth, blockHeight, 6, 5, 3, candidates, ref count);
+        AddWeightGridCandidate(blockWidth, blockHeight, 5, 6, 3, candidates, ref count);
+        AddWeightGridCandidate(blockWidth, blockHeight, 6, 6, 3, candidates, ref count);
+
+        return count;
+    }
+
+    private static void AddWeightGridCandidate(
+        int blockWidth,
+        int blockHeight,
+        int gridWidth,
+        int gridHeight,
+        int weightRange,
+        Span<AstcWeightGridCandidate> candidates,
+        ref int count)
+    {
+        if (gridWidth > blockWidth || gridHeight > blockHeight)
+        {
+            return;
+        }
+
+        for (var blockMode = 0; blockMode < 2048; blockMode++)
+        {
+            if (TryCreateWeightGridCandidate(blockMode, blockWidth, blockHeight, out var candidate)
+                && candidate.Width == gridWidth
+                && candidate.Height == gridHeight
+                && candidate.WeightRange == weightRange)
+            {
+                AddUniqueWeightGridCandidate(candidate, candidates, ref count);
+                return;
+            }
+        }
+    }
+
+    private static void AddUniqueWeightGridCandidate(
+        AstcWeightGridCandidate candidate,
+        Span<AstcWeightGridCandidate> candidates,
+        ref int count)
+    {
+        for (var i = 0; i < count; i++)
+        {
+            var existing = candidates[i];
+            if (existing.Width == candidate.Width
+                && existing.Height == candidate.Height
+                && existing.WeightRange == candidate.WeightRange
+                && existing.DualPlane == candidate.DualPlane
+                && existing.ColorRange == candidate.ColorRange)
+            {
+                return;
+            }
+        }
+
+        if (count < candidates.Length)
+        {
+            candidates[count++] = candidate;
+        }
+    }
+
+    private static bool TryCreateWeightGridCandidate(
+        int blockMode,
+        int blockWidth,
+        int blockHeight,
+        out AstcWeightGridCandidate candidate) =>
+        TryCreateWeightGridCandidate(blockMode, blockWidth, blockHeight, requireDualPlane: false, colorValueCount: 8, out candidate);
+
+    private static bool TryCreateWeightGridCandidate(
+        int blockMode,
+        int blockWidth,
+        int blockHeight,
+        bool requireDualPlane,
+        int colorValueCount,
+        out AstcWeightGridCandidate candidate)
+    {
+        if (!TryDecodeWeightGrid((ulong)blockMode, out var weightWidth, out var weightHeight, out var weightRange, out var widthA6HeightB6)
+            || weightWidth > blockWidth
+            || weightHeight > blockHeight)
+        {
+            candidate = default;
+            return false;
+        }
+
+        var dualPlane = !widthA6HeightB6 && ((blockMode >> 10) & 1) != 0;
+        if (dualPlane != requireDualPlane)
+        {
+            candidate = default;
+            return false;
+        }
+
+        var weightValueCount = weightWidth * weightHeight * (dualPlane ? 2 : 1);
+        if (weightValueCount > MaxWeightValues)
+        {
+            candidate = default;
+            return false;
+        }
+
+        var weightBitCount = GetBiseBitCount(weightValueCount, weightRange);
+        if (weightBitCount is < 24 or > 96)
+        {
+            candidate = default;
+            return false;
+        }
+
+        var maxColorBits = 128 - weightBitCount - 17 - (dualPlane ? 2 : 0);
+        if (!TryFitColorRange(colorValueCount, maxColorBits, out var colorRange, out var colorBitCount))
+        {
+            candidate = default;
+            return false;
+        }
+
+        candidate = new AstcWeightGridCandidate(
+            weightWidth,
+            weightHeight,
+            weightRange,
+            blockMode,
+            weightBitCount,
+            dualPlane,
+            colorRange,
+            colorBitCount);
+        return true;
+    }
+
+    private static bool TryGetColorRange(AstcWeightGridCandidate candidate, int colorValueCount, out int colorRange) =>
+        TryGetColorRange(candidate, partitionCount: 1, colorValueCount, out colorRange);
+
+    private static bool TryGetColorRange(AstcWeightGridCandidate candidate, int partitionCount, int colorValueCount, out int colorRange)
+    {
+        var colorStartBit = partitionCount == 1 ? 17 : 29;
+        var maxColorBits = 128 - candidate.WeightBitCount - colorStartBit - (candidate.DualPlane ? 2 : 0);
+        if (TryFitColorRange(colorValueCount, maxColorBits, out colorRange, out _))
+        {
+            return true;
+        }
+
+        colorRange = 0;
+        return false;
+    }
+
+    private static int GetLdrPartitionSeedCandidates(
+        ReadOnlySpan<Rgba8UNorm> storage,
+        int blockWidth,
+        int blockHeight,
+        int texelCount,
+        int partitionCount,
+        AstcCompressionMode compressionMode,
+        Span<int> seeds)
+    {
+        Span<double> scores = stackalloc double[32];
+        var count = 0;
+        var seedStep = compressionMode == AstcCompressionMode.Exhaustive ? 1 : 32;
+        var seedLimit = compressionMode == AstcCompressionMode.Exhaustive ? 16 : 4;
+        var partitions = new IntTexelBlock();
+
+        for (var seed = 0; seed < 1024; seed += seedStep)
+        {
+            if (!TryBuildPartitionAssignments(partitionCount, seed, blockWidth, blockHeight, partitions))
+            {
+                continue;
+            }
+
+            var score = GetLdrMeanPartitionScore(storage, texelCount, partitions, partitionCount);
+            InsertPartitionSeedCandidate(seed, score, seedLimit, seeds, scores, ref count);
+        }
+
+        return count;
+    }
+
+    private static int GetDualPlaneWeightGridCandidates(
+        int blockWidth,
+        int blockHeight,
+        AstcCompressionMode compressionMode,
+        Span<AstcWeightGridCandidate> candidates)
+    {
+        ValidateCompressionMode(compressionMode);
+
+        var count = 0;
+        if (compressionMode == AstcCompressionMode.Exhaustive)
+        {
+            for (var blockMode = 0; blockMode < 2048; blockMode++)
+            {
+                if (TryCreateWeightGridCandidate(blockMode, blockWidth, blockHeight, requireDualPlane: true, colorValueCount: 6, out var candidate))
+                {
+                    AddUniqueWeightGridCandidate(candidate, candidates, ref count);
+                }
+            }
+
+            return count;
+        }
+
+        AddDualPlaneWeightGridCandidate(blockWidth, blockHeight, 4, 4, 3, candidates, ref count);
+        AddDualPlaneWeightGridCandidate(blockWidth, blockHeight, 4, 4, 7, candidates, ref count);
+        AddDualPlaneWeightGridCandidate(blockWidth, blockHeight, 5, 4, 3, candidates, ref count);
+        AddDualPlaneWeightGridCandidate(blockWidth, blockHeight, 4, 5, 3, candidates, ref count);
+        AddDualPlaneWeightGridCandidate(blockWidth, blockHeight, 5, 5, 3, candidates, ref count);
+        AddDualPlaneWeightGridCandidate(blockWidth, blockHeight, 6, 5, 3, candidates, ref count);
+        AddDualPlaneWeightGridCandidate(blockWidth, blockHeight, 5, 6, 3, candidates, ref count);
+
+        return count;
+    }
+
+    private static void AddDualPlaneWeightGridCandidate(
+        int blockWidth,
+        int blockHeight,
+        int gridWidth,
+        int gridHeight,
+        int weightRange,
+        Span<AstcWeightGridCandidate> candidates,
+        ref int count)
+    {
+        if (gridWidth > blockWidth || gridHeight > blockHeight)
+        {
+            return;
+        }
+
+        for (var blockMode = 0; blockMode < 2048; blockMode++)
+        {
+            if (TryCreateWeightGridCandidate(blockMode, blockWidth, blockHeight, requireDualPlane: true, colorValueCount: 6, out var candidate)
+                && candidate.Width == gridWidth
+                && candidate.Height == gridHeight
+                && candidate.WeightRange == weightRange)
+            {
+                AddUniqueWeightGridCandidate(candidate, candidates, ref count);
+                return;
+            }
+        }
+    }
+
+    private static void InsertPartitionSeedCandidate(
+        int seed,
+        double score,
+        int seedLimit,
+        Span<int> seeds,
+        Span<double> scores,
+        ref int count)
+    {
+        var insertIndex = 0;
+        while (insertIndex < count && scores[insertIndex] <= score)
+        {
+            insertIndex++;
+        }
+
+        if (insertIndex >= seedLimit)
+        {
+            return;
+        }
+
+        var maxMove = Math.Min(count, seedLimit - 1);
+        for (var i = maxMove; i > insertIndex; i--)
+        {
+            seeds[i] = seeds[i - 1];
+            scores[i] = scores[i - 1];
+        }
+
+        seeds[insertIndex] = seed;
+        scores[insertIndex] = score;
+        count = Math.Min(count + 1, seedLimit);
+    }
+
+    private static double GetLdrMeanPartitionScore(
+        ReadOnlySpan<Rgba8UNorm> storage,
+        int texelCount,
+        ReadOnlySpan<int> partitions,
+        int partitionCount)
+    {
+        Span<int> counts = stackalloc int[partitionCount];
+        Span<int> sumR = stackalloc int[partitionCount];
+        Span<int> sumG = stackalloc int[partitionCount];
+        Span<int> sumB = stackalloc int[partitionCount];
+        Span<int> sumA = stackalloc int[partitionCount];
+
+        for (var i = 0; i < texelCount; i++)
+        {
+            var partition = partitions[i];
+            counts[partition]++;
+            sumR[partition] += storage[i].Red;
+            sumG[partition] += storage[i].Green;
+            sumB[partition] += storage[i].Blue;
+            sumA[partition] += storage[i].Alpha;
+        }
+
+        var score = 0.0;
+        for (var i = 0; i < texelCount; i++)
+        {
+            var partition = partitions[i];
+            var count = counts[partition];
+            var red = sumR[partition] / count;
+            var green = sumG[partition] / count;
+            var blue = sumB[partition] / count;
+            var alpha = sumA[partition] / count;
+            score += Squared(storage[i].Red - red);
+            score += Squared(storage[i].Green - green);
+            score += Squared(storage[i].Blue - blue);
+            score += Squared(storage[i].Alpha - alpha);
+        }
+
+        return score;
+    }
+
+    private static int GetTwoPartitionWeightCandidateLimit(AstcCompressionMode compressionMode) =>
+        compressionMode == AstcCompressionMode.Exhaustive ? 64 : 8;
+
+    private static int GetThreePartitionWeightCandidateLimit(AstcCompressionMode compressionMode) =>
+        compressionMode == AstcCompressionMode.Exhaustive ? 64 : 8;
+
+    private static bool TryBuildPartitionAssignments(
+        int partitionSeed,
+        int blockWidth,
+        int blockHeight,
+        Span<int> partitions) =>
+        TryBuildPartitionAssignments(partitionCount: 2, partitionSeed, blockWidth, blockHeight, partitions);
+
+    private static bool TryBuildPartitionAssignments(
+        int partitionCount,
+        int partitionSeed,
+        int blockWidth,
+        int blockHeight,
+        Span<int> partitions)
+    {
+        Span<int> counts = stackalloc int[4];
+        var texelIndex = 0;
+        for (var y = 0; y < blockHeight; y++)
+        {
+            for (var x = 0; x < blockWidth; x++)
+            {
+                var partition = GetPartitionIndex(partitionCount, partitionSeed, x, y, blockWidth, blockHeight);
+                partitions[texelIndex++] = partition;
+                counts[partition]++;
+            }
+        }
+
+        for (var partition = 0; partition < partitionCount; partition++)
+        {
+            if (counts[partition] == 0)
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static void FindLdrPartitionBounds(
+        ReadOnlySpan<Rgba8UNorm> storage,
+        int texelCount,
+        ReadOnlySpan<int> partitions,
+        int partition,
+        bool rgbOnly,
+        out Rgba8UNorm low,
+        out Rgba8UNorm high)
+    {
+        var minR = 255;
+        var minG = 255;
+        var minB = 255;
+        var minA = rgbOnly ? 255 : 255;
+        var maxR = 0;
+        var maxG = 0;
+        var maxB = 0;
+        var maxA = rgbOnly ? 255 : 0;
+
+        for (var i = 0; i < texelCount; i++)
+        {
+            if (partitions[i] != partition)
+            {
+                continue;
+            }
+
+            var color = storage[i];
+            minR = Math.Min(minR, color.Red);
+            minG = Math.Min(minG, color.Green);
+            minB = Math.Min(minB, color.Blue);
+            maxR = Math.Max(maxR, color.Red);
+            maxG = Math.Max(maxG, color.Green);
+            maxB = Math.Max(maxB, color.Blue);
+            if (!rgbOnly)
+            {
+                minA = Math.Min(minA, color.Alpha);
+                maxA = Math.Max(maxA, color.Alpha);
+            }
+        }
+
+        low = new Rgba8UNorm((byte)minR, (byte)minG, (byte)minB, (byte)minA);
+        high = new Rgba8UNorm((byte)maxR, (byte)maxG, (byte)maxB, (byte)maxA);
+        NormalizeLdrEndpointOrder(ref low, ref high);
+    }
+
+    private static void BuildLdrPartitionedRawWeights(
+        ReadOnlySpan<Rgba8UNorm> storage,
+        int blockWidth,
+        int blockHeight,
+        AstcWeightGridCandidate candidate,
+        ReadOnlySpan<int> partitions,
+        Rgba8UNorm low0,
+        Rgba8UNorm high0,
+        Rgba8UNorm low1,
+        Rgba8UNorm high1,
+        Span<int> rawWeights)
+    {
+        Span<Rgba8UNorm> lows = stackalloc Rgba8UNorm[2];
+        Span<Rgba8UNorm> highs = stackalloc Rgba8UNorm[2];
+        lows[0] = low0;
+        lows[1] = low1;
+        highs[0] = high0;
+        highs[1] = high1;
+        BuildLdrPartitionedRawWeights(storage, blockWidth, blockHeight, candidate, partitions, lows, highs, rawWeights);
+    }
+
+    private static void BuildLdrPartitionedRawWeights(
+        ReadOnlySpan<Rgba8UNorm> storage,
+        int blockWidth,
+        int blockHeight,
+        AstcWeightGridCandidate candidate,
+        ReadOnlySpan<int> partitions,
+        ReadOnlySpan<Rgba8UNorm> lows,
+        ReadOnlySpan<Rgba8UNorm> highs,
+        Span<int> rawWeights)
+    {
+        Span<int> accumulators = stackalloc int[MaxWeightValues];
+        Span<int> counts = stackalloc int[MaxWeightValues];
+        var gridSize = candidate.Width * candidate.Height;
+
+        for (var y = 0; y < blockHeight; y++)
+        {
+            for (var x = 0; x < blockWidth; x++)
+            {
+                var texelIndex = (y * blockWidth) + x;
+                var partition = partitions[texelIndex];
+                var gridX = GetEncoderGridCoordinate(x, blockWidth, candidate.Width);
+                var gridY = GetEncoderGridCoordinate(y, blockHeight, candidate.Height);
+                var gridIndex = (gridY * candidate.Width) + gridX;
+                accumulators[gridIndex] += QuantizeWeight(storage[texelIndex], lows[partition], highs[partition], candidate.WeightRange);
+                counts[gridIndex]++;
+            }
+        }
+
+        for (var i = 0; i < gridSize; i++)
+        {
+            rawWeights[i] = counts[i] == 0
+                ? 0
+                : Math.Clamp((accumulators[i] + (counts[i] / 2)) / counts[i], 0, candidate.WeightRange);
+        }
+    }
+
+    private static bool TryOptimizeLdrPartitionEndpoints(
+        ReadOnlySpan<Rgba8UNorm> storage,
+        int texelCount,
+        ReadOnlySpan<int> partitions,
+        ReadOnlySpan<int> texelWeights,
+        int partition,
+        bool rgbOnly,
+        out Rgba8UNorm low,
+        out Rgba8UNorm high)
+    {
+        if (!TryOptimizeLdrPartitionEndpointChannel(storage, texelCount, partitions, texelWeights, partition, 0, out var lowR, out var highR)
+            || !TryOptimizeLdrPartitionEndpointChannel(storage, texelCount, partitions, texelWeights, partition, 1, out var lowG, out var highG)
+            || !TryOptimizeLdrPartitionEndpointChannel(storage, texelCount, partitions, texelWeights, partition, 2, out var lowB, out var highB))
+        {
+            low = default;
+            high = default;
+            return false;
+        }
+
+        if (rgbOnly)
+        {
+            low = new Rgba8UNorm(lowR, lowG, lowB, 255);
+            high = new Rgba8UNorm(highR, highG, highB, 255);
+            return true;
+        }
+
+        if (!TryOptimizeLdrPartitionEndpointChannel(storage, texelCount, partitions, texelWeights, partition, 3, out var lowA, out var highA))
+        {
+            low = default;
+            high = default;
+            return false;
+        }
+
+        low = new Rgba8UNorm(lowR, lowG, lowB, lowA);
+        high = new Rgba8UNorm(highR, highG, highB, highA);
+        return true;
+    }
+
+    private static bool TryOptimizeLdrPartitionEndpointChannel(
+        ReadOnlySpan<Rgba8UNorm> storage,
+        int texelCount,
+        ReadOnlySpan<int> partitions,
+        ReadOnlySpan<int> texelWeights,
+        int partition,
+        int channel,
+        out byte low,
+        out byte high)
+    {
+        var aa = 0.0;
+        var ab = 0.0;
+        var bb = 0.0;
+        var ac = 0.0;
+        var bc = 0.0;
+
+        for (var i = 0; i < texelCount; i++)
+        {
+            if (partitions[i] != partition)
+            {
+                continue;
+            }
+
+            var weight1 = texelWeights[i];
+            var weight0 = 64 - weight1;
+            var value = GetRgbaChannel(storage[i], channel) * 64.0;
+            aa += weight0 * weight0;
+            ab += weight0 * weight1;
+            bb += weight1 * weight1;
+            ac += weight0 * value;
+            bc += weight1 * value;
+        }
+
+        var determinant = (aa * bb) - (ab * ab);
+        if (determinant <= double.Epsilon)
+        {
+            low = 0;
+            high = 0;
+            return false;
+        }
+
+        low = ClampToByte((int)Math.Round(((ac * bb) - (bc * ab)) / determinant));
+        high = ClampToByte((int)Math.Round(((bc * aa) - (ac * ab)) / determinant));
+        return true;
+    }
+
+    private static long GetLdrPartitionedSquaredError(
+        ReadOnlySpan<Rgba8UNorm> storage,
+        int texelCount,
+        ReadOnlySpan<int> partitions,
+        ReadOnlySpan<int> texelWeights,
+        Rgba8UNorm low0,
+        Rgba8UNorm high0,
+        Rgba8UNorm low1,
+        Rgba8UNorm high1)
+    {
+        Span<Rgba8UNorm> lows = stackalloc Rgba8UNorm[2];
+        Span<Rgba8UNorm> highs = stackalloc Rgba8UNorm[2];
+        lows[0] = low0;
+        lows[1] = low1;
+        highs[0] = high0;
+        highs[1] = high1;
+        return GetLdrPartitionedSquaredError(storage, texelCount, partitions, texelWeights, lows, highs);
+    }
+
+    private static long GetLdrPartitionedSquaredError(
+        ReadOnlySpan<Rgba8UNorm> storage,
+        int texelCount,
+        ReadOnlySpan<int> partitions,
+        ReadOnlySpan<int> texelWeights,
+        ReadOnlySpan<Rgba8UNorm> lows,
+        ReadOnlySpan<Rgba8UNorm> highs)
+    {
+        long error = 0;
+        for (var i = 0; i < texelCount; i++)
+        {
+            var partition = partitions[i];
+            var low = lows[partition];
+            var high = highs[partition];
+            var weight = texelWeights[i];
+            var red = Interpolate(low.Red * 257, high.Red * 257, weight) >> 8;
+            var green = Interpolate(low.Green * 257, high.Green * 257, weight) >> 8;
+            var blue = Interpolate(low.Blue * 257, high.Blue * 257, weight) >> 8;
+            var alpha = Interpolate(low.Alpha * 257, high.Alpha * 257, weight) >> 8;
+            error += Squared(storage[i].Red - red);
+            error += Squared(storage[i].Green - green);
+            error += Squared(storage[i].Blue - blue);
+            error += Squared(storage[i].Alpha - alpha);
+        }
+
+        return error;
+    }
+
+    private static void BuildLdrRawWeights(
+        ReadOnlySpan<Rgba8UNorm> storage,
+        int blockWidth,
+        int blockHeight,
+        AstcWeightGridCandidate candidate,
+        Rgba8UNorm low,
+        Rgba8UNorm high,
+        Span<int> rawWeights)
+    {
+        Span<int> accumulators = stackalloc int[MaxWeightValues];
+        Span<int> counts = stackalloc int[MaxWeightValues];
+        var gridSize = candidate.Width * candidate.Height;
+
+        for (var y = 0; y < blockHeight; y++)
+        {
+            for (var x = 0; x < blockWidth; x++)
+            {
+                var texelIndex = (y * blockWidth) + x;
+                var gridX = GetEncoderGridCoordinate(x, blockWidth, candidate.Width);
+                var gridY = GetEncoderGridCoordinate(y, blockHeight, candidate.Height);
+                var gridIndex = (gridY * candidate.Width) + gridX;
+                accumulators[gridIndex] += QuantizeWeight(storage[texelIndex], low, high, candidate.WeightRange);
+                counts[gridIndex]++;
+            }
+        }
+
+        for (var i = 0; i < gridSize; i++)
+        {
+            rawWeights[i] = counts[i] == 0
+                ? 0
+                : Math.Clamp((accumulators[i] + (counts[i] / 2)) / counts[i], 0, candidate.WeightRange);
+        }
+    }
+
+    private static void BuildLdrDualPlaneRawWeights(
+        ReadOnlySpan<Rgba8UNorm> storage,
+        int blockWidth,
+        int blockHeight,
+        AstcWeightGridCandidate candidate,
+        Rgba8UNorm low,
+        Rgba8UNorm high,
+        int dualPlaneChannel,
+        Span<int> rawWeights)
+    {
+        Span<int> sharedAccumulators = stackalloc int[MaxWeightValues];
+        Span<int> planeAccumulators = stackalloc int[MaxWeightValues];
+        Span<int> counts = stackalloc int[MaxWeightValues];
+        var gridSize = candidate.Width * candidate.Height;
+
+        for (var y = 0; y < blockHeight; y++)
+        {
+            for (var x = 0; x < blockWidth; x++)
+            {
+                var texelIndex = (y * blockWidth) + x;
+                var gridX = GetEncoderGridCoordinate(x, blockWidth, candidate.Width);
+                var gridY = GetEncoderGridCoordinate(y, blockHeight, candidate.Height);
+                var gridIndex = (gridY * candidate.Width) + gridX;
+                sharedAccumulators[gridIndex] += QuantizeRgbWeightExcludingChannel(
+                    storage[texelIndex],
+                    low,
+                    high,
+                    candidate.WeightRange,
+                    dualPlaneChannel);
+                planeAccumulators[gridIndex] += QuantizeWeightChannel(
+                    storage[texelIndex],
+                    low,
+                    high,
+                    candidate.WeightRange,
+                    dualPlaneChannel);
+                counts[gridIndex]++;
+            }
+        }
+
+        for (var i = 0; i < gridSize; i++)
+        {
+            var shared = counts[i] == 0
+                ? 0
+                : Math.Clamp((sharedAccumulators[i] + (counts[i] / 2)) / counts[i], 0, candidate.WeightRange);
+            var plane = counts[i] == 0
+                ? 0
+                : Math.Clamp((planeAccumulators[i] + (counts[i] / 2)) / counts[i], 0, candidate.WeightRange);
+            rawWeights[i * 2] = shared;
+            rawWeights[(i * 2) + 1] = plane;
+        }
+    }
+
+    private static void InfillLdrWeights(
+        ReadOnlySpan<int> rawWeights,
+        AstcWeightGridCandidate candidate,
+        int blockWidth,
+        int blockHeight,
+        Span<int> texelWeights)
+    {
+        var gridWeights = new IntWeightBlock();
+        var gridSize = candidate.Width * candidate.Height;
+        for (var i = 0; i < gridSize; i++)
+        {
+            gridWeights[i] = UnquantizeWeight(rawWeights[i], candidate.WeightRange);
+        }
+
+        InfillWeights(gridWeights, candidate.Width, candidate.Height, blockWidth, blockHeight, texelWeights);
+    }
+
+    private static void InfillLdrDualPlaneWeights(
+        ReadOnlySpan<int> rawWeights,
+        AstcWeightGridCandidate candidate,
+        int blockWidth,
+        int blockHeight,
+        Span<int> sharedTexelWeights,
+        Span<int> planeTexelWeights)
+    {
+        var sharedGridWeights = new IntWeightBlock();
+        var planeGridWeights = new IntWeightBlock();
+        var gridSize = candidate.Width * candidate.Height;
+        for (var i = 0; i < gridSize; i++)
+        {
+            sharedGridWeights[i] = UnquantizeWeight(rawWeights[i * 2], candidate.WeightRange);
+            planeGridWeights[i] = UnquantizeWeight(rawWeights[(i * 2) + 1], candidate.WeightRange);
+        }
+
+        InfillWeights(sharedGridWeights, candidate.Width, candidate.Height, blockWidth, blockHeight, sharedTexelWeights);
+        InfillWeights(planeGridWeights, candidate.Width, candidate.Height, blockWidth, blockHeight, planeTexelWeights);
+    }
+
+    private static bool ShouldRefineLdrWeights(int iterationLimit) => iterationLimit >= 4;
+
+    private static long RefineLdrRawWeights(
+        ReadOnlySpan<Rgba8UNorm> storage,
+        int blockWidth,
+        int blockHeight,
+        int texelCount,
+        AstcWeightGridCandidate candidate,
+        Rgba8UNorm low,
+        Rgba8UNorm high,
+        Span<int> rawWeights,
+        Span<int> texelWeights,
+        long bestError)
+    {
+        var weightValueCount = candidate.Width * candidate.Height;
+        for (var i = 0; i < weightValueCount; i++)
+        {
+            var original = rawWeights[i];
+            var bestValue = original;
+            for (var delta = -1; delta <= 1; delta += 2)
+            {
+                var candidateWeight = original + delta;
+                if ((uint)candidateWeight > (uint)candidate.WeightRange)
+                {
+                    continue;
+                }
+
+                rawWeights[i] = candidateWeight;
+                InfillLdrWeights(rawWeights, candidate, blockWidth, blockHeight, texelWeights);
+                var error = GetLdrSquaredError(storage, texelCount, texelWeights, low, high);
+                if (error < bestError)
+                {
+                    bestError = error;
+                    bestValue = candidateWeight;
+                }
+            }
+
+            rawWeights[i] = bestValue;
+        }
+
+        InfillLdrWeights(rawWeights, candidate, blockWidth, blockHeight, texelWeights);
+        return bestError;
+    }
+
+    private static long RefineLdrPartitionedRawWeights(
+        ReadOnlySpan<Rgba8UNorm> storage,
+        int blockWidth,
+        int blockHeight,
+        int texelCount,
+        AstcWeightGridCandidate candidate,
+        ReadOnlySpan<int> partitions,
+        ReadOnlySpan<Rgba8UNorm> lows,
+        ReadOnlySpan<Rgba8UNorm> highs,
+        Span<int> rawWeights,
+        Span<int> texelWeights,
+        long bestError)
+    {
+        var weightValueCount = candidate.Width * candidate.Height;
+        for (var i = 0; i < weightValueCount; i++)
+        {
+            var original = rawWeights[i];
+            var bestValue = original;
+            for (var delta = -1; delta <= 1; delta += 2)
+            {
+                var candidateWeight = original + delta;
+                if ((uint)candidateWeight > (uint)candidate.WeightRange)
+                {
+                    continue;
+                }
+
+                rawWeights[i] = candidateWeight;
+                InfillLdrWeights(rawWeights, candidate, blockWidth, blockHeight, texelWeights);
+                var error = GetLdrPartitionedSquaredError(storage, texelCount, partitions, texelWeights, lows, highs);
+                if (error < bestError)
+                {
+                    bestError = error;
+                    bestValue = candidateWeight;
+                }
+            }
+
+            rawWeights[i] = bestValue;
+        }
+
+        InfillLdrWeights(rawWeights, candidate, blockWidth, blockHeight, texelWeights);
+        return bestError;
+    }
+
+    private static long RefineLdrDualPlaneRawWeights(
+        ReadOnlySpan<Rgba8UNorm> storage,
+        int blockWidth,
+        int blockHeight,
+        int texelCount,
+        AstcWeightGridCandidate candidate,
+        Rgba8UNorm low,
+        Rgba8UNorm high,
+        int dualPlaneChannel,
+        Span<int> rawWeights,
+        Span<int> sharedTexelWeights,
+        Span<int> planeTexelWeights,
+        long bestError)
+    {
+        var weightValueCount = candidate.Width * candidate.Height * 2;
+        for (var i = 0; i < weightValueCount; i++)
+        {
+            var original = rawWeights[i];
+            var bestValue = original;
+            for (var delta = -1; delta <= 1; delta += 2)
+            {
+                var candidateWeight = original + delta;
+                if ((uint)candidateWeight > (uint)candidate.WeightRange)
+                {
+                    continue;
+                }
+
+                rawWeights[i] = candidateWeight;
+                InfillLdrDualPlaneWeights(rawWeights, candidate, blockWidth, blockHeight, sharedTexelWeights, planeTexelWeights);
+                var error = GetLdrDualPlaneSquaredError(
+                    storage,
+                    texelCount,
+                    sharedTexelWeights,
+                    planeTexelWeights,
+                    low,
+                    high,
+                    dualPlaneChannel);
+                if (error < bestError)
+                {
+                    bestError = error;
+                    bestValue = candidateWeight;
+                }
+            }
+
+            rawWeights[i] = bestValue;
+        }
+
+        InfillLdrDualPlaneWeights(rawWeights, candidate, blockWidth, blockHeight, sharedTexelWeights, planeTexelWeights);
+        return bestError;
+    }
+
+    private static void QuantizeLdrEndpoints(
+        Rgba8UNorm low,
+        Rgba8UNorm high,
+        int colorRange,
+        Span<int> endpointValues,
+        out Rgba8UNorm quantizedLow,
+        out Rgba8UNorm quantizedHigh)
+    {
+        QuantizeEndpointByte(low.Red, colorRange, out endpointValues[0], out var lowR);
+        QuantizeEndpointByte(high.Red, colorRange, out endpointValues[1], out var highR);
+        QuantizeEndpointByte(low.Green, colorRange, out endpointValues[2], out var lowG);
+        QuantizeEndpointByte(high.Green, colorRange, out endpointValues[3], out var highG);
+        QuantizeEndpointByte(low.Blue, colorRange, out endpointValues[4], out var lowB);
+        QuantizeEndpointByte(high.Blue, colorRange, out endpointValues[5], out var highB);
+        QuantizeEndpointByte(low.Alpha, colorRange, out endpointValues[6], out var lowA);
+        QuantizeEndpointByte(high.Alpha, colorRange, out endpointValues[7], out var highA);
+
+        quantizedLow = new Rgba8UNorm(lowR, lowG, lowB, lowA);
+        quantizedHigh = new Rgba8UNorm(highR, highG, highB, highA);
+        if (GetRgbSum(quantizedHigh) >= GetRgbSum(quantizedLow))
+        {
+            return;
+        }
+
+        (endpointValues[0], endpointValues[1]) = (endpointValues[1], endpointValues[0]);
+        (endpointValues[2], endpointValues[3]) = (endpointValues[3], endpointValues[2]);
+        (endpointValues[4], endpointValues[5]) = (endpointValues[5], endpointValues[4]);
+        (endpointValues[6], endpointValues[7]) = (endpointValues[7], endpointValues[6]);
+        (quantizedLow, quantizedHigh) = (quantizedHigh, quantizedLow);
+    }
+
+    private static void QuantizeLdrRgbEndpoints(
+        Rgba8UNorm low,
+        Rgba8UNorm high,
+        int colorRange,
+        Span<int> endpointValues,
+        out Rgba8UNorm quantizedLow,
+        out Rgba8UNorm quantizedHigh)
+    {
+        QuantizeEndpointByte(low.Red, colorRange, out endpointValues[0], out var lowR);
+        QuantizeEndpointByte(high.Red, colorRange, out endpointValues[1], out var highR);
+        QuantizeEndpointByte(low.Green, colorRange, out endpointValues[2], out var lowG);
+        QuantizeEndpointByte(high.Green, colorRange, out endpointValues[3], out var highG);
+        QuantizeEndpointByte(low.Blue, colorRange, out endpointValues[4], out var lowB);
+        QuantizeEndpointByte(high.Blue, colorRange, out endpointValues[5], out var highB);
+
+        quantizedLow = new Rgba8UNorm(lowR, lowG, lowB, 255);
+        quantizedHigh = new Rgba8UNorm(highR, highG, highB, 255);
+        if (GetRgbSum(quantizedHigh) >= GetRgbSum(quantizedLow))
+        {
+            return;
+        }
+
+        (endpointValues[0], endpointValues[1]) = (endpointValues[1], endpointValues[0]);
+        (endpointValues[2], endpointValues[3]) = (endpointValues[3], endpointValues[2]);
+        (endpointValues[4], endpointValues[5]) = (endpointValues[5], endpointValues[4]);
+        (quantizedLow, quantizedHigh) = (quantizedHigh, quantizedLow);
+    }
+
+    private static void QuantizeEndpointByte(byte value, int range, out int encoded, out byte decoded)
+    {
+        var bestValue = 0;
+        var bestError = int.MaxValue;
+        for (var candidate = 0; candidate <= range; candidate++)
+        {
+            var unquantized = UnquantizeEndpointValue(candidate, range);
+            var error = Math.Abs(unquantized - value);
+            if (error < bestError)
+            {
+                bestError = error;
+                bestValue = candidate;
+                if (error == 0)
+                {
+                    break;
+                }
+            }
+        }
+
+        encoded = bestValue;
+        decoded = (byte)UnquantizeEndpointValue(bestValue, range);
+    }
+
+    private static bool TryOptimizeLdrEndpoints(
+        ReadOnlySpan<Rgba8UNorm> storage,
+        int texelCount,
+        ReadOnlySpan<int> texelWeights,
+        out Rgba8UNorm low,
+        out Rgba8UNorm high)
+    {
+        if (!TryOptimizeLdrEndpointChannel(storage, texelCount, texelWeights, 0, out var lowR, out var highR)
+            || !TryOptimizeLdrEndpointChannel(storage, texelCount, texelWeights, 1, out var lowG, out var highG)
+            || !TryOptimizeLdrEndpointChannel(storage, texelCount, texelWeights, 2, out var lowB, out var highB)
+            || !TryOptimizeLdrEndpointChannel(storage, texelCount, texelWeights, 3, out var lowA, out var highA))
+        {
+            low = default;
+            high = default;
+            return false;
+        }
+
+        low = new Rgba8UNorm(lowR, lowG, lowB, lowA);
+        high = new Rgba8UNorm(highR, highG, highB, highA);
+        return true;
+    }
+
+    private static bool TryOptimizeLdrRgbEndpoints(
+        ReadOnlySpan<Rgba8UNorm> storage,
+        int texelCount,
+        ReadOnlySpan<int> texelWeights,
+        out Rgba8UNorm low,
+        out Rgba8UNorm high)
+    {
+        if (!TryOptimizeLdrEndpointChannel(storage, texelCount, texelWeights, 0, out var lowR, out var highR)
+            || !TryOptimizeLdrEndpointChannel(storage, texelCount, texelWeights, 1, out var lowG, out var highG)
+            || !TryOptimizeLdrEndpointChannel(storage, texelCount, texelWeights, 2, out var lowB, out var highB))
+        {
+            low = default;
+            high = default;
+            return false;
+        }
+
+        low = new Rgba8UNorm(lowR, lowG, lowB, 255);
+        high = new Rgba8UNorm(highR, highG, highB, 255);
+        return true;
+    }
+
+    private static bool TryOptimizeLdrDualPlaneRgbEndpoints(
+        ReadOnlySpan<Rgba8UNorm> storage,
+        int texelCount,
+        ReadOnlySpan<int> sharedTexelWeights,
+        ReadOnlySpan<int> planeTexelWeights,
+        int dualPlaneChannel,
+        out Rgba8UNorm low,
+        out Rgba8UNorm high)
+    {
+        if (!TryOptimizeLdrEndpointChannel(storage, texelCount, dualPlaneChannel == 0 ? planeTexelWeights : sharedTexelWeights, 0, out var lowR, out var highR)
+            || !TryOptimizeLdrEndpointChannel(storage, texelCount, dualPlaneChannel == 1 ? planeTexelWeights : sharedTexelWeights, 1, out var lowG, out var highG)
+            || !TryOptimizeLdrEndpointChannel(storage, texelCount, dualPlaneChannel == 2 ? planeTexelWeights : sharedTexelWeights, 2, out var lowB, out var highB))
+        {
+            low = default;
+            high = default;
+            return false;
+        }
+
+        low = new Rgba8UNorm(lowR, lowG, lowB, 255);
+        high = new Rgba8UNorm(highR, highG, highB, 255);
+        return true;
+    }
+
+    private static bool TryOptimizeLdrEndpointChannel(
+        ReadOnlySpan<Rgba8UNorm> storage,
+        int texelCount,
+        ReadOnlySpan<int> texelWeights,
+        int channel,
+        out byte low,
+        out byte high)
+    {
+        var aa = 0.0;
+        var ab = 0.0;
+        var bb = 0.0;
+        var ac = 0.0;
+        var bc = 0.0;
+
+        for (var i = 0; i < texelCount; i++)
+        {
+            var weight1 = texelWeights[i];
+            var weight0 = 64 - weight1;
+            var value = GetRgbaChannel(storage[i], channel) * 64.0;
+            aa += weight0 * weight0;
+            ab += weight0 * weight1;
+            bb += weight1 * weight1;
+            ac += weight0 * value;
+            bc += weight1 * value;
+        }
+
+        var determinant = (aa * bb) - (ab * ab);
+        if (determinant <= double.Epsilon)
+        {
+            low = 0;
+            high = 0;
+            return false;
+        }
+
+        low = ClampToByte((int)Math.Round(((ac * bb) - (bc * ab)) / determinant));
+        high = ClampToByte((int)Math.Round(((bc * aa) - (ac * ab)) / determinant));
+        return true;
+    }
+
+    private static bool TryFindPrincipalRgbaEndpoints(
+        ReadOnlySpan<Rgba8UNorm> storage,
+        int texelCount,
+        out Rgba8UNorm low,
+        out Rgba8UNorm high)
+    {
+        var meanR = 0.0;
+        var meanG = 0.0;
+        var meanB = 0.0;
+        var meanA = 0.0;
+        for (var i = 0; i < texelCount; i++)
+        {
+            meanR += storage[i].Red;
+            meanG += storage[i].Green;
+            meanB += storage[i].Blue;
+            meanA += storage[i].Alpha;
+        }
+
+        meanR /= texelCount;
+        meanG /= texelCount;
+        meanB /= texelCount;
+        meanA /= texelCount;
+
+        var rr = 0.0;
+        var rg = 0.0;
+        var rb = 0.0;
+        var ra = 0.0;
+        var gg = 0.0;
+        var gb = 0.0;
+        var ga = 0.0;
+        var bb = 0.0;
+        var ba = 0.0;
+        var aa = 0.0;
+
+        for (var i = 0; i < texelCount; i++)
+        {
+            var dr = storage[i].Red - meanR;
+            var dg = storage[i].Green - meanG;
+            var db = storage[i].Blue - meanB;
+            var da = storage[i].Alpha - meanA;
+            rr += dr * dr;
+            rg += dr * dg;
+            rb += dr * db;
+            ra += dr * da;
+            gg += dg * dg;
+            gb += dg * db;
+            ga += dg * da;
+            bb += db * db;
+            ba += db * da;
+            aa += da * da;
+        }
+
+        var axisR = 1.0;
+        var axisG = 0.0;
+        var axisB = 0.0;
+        var axisA = 0.0;
+        if (gg > rr && gg >= bb && gg >= aa)
+        {
+            axisR = 0.0;
+            axisG = 1.0;
+        }
+        else if (bb > rr && bb > gg && bb >= aa)
+        {
+            axisR = 0.0;
+            axisB = 1.0;
+        }
+        else if (aa > rr && aa > gg && aa > bb)
+        {
+            axisR = 0.0;
+            axisA = 1.0;
+        }
+
+        for (var i = 0; i < 6; i++)
+        {
+            var nextR = (rr * axisR) + (rg * axisG) + (rb * axisB) + (ra * axisA);
+            var nextG = (rg * axisR) + (gg * axisG) + (gb * axisB) + (ga * axisA);
+            var nextB = (rb * axisR) + (gb * axisG) + (bb * axisB) + (ba * axisA);
+            var nextA = (ra * axisR) + (ga * axisG) + (ba * axisB) + (aa * axisA);
+            if (!NormalizeVector(ref nextR, ref nextG, ref nextB, ref nextA))
+            {
+                low = default;
+                high = default;
+                return false;
+            }
+
+            axisR = nextR;
+            axisG = nextG;
+            axisB = nextB;
+            axisA = nextA;
+        }
+
+        var lowIndex = 0;
+        var highIndex = 0;
+        var lowProjection = double.PositiveInfinity;
+        var highProjection = double.NegativeInfinity;
+        for (var i = 0; i < texelCount; i++)
+        {
+            var projection =
+                ((storage[i].Red - meanR) * axisR)
+                + ((storage[i].Green - meanG) * axisG)
+                + ((storage[i].Blue - meanB) * axisB)
+                + ((storage[i].Alpha - meanA) * axisA);
+            if (projection < lowProjection)
+            {
+                lowProjection = projection;
+                lowIndex = i;
+            }
+
+            if (projection > highProjection)
+            {
+                highProjection = projection;
+                highIndex = i;
+            }
+        }
+
+        if (lowIndex == highIndex)
+        {
+            low = default;
+            high = default;
+            return false;
+        }
+
+        low = storage[lowIndex];
+        high = storage[highIndex];
+        NormalizeLdrEndpointOrder(ref low, ref high);
+        return true;
+    }
+
+    private static long GetLdrSquaredError(
+        ReadOnlySpan<Rgba8UNorm> storage,
+        int texelCount,
+        ReadOnlySpan<int> texelWeights,
+        Rgba8UNorm low,
+        Rgba8UNorm high)
+    {
+        long error = 0;
+        for (var i = 0; i < texelCount; i++)
+        {
+            var weight = texelWeights[i];
+            var red = Interpolate(low.Red * 257, high.Red * 257, weight) >> 8;
+            var green = Interpolate(low.Green * 257, high.Green * 257, weight) >> 8;
+            var blue = Interpolate(low.Blue * 257, high.Blue * 257, weight) >> 8;
+            var alpha = Interpolate(low.Alpha * 257, high.Alpha * 257, weight) >> 8;
+            error += Squared(storage[i].Red - red);
+            error += Squared(storage[i].Green - green);
+            error += Squared(storage[i].Blue - blue);
+            error += Squared(storage[i].Alpha - alpha);
+        }
+
+        return error;
+    }
+
+    private static long GetLdrDualPlaneSquaredError(
+        ReadOnlySpan<Rgba8UNorm> storage,
+        int texelCount,
+        ReadOnlySpan<int> sharedTexelWeights,
+        ReadOnlySpan<int> planeTexelWeights,
+        Rgba8UNorm low,
+        Rgba8UNorm high,
+        int dualPlaneChannel)
+    {
+        long error = 0;
+        for (var i = 0; i < texelCount; i++)
+        {
+            var sharedWeight = sharedTexelWeights[i];
+            var planeWeight = planeTexelWeights[i];
+            var redWeight = dualPlaneChannel == 0 ? planeWeight : sharedWeight;
+            var greenWeight = dualPlaneChannel == 1 ? planeWeight : sharedWeight;
+            var blueWeight = dualPlaneChannel == 2 ? planeWeight : sharedWeight;
+            var red = Interpolate(low.Red * 257, high.Red * 257, redWeight) >> 8;
+            var green = Interpolate(low.Green * 257, high.Green * 257, greenWeight) >> 8;
+            var blue = Interpolate(low.Blue * 257, high.Blue * 257, blueWeight) >> 8;
+            error += Squared(storage[i].Red - red);
+            error += Squared(storage[i].Green - green);
+            error += Squared(storage[i].Blue - blue);
+            error += Squared(storage[i].Alpha - 255);
+        }
+
+        return error;
+    }
+
+    private static int GetLdrEndpointOptimizationIterationLimit(AstcCompressionMode compressionMode) => compressionMode switch
+    {
+        AstcCompressionMode.Normal => 1,
+        AstcCompressionMode.High => 2,
+        AstcCompressionMode.Exhaustive => 4,
+        _ => 0
+    };
+
+    private static void NormalizeLdrEndpointOrder(ref Rgba8UNorm low, ref Rgba8UNorm high)
+    {
+        if (GetRgbSum(high) < GetRgbSum(low))
+        {
+            (low, high) = (high, low);
+        }
+    }
+
+    private static int GetRgbSum(Rgba8UNorm color) => color.Red + color.Green + color.Blue;
+
+    private static bool IsOpaqueLdrBlock(ReadOnlySpan<Rgba8UNorm> storage, int texelCount)
+    {
+        for (var i = 0; i < texelCount; i++)
+        {
+            if (storage[i].Alpha != 255)
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static int GetRgbaChannel(Rgba8UNorm color, int channel) => channel switch
+    {
+        0 => color.Red,
+        1 => color.Green,
+        2 => color.Blue,
+        _ => color.Alpha
+    };
+
+    private static int Squared(int value) => value * value;
+
+    private static double Squared(double value) => value * value;
+
+    private static void EncodeHdrBlock(
+        ReadOnlySpan<Rgba16Float> source,
+        int blockWidth,
+        int blockHeight,
+        AstcCompressionMode compressionMode,
+        Span<byte> destination)
     {
         var texelCount = blockWidth * blockHeight;
+        var storage = new Rgba16FloatTexelBlock();
+        for (var i = 0; i < texelCount; i++)
+        {
+            storage[i] = SanitizeHdrColor(source[i]);
+        }
+
         if (IsSolidBlock(source, texelCount, out var solidColor))
         {
             WriteHdrVoidExtentBlock(solidColor, destination);
             return;
         }
 
+        switch (compressionMode)
+        {
+            case AstcCompressionMode.Fast:
+                EncodeHdrBlockFast(storage, blockWidth, blockHeight, texelCount, destination);
+                return;
+            case AstcCompressionMode.Normal:
+            case AstcCompressionMode.High:
+            case AstcCompressionMode.Exhaustive:
+                EncodeHdrBlockOptimized(storage, blockWidth, blockHeight, texelCount, compressionMode, destination);
+                return;
+            default:
+                throw new ArgumentOutOfRangeException(
+                    nameof(compressionMode),
+                    compressionMode,
+                    "Unsupported ASTC compression mode.");
+        }
+    }
+
+    private static void EncodeHdrBlockFast(
+        ReadOnlySpan<Rgba16Float> source,
+        int blockWidth,
+        int blockHeight,
+        int texelCount,
+        Span<byte> destination)
+    {
         FindHdrBounds(source, texelCount, out var low, out var high);
 
         var weightAccumulators = new InlineArray16<int>();
@@ -499,6 +2675,628 @@ public sealed class AstcTextureCoder : IPitchTextureCoder
 
         WriteBlockBits(bits, destination);
     }
+
+    private static void EncodeHdrBlockOptimized(
+        ReadOnlySpan<Rgba16Float> storage,
+        int blockWidth,
+        int blockHeight,
+        int texelCount,
+        AstcCompressionMode compressionMode,
+        Span<byte> destination)
+    {
+        Span<AstcWeightGridCandidate> candidates = stackalloc AstcWeightGridCandidate[128];
+        var candidateCount = GetWeightGridCandidates(blockWidth, blockHeight, compressionMode, candidates);
+        if (candidateCount == 0)
+        {
+            EncodeHdrBlockFast(storage, blockWidth, blockHeight, texelCount, destination);
+            return;
+        }
+
+        FindHdrBounds(storage, texelCount, out var boundsLow, out var boundsHigh);
+        var best = new AstcHdrEncodingResult(UInt128.Zero, double.PositiveInfinity);
+        var iterationLimit = GetHdrEndpointOptimizationIterationLimit(compressionMode);
+        var hasPrincipalEndpoints = TryFindPrincipalHdrEndpoints(storage, texelCount, out var principalLow, out var principalHigh);
+        var isOpaque = IsOpaqueHdrBlock(storage, texelCount);
+
+        for (var i = 0; i < candidateCount; i++)
+        {
+            TryEncodeHdrRgbaCandidate(
+                storage,
+                blockWidth,
+                blockHeight,
+                texelCount,
+                candidates[i],
+                boundsLow,
+                boundsHigh,
+                iterationLimit,
+                ref best);
+
+            if (isOpaque)
+            {
+                TryEncodeHdrRgbCandidate(
+                    storage,
+                    blockWidth,
+                    blockHeight,
+                    texelCount,
+                    candidates[i],
+                    boundsLow,
+                    boundsHigh,
+                    iterationLimit,
+                    ref best);
+            }
+
+            if (hasPrincipalEndpoints)
+            {
+                TryEncodeHdrRgbaCandidate(
+                    storage,
+                    blockWidth,
+                    blockHeight,
+                    texelCount,
+                    candidates[i],
+                    principalLow,
+                    principalHigh,
+                    iterationLimit,
+                    ref best);
+
+                if (isOpaque)
+                {
+                    TryEncodeHdrRgbCandidate(
+                        storage,
+                        blockWidth,
+                        blockHeight,
+                        texelCount,
+                        candidates[i],
+                        principalLow,
+                        principalHigh,
+                        iterationLimit,
+                        ref best);
+                }
+            }
+        }
+
+        if (double.IsPositiveInfinity(best.Error))
+        {
+            EncodeHdrBlockFast(storage, blockWidth, blockHeight, texelCount, destination);
+            return;
+        }
+
+        WriteBlockBits(best.Bits, destination);
+    }
+
+    private static void TryEncodeHdrRgbaCandidate(
+        ReadOnlySpan<Rgba16Float> storage,
+        int blockWidth,
+        int blockHeight,
+        int texelCount,
+        AstcWeightGridCandidate candidate,
+        Rgba16Float initialLow,
+        Rgba16Float initialHigh,
+        int iterationLimit,
+        ref AstcHdrEncodingResult best)
+    {
+        if (!TryGetColorRange(candidate, colorValueCount: 8, out var colorRange))
+        {
+            return;
+        }
+
+        var low = initialLow;
+        var high = initialHigh;
+        var rawWeights = new IntWeightBlock();
+        var texelWeights = new IntTexelBlock();
+        Span<int> endpointValues = stackalloc int[8];
+        var endpoint = default(AstcEndpointPair);
+
+        for (var pass = 0; pass <= iterationLimit; pass++)
+        {
+            if (!TryQuantizeHdrEndpoints(low, high, colorRange, endpointValues, out endpoint))
+            {
+                return;
+            }
+
+            BuildHdrRawWeights(storage, blockWidth, blockHeight, candidate, endpoint, rawWeights);
+            InfillHdrWeights(rawWeights, candidate, blockWidth, blockHeight, texelWeights);
+
+            if (pass == iterationLimit
+                || !TryOptimizeHdrEndpoints(storage, texelCount, texelWeights, out low, out high))
+            {
+                break;
+            }
+        }
+
+        var error = GetHdrSquaredError(storage, texelCount, texelWeights, endpoint);
+        if (error >= best.Error)
+        {
+            return;
+        }
+
+        var bits = EncodeHdrSinglePartitionBlock(candidate, endpointMode: 14, endpointValues, endpointValueCount: 8, colorRange, rawWeights);
+        best = new AstcHdrEncodingResult(bits, error);
+    }
+
+    private static void TryEncodeHdrRgbCandidate(
+        ReadOnlySpan<Rgba16Float> storage,
+        int blockWidth,
+        int blockHeight,
+        int texelCount,
+        AstcWeightGridCandidate candidate,
+        Rgba16Float initialLow,
+        Rgba16Float initialHigh,
+        int iterationLimit,
+        ref AstcHdrEncodingResult best)
+    {
+        if (!TryGetColorRange(candidate, colorValueCount: 6, out var colorRange))
+        {
+            return;
+        }
+
+        var low = new Rgba16Float(initialLow.Red, initialLow.Green, initialLow.Blue, (Half)1f);
+        var high = new Rgba16Float(initialHigh.Red, initialHigh.Green, initialHigh.Blue, (Half)1f);
+        var rawWeights = new IntWeightBlock();
+        var texelWeights = new IntTexelBlock();
+        Span<int> endpointValues = stackalloc int[6];
+        var endpoint = default(AstcEndpointPair);
+
+        for (var pass = 0; pass <= iterationLimit; pass++)
+        {
+            if (!TryQuantizeHdrRgbEndpoints(low, high, colorRange, endpointValues, out endpoint))
+            {
+                return;
+            }
+
+            BuildHdrRawWeights(storage, blockWidth, blockHeight, candidate, endpoint, rawWeights);
+            InfillHdrWeights(rawWeights, candidate, blockWidth, blockHeight, texelWeights);
+
+            if (pass == iterationLimit
+                || !TryOptimizeHdrRgbEndpoints(storage, texelCount, texelWeights, out low, out high))
+            {
+                break;
+            }
+        }
+
+        var error = GetHdrSquaredError(storage, texelCount, texelWeights, endpoint);
+        if (error >= best.Error)
+        {
+            return;
+        }
+
+        var bits = EncodeHdrSinglePartitionBlock(candidate, endpointMode: 11, endpointValues, endpointValueCount: 6, colorRange, rawWeights);
+        best = new AstcHdrEncodingResult(bits, error);
+    }
+
+    private static UInt128 EncodeHdrSinglePartitionBlock(
+        AstcWeightGridCandidate candidate,
+        int endpointMode,
+        ReadOnlySpan<int> endpointValues,
+        int endpointValueCount,
+        int colorRange,
+        ReadOnlySpan<int> rawWeights)
+    {
+        var endpointBits = EncodeBiseSequence(endpointValues, endpointValueCount, colorRange);
+        var weightValueCount = candidate.Width * candidate.Height;
+        var weightBits = EncodeBiseSequence(rawWeights, weightValueCount, candidate.WeightRange);
+
+        var bits = (UInt128)(uint)candidate.BlockMode;
+        bits |= (UInt128)endpointMode << 13;
+        bits |= endpointBits << 17;
+        bits |= ReverseLowBits(weightBits, candidate.WeightBitCount) << (128 - candidate.WeightBitCount);
+        return bits;
+    }
+
+    private static void BuildHdrRawWeights(
+        ReadOnlySpan<Rgba16Float> storage,
+        int blockWidth,
+        int blockHeight,
+        AstcWeightGridCandidate candidate,
+        AstcEndpointPair endpoint,
+        Span<int> rawWeights)
+    {
+        Span<int> accumulators = stackalloc int[MaxWeightValues];
+        Span<int> counts = stackalloc int[MaxWeightValues];
+        var low = GetHdrEndpointColor(endpoint, endpointIndex: 0);
+        var high = GetHdrEndpointColor(endpoint, endpointIndex: 1);
+        var gridSize = candidate.Width * candidate.Height;
+
+        for (var y = 0; y < blockHeight; y++)
+        {
+            for (var x = 0; x < blockWidth; x++)
+            {
+                var texelIndex = (y * blockWidth) + x;
+                var gridX = GetEncoderGridCoordinate(x, blockWidth, candidate.Width);
+                var gridY = GetEncoderGridCoordinate(y, blockHeight, candidate.Height);
+                var gridIndex = (gridY * candidate.Width) + gridX;
+                accumulators[gridIndex] += QuantizeWeight(storage[texelIndex], low, high, candidate.WeightRange);
+                counts[gridIndex]++;
+            }
+        }
+
+        for (var i = 0; i < gridSize; i++)
+        {
+            rawWeights[i] = counts[i] == 0
+                ? 0
+                : Math.Clamp((accumulators[i] + (counts[i] / 2)) / counts[i], 0, candidate.WeightRange);
+        }
+    }
+
+    private static void InfillHdrWeights(
+        ReadOnlySpan<int> rawWeights,
+        AstcWeightGridCandidate candidate,
+        int blockWidth,
+        int blockHeight,
+        Span<int> texelWeights)
+    {
+        var gridWeights = new IntWeightBlock();
+        var gridSize = candidate.Width * candidate.Height;
+        for (var i = 0; i < gridSize; i++)
+        {
+            gridWeights[i] = UnquantizeWeight(rawWeights[i], candidate.WeightRange);
+        }
+
+        InfillWeights(gridWeights, candidate.Width, candidate.Height, blockWidth, blockHeight, texelWeights);
+    }
+
+    private static bool TryQuantizeHdrEndpoints(
+        Rgba16Float low,
+        Rgba16Float high,
+        int colorRange,
+        Span<int> endpointValues,
+        out AstcEndpointPair endpoint)
+    {
+        var lowR = HalfToLnsBits(low.Red);
+        var highR = HalfToLnsBits(high.Red);
+        var lowG = HalfToLnsBits(low.Green);
+        var highG = HalfToLnsBits(high.Green);
+        var lowB = HalfToLnsBits(low.Blue);
+        var highB = HalfToLnsBits(high.Blue);
+
+        if (!TryQuantizeHdrEndpointValue(lowR >> 8, colorRange, requireHighBit: false, out endpointValues[0])
+            || !TryQuantizeHdrEndpointValue(highR >> 8, colorRange, requireHighBit: false, out endpointValues[1])
+            || !TryQuantizeHdrEndpointValue(lowG >> 8, colorRange, requireHighBit: false, out endpointValues[2])
+            || !TryQuantizeHdrEndpointValue(highG >> 8, colorRange, requireHighBit: false, out endpointValues[3])
+            || !TryQuantizeHdrEndpointValue(0x80 | ((lowB >> 9) & 0x7F), colorRange, requireHighBit: true, out endpointValues[4])
+            || !TryQuantizeHdrEndpointValue(0x80 | ((highB >> 9) & 0x7F), colorRange, requireHighBit: true, out endpointValues[5])
+            || !TryQuantizeHdrEndpointValue(RgbaColorConversions.ToUNorm8(low.Alpha), colorRange, requireHighBit: false, out endpointValues[6])
+            || !TryQuantizeHdrEndpointValue(RgbaColorConversions.ToUNorm8(high.Alpha), colorRange, requireHighBit: false, out endpointValues[7]))
+        {
+            endpoint = default;
+            return false;
+        }
+
+        Span<int> decodedValues = stackalloc int[8];
+        for (var i = 0; i < decodedValues.Length; i++)
+        {
+            decodedValues[i] = UnquantizeEndpointValue(endpointValues[i], colorRange);
+        }
+
+        endpoint = DecodeHdrRgbDirectLdrAlpha(decodedValues);
+        return true;
+    }
+
+    private static bool TryQuantizeHdrRgbEndpoints(
+        Rgba16Float low,
+        Rgba16Float high,
+        int colorRange,
+        Span<int> endpointValues,
+        out AstcEndpointPair endpoint)
+    {
+        var lowR = HalfToLnsBits(low.Red);
+        var highR = HalfToLnsBits(high.Red);
+        var lowG = HalfToLnsBits(low.Green);
+        var highG = HalfToLnsBits(high.Green);
+        var lowB = HalfToLnsBits(low.Blue);
+        var highB = HalfToLnsBits(high.Blue);
+
+        if (!TryQuantizeHdrEndpointValue(lowR >> 8, colorRange, requireHighBit: false, out endpointValues[0])
+            || !TryQuantizeHdrEndpointValue(highR >> 8, colorRange, requireHighBit: false, out endpointValues[1])
+            || !TryQuantizeHdrEndpointValue(lowG >> 8, colorRange, requireHighBit: false, out endpointValues[2])
+            || !TryQuantizeHdrEndpointValue(highG >> 8, colorRange, requireHighBit: false, out endpointValues[3])
+            || !TryQuantizeHdrEndpointValue(0x80 | ((lowB >> 9) & 0x7F), colorRange, requireHighBit: true, out endpointValues[4])
+            || !TryQuantizeHdrEndpointValue(0x80 | ((highB >> 9) & 0x7F), colorRange, requireHighBit: true, out endpointValues[5]))
+        {
+            endpoint = default;
+            return false;
+        }
+
+        Span<int> decodedValues = stackalloc int[6];
+        for (var i = 0; i < decodedValues.Length; i++)
+        {
+            decodedValues[i] = UnquantizeEndpointValue(endpointValues[i], colorRange);
+        }
+
+        endpoint = DecodeHdrRgbDirect(decodedValues);
+        return true;
+    }
+
+    private static bool TryQuantizeHdrEndpointValue(int value, int range, bool requireHighBit, out int encoded)
+    {
+        var bestValue = 0;
+        var bestError = int.MaxValue;
+        for (var candidate = 0; candidate <= range; candidate++)
+        {
+            var unquantized = UnquantizeEndpointValue(candidate, range);
+            if (requireHighBit && (unquantized & 0x80) == 0)
+            {
+                continue;
+            }
+
+            var error = Math.Abs(unquantized - value);
+            if (error < bestError)
+            {
+                bestError = error;
+                bestValue = candidate;
+                if (error == 0)
+                {
+                    break;
+                }
+            }
+        }
+
+        encoded = bestValue;
+        return bestError < int.MaxValue;
+    }
+
+    private static bool TryOptimizeHdrEndpoints(
+        ReadOnlySpan<Rgba16Float> storage,
+        int texelCount,
+        ReadOnlySpan<int> texelWeights,
+        out Rgba16Float low,
+        out Rgba16Float high)
+    {
+        if (!TryOptimizeHdrEndpointChannel(storage, texelCount, texelWeights, 0, out var lowR, out var highR)
+            || !TryOptimizeHdrEndpointChannel(storage, texelCount, texelWeights, 1, out var lowG, out var highG)
+            || !TryOptimizeHdrEndpointChannel(storage, texelCount, texelWeights, 2, out var lowB, out var highB)
+            || !TryOptimizeHdrEndpointChannel(storage, texelCount, texelWeights, 3, out var lowA, out var highA))
+        {
+            low = default;
+            high = default;
+            return false;
+        }
+
+        low = new Rgba16Float(ToHdrHalf(lowR), ToHdrHalf(lowG), ToHdrHalf(lowB), ToHdrHalf(lowA));
+        high = new Rgba16Float(ToHdrHalf(highR), ToHdrHalf(highG), ToHdrHalf(highB), ToHdrHalf(highA));
+        return true;
+    }
+
+    private static bool TryOptimizeHdrRgbEndpoints(
+        ReadOnlySpan<Rgba16Float> storage,
+        int texelCount,
+        ReadOnlySpan<int> texelWeights,
+        out Rgba16Float low,
+        out Rgba16Float high)
+    {
+        if (!TryOptimizeHdrEndpointChannel(storage, texelCount, texelWeights, 0, out var lowR, out var highR)
+            || !TryOptimizeHdrEndpointChannel(storage, texelCount, texelWeights, 1, out var lowG, out var highG)
+            || !TryOptimizeHdrEndpointChannel(storage, texelCount, texelWeights, 2, out var lowB, out var highB))
+        {
+            low = default;
+            high = default;
+            return false;
+        }
+
+        low = new Rgba16Float(ToHdrHalf(lowR), ToHdrHalf(lowG), ToHdrHalf(lowB), (Half)1f);
+        high = new Rgba16Float(ToHdrHalf(highR), ToHdrHalf(highG), ToHdrHalf(highB), (Half)1f);
+        return true;
+    }
+
+    private static bool TryOptimizeHdrEndpointChannel(
+        ReadOnlySpan<Rgba16Float> storage,
+        int texelCount,
+        ReadOnlySpan<int> texelWeights,
+        int channel,
+        out double low,
+        out double high)
+    {
+        var aa = 0.0;
+        var ab = 0.0;
+        var bb = 0.0;
+        var ac = 0.0;
+        var bc = 0.0;
+
+        for (var i = 0; i < texelCount; i++)
+        {
+            var weight1 = texelWeights[i];
+            var weight0 = 64 - weight1;
+            var value = GetHdrChannel(storage[i], channel) * 64.0;
+            aa += weight0 * weight0;
+            ab += weight0 * weight1;
+            bb += weight1 * weight1;
+            ac += weight0 * value;
+            bc += weight1 * value;
+        }
+
+        var determinant = (aa * bb) - (ab * ab);
+        if (determinant <= double.Epsilon)
+        {
+            low = 0.0;
+            high = 0.0;
+            return false;
+        }
+
+        low = Math.Max(0.0, ((ac * bb) - (bc * ab)) / determinant);
+        high = Math.Max(0.0, ((bc * aa) - (ac * ab)) / determinant);
+        return true;
+    }
+
+    private static bool TryFindPrincipalHdrEndpoints(
+        ReadOnlySpan<Rgba16Float> storage,
+        int texelCount,
+        out Rgba16Float low,
+        out Rgba16Float high)
+    {
+        var meanR = 0.0;
+        var meanG = 0.0;
+        var meanB = 0.0;
+        var meanA = 0.0;
+        for (var i = 0; i < texelCount; i++)
+        {
+            meanR += (double)storage[i].Red;
+            meanG += (double)storage[i].Green;
+            meanB += (double)storage[i].Blue;
+            meanA += (double)storage[i].Alpha;
+        }
+
+        meanR /= texelCount;
+        meanG /= texelCount;
+        meanB /= texelCount;
+        meanA /= texelCount;
+
+        var rr = 0.0;
+        var rg = 0.0;
+        var rb = 0.0;
+        var ra = 0.0;
+        var gg = 0.0;
+        var gb = 0.0;
+        var ga = 0.0;
+        var bb = 0.0;
+        var ba = 0.0;
+        var aa = 0.0;
+
+        for (var i = 0; i < texelCount; i++)
+        {
+            var dr = (double)storage[i].Red - meanR;
+            var dg = (double)storage[i].Green - meanG;
+            var db = (double)storage[i].Blue - meanB;
+            var da = (double)storage[i].Alpha - meanA;
+            rr += dr * dr;
+            rg += dr * dg;
+            rb += dr * db;
+            ra += dr * da;
+            gg += dg * dg;
+            gb += dg * db;
+            ga += dg * da;
+            bb += db * db;
+            ba += db * da;
+            aa += da * da;
+        }
+
+        var axisR = 1.0;
+        var axisG = 0.0;
+        var axisB = 0.0;
+        var axisA = 0.0;
+        if (gg > rr && gg >= bb && gg >= aa)
+        {
+            axisR = 0.0;
+            axisG = 1.0;
+        }
+        else if (bb > rr && bb > gg && bb >= aa)
+        {
+            axisR = 0.0;
+            axisB = 1.0;
+        }
+        else if (aa > rr && aa > gg && aa > bb)
+        {
+            axisR = 0.0;
+            axisA = 1.0;
+        }
+
+        for (var i = 0; i < 6; i++)
+        {
+            var nextR = (rr * axisR) + (rg * axisG) + (rb * axisB) + (ra * axisA);
+            var nextG = (rg * axisR) + (gg * axisG) + (gb * axisB) + (ga * axisA);
+            var nextB = (rb * axisR) + (gb * axisG) + (bb * axisB) + (ba * axisA);
+            var nextA = (ra * axisR) + (ga * axisG) + (ba * axisB) + (aa * axisA);
+            if (!NormalizeVector(ref nextR, ref nextG, ref nextB, ref nextA))
+            {
+                low = default;
+                high = default;
+                return false;
+            }
+
+            axisR = nextR;
+            axisG = nextG;
+            axisB = nextB;
+            axisA = nextA;
+        }
+
+        var lowIndex = 0;
+        var highIndex = 0;
+        var lowProjection = double.PositiveInfinity;
+        var highProjection = double.NegativeInfinity;
+        for (var i = 0; i < texelCount; i++)
+        {
+            var projection =
+                (((double)storage[i].Red - meanR) * axisR)
+                + (((double)storage[i].Green - meanG) * axisG)
+                + (((double)storage[i].Blue - meanB) * axisB)
+                + (((double)storage[i].Alpha - meanA) * axisA);
+            if (projection < lowProjection)
+            {
+                lowProjection = projection;
+                lowIndex = i;
+            }
+
+            if (projection > highProjection)
+            {
+                highProjection = projection;
+                highIndex = i;
+            }
+        }
+
+        if (lowIndex == highIndex)
+        {
+            low = default;
+            high = default;
+            return false;
+        }
+
+        low = storage[lowIndex];
+        high = storage[highIndex];
+        return true;
+    }
+
+    private static double GetHdrSquaredError(
+        ReadOnlySpan<Rgba16Float> storage,
+        int texelCount,
+        ReadOnlySpan<int> texelWeights,
+        AstcEndpointPair endpoint)
+    {
+        var error = 0.0;
+        for (var i = 0; i < texelCount; i++)
+        {
+            var decoded = DecodeHdrTexel(endpoint, texelWeights[i], texelWeights[i], texelWeights[i], texelWeights[i]);
+            error += Squared((double)storage[i].Red - (double)decoded.Red);
+            error += Squared((double)storage[i].Green - (double)decoded.Green);
+            error += Squared((double)storage[i].Blue - (double)decoded.Blue);
+            error += Squared((double)storage[i].Alpha - (double)decoded.Alpha);
+        }
+
+        return error;
+    }
+
+    private static Rgba16Float GetHdrEndpointColor(AstcEndpointPair endpoint, int endpointIndex)
+    {
+        var weight = endpointIndex == 0 ? 0 : 64;
+        return DecodeHdrTexel(endpoint, weight, weight, weight, weight);
+    }
+
+    private static int GetHdrEndpointOptimizationIterationLimit(AstcCompressionMode compressionMode) => compressionMode switch
+    {
+        AstcCompressionMode.Normal => 1,
+        AstcCompressionMode.High => 2,
+        AstcCompressionMode.Exhaustive => 4,
+        _ => 0
+    };
+
+    private static bool IsOpaqueHdrBlock(ReadOnlySpan<Rgba16Float> storage, int texelCount)
+    {
+        var one = BitConverter.HalfToUInt16Bits((Half)1f);
+        for (var i = 0; i < texelCount; i++)
+        {
+            if (BitConverter.HalfToUInt16Bits(storage[i].Alpha) != one)
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static double GetHdrChannel(Rgba16Float color, int channel) => channel switch
+    {
+        0 => (double)color.Red,
+        1 => (double)color.Green,
+        2 => (double)color.Blue,
+        _ => (double)color.Alpha
+    };
 
     private static bool IsSolidBlock(ReadOnlySpan<Rgba8UNorm> source, int texelCount, out Rgba8UNorm color)
     {
@@ -588,7 +3386,10 @@ public sealed class AstcTextureCoder : IPitchTextureCoder
         high = new Rgba16Float(ToHdrHalf(maxR), ToHdrHalf(maxG), ToHdrHalf(maxB), ToHdrHalf(maxA));
     }
 
-    private static int QuantizeWeight(Rgba8UNorm color, Rgba8UNorm low, Rgba8UNorm high)
+    private static int QuantizeWeight(Rgba8UNorm color, Rgba8UNorm low, Rgba8UNorm high) =>
+        QuantizeWeight(color, low, high, range: 3);
+
+    private static int QuantizeWeight(Rgba8UNorm color, Rgba8UNorm low, Rgba8UNorm high, int range)
     {
         var deltaR = high.Red - low.Red;
         var deltaG = high.Green - low.Green;
@@ -611,10 +3412,60 @@ public sealed class AstcTextureCoder : IPitchTextureCoder
             + ((color.Blue - low.Blue) * deltaB)
             + ((color.Alpha - low.Alpha) * deltaA);
         var projected = numerator / (double)denominator;
-        return (int)Math.Clamp(Math.Round(projected * 3.0), 0.0, 3.0);
+        return (int)Math.Clamp(Math.Round(projected * range), 0.0, range);
     }
 
-    private static int QuantizeWeight(Rgba16Float color, Rgba16Float low, Rgba16Float high)
+    private static int QuantizeRgbWeightExcludingChannel(
+        Rgba8UNorm color,
+        Rgba8UNorm low,
+        Rgba8UNorm high,
+        int range,
+        int excludedChannel)
+    {
+        var denominator = 0;
+        var numerator = 0;
+        for (var channel = 0; channel < 3; channel++)
+        {
+            if (channel == excludedChannel)
+            {
+                continue;
+            }
+
+            var delta = GetRgbaChannel(high, channel) - GetRgbaChannel(low, channel);
+            denominator += delta * delta;
+            numerator += (GetRgbaChannel(color, channel) - GetRgbaChannel(low, channel)) * delta;
+        }
+
+        if (denominator == 0)
+        {
+            return 0;
+        }
+
+        var projected = numerator / (double)denominator;
+        return (int)Math.Clamp(Math.Round(projected * range), 0.0, range);
+    }
+
+    private static int QuantizeWeightChannel(
+        Rgba8UNorm color,
+        Rgba8UNorm low,
+        Rgba8UNorm high,
+        int range,
+        int channel)
+    {
+        var delta = GetRgbaChannel(high, channel) - GetRgbaChannel(low, channel);
+        if (delta == 0)
+        {
+            return 0;
+        }
+
+        var projected = (GetRgbaChannel(color, channel) - GetRgbaChannel(low, channel)) / (double)delta;
+        return (int)Math.Clamp(Math.Round(projected * range), 0.0, range);
+    }
+
+    private static int QuantizeWeight(Rgba16Float color, Rgba16Float low, Rgba16Float high) =>
+        QuantizeWeight(color, low, high, range: 3);
+
+    private static int QuantizeWeight(Rgba16Float color, Rgba16Float low, Rgba16Float high, int range)
     {
         color = SanitizeHdrColor(color);
         var deltaR = (double)high.Red - (double)low.Red;
@@ -638,11 +3489,16 @@ public sealed class AstcTextureCoder : IPitchTextureCoder
             + (((double)color.Blue - (double)low.Blue) * deltaB)
             + (((double)color.Alpha - (double)low.Alpha) * deltaA);
         var projected = numerator / denominator;
-        return (int)Math.Clamp(Math.Round(projected * 3.0), 0.0, 3.0);
+        return (int)Math.Clamp(Math.Round(projected * range), 0.0, range);
     }
 
     private static int GetEncoderGridCoordinate(int coordinate, int blockSize) =>
-        ((coordinate * 3) + ((blockSize - 1) / 2)) / (blockSize - 1);
+        GetEncoderGridCoordinate(coordinate, blockSize, gridSize: 4);
+
+    private static int GetEncoderGridCoordinate(int coordinate, int blockSize, int gridSize) =>
+        blockSize <= 1 || gridSize <= 1
+            ? 0
+            : ((coordinate * (gridSize - 1)) + ((blockSize - 1) / 2)) / (blockSize - 1);
 
     private static void WriteLdrVoidExtentBlock(Rgba8UNorm color, Span<byte> destination)
     {
@@ -1224,6 +4080,35 @@ public sealed class AstcTextureCoder : IPitchTextureCoder
 
     private static int SafeLeftShift(int value, int shift) => (int)((uint)value << shift);
 
+    private static void ValidateCompressionMode(AstcCompressionMode compressionMode)
+    {
+        if (compressionMode is not (AstcCompressionMode.Fast
+            or AstcCompressionMode.Normal
+            or AstcCompressionMode.High
+            or AstcCompressionMode.Exhaustive))
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(compressionMode),
+                compressionMode,
+                "Unsupported ASTC compression mode.");
+        }
+    }
+
+    private static bool NormalizeVector(ref double x, ref double y, ref double z, ref double w)
+    {
+        var length = Math.Sqrt((x * x) + (y * y) + (z * z) + (w * w));
+        if (length <= double.Epsilon)
+        {
+            return false;
+        }
+
+        x /= length;
+        y /= length;
+        z /= length;
+        w /= length;
+        return true;
+    }
+
     private static bool DecodeWeights(UInt128 bits, AstcBlockInfo info, int blockWidth, int blockHeight, Span<int> texelWeights0, Span<int> texelWeights1)
     {
         var gridSize = info.WeightWidth * info.WeightHeight;
@@ -1606,6 +4491,141 @@ public sealed class AstcTextureCoder : IPitchTextureCoder
 
     private static int GetEndpointValueCount(int mode) => ((mode >> 2) + 1) * 2;
 
+    private static UInt128 EncodeBiseSequence(ReadOnlySpan<int> values, int valueCount, int range)
+    {
+        var packing = GetBisePacking(range);
+        var totalBits = GetBiseBitCount(valueCount, range);
+        var result = UInt128.Zero;
+        var bitOffset = 0;
+
+        if (packing.Mode == BiseMode.Bits)
+        {
+            var mask = packing.Bits == 0 ? 0 : (1 << packing.Bits) - 1;
+            for (var i = 0; i < valueCount; i++)
+            {
+                result |= (UInt128)(values[i] & mask) << bitOffset;
+                bitOffset += packing.Bits;
+            }
+
+            return result;
+        }
+
+        var valuesPerBlock = packing.Mode == BiseMode.Trits ? 5 : 3;
+        var blockBitCount = (valuesPerBlock * packing.Bits) + (packing.Mode == BiseMode.Trits ? 8 : 7);
+        var valueIndex = 0;
+        while (bitOffset < totalBits)
+        {
+            var encodedBlock = packing.Mode == BiseMode.Trits
+                ? EncodeTritBlock(values, valueIndex, valueCount, packing.Bits)
+                : EncodeQuintBlock(values, valueIndex, valueCount, packing.Bits);
+            var bitsToWrite = Math.Min(blockBitCount, totalBits - bitOffset);
+            result |= (UInt128)(encodedBlock & (ulong)GetMask(bitsToWrite)) << bitOffset;
+            bitOffset += bitsToWrite;
+            valueIndex += valuesPerBlock;
+        }
+
+        return result;
+    }
+
+    private static ulong EncodeTritBlock(ReadOnlySpan<int> values, int valueIndex, int valueCount, int bits)
+    {
+        Span<int> mantissas = stackalloc int[5];
+        Span<int> trits = stackalloc int[5];
+        var mantissaMask = bits == 0 ? 0 : (1 << bits) - 1;
+        for (var i = 0; i < 5; i++)
+        {
+            var value = valueIndex + i < valueCount ? values[valueIndex + i] : 0;
+            mantissas[i] = value & mantissaMask;
+            trits[i] = value >> bits;
+        }
+
+        var packedTrits = STritEncodings[GetTritEncodingKey(trits)];
+        return PackTritBlock(mantissas, packedTrits, bits);
+    }
+
+    private static ulong EncodeQuintBlock(ReadOnlySpan<int> values, int valueIndex, int valueCount, int bits)
+    {
+        Span<int> mantissas = stackalloc int[3];
+        Span<int> quints = stackalloc int[3];
+        var mantissaMask = bits == 0 ? 0 : (1 << bits) - 1;
+        for (var i = 0; i < 3; i++)
+        {
+            var value = valueIndex + i < valueCount ? values[valueIndex + i] : 0;
+            mantissas[i] = value & mantissaMask;
+            quints[i] = value >> bits;
+        }
+
+        var packedQuints = SQuintEncodings[GetQuintEncodingKey(quints)];
+        return PackQuintBlock(mantissas, packedQuints, bits);
+    }
+
+    private static ulong PackTritBlock(ReadOnlySpan<int> mantissas, int packedTrits, int bits)
+    {
+        var result = 0UL;
+        var bitPosition = 0;
+        WritePackedBits(ref result, ref bitPosition, mantissas[0], bits);
+        WritePackedBits(ref result, ref bitPosition, packedTrits & 0x3, 2);
+        WritePackedBits(ref result, ref bitPosition, mantissas[1], bits);
+        WritePackedBits(ref result, ref bitPosition, (packedTrits >> 2) & 0x3, 2);
+        WritePackedBits(ref result, ref bitPosition, mantissas[2], bits);
+        WritePackedBits(ref result, ref bitPosition, (packedTrits >> 4) & 0x1, 1);
+        WritePackedBits(ref result, ref bitPosition, mantissas[3], bits);
+        WritePackedBits(ref result, ref bitPosition, (packedTrits >> 5) & 0x3, 2);
+        WritePackedBits(ref result, ref bitPosition, mantissas[4], bits);
+        WritePackedBits(ref result, ref bitPosition, (packedTrits >> 7) & 0x1, 1);
+        return result;
+    }
+
+    private static ulong PackQuintBlock(ReadOnlySpan<int> mantissas, int packedQuints, int bits)
+    {
+        var result = 0UL;
+        var bitPosition = 0;
+        WritePackedBits(ref result, ref bitPosition, mantissas[0], bits);
+        WritePackedBits(ref result, ref bitPosition, packedQuints & 0x7, 3);
+        WritePackedBits(ref result, ref bitPosition, mantissas[1], bits);
+        WritePackedBits(ref result, ref bitPosition, (packedQuints >> 3) & 0x3, 2);
+        WritePackedBits(ref result, ref bitPosition, mantissas[2], bits);
+        WritePackedBits(ref result, ref bitPosition, (packedQuints >> 5) & 0x3, 2);
+        return result;
+    }
+
+    private static void WritePackedBits(ref ulong result, ref int bitPosition, int value, int bitCount)
+    {
+        if (bitCount == 0)
+        {
+            return;
+        }
+
+        result |= ((ulong)value & ((1UL << bitCount) - 1)) << bitPosition;
+        bitPosition += bitCount;
+    }
+
+    private static int GetTritEncodingKey(ReadOnlySpan<int> trits)
+    {
+        var key = 0;
+        var scale = 1;
+        for (var i = 0; i < 5; i++)
+        {
+            key += trits[i] * scale;
+            scale *= 3;
+        }
+
+        return key;
+    }
+
+    private static int GetQuintEncodingKey(ReadOnlySpan<int> quints)
+    {
+        var key = 0;
+        var scale = 1;
+        for (var i = 0; i < 3; i++)
+        {
+            key += quints[i] * scale;
+            scale *= 5;
+        }
+
+        return key;
+    }
+
     private static void DecodeBiseValues(UInt128 bits, int startBit, int bitCount, int range, int valueCount, Span<int> result)
     {
         var source = GetBits(bits, startBit, bitCount);
@@ -1791,6 +4811,40 @@ public sealed class AstcTextureCoder : IPitchTextureCoder
             q1 = (c >> 3) & 0x3;
             q0 = c & 0x7;
         }
+    }
+
+    private static int[] CreateTritEncodings()
+    {
+        var encodings = new int[243];
+        Array.Fill(encodings, -1);
+        for (var packed = 0; packed < 256; packed++)
+        {
+            DecodePackedTrits(packed, out var t0, out var t1, out var t2, out var t3, out var t4);
+            var key = t0 + (t1 * 3) + (t2 * 9) + (t3 * 27) + (t4 * 81);
+            if (encodings[key] < 0)
+            {
+                encodings[key] = packed;
+            }
+        }
+
+        return encodings;
+    }
+
+    private static int[] CreateQuintEncodings()
+    {
+        var encodings = new int[125];
+        Array.Fill(encodings, -1);
+        for (var packed = 0; packed < 128; packed++)
+        {
+            DecodePackedQuints(packed, out var q0, out var q1, out var q2);
+            var key = q0 + (q1 * 5) + (q2 * 25);
+            if (encodings[key] < 0)
+            {
+                encodings[key] = packed;
+            }
+        }
+
+        return encodings;
     }
 
     private static int UnquantizeEndpointValue(int value, int range)
@@ -2206,6 +5260,9 @@ public sealed class AstcTextureCoder : IPitchTextureCoder
         return ((UInt128)ReverseBits64(low) << 64) | ReverseBits64(high);
     }
 
+    private static UInt128 ReverseLowBits(UInt128 value, int bitCount) =>
+        ReverseBits(value) >> (128 - bitCount);
+
     private static uint ReverseBits32(uint value)
     {
         value = ((value & 0x55555555U) << 1) | ((value >> 1) & 0x55555555U);
@@ -2413,6 +5470,20 @@ public sealed class AstcTextureCoder : IPitchTextureCoder
     }
 
     private readonly record struct AstcFormatInfo(TextureFormat Format, int BlockWidth, int BlockHeight, AstcTransfer Transfer);
+
+    private readonly record struct AstcLdrEncodingResult(UInt128 Bits, long Error);
+
+    private readonly record struct AstcHdrEncodingResult(UInt128 Bits, double Error);
+
+    private readonly record struct AstcWeightGridCandidate(
+        int Width,
+        int Height,
+        int WeightRange,
+        int BlockMode,
+        int WeightBitCount,
+        bool DualPlane,
+        int ColorRange,
+        int ColorBitCount);
 
     private readonly record struct BisePacking(BiseMode Mode, int Bits);
 
