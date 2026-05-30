@@ -416,6 +416,52 @@ public sealed class S3tcTextureCoderTests
         Assert.True(RgbSquaredError(source, decoded) < RgbSquaredError(source, boundsDecoded));
     }
 
+    [Theory]
+    [MemberData(nameof(S3tcCompressionModes))]
+    public void EncodeAndDecodeDxt5RgbaSupportsCompressionMode(S3tcCompressionMode compressionMode)
+    {
+        var pixels = Enumerable.Range(0, 16)
+            .Select(i => new Rgba8UNorm(
+                (byte)(i * 11),
+                (byte)(255 - (i * 7)),
+                (byte)(i * 5),
+                (byte)(32 + (i * 9))))
+            .ToArray();
+        var source = new ArrayBitmap<Rgba8UNorm>(4, 4, pixels);
+        var decoded = new ArrayBitmap<Rgba8UNorm>(4, 4);
+        var options = new S3tcCoderOptions { CompressionMode = compressionMode };
+        var coder = new S3tcTextureCoder(TextureFormats.Dxt5Rgba, options);
+        var rowPitch = coder.GetDefaultPitch(source.Width);
+        var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
+
+        coder.Encode(source.AsView(), encoded, rowPitch);
+        coder.Decode(encoded, decoded.AsView(), rowPitch);
+
+        Assert.Contains(encoded, value => value != 0);
+        Assert.Contains(decoded.Pixels, pixel => pixel.Alpha > 0);
+    }
+
+    [Fact]
+    public void EncodeDxt5AExhaustedIsNoWorseThanHighQualitySearch()
+    {
+        byte[] alphas =
+        [
+            0, 11, 29, 47,
+            63, 81, 103, 117,
+            141, 159, 173, 197,
+            211, 229, 241, 255
+        ];
+        var pixels = alphas
+            .Select(alpha => new Rgba8UNorm(0, 0, 0, alpha))
+            .ToArray();
+        var source = new ArrayBitmap<Rgba8UNorm>(4, 4, pixels);
+
+        var highError = EncodeAndDecodeDxt5AAlphaError(source, S3tcCompressionMode.High);
+        var exhaustedError = EncodeAndDecodeDxt5AAlphaError(source, S3tcCompressionMode.Exhaustive);
+
+        Assert.True(exhaustedError <= highError);
+    }
+
     [Fact]
     public void EncodeAndDecodeDxt5RgbaRoundTripsSolidRgba8WithinQuantization()
     {
@@ -622,6 +668,34 @@ public sealed class S3tcTextureCoderTests
         return error;
     }
 
+    private static long EncodeAndDecodeDxt5AAlphaError(
+        ArrayBitmap<Rgba8UNorm> source,
+        S3tcCompressionMode compressionMode)
+    {
+        var decoded = new ArrayBitmap<Rgba8UNorm>(source.Width, source.Height);
+        var options = new S3tcCoderOptions { CompressionMode = compressionMode };
+        var coder = new S3tcTextureCoder(TextureFormats.Dxt5A, options);
+        var rowPitch = coder.GetDefaultPitch(source.Width);
+        var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
+
+        coder.Encode(source.AsView(), encoded, rowPitch);
+        coder.Decode(encoded, decoded.AsView(), rowPitch);
+
+        return AlphaSquaredError(source, decoded);
+    }
+
+    private static long AlphaSquaredError(ArrayBitmap<Rgba8UNorm> expected, ArrayBitmap<Rgba8UNorm> actual)
+    {
+        long error = 0;
+        for (var i = 0; i < expected.Pixels.Length; i++)
+        {
+            var alpha = expected.Pixels[i].Alpha - actual.Pixels[i].Alpha;
+            error += alpha * alpha;
+        }
+
+        return error;
+    }
+
     private static void WriteAlphaBlock(Span<byte> destination, byte value0, byte value1, ulong indices)
     {
         destination[0] = value0;
@@ -706,5 +780,13 @@ public sealed class S3tcTextureCoderTests
         TextureFormats.Dxt5ABigEndian,
         TextureFormats.DxnBigEndian,
         TextureFormats.Ctx1BigEndian
+    };
+
+    public static TheoryData<S3tcCompressionMode> S3tcCompressionModes() => new()
+    {
+        S3tcCompressionMode.Fast,
+        S3tcCompressionMode.Normal,
+        S3tcCompressionMode.High,
+        S3tcCompressionMode.Exhaustive
     };
 }

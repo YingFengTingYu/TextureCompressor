@@ -776,12 +776,31 @@ public sealed class S3tcTextureCoder : IPitchTextureCoder
         S3tcCompressionMode compressionMode)
     {
         var hasTransparent = colorMode == Dxt1ColorMode.Rgba && HasTransparentTexel(source);
-        if (compressionMode == S3tcCompressionMode.Fast)
+        switch (compressionMode)
         {
-            EncodeColorBlockFast(source, colorMode, hasTransparent, destination);
-            return;
+            case S3tcCompressionMode.Fast:
+                EncodeColorBlockFast(source, colorMode, hasTransparent, destination);
+                return;
+            case S3tcCompressionMode.Normal:
+            case S3tcCompressionMode.High:
+            case S3tcCompressionMode.Exhaustive:
+                EncodeColorBlockOptimized(source, colorMode, hasTransparent, compressionMode, destination);
+                return;
+            default:
+                throw new ArgumentOutOfRangeException(
+                    nameof(compressionMode),
+                    compressionMode,
+                    "Unsupported S3TC compression mode.");
         }
+    }
 
+    private static void EncodeColorBlockOptimized(
+        ReadOnlySpan<Rgba8UNorm> source,
+        Dxt1ColorMode colorMode,
+        bool hasTransparent,
+        S3tcCompressionMode compressionMode,
+        Span<byte> destination)
+    {
         if (hasTransparent && !HasOpaqueTexel(source))
         {
             BinaryPrimitives.WriteUInt16LittleEndian(destination, 0);
@@ -790,7 +809,8 @@ public sealed class S3tcTextureCoder : IPitchTextureCoder
             return;
         }
 
-        Span<ColorEndpointPair> seeds = stackalloc ColorEndpointPair[8];
+        Span<ColorEndpointPair> seeds = stackalloc ColorEndpointPair[
+            compressionMode == S3tcCompressionMode.Exhaustive ? 272 : 8];
         var seedCount = 0;
         FindColorBounds(source, ignoreTransparent: hasTransparent, out var min, out var max);
         AddColorSeed(seeds, ref seedCount, PackRgb565(max), PackRgb565(min), hasTransparent);
@@ -810,23 +830,38 @@ public sealed class S3tcTextureCoder : IPitchTextureCoder
                 hasTransparent);
         }
 
-        if (TryFindFarthestColorEndpoints(source, hasTransparent, out var farA, out var farB))
+        if (compressionMode is S3tcCompressionMode.High or S3tcCompressionMode.Exhaustive
+            && TryFindFarthestColorEndpoints(source, hasTransparent, out var farA, out var farB))
         {
             AddColorSeed(seeds, ref seedCount, PackRgb565(farA), PackRgb565(farB), hasTransparent);
         }
 
-        if (TryFindAverageColor(source, hasTransparent, out var average))
+        if (compressionMode is S3tcCompressionMode.High or S3tcCompressionMode.Exhaustive
+            && TryFindAverageColor(source, hasTransparent, out var average))
         {
             AddColorSeed(seeds, ref seedCount, PackRgb565Nearest(average), PackRgb565Nearest(average), hasTransparent);
         }
 
-        var best = new ColorBlockEncoding { Error = long.MaxValue };
-        for (var i = 0; i < seedCount; i++)
+        if (compressionMode == S3tcCompressionMode.Exhaustive)
         {
-            OptimizeColorSeed(source, colorMode, hasTransparent, seeds[i].Color0, seeds[i].Color1, ref best);
+            AddUniqueColorSeeds(source, hasTransparent, seeds, ref seedCount);
         }
 
-        RefineColorEndpoints(source, colorMode, hasTransparent, ref best);
+        var best = new ColorBlockEncoding { Error = long.MaxValue };
+        var iterationLimit = GetColorOptimizationIterationLimit(compressionMode);
+        for (var i = 0; i < seedCount; i++)
+        {
+            OptimizeColorSeed(
+                source,
+                colorMode,
+                hasTransparent,
+                seeds[i].Color0,
+                seeds[i].Color1,
+                iterationLimit,
+                ref best);
+        }
+
+        RefineColorEndpoints(source, colorMode, hasTransparent, GetColorRefinementPassLimit(compressionMode), ref best);
 
         BinaryPrimitives.WriteUInt16LittleEndian(destination, best.Color0);
         BinaryPrimitives.WriteUInt16LittleEndian(destination[2..], best.Color1);
@@ -1277,17 +1312,64 @@ public sealed class S3tcTextureCoder : IPitchTextureCoder
         }
     }
 
+    private static void AddUniqueColorSeeds(
+        ReadOnlySpan<Rgba8UNorm> source,
+        bool ignoreTransparent,
+        Span<ColorEndpointPair> seeds,
+        ref int seedCount)
+    {
+        Span<Rgb24> colors = stackalloc Rgb24[TexelsPerBlock];
+        var uniqueCount = 0;
+        for (var i = 0; i < TexelsPerBlock; i++)
+        {
+            if (ignoreTransparent && source[i].Alpha < AlphaCutoff)
+            {
+                continue;
+            }
+
+            var color = new Rgb24(source[i].Red, source[i].Green, source[i].Blue);
+            var alreadyAdded = false;
+            for (var j = 0; j < uniqueCount; j++)
+            {
+                if (colors[j] == color)
+                {
+                    alreadyAdded = true;
+                    break;
+                }
+            }
+
+            if (!alreadyAdded)
+            {
+                colors[uniqueCount++] = color;
+            }
+        }
+
+        for (var i = 0; i < uniqueCount; i++)
+        {
+            for (var j = 0; j < uniqueCount; j++)
+            {
+                AddColorSeed(
+                    seeds,
+                    ref seedCount,
+                    PackRgb565Nearest(colors[i].Red, colors[i].Green, colors[i].Blue),
+                    PackRgb565Nearest(colors[j].Red, colors[j].Green, colors[j].Blue),
+                    ignoreTransparent);
+            }
+        }
+    }
+
     private static void OptimizeColorSeed(
         ReadOnlySpan<Rgba8UNorm> source,
         Dxt1ColorMode colorMode,
         bool hasTransparent,
         ushort color0,
         ushort color1,
+        int iterationLimit,
         ref ColorBlockEncoding best)
     {
         NormalizeColorOrder(ref color0, ref color1, hasTransparent);
 
-        for (var iteration = 0; iteration < 8; iteration++)
+        for (var iteration = 0; iteration < iterationLimit; iteration++)
         {
             var current = EvaluateColorCandidate(source, colorMode, hasTransparent, color0, color1);
             UpdateBestColorEncoding(current, ref best);
@@ -1443,9 +1525,10 @@ public sealed class S3tcTextureCoder : IPitchTextureCoder
         ReadOnlySpan<Rgba8UNorm> source,
         Dxt1ColorMode colorMode,
         bool hasTransparent,
+        int passLimit,
         ref ColorBlockEncoding best)
     {
-        for (var pass = 0; pass < 8; pass++)
+        for (var pass = 0; pass < passLimit; pass++)
         {
             var improved = false;
             for (var endpoint = 0; endpoint < 2; endpoint++)
@@ -1680,6 +1763,28 @@ public sealed class S3tcTextureCoder : IPitchTextureCoder
         return true;
     }
 
+    private static int GetColorOptimizationIterationLimit(S3tcCompressionMode compressionMode) => compressionMode switch
+    {
+        S3tcCompressionMode.Normal => 4,
+        S3tcCompressionMode.High => 8,
+        S3tcCompressionMode.Exhaustive => 12,
+        _ => throw new ArgumentOutOfRangeException(
+            nameof(compressionMode),
+            compressionMode,
+            "Unsupported S3TC compression mode.")
+    };
+
+    private static int GetColorRefinementPassLimit(S3tcCompressionMode compressionMode) => compressionMode switch
+    {
+        S3tcCompressionMode.Normal => 4,
+        S3tcCompressionMode.High => 8,
+        S3tcCompressionMode.Exhaustive => 16,
+        _ => throw new ArgumentOutOfRangeException(
+            nameof(compressionMode),
+            compressionMode,
+            "Unsupported S3TC compression mode.")
+    };
+
     private static bool TryFindFarthestColorEndpoints(
         ReadOnlySpan<Rgba8UNorm> source,
         bool ignoreTransparent,
@@ -1795,42 +1900,116 @@ public sealed class S3tcTextureCoder : IPitchTextureCoder
         S3tcCompressionMode compressionMode)
     {
         FindComponentBounds(source, component, out var min, out var max);
-        if (compressionMode == S3tcCompressionMode.Fast)
+        switch (compressionMode)
         {
-            destination[0] = max;
-            destination[1] = min;
+            case S3tcCompressionMode.Fast:
+                EncodeInterpolatedScalarBlockFast(source, component, min, max, destination);
+                return;
+            case S3tcCompressionMode.Normal:
+            case S3tcCompressionMode.High:
+                EncodeInterpolatedScalarBlockOptimized(source, component, min, max, compressionMode, destination);
+                return;
+            case S3tcCompressionMode.Exhaustive:
+                EncodeInterpolatedScalarBlockExhausted(source, component, destination);
+                return;
+            default:
+                throw new ArgumentOutOfRangeException(
+                    nameof(compressionMode),
+                    compressionMode,
+                    "Unsupported S3TC compression mode.");
+        }
+    }
 
-            Span<byte> palette = stackalloc byte[8];
-            BuildAlphaPalette(max, min, palette);
+    private static void EncodeInterpolatedScalarBlockFast(
+        ReadOnlySpan<Rgba8UNorm> source,
+        S3tcScalarComponent component,
+        byte min,
+        byte max,
+        Span<byte> destination)
+    {
+        destination[0] = max;
+        destination[1] = min;
 
-            ulong indices = 0;
-            for (var i = 0; i < TexelsPerBlock; i++)
-            {
-                indices |= (ulong)FindNearestAlphaIndex(GetComponent(source[i], component), palette) << (i * 3);
-            }
+        Span<byte> palette = stackalloc byte[8];
+        BuildAlphaPalette(max, min, palette);
 
-            for (var i = 0; i < 6; i++)
-            {
-                destination[2 + i] = (byte)(indices >> (8 * i));
-            }
-
-            return;
+        ulong indices = 0;
+        for (var i = 0; i < TexelsPerBlock; i++)
+        {
+            indices |= (ulong)FindNearestAlphaIndex(GetComponent(source[i], component), palette) << (i * 3);
         }
 
+        for (var i = 0; i < 6; i++)
+        {
+            destination[2 + i] = (byte)(indices >> (8 * i));
+        }
+    }
+
+    private static void EncodeInterpolatedScalarBlockOptimized(
+        ReadOnlySpan<Rgba8UNorm> source,
+        S3tcScalarComponent component,
+        byte min,
+        byte max,
+        S3tcCompressionMode compressionMode,
+        Span<byte> destination)
+    {
         var best = new ScalarBlockEncoding { Error = long.MaxValue };
-        OptimizeScalarSeed(source, component, min, max, AlphaEndpointMode.SixAlpha, ref best);
+        var iterationLimit = GetScalarOptimizationIterationLimit(compressionMode);
+        OptimizeScalarSeed(source, component, min, max, AlphaEndpointMode.SixAlpha, iterationLimit, ref best);
         if (max > min)
         {
-            OptimizeScalarSeed(source, component, max, min, AlphaEndpointMode.EightAlpha, ref best);
+            OptimizeScalarSeed(source, component, max, min, AlphaEndpointMode.EightAlpha, iterationLimit, ref best);
 
             var padding = Math.Max(1, (max - min + 13) / 14);
             var expandedMin = (byte)Math.Max(byte.MinValue, min - padding);
             var expandedMax = (byte)Math.Min(byte.MaxValue, max + padding);
-            OptimizeScalarSeed(source, component, expandedMin, expandedMax, AlphaEndpointMode.SixAlpha, ref best);
-            OptimizeScalarSeed(source, component, expandedMax, expandedMin, AlphaEndpointMode.EightAlpha, ref best);
+            OptimizeScalarSeed(
+                source,
+                component,
+                expandedMin,
+                expandedMax,
+                AlphaEndpointMode.SixAlpha,
+                iterationLimit,
+                ref best);
+            OptimizeScalarSeed(
+                source,
+                component,
+                expandedMax,
+                expandedMin,
+                AlphaEndpointMode.EightAlpha,
+                iterationLimit,
+                ref best);
         }
 
-        RefineScalarEndpoints(source, component, ref best);
+        RefineScalarEndpoints(source, component, GetScalarRefinementPassLimit(compressionMode), ref best);
+        WriteScalarBlock(best, destination);
+    }
+
+    private static void EncodeInterpolatedScalarBlockExhausted(
+        ReadOnlySpan<Rgba8UNorm> source,
+        S3tcScalarComponent component,
+        Span<byte> destination)
+    {
+        var best = new ScalarBlockEncoding { Error = long.MaxValue };
+        for (var endpoint0 = 0; endpoint0 <= byte.MaxValue; endpoint0++)
+        {
+            for (var endpoint1 = 0; endpoint1 <= byte.MaxValue; endpoint1++)
+            {
+                var candidate = EvaluateScalarCandidate(
+                    source,
+                    component,
+                    (byte)endpoint0,
+                    (byte)endpoint1,
+                    best.Error);
+                UpdateBestScalarEncoding(candidate, ref best);
+                if (best.Error == 0)
+                {
+                    WriteScalarBlock(best, destination);
+                    return;
+                }
+            }
+        }
+
         WriteScalarBlock(best, destination);
     }
 
@@ -1840,11 +2019,12 @@ public sealed class S3tcTextureCoder : IPitchTextureCoder
         byte endpoint0,
         byte endpoint1,
         AlphaEndpointMode mode,
+        int iterationLimit,
         ref ScalarBlockEncoding best)
     {
         NormalizeScalarOrder(ref endpoint0, ref endpoint1, mode);
 
-        for (var iteration = 0; iteration < 8; iteration++)
+        for (var iteration = 0; iteration < iterationLimit; iteration++)
         {
             var current = EvaluateScalarCandidate(source, component, endpoint0, endpoint1);
             UpdateBestScalarEncoding(current, ref best);
@@ -1868,7 +2048,8 @@ public sealed class S3tcTextureCoder : IPitchTextureCoder
         ReadOnlySpan<Rgba8UNorm> source,
         S3tcScalarComponent component,
         byte endpoint0,
-        byte endpoint1)
+        byte endpoint1,
+        long maxError = long.MaxValue)
     {
         Span<byte> palette = stackalloc byte[8];
         BuildAlphaPalette(endpoint0, endpoint1, palette);
@@ -1882,6 +2063,16 @@ public sealed class S3tcTextureCoder : IPitchTextureCoder
             var difference = value - palette[index];
             error += difference * difference;
             indices |= (ulong)index << (i * 3);
+            if (error >= maxError)
+            {
+                return new ScalarBlockEncoding
+                {
+                    Endpoint0 = endpoint0,
+                    Endpoint1 = endpoint1,
+                    Indices = indices,
+                    Error = error
+                };
+            }
         }
 
         return new ScalarBlockEncoding
@@ -1983,12 +2174,33 @@ public sealed class S3tcTextureCoder : IPitchTextureCoder
         }
     }
 
+    private static int GetScalarOptimizationIterationLimit(S3tcCompressionMode compressionMode) => compressionMode switch
+    {
+        S3tcCompressionMode.Normal => 4,
+        S3tcCompressionMode.High => 8,
+        _ => throw new ArgumentOutOfRangeException(
+            nameof(compressionMode),
+            compressionMode,
+            "Unsupported S3TC compression mode.")
+    };
+
+    private static int GetScalarRefinementPassLimit(S3tcCompressionMode compressionMode) => compressionMode switch
+    {
+        S3tcCompressionMode.Normal => 4,
+        S3tcCompressionMode.High => 8,
+        _ => throw new ArgumentOutOfRangeException(
+            nameof(compressionMode),
+            compressionMode,
+            "Unsupported S3TC compression mode.")
+    };
+
     private static void RefineScalarEndpoints(
         ReadOnlySpan<Rgba8UNorm> source,
         S3tcScalarComponent component,
+        int passLimit,
         ref ScalarBlockEncoding best)
     {
-        for (var pass = 0; pass < 8; pass++)
+        for (var pass = 0; pass < passLimit; pass++)
         {
             var mode = best.Endpoint0 > best.Endpoint1
                 ? AlphaEndpointMode.EightAlpha
