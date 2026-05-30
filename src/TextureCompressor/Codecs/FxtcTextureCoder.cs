@@ -11,6 +11,7 @@ public sealed class FxtcTextureCoder : IPitchTextureCoder
     private const int TexelsPerBlock = BlockWidth * BlockHeight;
     private const int BytesPerBlock = 16;
     private const int LeftTexelCount = 16;
+    private const int ExhaustiveCcHiColorSeedLimit = 16;
     private const byte AlphaCutoff = 128;
 
     private readonly FxtcCoderOptions _options;
@@ -142,8 +143,10 @@ public sealed class FxtcTextureCoder : IPitchTextureCoder
             case FxtcCompressionMode.Fast:
                 EncodeBlockFast(source, destination);
                 return;
+            case FxtcCompressionMode.Normal:
             case FxtcCompressionMode.High:
-                EncodeBlockHigh(source, destination);
+            case FxtcCompressionMode.Exhaustive:
+                EncodeBlockOptimized(source, destination, _options.CompressionMode);
                 return;
             default:
                 throw new ArgumentOutOfRangeException(
@@ -180,7 +183,10 @@ public sealed class FxtcTextureCoder : IPitchTextureCoder
         best.CopyTo(destination);
     }
 
-    private void EncodeBlockHigh(ReadOnlySpan<Rgba8UNorm> source, Span<byte> destination)
+    private void EncodeBlockOptimized(
+        ReadOnlySpan<Rgba8UNorm> source,
+        Span<byte> destination,
+        FxtcCompressionMode compressionMode)
     {
         Span<byte> best = stackalloc byte[BytesPerBlock];
         Span<byte> candidate = stackalloc byte[BytesPerBlock];
@@ -189,21 +195,30 @@ public sealed class FxtcTextureCoder : IPitchTextureCoder
         EncodeBlockFast(source, candidate);
         UpdateBestCandidate(source, candidate, best, ref bestError);
 
-        EncodeCcMixedOpaqueBlockHigh(source, candidate);
+        if (compressionMode is FxtcCompressionMode.High or FxtcCompressionMode.Exhaustive)
+        {
+            var previousMode = compressionMode == FxtcCompressionMode.High
+                ? FxtcCompressionMode.Normal
+                : FxtcCompressionMode.High;
+            EncodeBlockOptimized(source, candidate, previousMode);
+            UpdateBestCandidate(source, candidate, best, ref bestError);
+        }
+
+        EncodeCcMixedOpaqueBlockOptimized(source, candidate, compressionMode);
         UpdateBestCandidate(source, candidate, best, ref bestError);
 
-        EncodeCcHiBlockHigh(source, candidate);
+        EncodeCcHiBlockOptimized(source, candidate, compressionMode);
         UpdateBestCandidate(source, candidate, best, ref bestError);
 
-        EncodeCcChromaBlockHigh(source, candidate);
+        EncodeCcChromaBlockOptimized(source, candidate, compressionMode);
         UpdateBestCandidate(source, candidate, best, ref bestError);
 
         if (Format == TextureFormats.RgbaFxt1UNorm)
         {
-            EncodeCcMixedAlphaBlockHigh(source, candidate);
+            EncodeCcMixedAlphaBlockOptimized(source, candidate, compressionMode);
             UpdateBestCandidate(source, candidate, best, ref bestError);
 
-            EncodeCcAlphaBlockHigh(source, candidate);
+            EncodeCcAlphaBlockOptimized(source, candidate, compressionMode);
             UpdateBestCandidate(source, candidate, best, ref bestError);
         }
 
@@ -279,9 +294,13 @@ public sealed class FxtcTextureCoder : IPitchTextureCoder
         WriteBits(destination, 111, color1, 15);
     }
 
-    private void EncodeCcHiBlockHigh(ReadOnlySpan<Rgba8UNorm> source, Span<byte> destination)
+    private void EncodeCcHiBlockOptimized(
+        ReadOnlySpan<Rgba8UNorm> source,
+        Span<byte> destination,
+        FxtcCompressionMode compressionMode)
     {
-        Span<CcHiEndpointPair> seeds = stackalloc CcHiEndpointPair[16];
+        Span<CcHiEndpointPair> seeds = stackalloc CcHiEndpointPair[
+            compressionMode == FxtcCompressionMode.Exhaustive ? 272 : 16];
         var seedCount = 0;
         var compareAlpha = Format == TextureFormats.RgbaFxt1UNorm;
         var ignoreTransparent = compareAlpha && HasTransparentTexel(source);
@@ -313,24 +332,44 @@ public sealed class FxtcTextureCoder : IPitchTextureCoder
             AddCcHiSeed(seeds, ref seedCount, PackRgb555Nearest(axisMax), PackRgb555Nearest(axisMin));
         }
 
-        if (TryFindFarthestColorEndpoints(source, ignoreTransparent, out var farA, out var farB))
+        if (compressionMode is FxtcCompressionMode.High or FxtcCompressionMode.Exhaustive
+            && TryFindFarthestColorEndpoints(source, ignoreTransparent, out var farA, out var farB))
         {
             AddCcHiSeed(seeds, ref seedCount, PackRgb555(farA), PackRgb555(farB));
             AddCcHiSeed(seeds, ref seedCount, PackRgb555(farB), PackRgb555(farA));
         }
 
-        if (TryFindAverageColor(source, ignoreTransparent, out var average))
+        if (compressionMode is FxtcCompressionMode.High or FxtcCompressionMode.Exhaustive
+            && TryFindAverageColor(source, ignoreTransparent, out var average))
         {
             AddCcHiSeed(seeds, ref seedCount, PackRgb555Nearest(average), PackRgb555Nearest(average));
         }
 
-        var best = new CcHiEncoding { Error = long.MaxValue };
-        for (var i = 0; i < seedCount; i++)
+        if (compressionMode == FxtcCompressionMode.Exhaustive)
         {
-            OptimizeCcHiSeed(source, compareAlpha, ignoreTransparent, seeds[i].Color0, seeds[i].Color1, ref best);
+            AddUniqueCcHiSeeds(source, ignoreTransparent, seeds, ref seedCount);
         }
 
-        RefineCcHiEndpoints(source, compareAlpha, ignoreTransparent, ref best);
+        var best = new CcHiEncoding { Error = long.MaxValue };
+        var iterationLimit = GetColorOptimizationIterationLimit(compressionMode);
+        for (var i = 0; i < seedCount; i++)
+        {
+            OptimizeCcHiSeed(
+                source,
+                compareAlpha,
+                ignoreTransparent,
+                seeds[i].Color0,
+                seeds[i].Color1,
+                iterationLimit,
+                ref best);
+        }
+
+        RefineCcHiEndpoints(
+            source,
+            compareAlpha,
+            ignoreTransparent,
+            GetColorRefinementPassLimit(compressionMode),
+            ref best);
         WriteCcHiEncoding(source, best.Color0, best.Color1, compareAlpha, ignoreTransparent, destination);
     }
 
@@ -350,16 +389,43 @@ public sealed class FxtcTextureCoder : IPitchTextureCoder
         }
     }
 
+    private static void AddUniqueCcHiSeeds(
+        ReadOnlySpan<Rgba8UNorm> source,
+        bool ignoreTransparent,
+        Span<CcHiEndpointPair> seeds,
+        ref int seedCount)
+    {
+        Span<ushort> uniqueColors = stackalloc ushort[TexelsPerBlock];
+        var colorCount = CollectUniqueRgb555Colors(source, 0, TexelsPerBlock, ignoreTransparent, uniqueColors);
+        ReadOnlySpan<ushort> colors = uniqueColors[..colorCount];
+        Span<ushort> representativeColors = stackalloc ushort[ExhaustiveCcHiColorSeedLimit];
+        if (colorCount > representativeColors.Length)
+        {
+            SelectRepresentativeRgb555Colors(colors, representativeColors);
+            colors = representativeColors;
+            colorCount = colors.Length;
+        }
+
+        for (var i = 0; i < colorCount; i++)
+        {
+            for (var j = 0; j < colorCount; j++)
+            {
+                AddCcHiSeed(seeds, ref seedCount, colors[i], colors[j]);
+            }
+        }
+    }
+
     private void OptimizeCcHiSeed(
         ReadOnlySpan<Rgba8UNorm> source,
         bool compareAlpha,
         bool forceTransparent,
         ushort color0,
         ushort color1,
+        int iterationLimit,
         ref CcHiEncoding best)
     {
         Span<int> indices = stackalloc int[TexelsPerBlock];
-        for (var iteration = 0; iteration < 8; iteration++)
+        for (var iteration = 0; iteration < iterationLimit; iteration++)
         {
             var current = EvaluateCcHiCandidate(source, color0, color1, compareAlpha, forceTransparent, indices);
             UpdateBestCcHiEncoding(current, ref best);
@@ -401,9 +467,10 @@ public sealed class FxtcTextureCoder : IPitchTextureCoder
         ReadOnlySpan<Rgba8UNorm> source,
         bool compareAlpha,
         bool forceTransparent,
+        int passLimit,
         ref CcHiEncoding best)
     {
-        for (var pass = 0; pass < 8; pass++)
+        for (var pass = 0; pass < passLimit; pass++)
         {
             var improved = false;
             for (var endpoint = 0; endpoint < 2; endpoint++)
@@ -541,7 +608,10 @@ public sealed class FxtcTextureCoder : IPitchTextureCoder
         WriteBits(destination, 125, 0b010, 3);
     }
 
-    private static void EncodeCcChromaBlockHigh(ReadOnlySpan<Rgba8UNorm> source, Span<byte> destination)
+    private static void EncodeCcChromaBlockOptimized(
+        ReadOnlySpan<Rgba8UNorm> source,
+        Span<byte> destination,
+        FxtcCompressionMode compressionMode)
     {
         Span<ushort> colors = stackalloc ushort[4];
         Span<Rgba8UNorm> palette = stackalloc Rgba8UNorm[4];
@@ -552,12 +622,22 @@ public sealed class FxtcTextureCoder : IPitchTextureCoder
         }
 
         var best = EvaluateCcChromaCandidate(source, colors);
+        if (compressionMode == FxtcCompressionMode.Exhaustive
+            && TryBuildGreedyCcChromaSeed(source, colors))
+        {
+            var candidate = EvaluateCcChromaCandidate(source, colors);
+            if (candidate.Error < best.Error)
+            {
+                best = candidate;
+            }
+        }
+
         Span<int> sumsRed = stackalloc int[4];
         Span<int> sumsGreen = stackalloc int[4];
         Span<int> sumsBlue = stackalloc int[4];
         Span<int> counts = stackalloc int[4];
         Span<ushort> nextColors = stackalloc ushort[4];
-        for (var iteration = 0; iteration < 12; iteration++)
+        for (var iteration = 0; iteration < GetChromaOptimizationIterationLimit(compressionMode); iteration++)
         {
             sumsRed.Clear();
             sumsGreen.Clear();
@@ -600,8 +680,90 @@ public sealed class FxtcTextureCoder : IPitchTextureCoder
             }
         }
 
-        RefineCcChromaPalette(source, ref best);
+        RefineCcChromaPalette(source, GetChromaRefinementPassLimit(compressionMode), ref best);
         WriteCcChromaEncoding(best, destination);
+    }
+
+    private static bool TryBuildGreedyCcChromaSeed(ReadOnlySpan<Rgba8UNorm> source, Span<ushort> seed)
+    {
+        Span<ushort> colors = stackalloc ushort[TexelsPerBlock];
+        var colorCount = CollectUniqueRgb555Colors(source, 0, TexelsPerBlock, ignoreTransparent: false, colors);
+        if (colorCount == 0)
+        {
+            return false;
+        }
+
+        if (colorCount <= seed.Length)
+        {
+            for (var i = 0; i < seed.Length; i++)
+            {
+                seed[i] = colors[Math.Min(i, colorCount - 1)];
+            }
+
+            return true;
+        }
+
+        var bestDistance = -1;
+        var bestA = 0;
+        var bestB = 1;
+        for (var i = 0; i < colorCount; i++)
+        {
+            var colorA = UnpackRgb555(colors[i], byte.MaxValue);
+            for (var j = i + 1; j < colorCount; j++)
+            {
+                var distance = ColorDistance(colorA, UnpackRgb555(colors[j], byte.MaxValue), compareAlpha: false);
+                if (distance > bestDistance)
+                {
+                    bestDistance = distance;
+                    bestA = i;
+                    bestB = j;
+                }
+            }
+        }
+
+        seed[0] = colors[bestA];
+        seed[1] = colors[bestB];
+        var seedCount = 2;
+        while (seedCount < seed.Length)
+        {
+            var nextIndex = -1;
+            var nextDistance = -1;
+            for (var i = 0; i < colorCount; i++)
+            {
+                if (ContainsColor(seed[..seedCount], colors[i]))
+                {
+                    continue;
+                }
+
+                var color = UnpackRgb555(colors[i], byte.MaxValue);
+                var minDistance = int.MaxValue;
+                for (var j = 0; j < seedCount; j++)
+                {
+                    minDistance = Math.Min(
+                        minDistance,
+                        ColorDistance(color, UnpackRgb555(seed[j], byte.MaxValue), compareAlpha: false));
+                }
+
+                if (minDistance > nextDistance)
+                {
+                    nextDistance = minDistance;
+                    nextIndex = i;
+                }
+            }
+
+            if (nextIndex < 0)
+            {
+                seed[seedCount] = seed[seedCount - 1];
+            }
+            else
+            {
+                seed[seedCount] = colors[nextIndex];
+            }
+
+            seedCount++;
+        }
+
+        return true;
     }
 
     private static CcChromaEncoding EvaluateCcChromaCandidate(ReadOnlySpan<Rgba8UNorm> source, ReadOnlySpan<ushort> colors)
@@ -632,9 +794,12 @@ public sealed class FxtcTextureCoder : IPitchTextureCoder
         };
     }
 
-    private static void RefineCcChromaPalette(ReadOnlySpan<Rgba8UNorm> source, ref CcChromaEncoding best)
+    private static void RefineCcChromaPalette(
+        ReadOnlySpan<Rgba8UNorm> source,
+        int passLimit,
+        ref CcChromaEncoding best)
     {
-        for (var pass = 0; pass < 8; pass++)
+        for (var pass = 0; pass < passLimit; pass++)
         {
             var improved = false;
             for (var colorIndex = 0; colorIndex < 4; colorIndex++)
@@ -763,11 +928,14 @@ public sealed class FxtcTextureCoder : IPitchTextureCoder
         WriteBits(destination, 127, 1, 1);
     }
 
-    private static void EncodeCcMixedOpaqueBlockHigh(ReadOnlySpan<Rgba8UNorm> source, Span<byte> destination)
+    private static void EncodeCcMixedOpaqueBlockOptimized(
+        ReadOnlySpan<Rgba8UNorm> source,
+        Span<byte> destination,
+        FxtcCompressionMode compressionMode)
     {
         destination.Clear();
-        var left = FindBestCcMixedOpaqueHalf(source, 0, 64, 79, 125);
-        var right = FindBestCcMixedOpaqueHalf(source, LeftTexelCount, 94, 109, 126);
+        var left = FindBestCcMixedOpaqueHalf(source, 0, 64, 79, 125, compressionMode);
+        var right = FindBestCcMixedOpaqueHalf(source, LeftTexelCount, 94, 109, 126, compressionMode);
         WriteCcMixedOpaqueHalf(source, destination, 0, 64, 79, 125, left.Color0, left.Color1);
         WriteCcMixedOpaqueHalf(source, destination, LeftTexelCount, 94, 109, 126, right.Color0, right.Color1);
         WriteBits(destination, 127, 1, 1);
@@ -778,9 +946,11 @@ public sealed class FxtcTextureCoder : IPitchTextureCoder
         int start,
         int color0BitOffset,
         int color1BitOffset,
-        int greenLowBitOffset)
+        int greenLowBitOffset,
+        FxtcCompressionMode compressionMode)
     {
-        Span<Rgb565EndpointPair> seeds = stackalloc Rgb565EndpointPair[14];
+        Span<Rgb565EndpointPair> seeds = stackalloc Rgb565EndpointPair[
+            compressionMode == FxtcCompressionMode.Exhaustive ? 280 : 14];
         var seedCount = 0;
 
         FindColorBounds(source, start, LeftTexelCount, includeAlpha: false, ignoreTransparent: false, out var min, out var max);
@@ -799,18 +969,26 @@ public sealed class FxtcTextureCoder : IPitchTextureCoder
             AddRgb565Seed(seeds, ref seedCount, PackRgb565Nearest(axisMax), PackRgb565Nearest(axisMin));
         }
 
-        if (TryFindFarthestColorEndpoints(source, start, LeftTexelCount, ignoreTransparent: false, out var farA, out var farB))
+        if (compressionMode is FxtcCompressionMode.High or FxtcCompressionMode.Exhaustive
+            && TryFindFarthestColorEndpoints(source, start, LeftTexelCount, ignoreTransparent: false, out var farA, out var farB))
         {
             AddRgb565Seed(seeds, ref seedCount, PackRgb565(farA), PackRgb565(farB));
             AddRgb565Seed(seeds, ref seedCount, PackRgb565(farB), PackRgb565(farA));
         }
 
-        if (TryFindAverageColor(source, start, LeftTexelCount, ignoreTransparent: false, out var average))
+        if (compressionMode is FxtcCompressionMode.High or FxtcCompressionMode.Exhaustive
+            && TryFindAverageColor(source, start, LeftTexelCount, ignoreTransparent: false, out var average))
         {
             AddRgb565Seed(seeds, ref seedCount, PackRgb565Nearest(average), PackRgb565Nearest(average));
         }
 
+        if (compressionMode == FxtcCompressionMode.Exhaustive)
+        {
+            AddUniqueRgb565Seeds(source, start, LeftTexelCount, ignoreTransparent: false, seeds, ref seedCount);
+        }
+
         var best = new CcMixedOpaqueEncoding { Error = long.MaxValue };
+        var iterationLimit = GetColorOptimizationIterationLimit(compressionMode);
         for (var i = 0; i < seedCount; i++)
         {
             OptimizeCcMixedOpaqueSeed(
@@ -821,10 +999,18 @@ public sealed class FxtcTextureCoder : IPitchTextureCoder
                 greenLowBitOffset,
                 seeds[i].Color0,
                 seeds[i].Color1,
+                iterationLimit,
                 ref best);
         }
 
-        RefineCcMixedOpaqueEndpoints(source, start, color0BitOffset, color1BitOffset, greenLowBitOffset, ref best);
+        RefineCcMixedOpaqueEndpoints(
+            source,
+            start,
+            color0BitOffset,
+            color1BitOffset,
+            greenLowBitOffset,
+            GetColorRefinementPassLimit(compressionMode),
+            ref best);
         return best;
     }
 
@@ -844,6 +1030,25 @@ public sealed class FxtcTextureCoder : IPitchTextureCoder
         }
     }
 
+    private static void AddUniqueRgb565Seeds(
+        ReadOnlySpan<Rgba8UNorm> source,
+        int start,
+        int count,
+        bool ignoreTransparent,
+        Span<Rgb565EndpointPair> seeds,
+        ref int seedCount)
+    {
+        Span<ushort> colors = stackalloc ushort[LeftTexelCount];
+        var colorCount = CollectUniqueRgb565Colors(source, start, count, ignoreTransparent, colors);
+        for (var i = 0; i < colorCount; i++)
+        {
+            for (var j = 0; j < colorCount; j++)
+            {
+                AddRgb565Seed(seeds, ref seedCount, colors[i], colors[j]);
+            }
+        }
+    }
+
     private static void OptimizeCcMixedOpaqueSeed(
         ReadOnlySpan<Rgba8UNorm> source,
         int start,
@@ -852,10 +1057,11 @@ public sealed class FxtcTextureCoder : IPitchTextureCoder
         int greenLowBitOffset,
         ushort color0,
         ushort color1,
+        int iterationLimit,
         ref CcMixedOpaqueEncoding best)
     {
         Span<int> indices = stackalloc int[LeftTexelCount];
-        for (var iteration = 0; iteration < 8; iteration++)
+        for (var iteration = 0; iteration < iterationLimit; iteration++)
         {
             var current = EvaluateCcMixedOpaqueCandidate(
                 source,
@@ -917,9 +1123,10 @@ public sealed class FxtcTextureCoder : IPitchTextureCoder
         int color0BitOffset,
         int color1BitOffset,
         int greenLowBitOffset,
+        int passLimit,
         ref CcMixedOpaqueEncoding best)
     {
-        for (var pass = 0; pass < 8; pass++)
+        for (var pass = 0; pass < passLimit; pass++)
         {
             var improved = false;
             for (var endpoint = 0; endpoint < 2; endpoint++)
@@ -1110,11 +1317,14 @@ public sealed class FxtcTextureCoder : IPitchTextureCoder
         WriteBits(destination, 127, 1, 1);
     }
 
-    private static void EncodeCcMixedAlphaBlockHigh(ReadOnlySpan<Rgba8UNorm> source, Span<byte> destination)
+    private static void EncodeCcMixedAlphaBlockOptimized(
+        ReadOnlySpan<Rgba8UNorm> source,
+        Span<byte> destination,
+        FxtcCompressionMode compressionMode)
     {
         destination.Clear();
-        var left = FindBestCcMixedAlphaHalf(source, 0, 64, 79, 125);
-        var right = FindBestCcMixedAlphaHalf(source, LeftTexelCount, 94, 109, 126);
+        var left = FindBestCcMixedAlphaHalf(source, 0, 64, 79, 125, compressionMode);
+        var right = FindBestCcMixedAlphaHalf(source, LeftTexelCount, 94, 109, 126, compressionMode);
         WriteCcMixedAlphaHalf(source, destination, 0, 64, 79, 125, left.Color0, left.Color1);
         WriteCcMixedAlphaHalf(source, destination, LeftTexelCount, 94, 109, 126, right.Color0, right.Color1);
         WriteBits(destination, 124, 1, 1);
@@ -1126,14 +1336,16 @@ public sealed class FxtcTextureCoder : IPitchTextureCoder
         int start,
         int color0BitOffset,
         int color1BitOffset,
-        int greenLowBitOffset)
+        int greenLowBitOffset,
+        FxtcCompressionMode compressionMode)
     {
         if (!HasOpaqueTexel(source, start, LeftTexelCount))
         {
             return new CcMixedAlphaEncoding { Color0 = 0, Color1 = 0, Error = 0 };
         }
 
-        Span<MixedAlphaEndpointPair> seeds = stackalloc MixedAlphaEndpointPair[14];
+        Span<MixedAlphaEndpointPair> seeds = stackalloc MixedAlphaEndpointPair[
+            compressionMode == FxtcCompressionMode.Exhaustive ? 280 : 14];
         var seedCount = 0;
 
         FindColorBounds(source, start, LeftTexelCount, includeAlpha: false, ignoreTransparent: true, out var min, out var max);
@@ -1152,18 +1364,26 @@ public sealed class FxtcTextureCoder : IPitchTextureCoder
             AddMixedAlphaSeed(seeds, ref seedCount, PackRgb555Nearest(axisMax), PackRgb565Nearest(axisMin));
         }
 
-        if (TryFindFarthestColorEndpoints(source, start, LeftTexelCount, ignoreTransparent: true, out var farA, out var farB))
+        if (compressionMode is FxtcCompressionMode.High or FxtcCompressionMode.Exhaustive
+            && TryFindFarthestColorEndpoints(source, start, LeftTexelCount, ignoreTransparent: true, out var farA, out var farB))
         {
             AddMixedAlphaSeed(seeds, ref seedCount, PackRgb555(farA), PackRgb565(farB));
             AddMixedAlphaSeed(seeds, ref seedCount, PackRgb555(farB), PackRgb565(farA));
         }
 
-        if (TryFindAverageColor(source, start, LeftTexelCount, ignoreTransparent: true, out var average))
+        if (compressionMode is FxtcCompressionMode.High or FxtcCompressionMode.Exhaustive
+            && TryFindAverageColor(source, start, LeftTexelCount, ignoreTransparent: true, out var average))
         {
             AddMixedAlphaSeed(seeds, ref seedCount, PackRgb555Nearest(average), PackRgb565Nearest(average));
         }
 
+        if (compressionMode == FxtcCompressionMode.Exhaustive)
+        {
+            AddUniqueMixedAlphaSeeds(source, start, seeds, ref seedCount);
+        }
+
         var best = new CcMixedAlphaEncoding { Error = long.MaxValue };
+        var iterationLimit = GetColorOptimizationIterationLimit(compressionMode);
         for (var i = 0; i < seedCount; i++)
         {
             OptimizeCcMixedAlphaSeed(
@@ -1174,10 +1394,18 @@ public sealed class FxtcTextureCoder : IPitchTextureCoder
                 greenLowBitOffset,
                 seeds[i].Color0,
                 seeds[i].Color1,
+                iterationLimit,
                 ref best);
         }
 
-        RefineCcMixedAlphaEndpoints(source, start, color0BitOffset, color1BitOffset, greenLowBitOffset, ref best);
+        RefineCcMixedAlphaEndpoints(
+            source,
+            start,
+            color0BitOffset,
+            color1BitOffset,
+            greenLowBitOffset,
+            GetColorRefinementPassLimit(compressionMode),
+            ref best);
         return best;
     }
 
@@ -1197,6 +1425,25 @@ public sealed class FxtcTextureCoder : IPitchTextureCoder
         }
     }
 
+    private static void AddUniqueMixedAlphaSeeds(
+        ReadOnlySpan<Rgba8UNorm> source,
+        int start,
+        Span<MixedAlphaEndpointPair> seeds,
+        ref int seedCount)
+    {
+        Span<ushort> colors555 = stackalloc ushort[LeftTexelCount];
+        Span<ushort> colors565 = stackalloc ushort[LeftTexelCount];
+        var colorCount555 = CollectUniqueRgb555Colors(source, start, LeftTexelCount, ignoreTransparent: true, colors555);
+        var colorCount565 = CollectUniqueRgb565Colors(source, start, LeftTexelCount, ignoreTransparent: true, colors565);
+        for (var i = 0; i < colorCount555; i++)
+        {
+            for (var j = 0; j < colorCount565; j++)
+            {
+                AddMixedAlphaSeed(seeds, ref seedCount, colors555[i], colors565[j]);
+            }
+        }
+    }
+
     private static void OptimizeCcMixedAlphaSeed(
         ReadOnlySpan<Rgba8UNorm> source,
         int start,
@@ -1205,10 +1452,11 @@ public sealed class FxtcTextureCoder : IPitchTextureCoder
         int greenLowBitOffset,
         ushort color0,
         ushort color1,
+        int iterationLimit,
         ref CcMixedAlphaEncoding best)
     {
         Span<int> indices = stackalloc int[LeftTexelCount];
-        for (var iteration = 0; iteration < 8; iteration++)
+        for (var iteration = 0; iteration < iterationLimit; iteration++)
         {
             var current = EvaluateCcMixedAlphaCandidate(
                 source,
@@ -1271,9 +1519,10 @@ public sealed class FxtcTextureCoder : IPitchTextureCoder
         int color0BitOffset,
         int color1BitOffset,
         int greenLowBitOffset,
+        int passLimit,
         ref CcMixedAlphaEncoding best)
     {
-        for (var pass = 0; pass < 8; pass++)
+        for (var pass = 0; pass < passLimit; pass++)
         {
             var improved = false;
             for (var endpoint = 0; endpoint < 2; endpoint++)
@@ -1503,7 +1752,10 @@ public sealed class FxtcTextureCoder : IPitchTextureCoder
         WriteBits(destination, 125, 0b011, 3);
     }
 
-    private static void EncodeCcAlphaBlockHigh(ReadOnlySpan<Rgba8UNorm> source, Span<byte> destination)
+    private static void EncodeCcAlphaBlockOptimized(
+        ReadOnlySpan<Rgba8UNorm> source,
+        Span<byte> destination,
+        FxtcCompressionMode compressionMode)
     {
         Span<byte> best = stackalloc byte[BytesPerBlock];
         Span<byte> candidate = stackalloc byte[BytesPerBlock];
@@ -1512,7 +1764,7 @@ public sealed class FxtcTextureCoder : IPitchTextureCoder
         EncodeCcAlphaBlock(source, candidate);
         UpdateBestAlphaCandidate(source, candidate, best, ref bestError);
 
-        EncodeCcAlphaExplicitBlockHigh(source, candidate);
+        EncodeCcAlphaExplicitBlockOptimized(source, candidate, compressionMode);
         UpdateBestAlphaCandidate(source, candidate, best, ref bestError);
 
         best.CopyTo(destination);
@@ -1540,7 +1792,10 @@ public sealed class FxtcTextureCoder : IPitchTextureCoder
         }
     }
 
-    private static void EncodeCcAlphaExplicitBlockHigh(ReadOnlySpan<Rgba8UNorm> source, Span<byte> destination)
+    private static void EncodeCcAlphaExplicitBlockOptimized(
+        ReadOnlySpan<Rgba8UNorm> source,
+        Span<byte> destination,
+        FxtcCompressionMode compressionMode)
     {
         destination.Clear();
         if (!HasOpaqueTexel(source))
@@ -1555,7 +1810,12 @@ public sealed class FxtcTextureCoder : IPitchTextureCoder
         }
 
         Span<Rgba8UNorm> palette = stackalloc Rgba8UNorm[3];
-        BuildRgbaClusterPalette(source, palette, 3, ignoreTransparent: true);
+        BuildRgbaClusterPalette(
+            source,
+            palette,
+            3,
+            ignoreTransparent: true,
+            GetChromaOptimizationIterationLimit(compressionMode));
 
         Span<ushort> colors = stackalloc ushort[3];
         Span<byte> alphas = stackalloc byte[3];
@@ -2244,6 +2504,181 @@ public sealed class FxtcTextureCoder : IPitchTextureCoder
         return true;
     }
 
+    private static int GetColorOptimizationIterationLimit(FxtcCompressionMode compressionMode) => compressionMode switch
+    {
+        FxtcCompressionMode.Normal => 4,
+        FxtcCompressionMode.High => 8,
+        FxtcCompressionMode.Exhaustive => 12,
+        _ => throw new ArgumentOutOfRangeException(
+            nameof(compressionMode),
+            compressionMode,
+            "Unsupported FXT1 compression mode.")
+    };
+
+    private static int GetColorRefinementPassLimit(FxtcCompressionMode compressionMode) => compressionMode switch
+    {
+        FxtcCompressionMode.Normal => 4,
+        FxtcCompressionMode.High => 8,
+        FxtcCompressionMode.Exhaustive => 16,
+        _ => throw new ArgumentOutOfRangeException(
+            nameof(compressionMode),
+            compressionMode,
+            "Unsupported FXT1 compression mode.")
+    };
+
+    private static int GetChromaOptimizationIterationLimit(FxtcCompressionMode compressionMode) => compressionMode switch
+    {
+        FxtcCompressionMode.Normal => 6,
+        FxtcCompressionMode.High => 12,
+        FxtcCompressionMode.Exhaustive => 20,
+        _ => throw new ArgumentOutOfRangeException(
+            nameof(compressionMode),
+            compressionMode,
+            "Unsupported FXT1 compression mode.")
+    };
+
+    private static int GetChromaRefinementPassLimit(FxtcCompressionMode compressionMode) => compressionMode switch
+    {
+        FxtcCompressionMode.Normal => 2,
+        FxtcCompressionMode.High => 8,
+        FxtcCompressionMode.Exhaustive => 16,
+        _ => throw new ArgumentOutOfRangeException(
+            nameof(compressionMode),
+            compressionMode,
+            "Unsupported FXT1 compression mode.")
+    };
+
+    private static int CollectUniqueRgb555Colors(
+        ReadOnlySpan<Rgba8UNorm> source,
+        int start,
+        int count,
+        bool ignoreTransparent,
+        Span<ushort> colors)
+    {
+        var colorCount = 0;
+        for (var i = start; i < start + count; i++)
+        {
+            if (ignoreTransparent && IsTransparent(source[i]))
+            {
+                continue;
+            }
+
+            var color = PackRgb555(source[i]);
+            if (!ContainsColor(colors[..colorCount], color))
+            {
+                colors[colorCount++] = color;
+            }
+        }
+
+        return colorCount;
+    }
+
+    private static int CollectUniqueRgb565Colors(
+        ReadOnlySpan<Rgba8UNorm> source,
+        int start,
+        int count,
+        bool ignoreTransparent,
+        Span<ushort> colors)
+    {
+        var colorCount = 0;
+        for (var i = start; i < start + count; i++)
+        {
+            if (ignoreTransparent && IsTransparent(source[i]))
+            {
+                continue;
+            }
+
+            var color = PackRgb565(source[i]);
+            if (!ContainsColor(colors[..colorCount], color))
+            {
+                colors[colorCount++] = color;
+            }
+        }
+
+        return colorCount;
+    }
+
+    private static bool ContainsColor(ReadOnlySpan<ushort> colors, ushort color)
+    {
+        for (var i = 0; i < colors.Length; i++)
+        {
+            if (colors[i] == color)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static void SelectRepresentativeRgb555Colors(ReadOnlySpan<ushort> colors, Span<ushort> representatives)
+    {
+        if (colors.Length == 0 || representatives.Length == 0)
+        {
+            return;
+        }
+
+        if (representatives.Length == 1 || colors.Length == 1)
+        {
+            representatives[0] = colors[0];
+            return;
+        }
+
+        var bestDistance = -1;
+        var bestA = 0;
+        var bestB = 1;
+        for (var i = 0; i < colors.Length; i++)
+        {
+            var colorA = UnpackRgb555(colors[i], byte.MaxValue);
+            for (var j = i + 1; j < colors.Length; j++)
+            {
+                var distance = ColorDistance(colorA, UnpackRgb555(colors[j], byte.MaxValue), compareAlpha: false);
+                if (distance > bestDistance)
+                {
+                    bestDistance = distance;
+                    bestA = i;
+                    bestB = j;
+                }
+            }
+        }
+
+        representatives[0] = colors[bestA];
+        representatives[1] = colors[bestB];
+        var representativeCount = 2;
+        while (representativeCount < representatives.Length)
+        {
+            var nextIndex = -1;
+            var nextDistance = -1;
+            for (var i = 0; i < colors.Length; i++)
+            {
+                if (ContainsColor(representatives[..representativeCount], colors[i]))
+                {
+                    continue;
+                }
+
+                var color = UnpackRgb555(colors[i], byte.MaxValue);
+                var minDistance = int.MaxValue;
+                for (var j = 0; j < representativeCount; j++)
+                {
+                    minDistance = Math.Min(
+                        minDistance,
+                        ColorDistance(color, UnpackRgb555(representatives[j], byte.MaxValue), compareAlpha: false));
+                }
+
+                if (minDistance > nextDistance)
+                {
+                    nextDistance = minDistance;
+                    nextIndex = i;
+                }
+            }
+
+            representatives[representativeCount] = nextIndex < 0
+                ? representatives[representativeCount - 1]
+                : colors[nextIndex];
+            representativeCount++;
+        }
+    }
+
     private static bool TrySolveRgb555Line(
         ReadOnlySpan<Rgba8UNorm> source,
         ReadOnlySpan<int> indices,
@@ -2408,7 +2843,8 @@ public sealed class FxtcTextureCoder : IPitchTextureCoder
         ReadOnlySpan<Rgba8UNorm> source,
         Span<Rgba8UNorm> palette,
         int paletteCount,
-        bool ignoreTransparent)
+        bool ignoreTransparent,
+        int iterationLimit)
     {
         FindColorBounds(source, 0, TexelsPerBlock, includeAlpha: true, ignoreTransparent, out var min, out var max);
         for (var i = 0; i < paletteCount; i++)
@@ -2424,7 +2860,7 @@ public sealed class FxtcTextureCoder : IPitchTextureCoder
         Span<int> sumsAlpha = stackalloc int[4];
         Span<int> counts = stackalloc int[4];
 
-        for (var iteration = 0; iteration < 12; iteration++)
+        for (var iteration = 0; iteration < iterationLimit; iteration++)
         {
             sumsRed.Clear();
             sumsGreen.Clear();

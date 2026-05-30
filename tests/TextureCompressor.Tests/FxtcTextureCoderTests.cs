@@ -15,6 +15,18 @@ public sealed class FxtcTextureCoderTests
         }
     }
 
+    public static TheoryData<TextureFormat, FxtcCompressionMode> Fxt1FormatCompressionModes() => new()
+    {
+        { TextureFormats.RgbFxt1UNorm, FxtcCompressionMode.Fast },
+        { TextureFormats.RgbFxt1UNorm, FxtcCompressionMode.Normal },
+        { TextureFormats.RgbFxt1UNorm, FxtcCompressionMode.High },
+        { TextureFormats.RgbFxt1UNorm, FxtcCompressionMode.Exhaustive },
+        { TextureFormats.RgbaFxt1UNorm, FxtcCompressionMode.Fast },
+        { TextureFormats.RgbaFxt1UNorm, FxtcCompressionMode.Normal },
+        { TextureFormats.RgbaFxt1UNorm, FxtcCompressionMode.High },
+        { TextureFormats.RgbaFxt1UNorm, FxtcCompressionMode.Exhaustive }
+    };
+
     [Theory]
     [MemberData(nameof(Fxt1Formats))]
     public void GlobalManagerFindsFxtcTextureCoders(TextureFormat format)
@@ -219,6 +231,28 @@ public sealed class FxtcTextureCoderTests
             $"{format.Name} high-quality encoded output collapsed to too few decoded colors.");
     }
 
+    [Theory]
+    [MemberData(nameof(Fxt1FormatCompressionModes))]
+    public void EncodeAndDecodeSupportsCompressionMode(TextureFormat format, FxtcCompressionMode compressionMode)
+    {
+        const int width = 19;
+        const int height = 11;
+        var source = new ArrayBitmap<Rgba8UNorm>(width, height, CreateGradient(width, height, includeAlpha: format == TextureFormats.RgbaFxt1UNorm));
+        var options = new FxtcCoderOptions { CompressionMode = compressionMode };
+        var coder = new FxtcTextureCoder(format, options);
+        var rowPitch = coder.GetDefaultPitch(width);
+        var encoded = new byte[coder.GetEncodedByteCount(width, height, rowPitch)];
+        var decoded = new ArrayBitmap<Rgba8UNorm>(width, height);
+
+        coder.Encode(source.AsView(), encoded, rowPitch);
+        coder.Decode(encoded, decoded.AsView(), rowPitch);
+
+        Assert.Contains(encoded, value => value != 0);
+        Assert.True(
+            decoded.Pixels.Distinct().Count() > 2,
+            $"{format.Name} {compressionMode} encoded output collapsed to too few decoded colors.");
+    }
+
     [Fact]
     public void EncodeRgbFxt1HighQualityImprovesGradientError()
     {
@@ -235,6 +269,28 @@ public sealed class FxtcTextureCoderTests
         Assert.True(
             RgbSquaredError(source, highDecoded) < RgbSquaredError(source, fastDecoded),
             "High-quality FXT1 should improve this non-trivial gradient block over the fast endpoint heuristic.");
+    }
+
+    [Fact]
+    public void EncodeRgbFxt1ExhaustiveIsNoWorseThanHighQualitySearch()
+    {
+        const int width = 16;
+        const int height = 8;
+        var source = new ArrayBitmap<Rgba8UNorm>(width, height, CreateGradient(width, height, includeAlpha: false));
+        var highDecoded = EncodeDecode(
+            source,
+            new FxtcTextureCoder(
+                TextureFormats.RgbFxt1UNorm,
+                new FxtcCoderOptions { CompressionMode = FxtcCompressionMode.High }));
+        var exhaustiveDecoded = EncodeDecode(
+            source,
+            new FxtcTextureCoder(
+                TextureFormats.RgbFxt1UNorm,
+                new FxtcCoderOptions { CompressionMode = FxtcCompressionMode.Exhaustive }));
+
+        Assert.True(
+            RgbSquaredError(source, exhaustiveDecoded) <= RgbSquaredError(source, highDecoded),
+            "Exhaustive FXT1 search should preserve or improve the high-quality result.");
     }
 
     [Theory]
