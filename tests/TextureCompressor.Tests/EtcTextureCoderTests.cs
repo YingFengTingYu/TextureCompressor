@@ -123,6 +123,34 @@ public sealed class EtcTextureCoderTests
     }
 
     [Fact]
+    public void EncodeEtc2RgbHighQualityFitsColorClustersWithEtc2Modes()
+    {
+        var pixels = Enumerable.Range(0, 16)
+            .Select(i => (i & 1) == 0
+                ? new Rgba8UNorm(255, 0, 0, 255)
+                : new Rgba8UNorm(0, 255, 0, 255))
+            .ToArray();
+        var source = new ArrayBitmap<Rgba8UNorm>(4, 4, pixels);
+        var fastCoder = new EtcTextureCoder(TextureFormats.RgbEtc2UNorm);
+        var highCoder = new EtcTextureCoder(
+            TextureFormats.RgbEtc2UNorm,
+            new EtcCoderOptions { CompressionMode = EtcCompressionMode.High });
+        var rowPitch = fastCoder.GetDefaultPitch(source.Width);
+        var fastEncoded = new byte[fastCoder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
+        var highEncoded = new byte[highCoder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
+        var fastDecoded = new ArrayBitmap<Rgba8UNorm>(4, 4);
+        var highDecoded = new ArrayBitmap<Rgba8UNorm>(4, 4);
+
+        fastCoder.Encode(source.AsView(), fastEncoded, rowPitch);
+        highCoder.Encode(source.AsView(), highEncoded, rowPitch);
+        fastCoder.Decode(fastEncoded, fastDecoded.AsView(), rowPitch);
+        highCoder.Decode(highEncoded, highDecoded.AsView(), rowPitch);
+
+        Assert.Equal(0, RgbSquaredError(source, highDecoded));
+        Assert.True(RgbSquaredError(source, highDecoded) < RgbSquaredError(source, fastDecoded));
+    }
+
+    [Fact]
     public void EncodeAndDecodeEtc2RgbaEacRoundTripsSolidAlpha()
     {
         var source = new ArrayBitmap<Rgba8UNorm>(
@@ -200,6 +228,38 @@ public sealed class EtcTextureCoderTests
         {
             Assert.Equal(sourcePixels[i].Red, decoded.Pixels[i].Red);
         }
+    }
+
+    [Fact]
+    public void EncodeEacR11UNormHighQualityIsNoWorseThanFastSearch()
+    {
+        int[] targets =
+        [
+            0, 177, 356, 511,
+            691, 870, 1048, 1204,
+            1379, 1534, 1710, 1888,
+            2047, 1633, 806, 251
+        ];
+        var sourcePixels = targets
+            .Select(value => new Rgba16UNorm(Unsigned11ToUNorm16(value), 0, 0, ushort.MaxValue))
+            .ToArray();
+        var source = new ArrayBitmap<Rgba16UNorm>(4, 4, sourcePixels);
+        var fastCoder = new EtcTextureCoder(TextureFormats.R11EacUNorm);
+        var highCoder = new EtcTextureCoder(
+            TextureFormats.R11EacUNorm,
+            new EtcCoderOptions { CompressionMode = EtcCompressionMode.High });
+        var rowPitch = fastCoder.GetDefaultPitch(source.Width);
+        var fastEncoded = new byte[fastCoder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
+        var highEncoded = new byte[highCoder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
+        var fastDecoded = new ArrayBitmap<Rgba16UNorm>(4, 4);
+        var highDecoded = new ArrayBitmap<Rgba16UNorm>(4, 4);
+
+        fastCoder.Encode(source.AsView(), fastEncoded, rowPitch);
+        highCoder.Encode(source.AsView(), highEncoded, rowPitch);
+        fastCoder.Decode(fastEncoded, fastDecoded.AsView(), rowPitch);
+        highCoder.Decode(highEncoded, highDecoded.AsView(), rowPitch);
+
+        Assert.True(RedSquaredError(source, highDecoded) <= RedSquaredError(source, fastDecoded));
     }
 
     [Fact]
@@ -283,6 +343,32 @@ public sealed class EtcTextureCoderTests
         (short)(value >= 0
             ? ((value * short.MaxValue + 511) / 1023)
             : ((value * short.MaxValue - 511) / 1023));
+
+    private static long RgbSquaredError(ArrayBitmap<Rgba8UNorm> expected, ArrayBitmap<Rgba8UNorm> actual)
+    {
+        var error = 0L;
+        for (var i = 0; i < expected.Pixels.Length; i++)
+        {
+            var red = expected.Pixels[i].Red - actual.Pixels[i].Red;
+            var green = expected.Pixels[i].Green - actual.Pixels[i].Green;
+            var blue = expected.Pixels[i].Blue - actual.Pixels[i].Blue;
+            error += (red * red) + (green * green) + (blue * blue);
+        }
+
+        return error;
+    }
+
+    private static long RedSquaredError(ArrayBitmap<Rgba16UNorm> expected, ArrayBitmap<Rgba16UNorm> actual)
+    {
+        var error = 0L;
+        for (var i = 0; i < expected.Pixels.Length; i++)
+        {
+            var red = expected.Pixels[i].Red - actual.Pixels[i].Red;
+            error += (long)red * red;
+        }
+
+        return error;
+    }
 
     private static void WriteEtcRawIndices(Span<byte> destination, int rawIndex)
     {

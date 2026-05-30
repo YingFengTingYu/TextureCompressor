@@ -63,8 +63,9 @@ public sealed class EtcTextureCoder : IPitchTextureCoder
     ];
 
     private readonly EtcTransfer _transfer;
+    private readonly EtcCoderOptions _options;
 
-    public EtcTextureCoder(TextureFormat format)
+    public EtcTextureCoder(TextureFormat format, EtcCoderOptions? options = null)
     {
         if (!TryGetTransfer(format, out _transfer))
         {
@@ -72,6 +73,7 @@ public sealed class EtcTextureCoder : IPitchTextureCoder
         }
 
         Format = format;
+        _options = options ?? new EtcCoderOptions();
     }
 
     public TextureFormat Format { get; }
@@ -158,37 +160,37 @@ public sealed class EtcTextureCoder : IPitchTextureCoder
         switch (_transfer)
         {
             case EtcTransfer.RgbEtc1UNorm:
-                EncodeColor<TPixel, RgbEtc1Transfer>(source, destination, rowPitch);
+                EncodeColor<TPixel, RgbEtc1Transfer>(source, destination, rowPitch, _options.CompressionMode);
                 return;
             case EtcTransfer.RgbEtc2UNorm:
-                EncodeColor<TPixel, RgbEtc2Transfer>(source, destination, rowPitch);
+                EncodeColor<TPixel, RgbEtc2Transfer>(source, destination, rowPitch, _options.CompressionMode);
                 return;
             case EtcTransfer.RgbEtc2Srgb:
-                EncodeColor<TPixel, RgbEtc2SrgbTransfer>(source, destination, rowPitch);
+                EncodeColor<TPixel, RgbEtc2SrgbTransfer>(source, destination, rowPitch, _options.CompressionMode);
                 return;
             case EtcTransfer.RgbA1Etc2UNorm:
-                EncodeColor<TPixel, RgbA1Etc2Transfer>(source, destination, rowPitch);
+                EncodeColor<TPixel, RgbA1Etc2Transfer>(source, destination, rowPitch, _options.CompressionMode);
                 return;
             case EtcTransfer.RgbA1Etc2Srgb:
-                EncodeColor<TPixel, RgbA1Etc2SrgbTransfer>(source, destination, rowPitch);
+                EncodeColor<TPixel, RgbA1Etc2SrgbTransfer>(source, destination, rowPitch, _options.CompressionMode);
                 return;
             case EtcTransfer.RgbaEtc2EacUNorm:
-                EncodeColor<TPixel, RgbaEtc2EacTransfer>(source, destination, rowPitch);
+                EncodeColor<TPixel, RgbaEtc2EacTransfer>(source, destination, rowPitch, _options.CompressionMode);
                 return;
             case EtcTransfer.RgbaEtc2EacSrgb:
-                EncodeColor<TPixel, RgbaEtc2EacSrgbTransfer>(source, destination, rowPitch);
+                EncodeColor<TPixel, RgbaEtc2EacSrgbTransfer>(source, destination, rowPitch, _options.CompressionMode);
                 return;
             case EtcTransfer.R11EacUNorm:
-                EncodeUnsignedEac<TPixel, R11EacTransfer>(source, destination, rowPitch);
+                EncodeUnsignedEac<TPixel, R11EacTransfer>(source, destination, rowPitch, _options.CompressionMode);
                 return;
             case EtcTransfer.R11EacSNorm:
-                EncodeSignedEac<TPixel, R11EacSignedTransfer>(source, destination, rowPitch);
+                EncodeSignedEac<TPixel, R11EacSignedTransfer>(source, destination, rowPitch, _options.CompressionMode);
                 return;
             case EtcTransfer.Rg11EacUNorm:
-                EncodeUnsignedEac<TPixel, Rg11EacTransfer>(source, destination, rowPitch);
+                EncodeUnsignedEac<TPixel, Rg11EacTransfer>(source, destination, rowPitch, _options.CompressionMode);
                 return;
             case EtcTransfer.Rg11EacSNorm:
-                EncodeSignedEac<TPixel, Rg11EacSignedTransfer>(source, destination, rowPitch);
+                EncodeSignedEac<TPixel, Rg11EacSignedTransfer>(source, destination, rowPitch, _options.CompressionMode);
                 return;
             default:
                 throw CreateUnsupportedFormatException(Format);
@@ -203,7 +205,7 @@ public sealed class EtcTextureCoder : IPitchTextureCoder
             targets[i] = Math.Clamp(source[i], 0, 2047);
         }
 
-        EncodeEacBlock(ref targets, EacBlockKind.Unsigned11, destination);
+        EncodeEacBlock(ref targets, EacBlockKind.Unsigned11, EtcCompressionMode.Fast, destination);
     }
 
     private static void DecodeColor<TPixel, TTransfer>(ReadOnlySpan<byte> source, BitmapView<TPixel> destination, int rowPitch)
@@ -229,7 +231,11 @@ public sealed class EtcTextureCoder : IPitchTextureCoder
         }
     }
 
-    private static void EncodeColor<TPixel, TTransfer>(BitmapView<TPixel> source, Span<byte> destination, int rowPitch)
+    private static void EncodeColor<TPixel, TTransfer>(
+        BitmapView<TPixel> source,
+        Span<byte> destination,
+        int rowPitch,
+        EtcCompressionMode compressionMode)
         where TPixel : unmanaged, IPixel<TPixel>
         where TTransfer : IEtcColorTransfer
     {
@@ -244,7 +250,7 @@ public sealed class EtcTextureCoder : IPitchTextureCoder
             for (var blockX = 0; blockX < blockCountX; blockX++)
             {
                 LoadBlock(source, blockX, blockY, block);
-                TTransfer.EncodeBlock(block, destination.Slice(blockOffset, TTransfer.BytesPerBlock));
+                TTransfer.EncodeBlock(block, destination.Slice(blockOffset, TTransfer.BytesPerBlock), compressionMode);
                 blockOffset = checked(blockOffset + TTransfer.BytesPerBlock);
             }
 
@@ -275,7 +281,11 @@ public sealed class EtcTextureCoder : IPitchTextureCoder
         }
     }
 
-    private static void EncodeUnsignedEac<TPixel, TTransfer>(BitmapView<TPixel> source, Span<byte> destination, int rowPitch)
+    private static void EncodeUnsignedEac<TPixel, TTransfer>(
+        BitmapView<TPixel> source,
+        Span<byte> destination,
+        int rowPitch,
+        EtcCompressionMode compressionMode)
         where TPixel : unmanaged, IPixel<TPixel>
         where TTransfer : IUnsignedEacTransfer
     {
@@ -290,7 +300,7 @@ public sealed class EtcTextureCoder : IPitchTextureCoder
             for (var blockX = 0; blockX < blockCountX; blockX++)
             {
                 LoadBlock(source, blockX, blockY, block);
-                TTransfer.EncodeBlock(block, destination.Slice(blockOffset, TTransfer.BytesPerBlock));
+                TTransfer.EncodeBlock(block, destination.Slice(blockOffset, TTransfer.BytesPerBlock), compressionMode);
                 blockOffset = checked(blockOffset + TTransfer.BytesPerBlock);
             }
 
@@ -321,7 +331,11 @@ public sealed class EtcTextureCoder : IPitchTextureCoder
         }
     }
 
-    private static void EncodeSignedEac<TPixel, TTransfer>(BitmapView<TPixel> source, Span<byte> destination, int rowPitch)
+    private static void EncodeSignedEac<TPixel, TTransfer>(
+        BitmapView<TPixel> source,
+        Span<byte> destination,
+        int rowPitch,
+        EtcCompressionMode compressionMode)
         where TPixel : unmanaged, IPixel<TPixel>
         where TTransfer : ISignedEacTransfer
     {
@@ -336,7 +350,7 @@ public sealed class EtcTextureCoder : IPitchTextureCoder
             for (var blockX = 0; blockX < blockCountX; blockX++)
             {
                 LoadBlock(source, blockX, blockY, block);
-                TTransfer.EncodeBlock(block, destination.Slice(blockOffset, TTransfer.BytesPerBlock));
+                TTransfer.EncodeBlock(block, destination.Slice(blockOffset, TTransfer.BytesPerBlock), compressionMode);
                 blockOffset = checked(blockOffset + TTransfer.BytesPerBlock);
             }
 
@@ -350,7 +364,7 @@ public sealed class EtcTextureCoder : IPitchTextureCoder
 
         static abstract void DecodeBlock(ReadOnlySpan<byte> source, Span<Rgba8UNorm> destination);
 
-        static abstract void EncodeBlock(ReadOnlySpan<Rgba8UNorm> source, Span<byte> destination);
+        static abstract void EncodeBlock(ReadOnlySpan<Rgba8UNorm> source, Span<byte> destination, EtcCompressionMode compressionMode);
     }
 
     private readonly struct RgbEtc1Transfer : IEtcColorTransfer
@@ -360,8 +374,8 @@ public sealed class EtcTextureCoder : IPitchTextureCoder
         public static void DecodeBlock(ReadOnlySpan<byte> source, Span<Rgba8UNorm> destination) =>
             DecodeEtcColorBlock(source, etc2: false, punchthrough: false, destination);
 
-        public static void EncodeBlock(ReadOnlySpan<Rgba8UNorm> source, Span<byte> destination) =>
-            EncodeEtcColorBlock(source, punchthrough: false, destination);
+        public static void EncodeBlock(ReadOnlySpan<Rgba8UNorm> source, Span<byte> destination, EtcCompressionMode compressionMode) =>
+            EncodeEtcColorBlock(source, punchthrough: false, etc2: false, compressionMode, destination);
     }
 
     private readonly struct RgbEtc2Transfer : IEtcColorTransfer
@@ -371,8 +385,8 @@ public sealed class EtcTextureCoder : IPitchTextureCoder
         public static void DecodeBlock(ReadOnlySpan<byte> source, Span<Rgba8UNorm> destination) =>
             DecodeEtcColorBlock(source, etc2: true, punchthrough: false, destination);
 
-        public static void EncodeBlock(ReadOnlySpan<Rgba8UNorm> source, Span<byte> destination) =>
-            EncodeEtcColorBlock(source, punchthrough: false, destination);
+        public static void EncodeBlock(ReadOnlySpan<Rgba8UNorm> source, Span<byte> destination, EtcCompressionMode compressionMode) =>
+            EncodeEtcColorBlock(source, punchthrough: false, etc2: true, compressionMode, destination);
     }
 
     private readonly struct RgbEtc2SrgbTransfer : IEtcColorTransfer
@@ -385,8 +399,8 @@ public sealed class EtcTextureCoder : IPitchTextureCoder
             DecodeSrgbColors(destination);
         }
 
-        public static void EncodeBlock(ReadOnlySpan<Rgba8UNorm> source, Span<byte> destination) =>
-            EncodeSrgbEtcColorBlock(source, punchthrough: false, destination);
+        public static void EncodeBlock(ReadOnlySpan<Rgba8UNorm> source, Span<byte> destination, EtcCompressionMode compressionMode) =>
+            EncodeSrgbEtcColorBlock(source, punchthrough: false, compressionMode, destination);
     }
 
     private readonly struct RgbA1Etc2Transfer : IEtcColorTransfer
@@ -396,8 +410,8 @@ public sealed class EtcTextureCoder : IPitchTextureCoder
         public static void DecodeBlock(ReadOnlySpan<byte> source, Span<Rgba8UNorm> destination) =>
             DecodeEtcColorBlock(source, etc2: true, punchthrough: true, destination);
 
-        public static void EncodeBlock(ReadOnlySpan<Rgba8UNorm> source, Span<byte> destination) =>
-            EncodeEtcColorBlock(source, punchthrough: true, destination);
+        public static void EncodeBlock(ReadOnlySpan<Rgba8UNorm> source, Span<byte> destination, EtcCompressionMode compressionMode) =>
+            EncodeEtcColorBlock(source, punchthrough: true, etc2: true, compressionMode, destination);
     }
 
     private readonly struct RgbA1Etc2SrgbTransfer : IEtcColorTransfer
@@ -410,8 +424,8 @@ public sealed class EtcTextureCoder : IPitchTextureCoder
             DecodeSrgbColors(destination);
         }
 
-        public static void EncodeBlock(ReadOnlySpan<Rgba8UNorm> source, Span<byte> destination) =>
-            EncodeSrgbEtcColorBlock(source, punchthrough: true, destination);
+        public static void EncodeBlock(ReadOnlySpan<Rgba8UNorm> source, Span<byte> destination, EtcCompressionMode compressionMode) =>
+            EncodeSrgbEtcColorBlock(source, punchthrough: true, compressionMode, destination);
     }
 
     private readonly struct RgbaEtc2EacTransfer : IEtcColorTransfer
@@ -421,8 +435,8 @@ public sealed class EtcTextureCoder : IPitchTextureCoder
         public static void DecodeBlock(ReadOnlySpan<byte> source, Span<Rgba8UNorm> destination) =>
             DecodeEtc2RgbaBlock(source, srgb: false, destination);
 
-        public static void EncodeBlock(ReadOnlySpan<Rgba8UNorm> source, Span<byte> destination) =>
-            EncodeEtc2RgbaBlock(source, srgb: false, destination);
+        public static void EncodeBlock(ReadOnlySpan<Rgba8UNorm> source, Span<byte> destination, EtcCompressionMode compressionMode) =>
+            EncodeEtc2RgbaBlock(source, srgb: false, compressionMode, destination);
     }
 
     private readonly struct RgbaEtc2EacSrgbTransfer : IEtcColorTransfer
@@ -432,8 +446,8 @@ public sealed class EtcTextureCoder : IPitchTextureCoder
         public static void DecodeBlock(ReadOnlySpan<byte> source, Span<Rgba8UNorm> destination) =>
             DecodeEtc2RgbaBlock(source, srgb: true, destination);
 
-        public static void EncodeBlock(ReadOnlySpan<Rgba8UNorm> source, Span<byte> destination) =>
-            EncodeEtc2RgbaBlock(source, srgb: true, destination);
+        public static void EncodeBlock(ReadOnlySpan<Rgba8UNorm> source, Span<byte> destination, EtcCompressionMode compressionMode) =>
+            EncodeEtc2RgbaBlock(source, srgb: true, compressionMode, destination);
     }
 
     private interface IUnsignedEacTransfer
@@ -442,7 +456,7 @@ public sealed class EtcTextureCoder : IPitchTextureCoder
 
         static abstract void DecodeBlock(ReadOnlySpan<byte> source, Span<Rgba16UNorm> destination);
 
-        static abstract void EncodeBlock(ReadOnlySpan<Rgba16UNorm> source, Span<byte> destination);
+        static abstract void EncodeBlock(ReadOnlySpan<Rgba16UNorm> source, Span<byte> destination, EtcCompressionMode compressionMode);
     }
 
     private readonly struct R11EacTransfer : IUnsignedEacTransfer
@@ -452,8 +466,8 @@ public sealed class EtcTextureCoder : IPitchTextureCoder
         public static void DecodeBlock(ReadOnlySpan<byte> source, Span<Rgba16UNorm> destination) =>
             DecodeUnsignedEacRBlock(source, destination);
 
-        public static void EncodeBlock(ReadOnlySpan<Rgba16UNorm> source, Span<byte> destination) =>
-            EncodeUnsignedEacRBlock(source, destination);
+        public static void EncodeBlock(ReadOnlySpan<Rgba16UNorm> source, Span<byte> destination, EtcCompressionMode compressionMode) =>
+            EncodeUnsignedEacRBlock(source, compressionMode, destination);
     }
 
     private readonly struct Rg11EacTransfer : IUnsignedEacTransfer
@@ -463,8 +477,8 @@ public sealed class EtcTextureCoder : IPitchTextureCoder
         public static void DecodeBlock(ReadOnlySpan<byte> source, Span<Rgba16UNorm> destination) =>
             DecodeUnsignedEacRgBlock(source, destination);
 
-        public static void EncodeBlock(ReadOnlySpan<Rgba16UNorm> source, Span<byte> destination) =>
-            EncodeUnsignedEacRgBlock(source, destination);
+        public static void EncodeBlock(ReadOnlySpan<Rgba16UNorm> source, Span<byte> destination, EtcCompressionMode compressionMode) =>
+            EncodeUnsignedEacRgBlock(source, compressionMode, destination);
     }
 
     private interface ISignedEacTransfer
@@ -473,7 +487,7 @@ public sealed class EtcTextureCoder : IPitchTextureCoder
 
         static abstract void DecodeBlock(ReadOnlySpan<byte> source, Span<Rgba16SNorm> destination);
 
-        static abstract void EncodeBlock(ReadOnlySpan<Rgba16SNorm> source, Span<byte> destination);
+        static abstract void EncodeBlock(ReadOnlySpan<Rgba16SNorm> source, Span<byte> destination, EtcCompressionMode compressionMode);
     }
 
     private readonly struct R11EacSignedTransfer : ISignedEacTransfer
@@ -483,8 +497,8 @@ public sealed class EtcTextureCoder : IPitchTextureCoder
         public static void DecodeBlock(ReadOnlySpan<byte> source, Span<Rgba16SNorm> destination) =>
             DecodeSignedEacRBlock(source, destination);
 
-        public static void EncodeBlock(ReadOnlySpan<Rgba16SNorm> source, Span<byte> destination) =>
-            EncodeSignedEacRBlock(source, destination);
+        public static void EncodeBlock(ReadOnlySpan<Rgba16SNorm> source, Span<byte> destination, EtcCompressionMode compressionMode) =>
+            EncodeSignedEacRBlock(source, compressionMode, destination);
     }
 
     private readonly struct Rg11EacSignedTransfer : ISignedEacTransfer
@@ -494,8 +508,8 @@ public sealed class EtcTextureCoder : IPitchTextureCoder
         public static void DecodeBlock(ReadOnlySpan<byte> source, Span<Rgba16SNorm> destination) =>
             DecodeSignedEacRgBlock(source, destination);
 
-        public static void EncodeBlock(ReadOnlySpan<Rgba16SNorm> source, Span<byte> destination) =>
-            EncodeSignedEacRgBlock(source, destination);
+        public static void EncodeBlock(ReadOnlySpan<Rgba16SNorm> source, Span<byte> destination, EtcCompressionMode compressionMode) =>
+            EncodeSignedEacRgBlock(source, compressionMode, destination);
     }
 
     private static void DecodeEtc2RgbaBlock(ReadOnlySpan<byte> source, bool srgb, Span<Rgba8UNorm> destination)
@@ -509,16 +523,20 @@ public sealed class EtcTextureCoder : IPitchTextureCoder
         DecodeEtc2AlphaBlock(source[..8], destination);
     }
 
-    private static void EncodeEtc2RgbaBlock(ReadOnlySpan<Rgba8UNorm> source, bool srgb, Span<byte> destination)
+    private static void EncodeEtc2RgbaBlock(
+        ReadOnlySpan<Rgba8UNorm> source,
+        bool srgb,
+        EtcCompressionMode compressionMode,
+        Span<byte> destination)
     {
-        EncodeEtc2AlphaBlock(source, destination[..8]);
+        EncodeEtc2AlphaBlock(source, compressionMode, destination[..8]);
         if (srgb)
         {
-            EncodeSrgbEtcColorBlock(source, punchthrough: false, destination[8..]);
+            EncodeSrgbEtcColorBlock(source, punchthrough: false, compressionMode, destination[8..]);
             return;
         }
 
-        EncodeEtcColorBlock(source, punchthrough: false, destination[8..]);
+        EncodeEtcColorBlock(source, punchthrough: false, etc2: true, compressionMode, destination[8..]);
     }
 
     private static void DecodeEtcColorBlock(
@@ -785,7 +803,10 @@ public sealed class EtcTextureCoder : IPitchTextureCoder
         }
     }
 
-    private static void EncodeEtc2AlphaBlock(ReadOnlySpan<Rgba8UNorm> source, Span<byte> destination)
+    private static void EncodeEtc2AlphaBlock(
+        ReadOnlySpan<Rgba8UNorm> source,
+        EtcCompressionMode compressionMode,
+        Span<byte> destination)
     {
         var alpha = new IntBlock();
         for (var i = 0; i < TexelsPerBlock; i++)
@@ -793,7 +814,7 @@ public sealed class EtcTextureCoder : IPitchTextureCoder
             alpha[i] = source[i].Alpha;
         }
 
-        EncodeEacBlock(ref alpha, EacBlockKind.Alpha8, destination);
+        EncodeEacBlock(ref alpha, EacBlockKind.Alpha8, compressionMode, destination);
     }
 
     private static void DecodeUnsignedEacRBlock(ReadOnlySpan<byte> source, Span<Rgba16UNorm> destination)
@@ -864,7 +885,10 @@ public sealed class EtcTextureCoder : IPitchTextureCoder
         }
     }
 
-    private static void EncodeUnsignedEacRBlock(ReadOnlySpan<Rgba16UNorm> source, Span<byte> destination)
+    private static void EncodeUnsignedEacRBlock(
+        ReadOnlySpan<Rgba16UNorm> source,
+        EtcCompressionMode compressionMode,
+        Span<byte> destination)
     {
         var red = new IntBlock();
         for (var i = 0; i < TexelsPerBlock; i++)
@@ -872,10 +896,13 @@ public sealed class EtcTextureCoder : IPitchTextureCoder
             red[i] = UNorm16ToUnsigned11(source[i].Red);
         }
 
-        EncodeEacBlock(ref red, EacBlockKind.Unsigned11, destination);
+        EncodeEacBlock(ref red, EacBlockKind.Unsigned11, compressionMode, destination);
     }
 
-    private static void EncodeUnsignedEacRgBlock(ReadOnlySpan<Rgba16UNorm> source, Span<byte> destination)
+    private static void EncodeUnsignedEacRgBlock(
+        ReadOnlySpan<Rgba16UNorm> source,
+        EtcCompressionMode compressionMode,
+        Span<byte> destination)
     {
         var red = new IntBlock();
         var green = new IntBlock();
@@ -885,11 +912,14 @@ public sealed class EtcTextureCoder : IPitchTextureCoder
             green[i] = UNorm16ToUnsigned11(source[i].Green);
         }
 
-        EncodeEacBlock(ref red, EacBlockKind.Unsigned11, destination[..8]);
-        EncodeEacBlock(ref green, EacBlockKind.Unsigned11, destination[8..]);
+        EncodeEacBlock(ref red, EacBlockKind.Unsigned11, compressionMode, destination[..8]);
+        EncodeEacBlock(ref green, EacBlockKind.Unsigned11, compressionMode, destination[8..]);
     }
 
-    private static void EncodeSignedEacRBlock(ReadOnlySpan<Rgba16SNorm> source, Span<byte> destination)
+    private static void EncodeSignedEacRBlock(
+        ReadOnlySpan<Rgba16SNorm> source,
+        EtcCompressionMode compressionMode,
+        Span<byte> destination)
     {
         var red = new IntBlock();
         for (var i = 0; i < TexelsPerBlock; i++)
@@ -897,10 +927,13 @@ public sealed class EtcTextureCoder : IPitchTextureCoder
             red[i] = SNorm16ToSigned11(source[i].Red);
         }
 
-        EncodeEacBlock(ref red, EacBlockKind.Signed11, destination);
+        EncodeEacBlock(ref red, EacBlockKind.Signed11, compressionMode, destination);
     }
 
-    private static void EncodeSignedEacRgBlock(ReadOnlySpan<Rgba16SNorm> source, Span<byte> destination)
+    private static void EncodeSignedEacRgBlock(
+        ReadOnlySpan<Rgba16SNorm> source,
+        EtcCompressionMode compressionMode,
+        Span<byte> destination)
     {
         var red = new IntBlock();
         var green = new IntBlock();
@@ -910,18 +943,27 @@ public sealed class EtcTextureCoder : IPitchTextureCoder
             green[i] = SNorm16ToSigned11(source[i].Green);
         }
 
-        EncodeEacBlock(ref red, EacBlockKind.Signed11, destination[..8]);
-        EncodeEacBlock(ref green, EacBlockKind.Signed11, destination[8..]);
+        EncodeEacBlock(ref red, EacBlockKind.Signed11, compressionMode, destination[..8]);
+        EncodeEacBlock(ref green, EacBlockKind.Signed11, compressionMode, destination[8..]);
     }
 
-    private static void EncodeSrgbEtcColorBlock(ReadOnlySpan<Rgba8UNorm> source, bool punchthrough, Span<byte> destination)
+    private static void EncodeSrgbEtcColorBlock(
+        ReadOnlySpan<Rgba8UNorm> source,
+        bool punchthrough,
+        EtcCompressionMode compressionMode,
+        Span<byte> destination)
     {
         Span<Rgba8UNorm> srgbBlock = stackalloc Rgba8UNorm[TexelsPerBlock];
         EncodeSrgbColors(source, srgbBlock);
-        EncodeEtcColorBlock(srgbBlock, punchthrough, destination);
+        EncodeEtcColorBlock(srgbBlock, punchthrough, etc2: true, compressionMode, destination);
     }
 
-    private static void EncodeEtcColorBlock(ReadOnlySpan<Rgba8UNorm> source, bool punchthrough, Span<byte> destination)
+    private static void EncodeEtcColorBlock(
+        ReadOnlySpan<Rgba8UNorm> source,
+        bool punchthrough,
+        bool etc2,
+        EtcCompressionMode compressionMode,
+        Span<byte> destination)
     {
         var colors = new EtcColorBlock();
         for (var i = 0; i < TexelsPerBlock; i++)
@@ -933,12 +975,36 @@ public sealed class EtcTextureCoder : IPitchTextureCoder
                 source[i].Alpha);
         }
 
-        var encoded = punchthrough
-            ? EncodeDifferential(ref colors, HasTransparentTexel(ref colors))
-            : BestEncoding(EncodeIndividual(ref colors), EncodeDifferential(ref colors, transparentPunchthrough: false));
+        var encoded = compressionMode == EtcCompressionMode.High
+            ? EncodeEtcColorBlockHigh(ref colors, punchthrough, etc2)
+            : EncodeEtcColorBlockFast(ref colors, punchthrough);
 
         BinaryPrimitives.WriteUInt32BigEndian(destination, encoded.High);
         BinaryPrimitives.WriteUInt32BigEndian(destination[4..], encoded.Low);
+    }
+
+    private static EtcColorEncoding EncodeEtcColorBlockFast(ref EtcColorBlock colors, bool punchthrough) =>
+        punchthrough
+            ? EncodeDifferential(ref colors, HasTransparentTexel(ref colors))
+            : BestEncoding(EncodeIndividual(ref colors), EncodeDifferential(ref colors, transparentPunchthrough: false));
+
+    private static EtcColorEncoding EncodeEtcColorBlockHigh(ref EtcColorBlock colors, bool punchthrough, bool etc2)
+    {
+        var hasTransparent = punchthrough && HasTransparentTexel(ref colors);
+        var best = EncodeEtcColorBlockFast(ref colors, punchthrough);
+        best = punchthrough
+            ? BestEncoding(best, EncodeDifferentialHigh(ref colors, hasTransparent))
+            : BestEncoding(
+                best,
+                BestEncoding(EncodeIndividualHigh(ref colors), EncodeDifferentialHigh(ref colors, transparentPunchthrough: false)));
+
+        if (etc2 && !hasTransparent)
+        {
+            best = BestEncoding(best, EncodeTModeHigh(ref colors, transparentPunchthrough: false));
+            best = BestEncoding(best, EncodeHModeHigh(ref colors, transparentPunchthrough: false));
+        }
+
+        return best;
     }
 
     private static EtcColorEncoding EncodeIndividual(ref EtcColorBlock colors)
@@ -978,6 +1044,68 @@ public sealed class EtcTextureCoder : IPitchTextureCoder
         var baseColor = new EtcColor(Expand4To8(red), Expand4To8(green), Expand4To8(blue));
         FindBestTableAndIndices(ref colors, flip, subblock, baseColor, transparentPunchthrough: false, out var table, out var low, out var error);
         encoding = new IndividualSubblockEncoding(red, green, blue, table, error, low);
+    }
+
+    private static EtcColorEncoding EncodeIndividualHigh(ref EtcColorBlock colors)
+    {
+        var best = EtcColorEncoding.Worst;
+        for (var flip = 0; flip <= 1; flip++)
+        {
+            var high = (uint)flip;
+            EncodeIndividualSubblockHigh(ref colors, flip != 0, 0, out var sub0);
+            EncodeIndividualSubblockHigh(ref colors, flip != 0, 1, out var sub1);
+            high |= (uint)sub0.Red << 28;
+            high |= (uint)sub1.Red << 24;
+            high |= (uint)sub0.Green << 20;
+            high |= (uint)sub1.Green << 16;
+            high |= (uint)sub0.Blue << 12;
+            high |= (uint)sub1.Blue << 8;
+            high |= (uint)sub0.Table << 5;
+            high |= (uint)sub1.Table << 2;
+            high |= (uint)flip;
+            var candidate = new EtcColorEncoding(sub0.Error + sub1.Error, high, sub0.Low | sub1.Low);
+            best = BestEncoding(best, candidate);
+        }
+
+        return best;
+    }
+
+    private static void EncodeIndividualSubblockHigh(
+        ref EtcColorBlock colors,
+        bool flip,
+        int subblock,
+        out IndividualSubblockEncoding encoding)
+    {
+        AverageSubblock(ref colors, flip, subblock, ignoreTransparent: false, out var average);
+        var redCenter = QuantizeByte(average.Red, 15);
+        var greenCenter = QuantizeByte(average.Green, 15);
+        var blueCenter = QuantizeByte(average.Blue, 15);
+        encoding = new IndividualSubblockEncoding(redCenter, greenCenter, blueCenter, 0, long.MaxValue, 0);
+
+        const int radius = 1;
+        for (var red = Math.Max(0, redCenter - radius); red <= Math.Min(15, redCenter + radius); red++)
+        {
+            for (var green = Math.Max(0, greenCenter - radius); green <= Math.Min(15, greenCenter + radius); green++)
+            {
+                for (var blue = Math.Max(0, blueCenter - radius); blue <= Math.Min(15, blueCenter + radius); blue++)
+                {
+                    var baseColor = new EtcColor(Expand4To8(red), Expand4To8(green), Expand4To8(blue));
+                    FindBestTableAndIndices(
+                        ref colors,
+                        flip,
+                        subblock,
+                        baseColor,
+                        transparentPunchthrough: false,
+                        out var table,
+                        out var low,
+                        out var error);
+                    if (error < encoding.Error)
+                    {
+                        encoding = new IndividualSubblockEncoding(red, green, blue, table, error, low);
+                    }
+                }
+            }
+        }
     }
 
     private static EtcColorEncoding EncodeDifferential(ref EtcColorBlock colors, bool transparentPunchthrough)
@@ -1042,6 +1170,766 @@ public sealed class EtcTextureCoder : IPitchTextureCoder
         }
 
         return best;
+    }
+
+    private static EtcColorEncoding EncodeDifferentialHigh(ref EtcColorBlock colors, bool transparentPunchthrough)
+    {
+        var best = EtcColorEncoding.Worst;
+        Span<DifferentialSubblockEncoding> subblock0 = stackalloc DifferentialSubblockEncoding[27];
+        Span<DifferentialSubblockEncoding> subblock1 = stackalloc DifferentialSubblockEncoding[27];
+        for (var flip = 0; flip <= 1; flip++)
+        {
+            var count0 = BuildDifferentialSubblockCandidates(
+                ref colors,
+                flip != 0,
+                subblock: 0,
+                transparentPunchthrough,
+                subblock0);
+            var count1 = BuildDifferentialSubblockCandidates(
+                ref colors,
+                flip != 0,
+                subblock: 1,
+                transparentPunchthrough,
+                subblock1);
+
+            for (var i = 0; i < count0; i++)
+            {
+                var left = subblock0[i];
+                for (var j = 0; j < count1; j++)
+                {
+                    var right = subblock1[j];
+                    var dr = right.Red - left.Red;
+                    if (dr is < -4 or > 3)
+                    {
+                        continue;
+                    }
+
+                    var dg = right.Green - left.Green;
+                    if (dg is < -4 or > 3)
+                    {
+                        continue;
+                    }
+
+                    var db = right.Blue - left.Blue;
+                    if (db is < -4 or > 3)
+                    {
+                        continue;
+                    }
+
+                    var high = ((uint)left.Red << 27) |
+                               ((uint)PackSigned3(dr) << 24) |
+                               ((uint)left.Green << 19) |
+                               ((uint)PackSigned3(dg) << 16) |
+                               ((uint)left.Blue << 11) |
+                               ((uint)PackSigned3(db) << 8) |
+                               ((uint)left.Table << 5) |
+                               ((uint)right.Table << 2) |
+                               (transparentPunchthrough ? 0u : 0x2u) |
+                               (uint)flip;
+                    var candidate = new EtcColorEncoding(left.Error + right.Error, high, left.Low | right.Low);
+                    best = BestEncoding(best, candidate);
+                }
+            }
+        }
+
+        return best;
+    }
+
+    private static int BuildDifferentialSubblockCandidates(
+        ref EtcColorBlock colors,
+        bool flip,
+        int subblock,
+        bool transparentPunchthrough,
+        Span<DifferentialSubblockEncoding> destination)
+    {
+        AverageSubblock(ref colors, flip, subblock, transparentPunchthrough, out var average);
+        var redCenter = QuantizeByte(average.Red, 31);
+        var greenCenter = QuantizeByte(average.Green, 31);
+        var blueCenter = QuantizeByte(average.Blue, 31);
+
+        var count = 0;
+        const int radius = 1;
+        for (var red = Math.Max(0, redCenter - radius); red <= Math.Min(31, redCenter + radius); red++)
+        {
+            for (var green = Math.Max(0, greenCenter - radius); green <= Math.Min(31, greenCenter + radius); green++)
+            {
+                for (var blue = Math.Max(0, blueCenter - radius); blue <= Math.Min(31, blueCenter + radius); blue++)
+                {
+                    var baseColor = new EtcColor(Expand5To8(red), Expand5To8(green), Expand5To8(blue));
+                    FindBestTableAndIndices(
+                        ref colors,
+                        flip,
+                        subblock,
+                        baseColor,
+                        transparentPunchthrough,
+                        out var table,
+                        out var low,
+                        out var error);
+                    destination[count++] = new DifferentialSubblockEncoding(red, green, blue, table, low, error);
+                }
+            }
+        }
+
+        return count;
+    }
+
+    private static EtcColorEncoding EncodeDifferentialCandidate(
+        ref EtcColorBlock colors,
+        bool flip,
+        bool transparentPunchthrough,
+        int r0,
+        int g0,
+        int b0,
+        int r1,
+        int g1,
+        int b1)
+    {
+        var base0 = new EtcColor(Expand5To8(r0), Expand5To8(g0), Expand5To8(b0));
+        var base1 = new EtcColor(Expand5To8(r1), Expand5To8(g1), Expand5To8(b1));
+        FindBestTableAndIndices(ref colors, flip, 0, base0, transparentPunchthrough, out var table0, out var low0, out var error0);
+        FindBestTableAndIndices(ref colors, flip, 1, base1, transparentPunchthrough, out var table1, out var low1, out var error1);
+
+        var high = ((uint)r0 << 27) |
+                   ((uint)PackSigned3(r1 - r0) << 24) |
+                   ((uint)g0 << 19) |
+                   ((uint)PackSigned3(g1 - g0) << 16) |
+                   ((uint)b0 << 11) |
+                   ((uint)PackSigned3(b1 - b0) << 8) |
+                   ((uint)table0 << 5) |
+                   ((uint)table1 << 2) |
+                   (transparentPunchthrough ? 0u : 0x2u) |
+                   (uint)(flip ? 1 : 0);
+        return new EtcColorEncoding(error0 + error1, high, low0 | low1);
+    }
+
+    private static EtcColorEncoding EncodeTModeHigh(ref EtcColorBlock colors, bool transparentPunchthrough)
+    {
+        Span<EtcColorPairSeed> seeds = stackalloc EtcColorPairSeed[16];
+        var seedCount = 0;
+        AddEtc2ModeSeeds(ref colors, transparentPunchthrough, seeds, ref seedCount);
+
+        var best = EtcColorEncoding.Worst;
+        Span<EtcColor> paint = stackalloc EtcColor[4];
+        for (var seedIndex = 0; seedIndex < seedCount; seedIndex++)
+        {
+            var seed = seeds[seedIndex];
+            for (var distance = 0; distance < 8; distance++)
+            {
+                BuildTModePaintColors(seed.Color0, seed.Color1, distance, paint);
+                var candidate = EvaluateEtc2PaintMode(ref colors, paint, transparentPunchthrough);
+                if (candidate.Error >= best.Error)
+                {
+                    continue;
+                }
+
+                if (TryPackTMode(seed.Color0, seed.Color1, distance, candidate.Low, transparentPunchthrough, out var high, out var low))
+                {
+                    best = new EtcColorEncoding(candidate.Error, high, low);
+                }
+            }
+        }
+
+        return best;
+    }
+
+    private static EtcColorEncoding EncodeHModeHigh(ref EtcColorBlock colors, bool transparentPunchthrough)
+    {
+        Span<EtcColorPairSeed> seeds = stackalloc EtcColorPairSeed[16];
+        var seedCount = 0;
+        AddEtc2ModeSeeds(ref colors, transparentPunchthrough, seeds, ref seedCount);
+
+        var best = EtcColorEncoding.Worst;
+        Span<EtcColor> paint = stackalloc EtcColor[4];
+        for (var seedIndex = 0; seedIndex < seedCount; seedIndex++)
+        {
+            var seed = seeds[seedIndex];
+            for (var distance = 0; distance < 8; distance++)
+            {
+                if (!CanPackHModeDistance(seed.Color0, seed.Color1, distance))
+                {
+                    continue;
+                }
+
+                BuildHModePaintColors(seed.Color0, seed.Color1, distance, paint);
+                var candidate = EvaluateEtc2PaintMode(ref colors, paint, transparentPunchthrough);
+                if (candidate.Error >= best.Error)
+                {
+                    continue;
+                }
+
+                if (TryPackHMode(seed.Color0, seed.Color1, distance, candidate.Low, transparentPunchthrough, out var high, out var low))
+                {
+                    best = new EtcColorEncoding(candidate.Error, high, low);
+                }
+            }
+        }
+
+        return best;
+    }
+
+    private static EtcColorEncoding EncodePlanarModeHigh(ref EtcColorBlock colors)
+    {
+        Span<PlanarEndpointSet> endpoints = stackalloc PlanarEndpointSet[4];
+        var endpointCount = 0;
+        AddLeastSquaresPlanarEndpoint(ref colors, endpoints, ref endpointCount);
+        AddCornerPlanarEndpoint(ref colors, endpoints, ref endpointCount);
+
+        var best = EtcColorEncoding.Worst;
+        for (var i = 0; i < endpointCount; i++)
+        {
+            var candidate = EvaluatePlanarMode(ref colors, endpoints[i]);
+            if (candidate.Error >= best.Error)
+            {
+                continue;
+            }
+
+            if (TryPackPlanarMode(endpoints[i], out var high, out var low))
+            {
+                best = new EtcColorEncoding(candidate.Error, high, low);
+            }
+        }
+
+        return best;
+    }
+
+    private static EtcColorEncoding EvaluateEtc2PaintMode(
+        ref EtcColorBlock colors,
+        ReadOnlySpan<EtcColor> paint,
+        bool transparentPunchthrough)
+    {
+        var low = 0u;
+        var error = 0L;
+        for (var y = 0; y < BlockSize; y++)
+        {
+            for (var x = 0; x < BlockSize; x++)
+            {
+                var texel = (y * BlockSize) + x;
+                var source = colors[texel];
+                var index = FindBestEtc2PaintIndex(source, paint, transparentPunchthrough);
+                var reconstructed = transparentPunchthrough && index == 2
+                    ? new EtcColor(0, 0, 0, 0)
+                    : paint[index];
+                error += GetColorError(source, reconstructed, transparentPunchthrough);
+                SetEtcRawIndex(ref low, x, y, index);
+            }
+        }
+
+        return new EtcColorEncoding(error, 0, low);
+    }
+
+    private static int FindBestEtc2PaintIndex(
+        EtcColor source,
+        ReadOnlySpan<EtcColor> paint,
+        bool transparentPunchthrough)
+    {
+        if (transparentPunchthrough && IsTransparent(source))
+        {
+            return 2;
+        }
+
+        var bestIndex = 0;
+        var bestError = long.MaxValue;
+        for (var index = 0; index < 4; index++)
+        {
+            if (transparentPunchthrough && index == 2)
+            {
+                continue;
+            }
+
+            var error = GetColorError(source, paint[index], transparentPunchthrough);
+            if (error < bestError)
+            {
+                bestError = error;
+                bestIndex = index;
+            }
+        }
+
+        return bestIndex;
+    }
+
+    private static EtcColorEncoding EvaluatePlanarMode(ref EtcColorBlock colors, PlanarEndpointSet endpoints)
+    {
+        var error = 0L;
+        var origin = endpoints.Origin;
+        var horizontal = endpoints.Horizontal;
+        var vertical = endpoints.Vertical;
+        for (var y = 0; y < BlockSize; y++)
+        {
+            for (var x = 0; x < BlockSize; x++)
+            {
+                var reconstructed = ReconstructPlanarColor(origin, horizontal, vertical, x, y);
+                error += GetColorError(colors[(y * BlockSize) + x], reconstructed, transparentPunchthrough: false);
+            }
+        }
+
+        return new EtcColorEncoding(error, 0, 0);
+    }
+
+    private static EtcColor ReconstructPlanarColor(EtcColor origin, EtcColor horizontal, EtcColor vertical, int x, int y) => new(
+        ClampToByte(((x * (horizontal.Red - origin.Red)) + (y * (vertical.Red - origin.Red)) + (4 * origin.Red) + 2) >> 2),
+        ClampToByte(((x * (horizontal.Green - origin.Green)) + (y * (vertical.Green - origin.Green)) + (4 * origin.Green) + 2) >> 2),
+        ClampToByte(((x * (horizontal.Blue - origin.Blue)) + (y * (vertical.Blue - origin.Blue)) + (4 * origin.Blue) + 2) >> 2));
+
+    private static void AddEtc2ModeSeeds(
+        ref EtcColorBlock colors,
+        bool ignoreTransparent,
+        Span<EtcColorPairSeed> seeds,
+        ref int count)
+    {
+        GetColorBounds(ref colors, ignoreTransparent, out var min, out var max, out var hasOpaque);
+        if (!hasOpaque)
+        {
+            AddEtc2ModeSeed(new EtcColor(0, 0, 0), new EtcColor(0, 0, 0), seeds, ref count);
+            return;
+        }
+
+        AddEtc2ModeSeed(max, min, seeds, ref count);
+        AddEtc2ModeSeed(min, max, seeds, ref count);
+
+        if (TryFindFarthestEtcColors(ref colors, ignoreTransparent, out var farA, out var farB))
+        {
+            AddEtc2ModeSeed(farA, farB, seeds, ref count);
+            AddEtc2ModeSeed(farB, farA, seeds, ref count);
+            if (TryFindSplitAverageEtcColors(ref colors, ignoreTransparent, farA, farB, out var averageA, out var averageB))
+            {
+                AddEtc2ModeSeed(averageA, averageB, seeds, ref count);
+                AddEtc2ModeSeed(averageB, averageA, seeds, ref count);
+            }
+        }
+
+        AverageBlock(ref colors, ignoreTransparent, out var average);
+        AddEtc2ModeSeed(average, average, seeds, ref count);
+        AddEtc2ModeSeed(max, average, seeds, ref count);
+        AddEtc2ModeSeed(average, min, seeds, ref count);
+    }
+
+    private static void AddEtc2ModeSeed(EtcColor color0, EtcColor color1, Span<EtcColorPairSeed> seeds, ref int count)
+    {
+        if (count >= seeds.Length)
+        {
+            return;
+        }
+
+        color0 = QuantizeEtc4Color(color0);
+        color1 = QuantizeEtc4Color(color1);
+        var packed0 = PackColor444(color0);
+        var packed1 = PackColor444(color1);
+        for (var i = 0; i < count; i++)
+        {
+            if (PackColor444(seeds[i].Color0) == packed0 && PackColor444(seeds[i].Color1) == packed1)
+            {
+                return;
+            }
+        }
+
+        seeds[count++] = new EtcColorPairSeed(color0, color1);
+    }
+
+    private static void GetColorBounds(
+        ref EtcColorBlock colors,
+        bool ignoreTransparent,
+        out EtcColor min,
+        out EtcColor max,
+        out bool hasColor)
+    {
+        var minRed = byte.MaxValue;
+        var minGreen = byte.MaxValue;
+        var minBlue = byte.MaxValue;
+        var maxRed = byte.MinValue;
+        var maxGreen = byte.MinValue;
+        var maxBlue = byte.MinValue;
+        hasColor = false;
+        for (var i = 0; i < TexelsPerBlock; i++)
+        {
+            var color = colors[i];
+            if (ignoreTransparent && IsTransparent(color))
+            {
+                continue;
+            }
+
+            minRed = Math.Min(minRed, color.Red);
+            minGreen = Math.Min(minGreen, color.Green);
+            minBlue = Math.Min(minBlue, color.Blue);
+            maxRed = Math.Max(maxRed, color.Red);
+            maxGreen = Math.Max(maxGreen, color.Green);
+            maxBlue = Math.Max(maxBlue, color.Blue);
+            hasColor = true;
+        }
+
+        min = hasColor ? new EtcColor(minRed, minGreen, minBlue) : new EtcColor(0, 0, 0);
+        max = hasColor ? new EtcColor(maxRed, maxGreen, maxBlue) : new EtcColor(0, 0, 0);
+    }
+
+    private static bool TryFindFarthestEtcColors(
+        ref EtcColorBlock colors,
+        bool ignoreTransparent,
+        out EtcColor color0,
+        out EtcColor color1)
+    {
+        color0 = new EtcColor(0, 0, 0);
+        color1 = new EtcColor(0, 0, 0);
+        var bestDistance = -1L;
+        for (var i = 0; i < TexelsPerBlock; i++)
+        {
+            var left = colors[i];
+            if (ignoreTransparent && IsTransparent(left))
+            {
+                continue;
+            }
+
+            for (var j = i + 1; j < TexelsPerBlock; j++)
+            {
+                var right = colors[j];
+                if (ignoreTransparent && IsTransparent(right))
+                {
+                    continue;
+                }
+
+                var distance = GetColorDistanceSquared(left, right);
+                if (distance > bestDistance)
+                {
+                    bestDistance = distance;
+                    color0 = left;
+                    color1 = right;
+                }
+            }
+        }
+
+        return bestDistance >= 0;
+    }
+
+    private static bool TryFindSplitAverageEtcColors(
+        ref EtcColorBlock colors,
+        bool ignoreTransparent,
+        EtcColor seed0,
+        EtcColor seed1,
+        out EtcColor average0,
+        out EtcColor average1)
+    {
+        var red0 = 0;
+        var green0 = 0;
+        var blue0 = 0;
+        var count0 = 0;
+        var red1 = 0;
+        var green1 = 0;
+        var blue1 = 0;
+        var count1 = 0;
+
+        for (var i = 0; i < TexelsPerBlock; i++)
+        {
+            var color = colors[i];
+            if (ignoreTransparent && IsTransparent(color))
+            {
+                continue;
+            }
+
+            if (GetColorDistanceSquared(color, seed0) <= GetColorDistanceSquared(color, seed1))
+            {
+                red0 += color.Red;
+                green0 += color.Green;
+                blue0 += color.Blue;
+                count0++;
+            }
+            else
+            {
+                red1 += color.Red;
+                green1 += color.Green;
+                blue1 += color.Blue;
+                count1++;
+            }
+        }
+
+        if (count0 == 0 || count1 == 0)
+        {
+            average0 = seed0;
+            average1 = seed1;
+            return false;
+        }
+
+        average0 = new EtcColor(
+            (byte)((red0 + (count0 / 2)) / count0),
+            (byte)((green0 + (count0 / 2)) / count0),
+            (byte)((blue0 + (count0 / 2)) / count0));
+        average1 = new EtcColor(
+            (byte)((red1 + (count1 / 2)) / count1),
+            (byte)((green1 + (count1 / 2)) / count1),
+            (byte)((blue1 + (count1 / 2)) / count1));
+        return true;
+    }
+
+    private static void AverageBlock(ref EtcColorBlock colors, bool ignoreTransparent, out EtcColor average)
+    {
+        var red = 0;
+        var green = 0;
+        var blue = 0;
+        var count = 0;
+        for (var i = 0; i < TexelsPerBlock; i++)
+        {
+            var color = colors[i];
+            if (ignoreTransparent && IsTransparent(color))
+            {
+                continue;
+            }
+
+            red += color.Red;
+            green += color.Green;
+            blue += color.Blue;
+            count++;
+        }
+
+        if (count == 0)
+        {
+            average = new EtcColor(0, 0, 0);
+            return;
+        }
+
+        average = new EtcColor(
+            (byte)((red + (count / 2)) / count),
+            (byte)((green + (count / 2)) / count),
+            (byte)((blue + (count / 2)) / count));
+    }
+
+    private static long GetColorDistanceSquared(EtcColor left, EtcColor right)
+    {
+        var red = left.Red - right.Red;
+        var green = left.Green - right.Green;
+        var blue = left.Blue - right.Blue;
+        return (red * red) + (green * green) + (blue * blue);
+    }
+
+    private static EtcColor QuantizeEtc4Color(EtcColor color) => new(
+        Expand4To8(QuantizeByte(color.Red, 15)),
+        Expand4To8(QuantizeByte(color.Green, 15)),
+        Expand4To8(QuantizeByte(color.Blue, 15)));
+
+    private static int PackColor444(EtcColor color) =>
+        (QuantizeByte(color.Red, 15) << 8) |
+        (QuantizeByte(color.Green, 15) << 4) |
+        QuantizeByte(color.Blue, 15);
+
+    private static void AddLeastSquaresPlanarEndpoint(
+        ref EtcColorBlock colors,
+        Span<PlanarEndpointSet> endpoints,
+        ref int count)
+    {
+        FitPlanarChannel(ref colors, 0, out var originRed, out var horizontalRed, out var verticalRed);
+        FitPlanarChannel(ref colors, 1, out var originGreen, out var horizontalGreen, out var verticalGreen);
+        FitPlanarChannel(ref colors, 2, out var originBlue, out var horizontalBlue, out var verticalBlue);
+        AddPlanarEndpoint(
+            originRed,
+            originGreen,
+            originBlue,
+            horizontalRed,
+            horizontalGreen,
+            horizontalBlue,
+            verticalRed,
+            verticalGreen,
+            verticalBlue,
+            endpoints,
+            ref count);
+    }
+
+    private static void AddCornerPlanarEndpoint(ref EtcColorBlock colors, Span<PlanarEndpointSet> endpoints, ref int count)
+    {
+        var origin = colors[0];
+        var right = colors[3];
+        var bottom = colors[12];
+        AddPlanarEndpoint(
+            origin.Red,
+            origin.Green,
+            origin.Blue,
+            ClampToByte(DivRound((4 * right.Red) - origin.Red, 3)),
+            ClampToByte(DivRound((4 * right.Green) - origin.Green, 3)),
+            ClampToByte(DivRound((4 * right.Blue) - origin.Blue, 3)),
+            ClampToByte(DivRound((4 * bottom.Red) - origin.Red, 3)),
+            ClampToByte(DivRound((4 * bottom.Green) - origin.Green, 3)),
+            ClampToByte(DivRound((4 * bottom.Blue) - origin.Blue, 3)),
+            endpoints,
+            ref count);
+    }
+
+    private static void FitPlanarChannel(ref EtcColorBlock colors, int channel, out byte origin, out byte horizontal, out byte vertical)
+    {
+        var m00 = 0d;
+        var m01 = 0d;
+        var m02 = 0d;
+        var m11 = 0d;
+        var m12 = 0d;
+        var m22 = 0d;
+        var b0 = 0d;
+        var b1 = 0d;
+        var b2 = 0d;
+
+        for (var y = 0; y < BlockSize; y++)
+        {
+            for (var x = 0; x < BlockSize; x++)
+            {
+                var a = 4 - x - y;
+                var b = x;
+                var c = y;
+                var value = GetColorChannel(colors[(y * BlockSize) + x], channel) * 4d;
+                m00 += a * a;
+                m01 += a * b;
+                m02 += a * c;
+                m11 += b * b;
+                m12 += b * c;
+                m22 += c * c;
+                b0 += a * value;
+                b1 += b * value;
+                b2 += c * value;
+            }
+        }
+
+        SolveSymmetric3x3(m00, m01, m02, m11, m12, m22, b0, b1, b2, out var o, out var h, out var v);
+        origin = ClampToByte((int)Math.Round(o));
+        horizontal = ClampToByte((int)Math.Round(h));
+        vertical = ClampToByte((int)Math.Round(v));
+    }
+
+    private static void SolveSymmetric3x3(
+        double m00,
+        double m01,
+        double m02,
+        double m11,
+        double m12,
+        double m22,
+        double b0,
+        double b1,
+        double b2,
+        out double x0,
+        out double x1,
+        out double x2)
+    {
+        var determinant = (m00 * ((m11 * m22) - (m12 * m12))) -
+                          (m01 * ((m01 * m22) - (m12 * m02))) +
+                          (m02 * ((m01 * m12) - (m11 * m02)));
+        if (Math.Abs(determinant) < 0.000001d)
+        {
+            x0 = x1 = x2 = 0d;
+            return;
+        }
+
+        x0 = ((b0 * ((m11 * m22) - (m12 * m12))) -
+              (m01 * ((b1 * m22) - (m12 * b2))) +
+              (m02 * ((b1 * m12) - (m11 * b2)))) / determinant;
+        x1 = ((m00 * ((b1 * m22) - (m12 * b2))) -
+              (b0 * ((m01 * m22) - (m12 * m02))) +
+              (m02 * ((m01 * b2) - (b1 * m02)))) / determinant;
+        x2 = ((m00 * ((m11 * b2) - (b1 * m12))) -
+              (m01 * ((m01 * b2) - (b1 * m02))) +
+              (b0 * ((m01 * m12) - (m11 * m02)))) / determinant;
+    }
+
+    private static int GetColorChannel(EtcColor color, int channel) => channel switch
+    {
+        0 => color.Red,
+        1 => color.Green,
+        _ => color.Blue
+    };
+
+    private static void AddPlanarEndpoint(
+        int originRed,
+        int originGreen,
+        int originBlue,
+        int horizontalRed,
+        int horizontalGreen,
+        int horizontalBlue,
+        int verticalRed,
+        int verticalGreen,
+        int verticalBlue,
+        Span<PlanarEndpointSet> endpoints,
+        ref int count)
+    {
+        if (count >= endpoints.Length)
+        {
+            return;
+        }
+
+        var endpoint = new PlanarEndpointSet(
+            QuantizeByte(ClampToByte(originRed), 63),
+            QuantizeByte(ClampToByte(originGreen), 127),
+            QuantizeByte(ClampToByte(originBlue), 63),
+            QuantizeByte(ClampToByte(horizontalRed), 63),
+            QuantizeByte(ClampToByte(horizontalGreen), 127),
+            QuantizeByte(ClampToByte(horizontalBlue), 63),
+            QuantizeByte(ClampToByte(verticalRed), 63),
+            QuantizeByte(ClampToByte(verticalGreen), 127),
+            QuantizeByte(ClampToByte(verticalBlue), 63));
+        for (var i = 0; i < count; i++)
+        {
+            if (endpoints[i] == endpoint)
+            {
+                return;
+            }
+        }
+
+        endpoints[count++] = endpoint;
+    }
+
+    private static bool CanPackHModeDistance(EtcColor color0, EtcColor color1, int distance) =>
+        (PackColor444(color0) >= PackColor444(color1)) == ((distance & 1) != 0);
+
+    private static bool TryPackTMode(
+        EtcColor color0,
+        EtcColor color1,
+        int distance,
+        uint modeLow,
+        bool transparentPunchthrough,
+        out uint high,
+        out uint low)
+    {
+        var tHigh = 0u;
+        PutBitsHigh(ref tHigh, QuantizeByte(color0.Red, 15), 4, 58);
+        PutBitsHigh(ref tHigh, QuantizeByte(color0.Green, 15), 4, 54);
+        PutBitsHigh(ref tHigh, QuantizeByte(color0.Blue, 15), 4, 50);
+        PutBitsHigh(ref tHigh, QuantizeByte(color1.Red, 15), 4, 46);
+        PutBitsHigh(ref tHigh, QuantizeByte(color1.Green, 15), 4, 42);
+        PutBitsHigh(ref tHigh, QuantizeByte(color1.Blue, 15), 4, 38);
+        PutBitsHigh(ref tHigh, distance, 3, 34);
+        return TryStuff59Bits(tHigh, modeLow, transparentPunchthrough, out high, out low);
+    }
+
+    private static bool TryPackHMode(
+        EtcColor color0,
+        EtcColor color1,
+        int distance,
+        uint modeLow,
+        bool transparentPunchthrough,
+        out uint high,
+        out uint low)
+    {
+        high = 0;
+        low = 0;
+        if (!CanPackHModeDistance(color0, color1, distance))
+        {
+            return false;
+        }
+
+        var hHigh = 0u;
+        PutBitsHigh(ref hHigh, QuantizeByte(color0.Red, 15), 4, 57);
+        PutBitsHigh(ref hHigh, QuantizeByte(color0.Green, 15), 4, 53);
+        PutBitsHigh(ref hHigh, QuantizeByte(color0.Blue, 15), 4, 49);
+        PutBitsHigh(ref hHigh, QuantizeByte(color1.Red, 15), 4, 45);
+        PutBitsHigh(ref hHigh, QuantizeByte(color1.Green, 15), 4, 41);
+        PutBitsHigh(ref hHigh, QuantizeByte(color1.Blue, 15), 4, 37);
+        PutBitsHigh(ref hHigh, distance >> 1, 2, 33);
+        return TryStuff58Bits(hHigh, modeLow, transparentPunchthrough, out high, out low);
+    }
+
+    private static bool TryPackPlanarMode(PlanarEndpointSet endpoints, out uint high, out uint low)
+    {
+        var planarHigh = 0u;
+        var planarLow = 0u;
+        PutBitsHigh(ref planarHigh, endpoints.OriginRed, 6, 63);
+        PutBitsHigh(ref planarHigh, endpoints.OriginGreen, 7, 57);
+        PutBitsHigh(ref planarHigh, endpoints.OriginBlue, 6, 50);
+        PutBitsHigh(ref planarHigh, endpoints.HorizontalRed, 6, 44);
+        PutBitsHigh(ref planarHigh, endpoints.HorizontalGreen, 7, 38);
+        PutBits(ref planarLow, endpoints.HorizontalBlue, 6, 31);
+        PutBits(ref planarLow, endpoints.VerticalRed, 6, 25);
+        PutBits(ref planarLow, endpoints.VerticalGreen, 7, 19);
+        PutBits(ref planarLow, endpoints.VerticalBlue, 6, 12);
+        return TryStuff57Bits(planarHigh, planarLow, out high, out low);
     }
 
     private static void FindBestTableAndIndices(
@@ -1195,8 +2083,18 @@ public sealed class EtcTextureCoder : IPitchTextureCoder
             (byte)((blue + (count / 2)) / count));
     }
 
-    private static void EncodeEacBlock(ref IntBlock source, EacBlockKind kind, Span<byte> destination)
+    private static void EncodeEacBlock(
+        ref IntBlock source,
+        EacBlockKind kind,
+        EtcCompressionMode compressionMode,
+        Span<byte> destination)
     {
+        if (compressionMode == EtcCompressionMode.High)
+        {
+            EncodeEacBlockHigh(ref source, kind, destination);
+            return;
+        }
+
         GetTargetStats(ref source, out var min, out var max, out var average);
         var best = EacEncoding.Worst;
         var targetRange = max - min;
@@ -1231,6 +2129,60 @@ public sealed class EtcTextureCoder : IPitchTextureCoder
             }
         }
 
+        WriteEacEncoding(best, destination);
+    }
+
+    private static void EncodeEacBlockHigh(ref IntBlock source, EacBlockKind kind, Span<byte> destination)
+    {
+        GetTargetStats(ref source, out var min, out var max, out var average);
+        var best = EacEncoding.Worst;
+        var targetRange = max - min;
+        Span<int> multipliers = stackalloc int[5];
+        Span<int> bases = stackalloc int[32];
+        Span<int> palette = stackalloc int[8];
+
+        for (var table = 0; table < 16; table++)
+        {
+            var multiplierCount = 0;
+            var estimatedMultiplier = EstimateEacMultiplier(kind, table, targetRange);
+            AddMultiplierCandidate(kind, estimatedMultiplier - 2, multipliers, ref multiplierCount);
+            AddMultiplierCandidate(kind, estimatedMultiplier - 1, multipliers, ref multiplierCount);
+            AddMultiplierCandidate(kind, estimatedMultiplier, multipliers, ref multiplierCount);
+            AddMultiplierCandidate(kind, estimatedMultiplier + 1, multipliers, ref multiplierCount);
+            AddMultiplierCandidate(kind, estimatedMultiplier + 2, multipliers, ref multiplierCount);
+
+            for (var multiplierIndex = 0; multiplierIndex < multiplierCount; multiplierIndex++)
+            {
+                var multiplier = multipliers[multiplierIndex];
+                GetTermBounds(kind, table, multiplier, out var minTerm, out var maxTerm);
+                var baseCount = 0;
+                AddBaseCandidate(kind, min, minTerm, bases, ref baseCount);
+                AddBaseCandidate(kind, max, maxTerm, bases, ref baseCount);
+                AddBaseCandidate(kind, average, (minTerm + maxTerm) / 2, bases, ref baseCount);
+                AddBaseCandidate(kind, average, 0, bases, ref baseCount);
+
+                for (var index = 0; index < 8; index++)
+                {
+                    var term = GetEacTerm(kind, table, multiplier, index);
+                    AddBaseCandidate(kind, min, term, bases, ref baseCount);
+                    AddBaseCandidate(kind, max, term, bases, ref baseCount);
+                    AddBaseCandidate(kind, average, term, bases, ref baseCount);
+                }
+
+                for (var baseIndex = 0; baseIndex < baseCount; baseIndex++)
+                {
+                    BuildEacPalette(kind, bases[baseIndex], table, multiplier, palette);
+                    var candidate = EvaluateEacCandidate(ref source, bases[baseIndex], table, multiplier, palette, best.Error);
+                    best = BestEncoding(best, candidate);
+                }
+            }
+        }
+
+        WriteEacEncoding(best, destination);
+    }
+
+    private static void WriteEacEncoding(EacEncoding best, Span<byte> destination)
+    {
         destination[0] = unchecked((byte)best.BaseCodeword);
         destination[1] = (byte)((best.Multiplier << 4) | best.Table);
 
@@ -1337,12 +2289,23 @@ public sealed class EtcTextureCoder : IPitchTextureCoder
 
     private static int DecodeEacValue(EacBlockKind kind, int baseCodeword, int table, int multiplier, int index)
     {
+        var term = GetEacTerm(kind, table, multiplier, index);
+        return kind switch
+        {
+            EacBlockKind.Alpha8 => Math.Clamp(baseCodeword + term, 0, 255),
+            EacBlockKind.Unsigned11 => Math.Clamp((baseCodeword * 8) + 4 + term, 0, 2047),
+            EacBlockKind.Signed11 => Math.Clamp((baseCodeword * 8) + term, -1023, 1023),
+            _ => throw new ArgumentOutOfRangeException(nameof(kind))
+        };
+    }
+
+    private static int GetEacTerm(EacBlockKind kind, int table, int multiplier, int index)
+    {
         var modifier = GetEacModifier(table, index);
         return kind switch
         {
-            EacBlockKind.Alpha8 => Math.Clamp(baseCodeword + (modifier * multiplier), 0, 255),
-            EacBlockKind.Unsigned11 => Math.Clamp((baseCodeword * 8) + 4 + (multiplier == 0 ? modifier : modifier * multiplier * 8), 0, 2047),
-            EacBlockKind.Signed11 => Math.Clamp((baseCodeword * 8) + (multiplier == 0 ? modifier : modifier * multiplier * 8), -1023, 1023),
+            EacBlockKind.Alpha8 => modifier * multiplier,
+            EacBlockKind.Unsigned11 or EacBlockKind.Signed11 => multiplier == 0 ? modifier : modifier * multiplier * 8,
             _ => throw new ArgumentOutOfRangeException(nameof(kind))
         };
     }
@@ -1386,6 +2349,11 @@ public sealed class EtcTextureCoder : IPitchTextureCoder
             }
         }
 
+        if (count >= bases.Length)
+        {
+            return;
+        }
+
         bases[count++] = baseCodeword;
     }
 
@@ -1395,13 +2363,7 @@ public sealed class EtcTextureCoder : IPitchTextureCoder
         max = int.MinValue;
         for (var index = 0; index < 8; index++)
         {
-            var modifier = GetEacModifier(table, index);
-            var term = kind switch
-            {
-                EacBlockKind.Alpha8 => modifier * multiplier,
-                EacBlockKind.Unsigned11 or EacBlockKind.Signed11 => multiplier == 0 ? modifier : modifier * multiplier * 8,
-                _ => throw new ArgumentOutOfRangeException(nameof(kind))
-            };
+            var term = GetEacTerm(kind, table, multiplier, index);
             min = Math.Min(min, term);
             max = Math.Max(max, term);
         }
@@ -1467,6 +2429,37 @@ public sealed class EtcTextureCoder : IPitchTextureCoder
         PutBits(ref planarLow, bv, 6, 12);
     }
 
+    private static bool TryStuff57Bits(uint planarHigh, uint planarLow, out uint high, out uint low)
+    {
+        high = 0;
+        low = 0;
+        PutBitsHigh(ref high, (int)GetBitsHigh(planarHigh, 6, 63), 6, 62);
+        PutBitsHigh(ref high, (int)GetBitsHigh(planarHigh, 1, 57), 1, 56);
+        PutBitsHigh(ref high, (int)GetBitsHigh(planarHigh, 6, 56), 6, 54);
+        PutBitsHigh(ref high, (int)GetBitsHigh(planarHigh, 1, 50), 1, 48);
+        PutBitsHigh(ref high, (int)GetBitsHigh(planarHigh, 2, 49), 2, 44);
+        PutBitsHigh(ref high, (int)GetBitsHigh(planarHigh, 3, 47), 3, 41);
+        PutBitsHigh(ref high, (int)GetBitsHigh(planarHigh, 5, 44), 5, 38);
+        PutBitsHigh(ref high, (int)GetBitsHigh(planarHigh, 1, 39), 1, 32);
+        PutBits(ref low, (int)GetBitsHigh(planarHigh, 7, 38), 7, 31);
+        PutBits(ref low, (int)GetBits(planarLow, 6, 31), 6, 24);
+        PutBits(ref low, (int)GetBits(planarLow, 6, 25), 6, 18);
+        PutBits(ref low, (int)GetBits(planarLow, 7, 19), 7, 12);
+        PutBits(ref low, (int)GetBits(planarLow, 6, 12), 6, 5);
+
+        Span<int> freeBits = [63, 55, 47, 46, 45, 42, 33];
+        return TryFillStuffedModeBits(
+            high,
+            low,
+            freeBits,
+            invalidChannel: 2,
+            Unstuff57Bits,
+            planarHigh,
+            planarLow,
+            out high,
+            out low);
+    }
+
     private static void Unstuff58Bits(uint high, uint low, out uint hHigh, out uint hLow)
     {
         var part0 = (int)GetBitsHigh(high, 7, 62);
@@ -1481,6 +2474,29 @@ public sealed class EtcTextureCoder : IPitchTextureCoder
         hLow = low;
     }
 
+    private static bool TryStuff58Bits(uint hHigh, uint hLow, bool transparentPunchthrough, out uint high, out uint low)
+    {
+        high = 0;
+        low = hLow;
+        PutBitsHigh(ref high, (int)GetBitsHigh(hHigh, 7, 57), 7, 62);
+        PutBitsHigh(ref high, (int)GetBitsHigh(hHigh, 2, 50), 2, 52);
+        PutBitsHigh(ref high, (int)GetBitsHigh(hHigh, 16, 48), 16, 49);
+        PutBitsHigh(ref high, (int)GetBitsHigh(hHigh, 1, 32), 1, 32);
+        PutBitsHigh(ref high, transparentPunchthrough ? 0 : 1, 1, 33);
+
+        Span<int> freeBits = [63, 55, 54, 53, 50];
+        return TryFillStuffedModeBits(
+            high,
+            low,
+            freeBits,
+            invalidChannel: 1,
+            Unstuff58Bits,
+            hHigh,
+            hLow,
+            out high,
+            out low);
+    }
+
     private static void Unstuff59Bits(uint high, uint low, out uint tHigh, out uint tLow)
     {
         tHigh = high >> 1;
@@ -1489,6 +2505,71 @@ public sealed class EtcTextureCoder : IPitchTextureCoder
         PutBitsHigh(ref tHigh, r0a, 2, 58);
         PutBitsHigh(ref tHigh, 0, 5, 63);
         tLow = low;
+    }
+
+    private static bool TryStuff59Bits(uint tHigh, uint tLow, bool transparentPunchthrough, out uint high, out uint low)
+    {
+        high = 0;
+        low = tLow;
+        PutBitsHigh(ref high, (int)GetBitsHigh(tHigh, 2, 58), 2, 60);
+        for (var position = 33; position <= 56; position++)
+        {
+            PutBitsHigh(ref high, (int)GetBitsHigh(tHigh, 1, position), 1, position + 1);
+        }
+
+        PutBitsHigh(ref high, (int)GetBitsHigh(tHigh, 1, 32), 1, 32);
+        PutBitsHigh(ref high, transparentPunchthrough ? 0 : 1, 1, 33);
+
+        Span<int> freeBits = [63, 62, 61, 58];
+        return TryFillStuffedModeBits(
+            high,
+            low,
+            freeBits,
+            invalidChannel: 0,
+            Unstuff59Bits,
+            tHigh,
+            tLow,
+            out high,
+            out low);
+    }
+
+    private delegate void UnstuffMode(uint high, uint low, out uint modeHigh, out uint modeLow);
+
+    private static bool TryFillStuffedModeBits(
+        uint baseHigh,
+        uint baseLow,
+        ReadOnlySpan<int> freeBits,
+        int invalidChannel,
+        UnstuffMode unstuff,
+        uint expectedHigh,
+        uint expectedLow,
+        out uint high,
+        out uint low)
+    {
+        var combinationCount = 1 << freeBits.Length;
+        for (var mask = 0; mask < combinationCount; mask++)
+        {
+            var candidateHigh = baseHigh;
+            for (var bit = 0; bit < freeBits.Length; bit++)
+            {
+                PutBitsHigh(ref candidateHigh, (mask >> bit) & 1, 1, freeBits[bit]);
+            }
+
+            unstuff(candidateHigh, baseLow, out var modeHigh, out var modeLow);
+            if (modeHigh == expectedHigh &&
+                modeLow == expectedLow &&
+                TryGetInvalidDifferentialChannel(candidateHigh, out var channel) &&
+                channel == invalidChannel)
+            {
+                high = candidateHigh;
+                low = baseLow;
+                return true;
+            }
+        }
+
+        high = 0;
+        low = 0;
+        return false;
     }
 
     private static bool TryGetInvalidDifferentialChannel(uint high, out int channel)
@@ -1999,6 +3080,34 @@ public sealed class EtcTextureCoder : IPitchTextureCoder
     private readonly record struct EtcColorEncoding(long Error, uint High, uint Low)
     {
         public static EtcColorEncoding Worst => new(long.MaxValue, 0, 0);
+    }
+
+    private readonly record struct EtcColorPairSeed(EtcColor Color0, EtcColor Color1);
+
+    private readonly record struct DifferentialSubblockEncoding(
+        int Red,
+        int Green,
+        int Blue,
+        int Table,
+        uint Low,
+        long Error);
+
+    private readonly record struct PlanarEndpointSet(
+        int OriginRed,
+        int OriginGreen,
+        int OriginBlue,
+        int HorizontalRed,
+        int HorizontalGreen,
+        int HorizontalBlue,
+        int VerticalRed,
+        int VerticalGreen,
+        int VerticalBlue)
+    {
+        public EtcColor Origin => new(Expand6To8(OriginRed), Expand7To8(OriginGreen), Expand6To8(OriginBlue));
+
+        public EtcColor Horizontal => new(Expand6To8(HorizontalRed), Expand7To8(HorizontalGreen), Expand6To8(HorizontalBlue));
+
+        public EtcColor Vertical => new(Expand6To8(VerticalRed), Expand7To8(VerticalGreen), Expand6To8(VerticalBlue));
     }
 
     private readonly record struct IndividualSubblockEncoding(int Red, int Green, int Blue, int Table, long Error, uint Low);
