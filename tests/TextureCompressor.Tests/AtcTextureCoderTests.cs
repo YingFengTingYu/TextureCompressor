@@ -255,6 +255,58 @@ public sealed class AtcTextureCoderTests
         Assert.True(AlphaSquaredError(source, highDecoded) <= AlphaSquaredError(source, fastDecoded));
     }
 
+    [Theory]
+    [MemberData(nameof(AtcFormatCompressionModes))]
+    public void EncodeAndDecodeAtcSupportsCompressionMode(TextureFormat format, AtcCompressionMode compressionMode)
+    {
+        var pixels = Enumerable.Range(0, 16)
+            .Select(i => new Rgba8UNorm(
+                (byte)(24 + (i * 9)),
+                (byte)(220 - (i * 7)),
+                (byte)(32 + (i * 11)),
+                (byte)(16 + (i * 13))))
+            .ToArray();
+        var source = new ArrayBitmap<Rgba8UNorm>(4, 4, pixels);
+        var decoded = new ArrayBitmap<Rgba8UNorm>(4, 4);
+        var coder = new AtcTextureCoder(format, new AtcCoderOptions { CompressionMode = compressionMode });
+        var rowPitch = coder.GetDefaultPitch(source.Width);
+        var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
+
+        coder.Encode(source.AsView(), encoded, rowPitch);
+        coder.Decode(encoded, decoded.AsView(), rowPitch);
+
+        Assert.Contains(encoded, value => value != 0);
+        Assert.Contains(decoded.Pixels, pixel => pixel.Red != 0 || pixel.Green != 0 || pixel.Blue != 0);
+        Assert.Contains(decoded.Pixels, pixel => pixel.Alpha != 0);
+    }
+
+    [Fact]
+    public void EncodeAtcRgbaInterpolatedAlphaExhaustiveIsNoWorseThanHighQualitySearch()
+    {
+        var pixels = Enumerable.Range(0, 16)
+            .Select(i => new Rgba8UNorm(48, 80, 112, (byte)((i * 15) + ((i % 3) * 7))))
+            .ToArray();
+        var source = new ArrayBitmap<Rgba8UNorm>(4, 4, pixels);
+        var highCoder = new AtcTextureCoder(
+            TextureFormats.AtcRgbaInterpolatedAlpha,
+            new AtcCoderOptions { CompressionMode = AtcCompressionMode.High });
+        var exhaustiveCoder = new AtcTextureCoder(
+            TextureFormats.AtcRgbaInterpolatedAlpha,
+            new AtcCoderOptions { CompressionMode = AtcCompressionMode.Exhaustive });
+        var rowPitch = highCoder.GetDefaultPitch(source.Width);
+        var highEncoded = new byte[highCoder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
+        var exhaustiveEncoded = new byte[exhaustiveCoder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
+        var highDecoded = new ArrayBitmap<Rgba8UNorm>(4, 4);
+        var exhaustiveDecoded = new ArrayBitmap<Rgba8UNorm>(4, 4);
+
+        highCoder.Encode(source.AsView(), highEncoded, rowPitch);
+        exhaustiveCoder.Encode(source.AsView(), exhaustiveEncoded, rowPitch);
+        highCoder.Decode(highEncoded, highDecoded.AsView(), rowPitch);
+        exhaustiveCoder.Decode(exhaustiveEncoded, exhaustiveDecoded.AsView(), rowPitch);
+
+        Assert.True(AlphaSquaredError(source, exhaustiveDecoded) <= AlphaSquaredError(source, highDecoded));
+    }
+
     [Fact]
     public void AtcDecodeUsesPaddedBlockWidthForNonMultipleOfFourWidth()
     {
@@ -478,5 +530,21 @@ public sealed class AtcTextureCoderTests
         TextureFormats.AtcRgb,
         TextureFormats.AtcRgbaExplicitAlpha,
         TextureFormats.AtcRgbaInterpolatedAlpha
+    };
+
+    public static TheoryData<TextureFormat, AtcCompressionMode> AtcFormatCompressionModes() => new()
+    {
+        { TextureFormats.AtcRgb, AtcCompressionMode.Fast },
+        { TextureFormats.AtcRgb, AtcCompressionMode.Normal },
+        { TextureFormats.AtcRgb, AtcCompressionMode.High },
+        { TextureFormats.AtcRgb, AtcCompressionMode.Exhaustive },
+        { TextureFormats.AtcRgbaExplicitAlpha, AtcCompressionMode.Fast },
+        { TextureFormats.AtcRgbaExplicitAlpha, AtcCompressionMode.Normal },
+        { TextureFormats.AtcRgbaExplicitAlpha, AtcCompressionMode.High },
+        { TextureFormats.AtcRgbaExplicitAlpha, AtcCompressionMode.Exhaustive },
+        { TextureFormats.AtcRgbaInterpolatedAlpha, AtcCompressionMode.Fast },
+        { TextureFormats.AtcRgbaInterpolatedAlpha, AtcCompressionMode.Normal },
+        { TextureFormats.AtcRgbaInterpolatedAlpha, AtcCompressionMode.High },
+        { TextureFormats.AtcRgbaInterpolatedAlpha, AtcCompressionMode.Exhaustive }
     };
 }

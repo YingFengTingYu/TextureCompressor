@@ -236,8 +236,10 @@ public sealed class AtcTextureCoder : IPitchTextureCoder
             case AtcCompressionMode.Fast:
                 EncodeColorBlockFast(source, destination);
                 return;
+            case AtcCompressionMode.Normal:
             case AtcCompressionMode.High:
-                EncodeColorBlockHigh(source, destination);
+            case AtcCompressionMode.Exhaustive:
+                EncodeColorBlockOptimized(source, compressionMode, destination);
                 return;
             default:
                 throw new ArgumentOutOfRangeException(
@@ -266,9 +268,13 @@ public sealed class AtcTextureCoder : IPitchTextureCoder
         BinaryPrimitives.WriteUInt32LittleEndian(destination[4..], bestIndices);
     }
 
-    private static void EncodeColorBlockHigh(ReadOnlySpan<Rgba8UNorm> source, Span<byte> destination)
+    private static void EncodeColorBlockOptimized(
+        ReadOnlySpan<Rgba8UNorm> source,
+        AtcCompressionMode compressionMode,
+        Span<byte> destination)
     {
-        Span<ColorEndpointPair> seeds = stackalloc ColorEndpointPair[24];
+        Span<ColorEndpointPair> seeds = stackalloc ColorEndpointPair[
+            compressionMode == AtcCompressionMode.Exhaustive ? 536 : 24];
         var seedCount = 0;
         FindColorBounds(source, out var min, out var max);
         AddColorSeed(seeds, ref seedCount, PackRgb555(min), PackRgb565(max));
@@ -283,7 +289,8 @@ public sealed class AtcTextureCoder : IPitchTextureCoder
             AddColorSeed(seeds, ref seedCount, (ushort)(PackRgb555(insetMax) | 0x8000), PackRgb565(insetMin));
         }
 
-        if (TryFindFarthestColorEndpoints(source, out var farA, out var farB))
+        if (compressionMode is AtcCompressionMode.High or AtcCompressionMode.Exhaustive
+            && TryFindFarthestColorEndpoints(source, out var farA, out var farB))
         {
             AddColorSeed(seeds, ref seedCount, PackRgb555(farA), PackRgb565(farB));
             AddColorSeed(seeds, ref seedCount, PackRgb555(farB), PackRgb565(farA));
@@ -298,19 +305,26 @@ public sealed class AtcTextureCoder : IPitchTextureCoder
             AddColorSeed(seeds, ref seedCount, (ushort)(PackRgb555(axisMax) | 0x8000), PackRgb565(axisMin));
         }
 
-        if (TryFindAverageColor(source, out var average))
+        if (compressionMode is AtcCompressionMode.High or AtcCompressionMode.Exhaustive
+            && TryFindAverageColor(source, out var average))
         {
             AddColorSeed(seeds, ref seedCount, PackRgb555(average), PackRgb565(average));
             AddColorSeed(seeds, ref seedCount, (ushort)(PackRgb555(average) | 0x8000), PackRgb565(average));
         }
 
-        var best = new ColorBlockEncoding { Error = long.MaxValue };
-        for (var i = 0; i < seedCount; i++)
+        if (compressionMode == AtcCompressionMode.Exhaustive)
         {
-            OptimizeColorSeed(source, seeds[i].Color0, seeds[i].Color1, ref best);
+            AddUniqueColorSeeds(source, seeds, ref seedCount);
         }
 
-        RefineColorEndpoints(source, ref best);
+        var best = new ColorBlockEncoding { Error = long.MaxValue };
+        var iterationLimit = GetColorOptimizationIterationLimit(compressionMode);
+        for (var i = 0; i < seedCount; i++)
+        {
+            OptimizeColorSeed(source, seeds[i].Color0, seeds[i].Color1, iterationLimit, ref best);
+        }
+
+        RefineColorEndpoints(source, GetColorRefinementPassLimit(compressionMode), ref best);
 
         BinaryPrimitives.WriteUInt16LittleEndian(destination, best.Color0);
         BinaryPrimitives.WriteUInt16LittleEndian(destination[2..], best.Color1);
@@ -366,13 +380,50 @@ public sealed class AtcTextureCoder : IPitchTextureCoder
         }
     }
 
+    private static void AddUniqueColorSeeds(
+        ReadOnlySpan<Rgba8UNorm> source,
+        Span<ColorEndpointPair> seeds,
+        ref int seedCount)
+    {
+        Span<Rgb24> colors = stackalloc Rgb24[TexelsPerBlock];
+        var uniqueCount = 0;
+        for (var i = 0; i < TexelsPerBlock; i++)
+        {
+            var color = ToRgb24(source[i]);
+            var alreadyAdded = false;
+            for (var j = 0; j < uniqueCount; j++)
+            {
+                if (colors[j] == color)
+                {
+                    alreadyAdded = true;
+                    break;
+                }
+            }
+
+            if (!alreadyAdded)
+            {
+                colors[uniqueCount++] = color;
+            }
+        }
+
+        for (var i = 0; i < uniqueCount; i++)
+        {
+            for (var j = 0; j < uniqueCount; j++)
+            {
+                AddColorSeed(seeds, ref seedCount, PackRgb555(colors[i]), PackRgb565(colors[j]));
+                AddColorSeed(seeds, ref seedCount, (ushort)(PackRgb555(colors[i]) | 0x8000), PackRgb565(colors[j]));
+            }
+        }
+    }
+
     private static void OptimizeColorSeed(
         ReadOnlySpan<Rgba8UNorm> source,
         ushort color0,
         ushort color1,
+        int iterationLimit,
         ref ColorBlockEncoding best)
     {
-        for (var iteration = 0; iteration < 8; iteration++)
+        for (var iteration = 0; iteration < iterationLimit; iteration++)
         {
             var current = EvaluateColorCandidate(source, color0, color1);
             UpdateBestColorEncoding(current, ref best);
@@ -539,9 +590,34 @@ public sealed class AtcTextureCoder : IPitchTextureCoder
     private static double SolveEndpointB(double ap, double bp, double aa, double ab, double determinant) =>
         ((aa * bp) - (ab * ap)) / determinant;
 
-    private static void RefineColorEndpoints(ReadOnlySpan<Rgba8UNorm> source, ref ColorBlockEncoding best)
+    private static int GetColorOptimizationIterationLimit(AtcCompressionMode compressionMode) => compressionMode switch
     {
-        for (var pass = 0; pass < 2; pass++)
+        AtcCompressionMode.Normal => 4,
+        AtcCompressionMode.High => 8,
+        AtcCompressionMode.Exhaustive => 12,
+        _ => throw new ArgumentOutOfRangeException(
+            nameof(compressionMode),
+            compressionMode,
+            "Unsupported ATC compression mode.")
+    };
+
+    private static int GetColorRefinementPassLimit(AtcCompressionMode compressionMode) => compressionMode switch
+    {
+        AtcCompressionMode.Normal => 1,
+        AtcCompressionMode.High => 2,
+        AtcCompressionMode.Exhaustive => 4,
+        _ => throw new ArgumentOutOfRangeException(
+            nameof(compressionMode),
+            compressionMode,
+            "Unsupported ATC compression mode.")
+    };
+
+    private static void RefineColorEndpoints(
+        ReadOnlySpan<Rgba8UNorm> source,
+        int passLimit,
+        ref ColorBlockEncoding best)
+    {
+        for (var pass = 0; pass < passLimit; pass++)
         {
             var previousError = best.Error;
             var baseColor0 = best.Color0;
@@ -632,8 +708,12 @@ public sealed class AtcTextureCoder : IPitchTextureCoder
             case AtcCompressionMode.Fast:
                 EncodeInterpolatedAlphaBlockFast(source, destination);
                 return;
+            case AtcCompressionMode.Normal:
             case AtcCompressionMode.High:
-                EncodeInterpolatedAlphaBlockHigh(source, destination);
+                EncodeInterpolatedAlphaBlockOptimized(source, compressionMode, destination);
+                return;
+            case AtcCompressionMode.Exhaustive:
+                EncodeInterpolatedAlphaBlockExhaustive(source, destination);
                 return;
             default:
                 throw new ArgumentOutOfRangeException(
@@ -663,23 +743,49 @@ public sealed class AtcTextureCoder : IPitchTextureCoder
         }
     }
 
-    private static void EncodeInterpolatedAlphaBlockHigh(ReadOnlySpan<Rgba8UNorm> source, Span<byte> destination)
+    private static void EncodeInterpolatedAlphaBlockOptimized(
+        ReadOnlySpan<Rgba8UNorm> source,
+        AtcCompressionMode compressionMode,
+        Span<byte> destination)
     {
         FindAlphaBounds(source, out var min, out var max);
         var best = new AlphaBlockEncoding { Error = long.MaxValue };
-        OptimizeAlphaSeed(source, max, min, AlphaEndpointMode.EightAlpha, ref best);
-        OptimizeAlphaSeed(source, min, max, AlphaEndpointMode.SixAlpha, ref best);
+        var iterationLimit = GetAlphaOptimizationIterationLimit(compressionMode);
+        OptimizeAlphaSeed(source, max, min, AlphaEndpointMode.EightAlpha, iterationLimit, ref best);
+        OptimizeAlphaSeed(source, min, max, AlphaEndpointMode.SixAlpha, iterationLimit, ref best);
 
         if (max > min)
         {
             var padding = Math.Max(1, (max - min + 13) / 14);
             var expandedMin = (byte)Math.Max(byte.MinValue, min - padding);
             var expandedMax = (byte)Math.Min(byte.MaxValue, max + padding);
-            OptimizeAlphaSeed(source, expandedMax, expandedMin, AlphaEndpointMode.EightAlpha, ref best);
-            OptimizeAlphaSeed(source, expandedMin, expandedMax, AlphaEndpointMode.SixAlpha, ref best);
+            OptimizeAlphaSeed(source, expandedMax, expandedMin, AlphaEndpointMode.EightAlpha, iterationLimit, ref best);
+            OptimizeAlphaSeed(source, expandedMin, expandedMax, AlphaEndpointMode.SixAlpha, iterationLimit, ref best);
         }
 
-        RefineAlphaEndpoints(source, ref best);
+        RefineAlphaEndpoints(source, GetAlphaRefinementPassLimit(compressionMode), ref best);
+        WriteAlphaBlock(best, destination);
+    }
+
+    private static void EncodeInterpolatedAlphaBlockExhaustive(
+        ReadOnlySpan<Rgba8UNorm> source,
+        Span<byte> destination)
+    {
+        var best = new AlphaBlockEncoding { Error = long.MaxValue };
+        for (var alpha0 = 0; alpha0 <= byte.MaxValue; alpha0++)
+        {
+            for (var alpha1 = 0; alpha1 <= byte.MaxValue; alpha1++)
+            {
+                var candidate = EvaluateAlphaCandidate(source, (byte)alpha0, (byte)alpha1, best.Error);
+                UpdateBestAlphaEncoding(candidate, ref best);
+                if (best.Error == 0)
+                {
+                    WriteAlphaBlock(best, destination);
+                    return;
+                }
+            }
+        }
+
         WriteAlphaBlock(best, destination);
     }
 
@@ -720,10 +826,11 @@ public sealed class AtcTextureCoder : IPitchTextureCoder
         byte alpha0,
         byte alpha1,
         AlphaEndpointMode mode,
+        int iterationLimit,
         ref AlphaBlockEncoding best)
     {
         NormalizeAlphaEndpointOrder(ref alpha0, ref alpha1, mode);
-        for (var iteration = 0; iteration < 8; iteration++)
+        for (var iteration = 0; iteration < iterationLimit; iteration++)
         {
             var current = EvaluateAlphaCandidate(source, alpha0, alpha1);
             UpdateBestAlphaEncoding(current, ref best);
@@ -746,7 +853,8 @@ public sealed class AtcTextureCoder : IPitchTextureCoder
     private static AlphaBlockEncoding EvaluateAlphaCandidate(
         ReadOnlySpan<Rgba8UNorm> source,
         byte alpha0,
-        byte alpha1)
+        byte alpha1,
+        long maxError = long.MaxValue)
     {
         var palette = new InlineArray8<byte>();
         BuildAlphaPalette(alpha0, alpha1, palette);
@@ -758,6 +866,10 @@ public sealed class AtcTextureCoder : IPitchTextureCoder
             var index = FindNearestAlphaIndex(source[i].Alpha, palette, out var distance);
             error += distance * distance;
             indices |= (ulong)index << (i * 3);
+            if (error >= maxError)
+            {
+                return new AlphaBlockEncoding(alpha0, alpha1, indices, error);
+            }
         }
 
         return new AlphaBlockEncoding(alpha0, alpha1, indices, error);
@@ -882,10 +994,33 @@ public sealed class AtcTextureCoder : IPitchTextureCoder
         }
     }
 
-    private static void RefineAlphaEndpoints(ReadOnlySpan<Rgba8UNorm> source, ref AlphaBlockEncoding best)
+    private static int GetAlphaOptimizationIterationLimit(AtcCompressionMode compressionMode) => compressionMode switch
+    {
+        AtcCompressionMode.Normal => 4,
+        AtcCompressionMode.High => 8,
+        _ => throw new ArgumentOutOfRangeException(
+            nameof(compressionMode),
+            compressionMode,
+            "Unsupported ATC compression mode.")
+    };
+
+    private static int GetAlphaRefinementPassLimit(AtcCompressionMode compressionMode) => compressionMode switch
+    {
+        AtcCompressionMode.Normal => 1,
+        AtcCompressionMode.High => 2,
+        _ => throw new ArgumentOutOfRangeException(
+            nameof(compressionMode),
+            compressionMode,
+            "Unsupported ATC compression mode.")
+    };
+
+    private static void RefineAlphaEndpoints(
+        ReadOnlySpan<Rgba8UNorm> source,
+        int passLimit,
+        ref AlphaBlockEncoding best)
     {
         var mode = best.Alpha0 > best.Alpha1 ? AlphaEndpointMode.EightAlpha : AlphaEndpointMode.SixAlpha;
-        for (var pass = 0; pass < 2; pass++)
+        for (var pass = 0; pass < passLimit; pass++)
         {
             var previousError = best.Error;
             var baseAlpha0 = best.Alpha0;
