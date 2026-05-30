@@ -3,5 +3,7 @@ namespace TextureCompressor.Codecs;
 public enum EtcCompressionMode
 {
     Fast,
-    High
+    Normal,
+    High,
+    Exhaustive
 }

@@ -150,6 +150,53 @@ public sealed class EtcTextureCoderTests
         Assert.True(RgbSquaredError(source, highDecoded) < RgbSquaredError(source, fastDecoded));
     }
 
+    [Theory]
+    [MemberData(nameof(EtcCompressionModes))]
+    public void EncodeAndDecodeEtc2RgbAcceptsCompressionModes(EtcCompressionMode compressionMode)
+    {
+        var source = new ArrayBitmap<Rgba8UNorm>(
+            4,
+            4,
+            Enumerable.Range(0, 16)
+                .Select(i => new Rgba8UNorm((byte)(40 + (i * 11)), (byte)(200 - (i * 7)), (byte)(80 + (i * 5)), 255))
+                .ToArray());
+        var decoded = new ArrayBitmap<Rgba8UNorm>(4, 4);
+        var coder = new EtcTextureCoder(
+            TextureFormats.RgbEtc2UNorm,
+            new EtcCoderOptions { CompressionMode = compressionMode });
+        var rowPitch = coder.GetDefaultPitch(source.Width);
+        var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
+
+        coder.Encode(source.AsView(), encoded, rowPitch);
+        coder.Decode(encoded, decoded.AsView(), rowPitch);
+
+        Assert.All(decoded.Pixels, pixel => Assert.Equal(255, pixel.Alpha));
+    }
+
+    [Fact]
+    public void EncodeEtc2RgbCompressionModesDoNotIncreaseError()
+    {
+        var source = new ArrayBitmap<Rgba8UNorm>(
+            4,
+            4,
+            [
+                new(32, 64, 224, 255), new(48, 72, 208, 255), new(192, 56, 40, 255), new(208, 72, 56, 255),
+                new(40, 96, 216, 255), new(64, 112, 192, 255), new(184, 96, 64, 255), new(224, 104, 72, 255),
+                new(24, 160, 96, 255), new(56, 176, 120, 255), new(160, 152, 176, 255), new(192, 168, 200, 255),
+                new(16, 200, 80, 255), new(64, 216, 104, 255), new(144, 208, 192, 255), new(224, 224, 232, 255)
+            ]);
+        var previousError = long.MaxValue;
+
+        foreach (var compressionMode in OrderedEtcCompressionModes)
+        {
+            var decoded = EncodeAndDecodeEtc2Rgb(source, compressionMode);
+            var error = RgbSquaredError(source, decoded);
+
+            Assert.True(error <= previousError, $"{compressionMode} error {error} exceeded previous mode error {previousError}.");
+            previousError = error;
+        }
+    }
+
     [Fact]
     public void EncodeAndDecodeEtc2RgbaEacRoundTripsSolidAlpha()
     {
@@ -231,7 +278,7 @@ public sealed class EtcTextureCoderTests
     }
 
     [Fact]
-    public void EncodeEacR11UNormHighQualityIsNoWorseThanFastSearch()
+    public void EncodeEacR11UNormCompressionModesDoNotIncreaseError()
     {
         int[] targets =
         [
@@ -244,22 +291,16 @@ public sealed class EtcTextureCoderTests
             .Select(value => new Rgba16UNorm(Unsigned11ToUNorm16(value), 0, 0, ushort.MaxValue))
             .ToArray();
         var source = new ArrayBitmap<Rgba16UNorm>(4, 4, sourcePixels);
-        var fastCoder = new EtcTextureCoder(TextureFormats.R11EacUNorm);
-        var highCoder = new EtcTextureCoder(
-            TextureFormats.R11EacUNorm,
-            new EtcCoderOptions { CompressionMode = EtcCompressionMode.High });
-        var rowPitch = fastCoder.GetDefaultPitch(source.Width);
-        var fastEncoded = new byte[fastCoder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
-        var highEncoded = new byte[highCoder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
-        var fastDecoded = new ArrayBitmap<Rgba16UNorm>(4, 4);
-        var highDecoded = new ArrayBitmap<Rgba16UNorm>(4, 4);
+        var previousError = long.MaxValue;
 
-        fastCoder.Encode(source.AsView(), fastEncoded, rowPitch);
-        highCoder.Encode(source.AsView(), highEncoded, rowPitch);
-        fastCoder.Decode(fastEncoded, fastDecoded.AsView(), rowPitch);
-        highCoder.Decode(highEncoded, highDecoded.AsView(), rowPitch);
+        foreach (var compressionMode in OrderedEtcCompressionModes)
+        {
+            var decoded = EncodeAndDecodeEacR11UNorm(source, compressionMode);
+            var error = RedSquaredError(source, decoded);
 
-        Assert.True(RedSquaredError(source, highDecoded) <= RedSquaredError(source, fastDecoded));
+            Assert.True(error <= previousError, $"{compressionMode} error {error} exceeded previous mode error {previousError}.");
+            previousError = error;
+        }
     }
 
     [Fact]
@@ -370,6 +411,40 @@ public sealed class EtcTextureCoderTests
         return error;
     }
 
+    private static ArrayBitmap<Rgba8UNorm> EncodeAndDecodeEtc2Rgb(
+        ArrayBitmap<Rgba8UNorm> source,
+        EtcCompressionMode compressionMode)
+    {
+        var decoded = new ArrayBitmap<Rgba8UNorm>(4, 4);
+        var coder = new EtcTextureCoder(
+            TextureFormats.RgbEtc2UNorm,
+            new EtcCoderOptions { CompressionMode = compressionMode });
+        var rowPitch = coder.GetDefaultPitch(source.Width);
+        var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
+
+        coder.Encode(source.AsView(), encoded, rowPitch);
+        coder.Decode(encoded, decoded.AsView(), rowPitch);
+
+        return decoded;
+    }
+
+    private static ArrayBitmap<Rgba16UNorm> EncodeAndDecodeEacR11UNorm(
+        ArrayBitmap<Rgba16UNorm> source,
+        EtcCompressionMode compressionMode)
+    {
+        var decoded = new ArrayBitmap<Rgba16UNorm>(4, 4);
+        var coder = new EtcTextureCoder(
+            TextureFormats.R11EacUNorm,
+            new EtcCoderOptions { CompressionMode = compressionMode });
+        var rowPitch = coder.GetDefaultPitch(source.Width);
+        var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
+
+        coder.Encode(source.AsView(), encoded, rowPitch);
+        coder.Decode(encoded, decoded.AsView(), rowPitch);
+
+        return decoded;
+    }
+
     private static void WriteEtcRawIndices(Span<byte> destination, int rawIndex)
     {
         uint low = 0;
@@ -417,4 +492,20 @@ public sealed class EtcTextureCoderTests
         TextureFormats.Rg11EacUNorm,
         TextureFormats.Rg11EacSNorm
     };
+
+    public static TheoryData<EtcCompressionMode> EtcCompressionModes() => new()
+    {
+        EtcCompressionMode.Fast,
+        EtcCompressionMode.Normal,
+        EtcCompressionMode.High,
+        EtcCompressionMode.Exhaustive
+    };
+
+    private static EtcCompressionMode[] OrderedEtcCompressionModes =>
+    [
+        EtcCompressionMode.Fast,
+        EtcCompressionMode.Normal,
+        EtcCompressionMode.High,
+        EtcCompressionMode.Exhaustive
+    ];
 }

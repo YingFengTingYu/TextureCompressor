@@ -975,9 +975,13 @@ public sealed class EtcTextureCoder : IPitchTextureCoder
                 source[i].Alpha);
         }
 
-        var encoded = compressionMode == EtcCompressionMode.High
-            ? EncodeEtcColorBlockHigh(ref colors, punchthrough, etc2)
-            : EncodeEtcColorBlockFast(ref colors, punchthrough);
+        var encoded = compressionMode switch
+        {
+            EtcCompressionMode.Fast => EncodeEtcColorBlockFast(ref colors, punchthrough),
+            EtcCompressionMode.Normal or EtcCompressionMode.High or EtcCompressionMode.Exhaustive =>
+                EncodeEtcColorBlockOptimized(ref colors, punchthrough, etc2, compressionMode),
+            _ => throw CreateUnsupportedCompressionModeException(compressionMode)
+        };
 
         BinaryPrimitives.WriteUInt32BigEndian(destination, encoded.High);
         BinaryPrimitives.WriteUInt32BigEndian(destination[4..], encoded.Low);
@@ -988,20 +992,70 @@ public sealed class EtcTextureCoder : IPitchTextureCoder
             ? EncodeDifferential(ref colors, HasTransparentTexel(ref colors))
             : BestEncoding(EncodeIndividual(ref colors), EncodeDifferential(ref colors, transparentPunchthrough: false));
 
-    private static EtcColorEncoding EncodeEtcColorBlockHigh(ref EtcColorBlock colors, bool punchthrough, bool etc2)
+    private static EtcColorEncoding EncodeEtcColorBlockOptimized(
+        ref EtcColorBlock colors,
+        bool punchthrough,
+        bool etc2,
+        EtcCompressionMode compressionMode)
     {
         var hasTransparent = punchthrough && HasTransparentTexel(ref colors);
-        var best = EncodeEtcColorBlockFast(ref colors, punchthrough);
+        var best = compressionMode == EtcCompressionMode.Exhaustive
+            ? EncodeEtcColorBlockOptimized(ref colors, punchthrough, etc2, EtcCompressionMode.High)
+            : RecalculateEtcColorEncodingError(
+                ref colors,
+                EncodeEtcColorBlockFast(ref colors, punchthrough),
+                punchthrough,
+                etc2,
+                hasTransparent);
+        var differential = RecalculateEtcColorEncodingError(
+            ref colors,
+            EncodeDifferentialOptimized(ref colors, hasTransparent, compressionMode),
+            punchthrough,
+            etc2,
+            hasTransparent);
         best = punchthrough
-            ? BestEncoding(best, EncodeDifferentialHigh(ref colors, hasTransparent))
+            ? BestEncoding(best, differential)
             : BestEncoding(
                 best,
-                BestEncoding(EncodeIndividualHigh(ref colors), EncodeDifferentialHigh(ref colors, transparentPunchthrough: false)));
+                BestEncoding(
+                    RecalculateEtcColorEncodingError(
+                        ref colors,
+                        EncodeIndividualOptimized(ref colors, compressionMode),
+                        punchthrough,
+                        etc2,
+                        transparentPunchthrough: false),
+                    differential));
 
         if (etc2 && !hasTransparent)
         {
-            best = BestEncoding(best, EncodeTModeHigh(ref colors, transparentPunchthrough: false));
-            best = BestEncoding(best, EncodeHModeHigh(ref colors, transparentPunchthrough: false));
+            best = BestEncoding(
+                best,
+                RecalculateEtcColorEncodingError(
+                    ref colors,
+                    EncodePlanarModeHigh(ref colors),
+                    punchthrough,
+                    etc2,
+                    transparentPunchthrough: false));
+
+            if (compressionMode is EtcCompressionMode.High or EtcCompressionMode.Exhaustive)
+            {
+                best = BestEncoding(
+                    best,
+                    RecalculateEtcColorEncodingError(
+                        ref colors,
+                        EncodeTModeHigh(ref colors, transparentPunchthrough: false, compressionMode),
+                        punchthrough,
+                        etc2,
+                        transparentPunchthrough: false));
+                best = BestEncoding(
+                    best,
+                    RecalculateEtcColorEncodingError(
+                        ref colors,
+                        EncodeHModeHigh(ref colors, transparentPunchthrough: false, compressionMode),
+                        punchthrough,
+                        etc2,
+                        transparentPunchthrough: false));
+            }
         }
 
         return best;
@@ -1046,14 +1100,16 @@ public sealed class EtcTextureCoder : IPitchTextureCoder
         encoding = new IndividualSubblockEncoding(red, green, blue, table, error, low);
     }
 
-    private static EtcColorEncoding EncodeIndividualHigh(ref EtcColorBlock colors)
+    private static EtcColorEncoding EncodeIndividualOptimized(
+        ref EtcColorBlock colors,
+        EtcCompressionMode compressionMode)
     {
         var best = EtcColorEncoding.Worst;
         for (var flip = 0; flip <= 1; flip++)
         {
             var high = (uint)flip;
-            EncodeIndividualSubblockHigh(ref colors, flip != 0, 0, out var sub0);
-            EncodeIndividualSubblockHigh(ref colors, flip != 0, 1, out var sub1);
+            EncodeIndividualSubblockOptimized(ref colors, flip != 0, 0, compressionMode, out var sub0);
+            EncodeIndividualSubblockOptimized(ref colors, flip != 0, 1, compressionMode, out var sub1);
             high |= (uint)sub0.Red << 28;
             high |= (uint)sub1.Red << 24;
             high |= (uint)sub0.Green << 20;
@@ -1070,10 +1126,11 @@ public sealed class EtcTextureCoder : IPitchTextureCoder
         return best;
     }
 
-    private static void EncodeIndividualSubblockHigh(
+    private static void EncodeIndividualSubblockOptimized(
         ref EtcColorBlock colors,
         bool flip,
         int subblock,
+        EtcCompressionMode compressionMode,
         out IndividualSubblockEncoding encoding)
     {
         AverageSubblock(ref colors, flip, subblock, ignoreTransparent: false, out var average);
@@ -1082,7 +1139,7 @@ public sealed class EtcTextureCoder : IPitchTextureCoder
         var blueCenter = QuantizeByte(average.Blue, 15);
         encoding = new IndividualSubblockEncoding(redCenter, greenCenter, blueCenter, 0, long.MaxValue, 0);
 
-        const int radius = 1;
+        var radius = GetIndividualEndpointSearchRadius(compressionMode);
         for (var red = Math.Max(0, redCenter - radius); red <= Math.Min(15, redCenter + radius); red++)
         {
             for (var green = Math.Max(0, greenCenter - radius); green <= Math.Min(15, greenCenter + radius); green++)
@@ -1172,11 +1229,15 @@ public sealed class EtcTextureCoder : IPitchTextureCoder
         return best;
     }
 
-    private static EtcColorEncoding EncodeDifferentialHigh(ref EtcColorBlock colors, bool transparentPunchthrough)
+    private static EtcColorEncoding EncodeDifferentialOptimized(
+        ref EtcColorBlock colors,
+        bool transparentPunchthrough,
+        EtcCompressionMode compressionMode)
     {
         var best = EtcColorEncoding.Worst;
-        Span<DifferentialSubblockEncoding> subblock0 = stackalloc DifferentialSubblockEncoding[27];
-        Span<DifferentialSubblockEncoding> subblock1 = stackalloc DifferentialSubblockEncoding[27];
+        var capacity = GetDifferentialSubblockCandidateCapacity(compressionMode);
+        Span<DifferentialSubblockEncoding> subblock0 = stackalloc DifferentialSubblockEncoding[capacity];
+        Span<DifferentialSubblockEncoding> subblock1 = stackalloc DifferentialSubblockEncoding[capacity];
         for (var flip = 0; flip <= 1; flip++)
         {
             var count0 = BuildDifferentialSubblockCandidates(
@@ -1184,12 +1245,14 @@ public sealed class EtcTextureCoder : IPitchTextureCoder
                 flip != 0,
                 subblock: 0,
                 transparentPunchthrough,
+                compressionMode,
                 subblock0);
             var count1 = BuildDifferentialSubblockCandidates(
                 ref colors,
                 flip != 0,
                 subblock: 1,
                 transparentPunchthrough,
+                compressionMode,
                 subblock1);
 
             for (var i = 0; i < count0; i++)
@@ -1240,6 +1303,7 @@ public sealed class EtcTextureCoder : IPitchTextureCoder
         bool flip,
         int subblock,
         bool transparentPunchthrough,
+        EtcCompressionMode compressionMode,
         Span<DifferentialSubblockEncoding> destination)
     {
         AverageSubblock(ref colors, flip, subblock, transparentPunchthrough, out var average);
@@ -1248,7 +1312,7 @@ public sealed class EtcTextureCoder : IPitchTextureCoder
         var blueCenter = QuantizeByte(average.Blue, 31);
 
         var count = 0;
-        const int radius = 1;
+        var radius = GetDifferentialEndpointSearchRadius(compressionMode);
         for (var red = Math.Max(0, redCenter - radius); red <= Math.Min(31, redCenter + radius); red++)
         {
             for (var green = Math.Max(0, greenCenter - radius); green <= Math.Min(31, greenCenter + radius); green++)
@@ -1302,11 +1366,18 @@ public sealed class EtcTextureCoder : IPitchTextureCoder
         return new EtcColorEncoding(error0 + error1, high, low0 | low1);
     }
 
-    private static EtcColorEncoding EncodeTModeHigh(ref EtcColorBlock colors, bool transparentPunchthrough)
+    private static EtcColorEncoding EncodeTModeHigh(
+        ref EtcColorBlock colors,
+        bool transparentPunchthrough,
+        EtcCompressionMode compressionMode)
     {
-        Span<EtcColorPairSeed> seeds = stackalloc EtcColorPairSeed[16];
+        Span<EtcColorPairSeed> seeds = stackalloc EtcColorPairSeed[GetEtc2ModeSeedCapacity(compressionMode)];
         var seedCount = 0;
         AddEtc2ModeSeeds(ref colors, transparentPunchthrough, seeds, ref seedCount);
+        if (compressionMode == EtcCompressionMode.Exhaustive)
+        {
+            AddUniqueEtc2ModeSeeds(ref colors, transparentPunchthrough, seeds, ref seedCount);
+        }
 
         var best = EtcColorEncoding.Worst;
         Span<EtcColor> paint = stackalloc EtcColor[4];
@@ -1332,11 +1403,18 @@ public sealed class EtcTextureCoder : IPitchTextureCoder
         return best;
     }
 
-    private static EtcColorEncoding EncodeHModeHigh(ref EtcColorBlock colors, bool transparentPunchthrough)
+    private static EtcColorEncoding EncodeHModeHigh(
+        ref EtcColorBlock colors,
+        bool transparentPunchthrough,
+        EtcCompressionMode compressionMode)
     {
-        Span<EtcColorPairSeed> seeds = stackalloc EtcColorPairSeed[16];
+        Span<EtcColorPairSeed> seeds = stackalloc EtcColorPairSeed[GetEtc2ModeSeedCapacity(compressionMode)];
         var seedCount = 0;
         AddEtc2ModeSeeds(ref colors, transparentPunchthrough, seeds, ref seedCount);
+        if (compressionMode == EtcCompressionMode.Exhaustive)
+        {
+            AddUniqueEtc2ModeSeeds(ref colors, transparentPunchthrough, seeds, ref seedCount);
+        }
 
         var best = EtcColorEncoding.Worst;
         Span<EtcColor> paint = stackalloc EtcColor[4];
@@ -1501,6 +1579,33 @@ public sealed class EtcTextureCoder : IPitchTextureCoder
         AddEtc2ModeSeed(average, average, seeds, ref count);
         AddEtc2ModeSeed(max, average, seeds, ref count);
         AddEtc2ModeSeed(average, min, seeds, ref count);
+    }
+
+    private static void AddUniqueEtc2ModeSeeds(
+        ref EtcColorBlock colors,
+        bool ignoreTransparent,
+        Span<EtcColorPairSeed> seeds,
+        ref int count)
+    {
+        for (var i = 0; i < TexelsPerBlock; i++)
+        {
+            var color0 = colors[i];
+            if (ignoreTransparent && IsTransparent(color0))
+            {
+                continue;
+            }
+
+            for (var j = 0; j < TexelsPerBlock; j++)
+            {
+                var color1 = colors[j];
+                if (ignoreTransparent && IsTransparent(color1))
+                {
+                    continue;
+                }
+
+                AddEtc2ModeSeed(color0, color1, seeds, ref count);
+            }
+        }
     }
 
     private static void AddEtc2ModeSeed(EtcColor color0, EtcColor color1, Span<EtcColorPairSeed> seeds, ref int count)
@@ -2037,6 +2142,44 @@ public sealed class EtcTextureCoder : IPitchTextureCoder
         return (red * red) + (green * green) + (blue * blue) + (alpha * alpha);
     }
 
+    private static EtcColorEncoding RecalculateEtcColorEncodingError(
+        ref EtcColorBlock colors,
+        EtcColorEncoding encoding,
+        bool punchthrough,
+        bool etc2,
+        bool transparentPunchthrough)
+    {
+        if (encoding.Error == long.MaxValue)
+        {
+            return encoding;
+        }
+
+        var decoded = new EtcColorBlock();
+        if (etc2)
+        {
+            if (punchthrough)
+            {
+                DecodeEtc2PunchthroughBlock(encoding.High, encoding.Low, ref decoded);
+            }
+            else
+            {
+                DecodeEtc2RgbBlock(encoding.High, encoding.Low, ref decoded);
+            }
+        }
+        else
+        {
+            DecodeDiffFlip(encoding.High, encoding.Low, forceDifferential: false, transparentPunchthrough: false, ref decoded);
+        }
+
+        var error = 0L;
+        for (var i = 0; i < TexelsPerBlock; i++)
+        {
+            error += GetColorError(colors[i], decoded[i], transparentPunchthrough);
+        }
+
+        return new EtcColorEncoding(error, encoding.High, encoding.Low);
+    }
+
     private static void AverageSubblock(
         ref EtcColorBlock colors,
         bool flip,
@@ -2089,12 +2232,23 @@ public sealed class EtcTextureCoder : IPitchTextureCoder
         EtcCompressionMode compressionMode,
         Span<byte> destination)
     {
-        if (compressionMode == EtcCompressionMode.High)
+        switch (compressionMode)
         {
-            EncodeEacBlockHigh(ref source, kind, destination);
-            return;
+            case EtcCompressionMode.Fast:
+                EncodeEacBlockFast(ref source, kind, destination);
+                return;
+            case EtcCompressionMode.Normal:
+            case EtcCompressionMode.High:
+            case EtcCompressionMode.Exhaustive:
+                EncodeEacBlockOptimized(ref source, kind, compressionMode, destination);
+                return;
+            default:
+                throw CreateUnsupportedCompressionModeException(compressionMode);
         }
+    }
 
+    private static void EncodeEacBlockFast(ref IntBlock source, EacBlockKind kind, Span<byte> destination)
+    {
         GetTargetStats(ref source, out var min, out var max, out var average);
         var best = EacEncoding.Worst;
         var targetRange = max - min;
@@ -2132,24 +2286,38 @@ public sealed class EtcTextureCoder : IPitchTextureCoder
         WriteEacEncoding(best, destination);
     }
 
-    private static void EncodeEacBlockHigh(ref IntBlock source, EacBlockKind kind, Span<byte> destination)
+    private static void EncodeEacBlockOptimized(
+        ref IntBlock source,
+        EacBlockKind kind,
+        EtcCompressionMode compressionMode,
+        Span<byte> destination)
     {
         GetTargetStats(ref source, out var min, out var max, out var average);
         var best = EacEncoding.Worst;
         var targetRange = max - min;
-        Span<int> multipliers = stackalloc int[5];
-        Span<int> bases = stackalloc int[32];
+        Span<int> multipliers = stackalloc int[compressionMode == EtcCompressionMode.Exhaustive ? 16 : 5];
+        Span<int> bases = stackalloc int[compressionMode == EtcCompressionMode.Exhaustive ? 160 : 32];
         Span<int> palette = stackalloc int[8];
 
         for (var table = 0; table < 16; table++)
         {
             var multiplierCount = 0;
             var estimatedMultiplier = EstimateEacMultiplier(kind, table, targetRange);
-            AddMultiplierCandidate(kind, estimatedMultiplier - 2, multipliers, ref multiplierCount);
-            AddMultiplierCandidate(kind, estimatedMultiplier - 1, multipliers, ref multiplierCount);
-            AddMultiplierCandidate(kind, estimatedMultiplier, multipliers, ref multiplierCount);
-            AddMultiplierCandidate(kind, estimatedMultiplier + 1, multipliers, ref multiplierCount);
-            AddMultiplierCandidate(kind, estimatedMultiplier + 2, multipliers, ref multiplierCount);
+            if (compressionMode == EtcCompressionMode.Exhaustive)
+            {
+                for (var multiplier = 0; multiplier <= 15; multiplier++)
+                {
+                    AddMultiplierCandidate(kind, multiplier, multipliers, ref multiplierCount);
+                }
+            }
+            else
+            {
+                AddMultiplierCandidate(kind, estimatedMultiplier - 2, multipliers, ref multiplierCount);
+                AddMultiplierCandidate(kind, estimatedMultiplier - 1, multipliers, ref multiplierCount);
+                AddMultiplierCandidate(kind, estimatedMultiplier, multipliers, ref multiplierCount);
+                AddMultiplierCandidate(kind, estimatedMultiplier + 1, multipliers, ref multiplierCount);
+                AddMultiplierCandidate(kind, estimatedMultiplier + 2, multipliers, ref multiplierCount);
+            }
 
             for (var multiplierIndex = 0; multiplierIndex < multiplierCount; multiplierIndex++)
             {
@@ -2161,12 +2329,27 @@ public sealed class EtcTextureCoder : IPitchTextureCoder
                 AddBaseCandidate(kind, average, (minTerm + maxTerm) / 2, bases, ref baseCount);
                 AddBaseCandidate(kind, average, 0, bases, ref baseCount);
 
-                for (var index = 0; index < 8; index++)
+                if (compressionMode is EtcCompressionMode.High or EtcCompressionMode.Exhaustive)
                 {
-                    var term = GetEacTerm(kind, table, multiplier, index);
-                    AddBaseCandidate(kind, min, term, bases, ref baseCount);
-                    AddBaseCandidate(kind, max, term, bases, ref baseCount);
-                    AddBaseCandidate(kind, average, term, bases, ref baseCount);
+                    for (var index = 0; index < 8; index++)
+                    {
+                        var term = GetEacTerm(kind, table, multiplier, index);
+                        AddBaseCandidate(kind, min, term, bases, ref baseCount);
+                        AddBaseCandidate(kind, max, term, bases, ref baseCount);
+                        AddBaseCandidate(kind, average, term, bases, ref baseCount);
+                    }
+                }
+
+                if (compressionMode == EtcCompressionMode.Exhaustive)
+                {
+                    for (var texel = 0; texel < TexelsPerBlock; texel++)
+                    {
+                        for (var index = 0; index < 8; index++)
+                        {
+                            var term = GetEacTerm(kind, table, multiplier, index);
+                            AddBaseCandidate(kind, source[texel], term, bases, ref baseCount);
+                        }
+                    }
                 }
 
                 for (var baseIndex = 0; baseIndex < baseCount; baseIndex++)
@@ -2778,6 +2961,34 @@ public sealed class EtcTextureCoder : IPitchTextureCoder
     private static EacEncoding BestEncoding(EacEncoding left, EacEncoding right) =>
         left.Error <= right.Error ? left : right;
 
+    private static int GetIndividualEndpointSearchRadius(EtcCompressionMode compressionMode) => compressionMode switch
+    {
+        EtcCompressionMode.Normal or EtcCompressionMode.High => 1,
+        EtcCompressionMode.Exhaustive => 2,
+        _ => throw CreateUnsupportedCompressionModeException(compressionMode)
+    };
+
+    private static int GetDifferentialEndpointSearchRadius(EtcCompressionMode compressionMode) => compressionMode switch
+    {
+        EtcCompressionMode.Normal or EtcCompressionMode.High => 1,
+        EtcCompressionMode.Exhaustive => 2,
+        _ => throw CreateUnsupportedCompressionModeException(compressionMode)
+    };
+
+    private static int GetDifferentialSubblockCandidateCapacity(EtcCompressionMode compressionMode)
+    {
+        var radius = GetDifferentialEndpointSearchRadius(compressionMode);
+        var diameter = (radius * 2) + 1;
+        return diameter * diameter * diameter;
+    }
+
+    private static int GetEtc2ModeSeedCapacity(EtcCompressionMode compressionMode) => compressionMode switch
+    {
+        EtcCompressionMode.High => 16,
+        EtcCompressionMode.Exhaustive => 272,
+        _ => throw CreateUnsupportedCompressionModeException(compressionMode)
+    };
+
     private static void LoadBlock<TPixel>(
         BitmapView<TPixel> source,
         int blockX,
@@ -3052,6 +3263,12 @@ public sealed class EtcTextureCoder : IPitchTextureCoder
 
     private static NotSupportedException CreateUnsupportedFormatException(TextureFormat format) =>
         new($"ETC/EAC texture coder does not support texture format '{format.Name}'.");
+
+    private static ArgumentOutOfRangeException CreateUnsupportedCompressionModeException(EtcCompressionMode compressionMode) =>
+        new(
+            nameof(compressionMode),
+            compressionMode,
+            "Unsupported ETC/EAC compression mode.");
 
     private enum EacBlockKind
     {
