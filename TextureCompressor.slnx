@@ -10,6 +10,8 @@
     <Project Path="src/TextureCompressor.Codecs.BasisUniversal/TextureCompressor.Codecs.BasisUniversal.csproj" />
     <Project Path="src/TextureCompressor.Codecs.DirectXTex/TextureCompressor.Codecs.DirectXTex.csproj" />
     <Project Path="src/TextureCompressor.Codecs.PVRTexLib/TextureCompressor.Codecs.PVRTexLib.csproj" />
+    <Project Path="src/TextureCompressor.Analysis/TextureCompressor.Analysis.csproj" />
+    <Project Path="src/TextureCompressor.SourceGenerators/TextureCompressor.SourceGenerators.csproj" />
     <Project Path="src/TextureCompressor.Bitmap/TextureCompressor.Bitmap.csproj" />
     <Project Path="src/TextureCompressor/TextureCompressor.csproj" />
   </Folder>
