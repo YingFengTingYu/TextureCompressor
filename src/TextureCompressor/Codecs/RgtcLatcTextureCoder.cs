@@ -11,18 +11,22 @@ public sealed class RgtcLatcTextureCoder : IPitchTextureCoder
 
     private readonly RgtcLatcLayout _layout;
     private readonly bool _isSigned;
+    private readonly RgtcLatcCoderOptions _options;
 
-    public RgtcLatcTextureCoder(TextureFormat format)
+    public RgtcLatcTextureCoder(TextureFormat format, RgtcLatcCoderOptions? options = null)
     {
         if (!TryGetLayout(format, out _layout, out _isSigned))
         {
             throw CreateUnsupportedFormatException(format);
         }
 
+        _options = options ?? new RgtcLatcCoderOptions();
         Format = format;
     }
 
     public TextureFormat Format { get; }
+
+    public RgtcLatcCoderOptions Options => _options;
 
     public static bool IsSupported(TextureFormat format) => TryGetLayout(format, out _, out _);
 
@@ -204,7 +208,7 @@ public sealed class RgtcLatcTextureCoder : IPitchTextureCoder
             {
                 LoadUnsignedBlock(source, blockX, blockY, block);
                 var encodedBlock = destination.Slice(blockOffset, bytesPerBlock);
-                EncodeUnsignedBlock<TLayout>(block, encodedBlock);
+                EncodeUnsignedBlock<TLayout>(block, encodedBlock, _options.CompressionMode);
                 blockOffset = checked(blockOffset + bytesPerBlock);
             }
 
@@ -251,7 +255,7 @@ public sealed class RgtcLatcTextureCoder : IPitchTextureCoder
             {
                 LoadSignedBlock(source, blockX, blockY, block);
                 var encodedBlock = destination.Slice(blockOffset, bytesPerBlock);
-                EncodeSignedBlock<TLayout>(block, encodedBlock);
+                EncodeSignedBlock<TLayout>(block, encodedBlock, _options.CompressionMode);
                 blockOffset = checked(blockOffset + bytesPerBlock);
             }
 
@@ -283,25 +287,31 @@ public sealed class RgtcLatcTextureCoder : IPitchTextureCoder
         }
     }
 
-    private static void EncodeUnsignedBlock<TLayout>(ReadOnlySpan<Rgba8UNorm> source, Span<byte> destination)
+    private static void EncodeUnsignedBlock<TLayout>(
+        ReadOnlySpan<Rgba8UNorm> source,
+        Span<byte> destination,
+        RgtcLatcCompressionMode compressionMode)
         where TLayout : IRgtcLatcLayoutTransfer
     {
-        EncodeUNormFirstComponentBlock<TLayout>(source, destination[..8]);
+        EncodeUNormFirstComponentBlock<TLayout>(source, destination[..8], compressionMode);
 
         if (TLayout.HasSecondComponent)
         {
-            EncodeUNormSecondComponentBlock<TLayout>(source, destination[8..]);
+            EncodeUNormSecondComponentBlock<TLayout>(source, destination[8..], compressionMode);
         }
     }
 
-    private static void EncodeSignedBlock<TLayout>(ReadOnlySpan<Rgba8SNorm> source, Span<byte> destination)
+    private static void EncodeSignedBlock<TLayout>(
+        ReadOnlySpan<Rgba8SNorm> source,
+        Span<byte> destination,
+        RgtcLatcCompressionMode compressionMode)
         where TLayout : IRgtcLatcLayoutTransfer
     {
-        EncodeSNormFirstComponentBlock<TLayout>(source, destination[..8]);
+        EncodeSNormFirstComponentBlock<TLayout>(source, destination[..8], compressionMode);
 
         if (TLayout.HasSecondComponent)
         {
-            EncodeSNormSecondComponentBlock<TLayout>(source, destination[8..]);
+            EncodeSNormSecondComponentBlock<TLayout>(source, destination[8..], compressionMode);
         }
     }
 
@@ -357,82 +367,64 @@ public sealed class RgtcLatcTextureCoder : IPitchTextureCoder
         }
     }
 
-    private static void EncodeUNormFirstComponentBlock<TLayout>(ReadOnlySpan<Rgba8UNorm> source, Span<byte> destination)
+    private static void EncodeUNormFirstComponentBlock<TLayout>(
+        ReadOnlySpan<Rgba8UNorm> source,
+        Span<byte> destination,
+        RgtcLatcCompressionMode compressionMode)
         where TLayout : IRgtcLatcLayoutTransfer
     {
-        FindUNormFirstBounds<TLayout>(source, out var min, out var max);
-        destination[0] = max;
-        destination[1] = min;
-
-        Span<byte> palette = stackalloc byte[8];
-        BuildUNormPalette(max, min, palette);
-
-        ulong indices = 0;
+        Span<int> values = stackalloc int[TexelsPerBlock];
         for (var i = 0; i < TexelsPerBlock; i++)
         {
-            indices |= (ulong)FindNearestUNormIndex(TLayout.GetFirstComponent(source[i]), palette) << (i * 3);
+            values[i] = TLayout.GetFirstComponent(source[i]);
         }
 
-        WriteIndices(indices, destination);
+        EncodeScalarBlock(values, byte.MinValue, byte.MaxValue, compressionMode, destination);
     }
 
-    private static void EncodeUNormSecondComponentBlock<TLayout>(ReadOnlySpan<Rgba8UNorm> source, Span<byte> destination)
+    private static void EncodeUNormSecondComponentBlock<TLayout>(
+        ReadOnlySpan<Rgba8UNorm> source,
+        Span<byte> destination,
+        RgtcLatcCompressionMode compressionMode)
         where TLayout : IRgtcLatcLayoutTransfer
     {
-        FindUNormSecondBounds<TLayout>(source, out var min, out var max);
-        destination[0] = max;
-        destination[1] = min;
-
-        Span<byte> palette = stackalloc byte[8];
-        BuildUNormPalette(max, min, palette);
-
-        ulong indices = 0;
+        Span<int> values = stackalloc int[TexelsPerBlock];
         for (var i = 0; i < TexelsPerBlock; i++)
         {
-            indices |= (ulong)FindNearestUNormIndex(TLayout.GetSecondComponent(source[i]), palette) << (i * 3);
+            values[i] = TLayout.GetSecondComponent(source[i]);
         }
 
-        WriteIndices(indices, destination);
+        EncodeScalarBlock(values, byte.MinValue, byte.MaxValue, compressionMode, destination);
     }
 
-    private static void EncodeSNormFirstComponentBlock<TLayout>(ReadOnlySpan<Rgba8SNorm> source, Span<byte> destination)
+    private static void EncodeSNormFirstComponentBlock<TLayout>(
+        ReadOnlySpan<Rgba8SNorm> source,
+        Span<byte> destination,
+        RgtcLatcCompressionMode compressionMode)
         where TLayout : IRgtcLatcLayoutTransfer
     {
-        FindSNormFirstBounds<TLayout>(source, out var min, out var max);
-        destination[0] = unchecked((byte)max);
-        destination[1] = unchecked((byte)min);
-
-        Span<sbyte> palette = stackalloc sbyte[8];
-        BuildSNormPalette(max, min, palette);
-
-        ulong indices = 0;
+        Span<int> values = stackalloc int[TexelsPerBlock];
         for (var i = 0; i < TexelsPerBlock; i++)
         {
-            var value = CanonicalSNorm(TLayout.GetFirstComponent(source[i]));
-            indices |= (ulong)FindNearestSNormIndex(value, palette) << (i * 3);
+            values[i] = CanonicalSNorm(TLayout.GetFirstComponent(source[i]));
         }
 
-        WriteIndices(indices, destination);
+        EncodeScalarBlock(values, -sbyte.MaxValue, sbyte.MaxValue, compressionMode, destination);
     }
 
-    private static void EncodeSNormSecondComponentBlock<TLayout>(ReadOnlySpan<Rgba8SNorm> source, Span<byte> destination)
+    private static void EncodeSNormSecondComponentBlock<TLayout>(
+        ReadOnlySpan<Rgba8SNorm> source,
+        Span<byte> destination,
+        RgtcLatcCompressionMode compressionMode)
         where TLayout : IRgtcLatcLayoutTransfer
     {
-        FindSNormSecondBounds<TLayout>(source, out var min, out var max);
-        destination[0] = unchecked((byte)max);
-        destination[1] = unchecked((byte)min);
-
-        Span<sbyte> palette = stackalloc sbyte[8];
-        BuildSNormPalette(max, min, palette);
-
-        ulong indices = 0;
+        Span<int> values = stackalloc int[TexelsPerBlock];
         for (var i = 0; i < TexelsPerBlock; i++)
         {
-            var value = CanonicalSNorm(TLayout.GetSecondComponent(source[i]));
-            indices |= (ulong)FindNearestSNormIndex(value, palette) << (i * 3);
+            values[i] = CanonicalSNorm(TLayout.GetSecondComponent(source[i]));
         }
 
-        WriteIndices(indices, destination);
+        EncodeScalarBlock(values, -sbyte.MaxValue, sbyte.MaxValue, compressionMode, destination);
     }
 
     private static void BuildUNormPalette(byte value0, byte value1, Span<byte> palette)
@@ -488,6 +480,490 @@ public sealed class RgtcLatcTextureCoder : IPitchTextureCoder
     private static sbyte InterpolateSNorm(sbyte value0, sbyte value1, int weight0, int weight1, int divisor) =>
         (sbyte)(((weight0 * value0) + (weight1 * value1)) / divisor);
 
+    private static void EncodeScalarBlock(
+        ReadOnlySpan<int> source,
+        int minValue,
+        int maxValue,
+        RgtcLatcCompressionMode compressionMode,
+        Span<byte> destination)
+    {
+        switch (compressionMode)
+        {
+            case RgtcLatcCompressionMode.Fast:
+                EncodeScalarBlockFast(source, minValue, maxValue, destination);
+                return;
+            case RgtcLatcCompressionMode.Normal:
+                EncodeScalarBlockOptimized(source, minValue, maxValue, highQuality: false, destination);
+                return;
+            case RgtcLatcCompressionMode.High:
+                EncodeScalarBlockOptimized(source, minValue, maxValue, highQuality: true, destination);
+                return;
+            case RgtcLatcCompressionMode.Exhaustive:
+                EncodeScalarBlockExhaustive(source, minValue, maxValue, destination);
+                return;
+            default:
+                throw new ArgumentOutOfRangeException(
+                    nameof(compressionMode),
+                    compressionMode,
+                    "Unsupported RGTC/LATC compression mode.");
+        }
+    }
+
+    private static void EncodeScalarBlockFast(
+        ReadOnlySpan<int> source,
+        int minValue,
+        int maxValue,
+        Span<byte> destination)
+    {
+        FindScalarBounds(source, out var min, out var max);
+        var encoding = EvaluateScalarCandidate(source, max, min, minValue, maxValue, long.MaxValue);
+        WriteScalarBlock(encoding, minValue, destination);
+    }
+
+    private static void EncodeScalarBlockOptimized(
+        ReadOnlySpan<int> source,
+        int minValue,
+        int maxValue,
+        bool highQuality,
+        Span<byte> destination)
+    {
+        FindScalarBounds(source, out var min, out var max);
+        var best = EvaluateScalarCandidate(source, max, min, minValue, maxValue, long.MaxValue);
+        var iterationLimit = highQuality ? 8 : 4;
+
+        OptimizeScalarSeed(source, min, max, ScalarEndpointMode.SixValue, minValue, maxValue, iterationLimit, ref best);
+        if (max > min)
+        {
+            OptimizeScalarSeed(source, max, min, ScalarEndpointMode.EightValue, minValue, maxValue, iterationLimit, ref best);
+
+            var padding = Math.Max(1, (max - min + 13) / 14);
+            var expandedMin = Math.Max(minValue, min - padding);
+            var expandedMax = Math.Min(maxValue, max + padding);
+            OptimizeScalarSeed(source, expandedMin, expandedMax, ScalarEndpointMode.SixValue, minValue, maxValue, iterationLimit, ref best);
+            OptimizeScalarSeed(source, expandedMax, expandedMin, ScalarEndpointMode.EightValue, minValue, maxValue, iterationLimit, ref best);
+        }
+
+        if (highQuality)
+        {
+            OptimizeUniqueScalarSeeds(source, minValue, maxValue, ref best);
+        }
+
+        RefineScalarEndpoints(source, minValue, maxValue, highQuality ? 8 : 4, ref best);
+        WriteScalarBlock(best, minValue, destination);
+    }
+
+    private static void EncodeScalarBlockExhaustive(
+        ReadOnlySpan<int> source,
+        int minValue,
+        int maxValue,
+        Span<byte> destination)
+    {
+        var best = new ScalarBlockEncoding { Error = long.MaxValue };
+        for (var endpoint0 = minValue; endpoint0 <= maxValue; endpoint0++)
+        {
+            for (var endpoint1 = minValue; endpoint1 <= maxValue; endpoint1++)
+            {
+                var candidate = EvaluateScalarCandidate(source, endpoint0, endpoint1, minValue, maxValue, best.Error);
+                UpdateBestScalarEncoding(candidate, ref best);
+                if (best.Error == 0)
+                {
+                    WriteScalarBlock(best, minValue, destination);
+                    return;
+                }
+            }
+        }
+
+        WriteScalarBlock(best, minValue, destination);
+    }
+
+    private static void OptimizeScalarSeed(
+        ReadOnlySpan<int> source,
+        int endpoint0,
+        int endpoint1,
+        ScalarEndpointMode mode,
+        int minValue,
+        int maxValue,
+        int iterationLimit,
+        ref ScalarBlockEncoding best)
+    {
+        NormalizeScalarOrder(ref endpoint0, ref endpoint1, mode, minValue, maxValue);
+
+        for (var iteration = 0; iteration < iterationLimit; iteration++)
+        {
+            var current = EvaluateScalarCandidate(source, endpoint0, endpoint1, minValue, maxValue, long.MaxValue);
+            UpdateBestScalarEncoding(current, ref best);
+            if (current.Error == 0
+                || !TrySolveScalarEndpoints(source, mode, current.Indices, minValue, maxValue, out var nextEndpoint0, out var nextEndpoint1))
+            {
+                return;
+            }
+
+            if (nextEndpoint0 == endpoint0 && nextEndpoint1 == endpoint1)
+            {
+                return;
+            }
+
+            endpoint0 = nextEndpoint0;
+            endpoint1 = nextEndpoint1;
+        }
+    }
+
+    private static void OptimizeUniqueScalarSeeds(
+        ReadOnlySpan<int> source,
+        int minValue,
+        int maxValue,
+        ref ScalarBlockEncoding best)
+    {
+        Span<int> uniqueValues = stackalloc int[TexelsPerBlock];
+        var uniqueCount = 0;
+        for (var i = 0; i < TexelsPerBlock; i++)
+        {
+            var value = source[i];
+            var alreadyAdded = false;
+            for (var j = 0; j < uniqueCount; j++)
+            {
+                if (uniqueValues[j] == value)
+                {
+                    alreadyAdded = true;
+                    break;
+                }
+            }
+
+            if (!alreadyAdded)
+            {
+                uniqueValues[uniqueCount++] = value;
+            }
+        }
+
+        for (var i = 0; i < uniqueCount; i++)
+        {
+            for (var j = 0; j < uniqueCount; j++)
+            {
+                OptimizeScalarSeed(source, uniqueValues[i], uniqueValues[j], ScalarEndpointMode.SixValue, minValue, maxValue, 8, ref best);
+                OptimizeScalarSeed(source, uniqueValues[i], uniqueValues[j], ScalarEndpointMode.EightValue, minValue, maxValue, 8, ref best);
+                if (best.Error == 0)
+                {
+                    return;
+                }
+            }
+        }
+    }
+
+    private static ScalarBlockEncoding EvaluateScalarCandidate(
+        ReadOnlySpan<int> source,
+        int endpoint0,
+        int endpoint1,
+        int minValue,
+        int maxValue,
+        long maxError)
+    {
+        Span<int> palette = stackalloc int[8];
+        BuildScalarPalette(endpoint0, endpoint1, minValue, maxValue, palette);
+
+        ulong indices = 0;
+        long error = 0;
+        for (var i = 0; i < TexelsPerBlock; i++)
+        {
+            var value = source[i];
+            var index = FindNearestScalarIndex(value, palette);
+            var difference = value - palette[index];
+            error += difference * difference;
+            indices |= (ulong)index << (i * 3);
+            if (error >= maxError)
+            {
+                return new ScalarBlockEncoding
+                {
+                    Endpoint0 = endpoint0,
+                    Endpoint1 = endpoint1,
+                    Indices = indices,
+                    Error = error
+                };
+            }
+        }
+
+        return new ScalarBlockEncoding
+        {
+            Endpoint0 = endpoint0,
+            Endpoint1 = endpoint1,
+            Indices = indices,
+            Error = error
+        };
+    }
+
+    private static bool TrySolveScalarEndpoints(
+        ReadOnlySpan<int> source,
+        ScalarEndpointMode mode,
+        ulong indices,
+        int minValue,
+        int maxValue,
+        out int endpoint0,
+        out int endpoint1)
+    {
+        var a00 = 0d;
+        var a01 = 0d;
+        var a11 = 0d;
+        var b0 = 0d;
+        var b1 = 0d;
+
+        for (var i = 0; i < TexelsPerBlock; i++)
+        {
+            var index = (int)((indices >> (i * 3)) & 0x7u);
+            if (!TryGetScalarEndpointWeights(index, mode, out var weight0, out var weight1))
+            {
+                continue;
+            }
+
+            var value = source[i];
+            a00 += weight0 * weight0;
+            a01 += weight0 * weight1;
+            a11 += weight1 * weight1;
+            b0 += weight0 * value;
+            b1 += weight1 * value;
+        }
+
+        var determinant = (a00 * a11) - (a01 * a01);
+        if (Math.Abs(determinant) < 0.000001d)
+        {
+            endpoint0 = 0;
+            endpoint1 = 0;
+            return false;
+        }
+
+        endpoint0 = ClampToScalar(((b0 * a11) - (b1 * a01)) / determinant, minValue, maxValue);
+        endpoint1 = ClampToScalar(((a00 * b1) - (a01 * b0)) / determinant, minValue, maxValue);
+        NormalizeScalarOrder(ref endpoint0, ref endpoint1, mode, minValue, maxValue);
+        return true;
+    }
+
+    private static bool TryGetScalarEndpointWeights(
+        int index,
+        ScalarEndpointMode mode,
+        out double weight0,
+        out double weight1)
+    {
+        if (mode == ScalarEndpointMode.EightValue)
+        {
+            switch (index)
+            {
+                case 0:
+                    weight0 = 1d;
+                    weight1 = 0d;
+                    return true;
+                case 1:
+                    weight0 = 0d;
+                    weight1 = 1d;
+                    return true;
+                default:
+                    weight0 = (8d - index) / 7d;
+                    weight1 = (index - 1d) / 7d;
+                    return true;
+            }
+        }
+
+        switch (index)
+        {
+            case 0:
+                weight0 = 1d;
+                weight1 = 0d;
+                return true;
+            case 1:
+                weight0 = 0d;
+                weight1 = 1d;
+                return true;
+            case >= 2 and <= 5:
+                weight0 = (6d - index) / 5d;
+                weight1 = (index - 1d) / 5d;
+                return true;
+            default:
+                weight0 = 0d;
+                weight1 = 0d;
+                return false;
+        }
+    }
+
+    private static void RefineScalarEndpoints(
+        ReadOnlySpan<int> source,
+        int minValue,
+        int maxValue,
+        int passLimit,
+        ref ScalarBlockEncoding best)
+    {
+        for (var pass = 0; pass < passLimit; pass++)
+        {
+            var mode = best.Endpoint0 > best.Endpoint1
+                ? ScalarEndpointMode.EightValue
+                : ScalarEndpointMode.SixValue;
+            var improved = false;
+            improved |= TryRefineScalarEndpoint(source, mode, minValue, maxValue, endpointIndex: 0, delta: -1, ref best);
+            improved |= TryRefineScalarEndpoint(source, mode, minValue, maxValue, endpointIndex: 0, delta: 1, ref best);
+            improved |= TryRefineScalarEndpoint(source, mode, minValue, maxValue, endpointIndex: 1, delta: -1, ref best);
+            improved |= TryRefineScalarEndpoint(source, mode, minValue, maxValue, endpointIndex: 1, delta: 1, ref best);
+            if (!improved || best.Error == 0)
+            {
+                return;
+            }
+        }
+    }
+
+    private static bool TryRefineScalarEndpoint(
+        ReadOnlySpan<int> source,
+        ScalarEndpointMode mode,
+        int minValue,
+        int maxValue,
+        int endpointIndex,
+        int delta,
+        ref ScalarBlockEncoding best)
+    {
+        var endpoint0 = best.Endpoint0;
+        var endpoint1 = best.Endpoint1;
+        if (endpointIndex == 0)
+        {
+            if (!TryOffsetScalarEndpoint(ref endpoint0, delta, minValue, maxValue))
+            {
+                return false;
+            }
+        }
+        else if (!TryOffsetScalarEndpoint(ref endpoint1, delta, minValue, maxValue))
+        {
+            return false;
+        }
+
+        NormalizeScalarOrder(ref endpoint0, ref endpoint1, mode, minValue, maxValue);
+        if (endpoint0 == best.Endpoint0 && endpoint1 == best.Endpoint1)
+        {
+            return false;
+        }
+
+        var candidate = EvaluateScalarCandidate(source, endpoint0, endpoint1, minValue, maxValue, best.Error);
+        if (candidate.Error >= best.Error)
+        {
+            return false;
+        }
+
+        best = candidate;
+        return true;
+    }
+
+    private static void BuildScalarPalette(int value0, int value1, int minValue, int maxValue, Span<int> palette)
+    {
+        palette[0] = value0;
+        palette[1] = value1;
+
+        if (value0 > value1)
+        {
+            palette[2] = ((6 * value0) + value1) / 7;
+            palette[3] = ((5 * value0) + (2 * value1)) / 7;
+            palette[4] = ((4 * value0) + (3 * value1)) / 7;
+            palette[5] = ((3 * value0) + (4 * value1)) / 7;
+            palette[6] = ((2 * value0) + (5 * value1)) / 7;
+            palette[7] = (value0 + (6 * value1)) / 7;
+        }
+        else
+        {
+            palette[2] = ((4 * value0) + value1) / 5;
+            palette[3] = ((3 * value0) + (2 * value1)) / 5;
+            palette[4] = ((2 * value0) + (3 * value1)) / 5;
+            palette[5] = (value0 + (4 * value1)) / 5;
+            palette[6] = minValue;
+            palette[7] = maxValue;
+        }
+    }
+
+    private static void FindScalarBounds(ReadOnlySpan<int> source, out int min, out int max)
+    {
+        min = int.MaxValue;
+        max = int.MinValue;
+        for (var i = 0; i < TexelsPerBlock; i++)
+        {
+            min = Math.Min(min, source[i]);
+            max = Math.Max(max, source[i]);
+        }
+    }
+
+    private static int FindNearestScalarIndex(int value, ReadOnlySpan<int> palette)
+    {
+        var bestIndex = 0;
+        var bestDistance = int.MaxValue;
+        for (var i = 0; i < palette.Length; i++)
+        {
+            var distance = Math.Abs(value - palette[i]);
+            if (distance < bestDistance)
+            {
+                bestDistance = distance;
+                bestIndex = i;
+            }
+        }
+
+        return bestIndex;
+    }
+
+    private static void NormalizeScalarOrder(
+        ref int endpoint0,
+        ref int endpoint1,
+        ScalarEndpointMode mode,
+        int minValue,
+        int maxValue)
+    {
+        if (mode == ScalarEndpointMode.EightValue)
+        {
+            if (endpoint0 < endpoint1)
+            {
+                (endpoint0, endpoint1) = (endpoint1, endpoint0);
+            }
+            else if (endpoint0 == endpoint1)
+            {
+                if (endpoint0 < maxValue)
+                {
+                    endpoint0++;
+                }
+                else
+                {
+                    endpoint1--;
+                }
+            }
+
+            return;
+        }
+
+        if (endpoint0 > endpoint1)
+        {
+            (endpoint0, endpoint1) = (endpoint1, endpoint0);
+        }
+    }
+
+    private static bool TryOffsetScalarEndpoint(ref int endpoint, int delta, int minValue, int maxValue)
+    {
+        var next = endpoint + delta;
+        if (next < minValue || next > maxValue)
+        {
+            return false;
+        }
+
+        endpoint = next;
+        return true;
+    }
+
+    private static int ClampToScalar(double value, int minValue, int maxValue) =>
+        Math.Clamp((int)Math.Round(value), minValue, maxValue);
+
+    private static void UpdateBestScalarEncoding(ScalarBlockEncoding candidate, ref ScalarBlockEncoding best)
+    {
+        if (candidate.Error < best.Error)
+        {
+            best = candidate;
+        }
+    }
+
+    private static void WriteScalarBlock(ScalarBlockEncoding encoding, int minValue, Span<byte> destination)
+    {
+        destination[0] = EncodeScalarEndpoint(encoding.Endpoint0, minValue);
+        destination[1] = EncodeScalarEndpoint(encoding.Endpoint1, minValue);
+        WriteIndices(encoding.Indices, destination);
+    }
+
+    private static byte EncodeScalarEndpoint(int value, int minValue) =>
+        minValue < 0 ? unchecked((byte)(sbyte)value) : (byte)value;
+
     private static ulong ReadIndices(ReadOnlySpan<byte> source)
     {
         ulong indices = 0;
@@ -505,104 +981,6 @@ public sealed class RgtcLatcTextureCoder : IPitchTextureCoder
         {
             destination[2 + i] = (byte)(indices >> (8 * i));
         }
-    }
-
-    private static void FindUNormFirstBounds<TLayout>(
-        ReadOnlySpan<Rgba8UNorm> source,
-        out byte min,
-        out byte max)
-        where TLayout : IRgtcLatcLayoutTransfer
-    {
-        min = byte.MaxValue;
-        max = byte.MinValue;
-        for (var i = 0; i < TexelsPerBlock; i++)
-        {
-            var value = TLayout.GetFirstComponent(source[i]);
-            min = Math.Min(min, value);
-            max = Math.Max(max, value);
-        }
-    }
-
-    private static void FindUNormSecondBounds<TLayout>(
-        ReadOnlySpan<Rgba8UNorm> source,
-        out byte min,
-        out byte max)
-        where TLayout : IRgtcLatcLayoutTransfer
-    {
-        min = byte.MaxValue;
-        max = byte.MinValue;
-        for (var i = 0; i < TexelsPerBlock; i++)
-        {
-            var value = TLayout.GetSecondComponent(source[i]);
-            min = Math.Min(min, value);
-            max = Math.Max(max, value);
-        }
-    }
-
-    private static void FindSNormFirstBounds<TLayout>(
-        ReadOnlySpan<Rgba8SNorm> source,
-        out sbyte min,
-        out sbyte max)
-        where TLayout : IRgtcLatcLayoutTransfer
-    {
-        min = sbyte.MaxValue;
-        max = -sbyte.MaxValue;
-        for (var i = 0; i < TexelsPerBlock; i++)
-        {
-            var value = CanonicalSNorm(TLayout.GetFirstComponent(source[i]));
-            min = (sbyte)Math.Min(min, value);
-            max = (sbyte)Math.Max(max, value);
-        }
-    }
-
-    private static void FindSNormSecondBounds<TLayout>(
-        ReadOnlySpan<Rgba8SNorm> source,
-        out sbyte min,
-        out sbyte max)
-        where TLayout : IRgtcLatcLayoutTransfer
-    {
-        min = sbyte.MaxValue;
-        max = -sbyte.MaxValue;
-        for (var i = 0; i < TexelsPerBlock; i++)
-        {
-            var value = CanonicalSNorm(TLayout.GetSecondComponent(source[i]));
-            min = (sbyte)Math.Min(min, value);
-            max = (sbyte)Math.Max(max, value);
-        }
-    }
-
-    private static int FindNearestUNormIndex(byte value, ReadOnlySpan<byte> palette)
-    {
-        var bestIndex = 0;
-        var bestDistance = int.MaxValue;
-        for (var i = 0; i < palette.Length; i++)
-        {
-            var distance = Math.Abs(value - palette[i]);
-            if (distance < bestDistance)
-            {
-                bestDistance = distance;
-                bestIndex = i;
-            }
-        }
-
-        return bestIndex;
-    }
-
-    private static int FindNearestSNormIndex(sbyte value, ReadOnlySpan<sbyte> palette)
-    {
-        var bestIndex = 0;
-        var bestDistance = int.MaxValue;
-        for (var i = 0; i < palette.Length; i++)
-        {
-            var distance = Math.Abs(value - palette[i]);
-            if (distance < bestDistance)
-            {
-                bestDistance = distance;
-                bestIndex = i;
-            }
-        }
-
-        return bestIndex;
     }
 
     private static void InitializeUnsignedBlock(Span<Rgba8UNorm> destination)
@@ -979,6 +1357,20 @@ public sealed class RgtcLatcTextureCoder : IPitchTextureCoder
         Rg,
         Luminance,
         LuminanceAlpha
+    }
+
+    private struct ScalarBlockEncoding
+    {
+        public int Endpoint0;
+        public int Endpoint1;
+        public ulong Indices;
+        public long Error;
+    }
+
+    private enum ScalarEndpointMode
+    {
+        SixValue,
+        EightValue
     }
 
 }

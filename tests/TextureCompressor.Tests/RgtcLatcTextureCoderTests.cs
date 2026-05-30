@@ -134,6 +134,110 @@ public sealed class RgtcLatcTextureCoderTests
     }
 
     [Fact]
+    public void EncodeBc4UNormUsesFastBoundsByDefault()
+    {
+        var pixels = new[]
+        {
+            new Rgba8UNorm(0, 0, 0), new Rgba8UNorm(255, 0, 0), new Rgba8UNorm(100, 0, 0), new Rgba8UNorm(105, 0, 0),
+            new Rgba8UNorm(110, 0, 0), new Rgba8UNorm(115, 0, 0), new Rgba8UNorm(120, 0, 0), new Rgba8UNorm(125, 0, 0),
+            new Rgba8UNorm(130, 0, 0), new Rgba8UNorm(135, 0, 0), new Rgba8UNorm(140, 0, 0), new Rgba8UNorm(145, 0, 0),
+            new Rgba8UNorm(150, 0, 0), new Rgba8UNorm(155, 0, 0), new Rgba8UNorm(160, 0, 0), new Rgba8UNorm(165, 0, 0)
+        };
+        var source = new ArrayBitmap<Rgba8UNorm>(4, 4, pixels);
+        var coder = new RgtcLatcTextureCoder(TextureFormats.Bc4UNorm);
+        var rowPitch = coder.GetDefaultPitch(source.Width);
+        var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
+
+        coder.Encode(source.AsView(), encoded, rowPitch);
+
+        Assert.Equal(255, encoded[0]);
+        Assert.Equal(0, encoded[1]);
+    }
+
+    [Fact]
+    public void EncodeBc4UNormHighQualityImprovesSpecialEndpointBlock()
+    {
+        var pixels = new[]
+        {
+            new Rgba8UNorm(0, 0, 0), new Rgba8UNorm(255, 0, 0), new Rgba8UNorm(100, 0, 0), new Rgba8UNorm(105, 0, 0),
+            new Rgba8UNorm(110, 0, 0), new Rgba8UNorm(115, 0, 0), new Rgba8UNorm(120, 0, 0), new Rgba8UNorm(125, 0, 0),
+            new Rgba8UNorm(130, 0, 0), new Rgba8UNorm(135, 0, 0), new Rgba8UNorm(140, 0, 0), new Rgba8UNorm(145, 0, 0),
+            new Rgba8UNorm(150, 0, 0), new Rgba8UNorm(155, 0, 0), new Rgba8UNorm(160, 0, 0), new Rgba8UNorm(165, 0, 0)
+        };
+        var source = new ArrayBitmap<Rgba8UNorm>(4, 4, pixels);
+        var fastCoder = new RgtcLatcTextureCoder(TextureFormats.Bc4UNorm);
+        var highCoder = new RgtcLatcTextureCoder(
+            TextureFormats.Bc4UNorm,
+            new RgtcLatcCoderOptions { CompressionMode = RgtcLatcCompressionMode.High });
+        var rowPitch = fastCoder.GetDefaultPitch(source.Width);
+        var fastEncoded = new byte[fastCoder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
+        var highEncoded = new byte[highCoder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
+        var fastDecoded = new ArrayBitmap<Rgba8UNorm>(4, 4);
+        var highDecoded = new ArrayBitmap<Rgba8UNorm>(4, 4);
+
+        fastCoder.Encode(source.AsView(), fastEncoded, rowPitch);
+        highCoder.Encode(source.AsView(), highEncoded, rowPitch);
+        fastCoder.Decode(fastEncoded, fastDecoded.AsView(), rowPitch);
+        highCoder.Decode(highEncoded, highDecoded.AsView(), rowPitch);
+
+        Assert.True(
+            RedSquaredError(source, highDecoded) < RedSquaredError(source, fastDecoded),
+            "High-quality RGTC should use the special endpoint mode when it better fits the scalar block.");
+    }
+
+    [Fact]
+    public void EncodeBc4SNormHighQualityIsNoWorseThanFastSearch()
+    {
+        var values = new[]
+        {
+            -sbyte.MaxValue, sbyte.MaxValue, -20, -16,
+            -12, -8, -4, 0,
+            4, 8, 12, 16,
+            20, 24, 28, 32
+        };
+        var pixels = values.Select(value => new Rgba8SNorm((sbyte)value, 0, 0)).ToArray();
+        var source = new ArrayBitmap<Rgba8SNorm>(4, 4, pixels);
+        var fastCoder = new RgtcLatcTextureCoder(TextureFormats.Bc4SNorm);
+        var highCoder = new RgtcLatcTextureCoder(
+            TextureFormats.Bc4SNorm,
+            new RgtcLatcCoderOptions { CompressionMode = RgtcLatcCompressionMode.High });
+        var rowPitch = fastCoder.GetDefaultPitch(source.Width);
+        var fastEncoded = new byte[fastCoder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
+        var highEncoded = new byte[highCoder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
+        var fastDecoded = new ArrayBitmap<Rgba8SNorm>(4, 4);
+        var highDecoded = new ArrayBitmap<Rgba8SNorm>(4, 4);
+
+        fastCoder.Encode(source.AsView(), fastEncoded, rowPitch);
+        highCoder.Encode(source.AsView(), highEncoded, rowPitch);
+        fastCoder.Decode(fastEncoded, fastDecoded.AsView(), rowPitch);
+        highCoder.Decode(highEncoded, highDecoded.AsView(), rowPitch);
+
+        Assert.True(RedSquaredError(source, highDecoded) <= RedSquaredError(source, fastDecoded));
+    }
+
+    [Theory]
+    [MemberData(nameof(RgtcLatcCompressionModes))]
+    public void Bc5CompressionModesEncodeDecodablePayloads(RgtcLatcCompressionMode compressionMode)
+    {
+        var pixels = Enumerable.Range(0, 16)
+            .Select(i => new Rgba8UNorm((byte)(40 + (i * 9)), (byte)(220 - (i * 7)), 0, 255))
+            .ToArray();
+        var source = new ArrayBitmap<Rgba8UNorm>(4, 4, pixels);
+        var decoded = new ArrayBitmap<Rgba8UNorm>(4, 4);
+        var coder = new RgtcLatcTextureCoder(
+            TextureFormats.Bc5UNorm,
+            new RgtcLatcCoderOptions { CompressionMode = compressionMode });
+        var rowPitch = coder.GetDefaultPitch(source.Width);
+        var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
+
+        coder.Encode(source.AsView(), encoded, rowPitch);
+        coder.Decode(encoded, decoded.AsView(), rowPitch);
+
+        Assert.Contains(decoded.Pixels, pixel => pixel.Red != 0);
+        Assert.Contains(decoded.Pixels, pixel => pixel.Green != 0);
+    }
+
+    [Fact]
     public void EncodeAndDecodeHonorsBlockRowPitch()
     {
         var source = new ArrayBitmap<Rgba8UNorm>(
@@ -179,6 +283,38 @@ public sealed class RgtcLatcTextureCoderTests
     }
 
     private static byte SignedByte(int value) => unchecked((byte)(sbyte)value);
+
+    private static long RedSquaredError(ArrayBitmap<Rgba8UNorm> expected, ArrayBitmap<Rgba8UNorm> actual)
+    {
+        var error = 0L;
+        for (var i = 0; i < expected.Pixels.Length; i++)
+        {
+            var difference = expected.Pixels[i].Red - actual.Pixels[i].Red;
+            error += difference * difference;
+        }
+
+        return error;
+    }
+
+    private static long RedSquaredError(ArrayBitmap<Rgba8SNorm> expected, ArrayBitmap<Rgba8SNorm> actual)
+    {
+        var error = 0L;
+        for (var i = 0; i < expected.Pixels.Length; i++)
+        {
+            var difference = expected.Pixels[i].Red - actual.Pixels[i].Red;
+            error += difference * difference;
+        }
+
+        return error;
+    }
+
+    public static TheoryData<RgtcLatcCompressionMode> RgtcLatcCompressionModes() => new()
+    {
+        RgtcLatcCompressionMode.Fast,
+        RgtcLatcCompressionMode.Normal,
+        RgtcLatcCompressionMode.High,
+        RgtcLatcCompressionMode.Exhaustive
+    };
 
     public static TheoryData<TextureFormat> RgtcLatcFormats() => new()
     {
