@@ -375,6 +375,48 @@ public sealed class S3tcTextureCoderTests
     }
 
     [Fact]
+    public void EncodeDxt1RgbUsesFastBoundsByDefault()
+    {
+        var pixels = Enumerable.Range(0, 16)
+            .Select(i => (i & 1) == 0
+                ? new Rgba8UNorm(255, 0, 0, 255)
+                : new Rgba8UNorm(0, 255, 0, 255))
+            .ToArray();
+        var source = new ArrayBitmap<Rgba8UNorm>(4, 4, pixels);
+        var coder = new S3tcTextureCoder(TextureFormats.Dxt1Rgb);
+        var rowPitch = coder.GetDefaultPitch(source.Width);
+        var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
+
+        coder.Encode(source.AsView(), encoded, rowPitch);
+
+        Assert.Equal(EncodeBoundsDxt1RgbBlock(pixels), encoded);
+    }
+
+    [Fact]
+    public void EncodeDxt1RgbHighQualityFitsColorClustersInsteadOfRgbBounds()
+    {
+        var pixels = Enumerable.Range(0, 16)
+            .Select(i => (i & 1) == 0
+                ? new Rgba8UNorm(255, 0, 0, 255)
+                : new Rgba8UNorm(0, 255, 0, 255))
+            .ToArray();
+        var source = new ArrayBitmap<Rgba8UNorm>(4, 4, pixels);
+        var options = new S3tcCoderOptions { CompressionMode = S3tcCompressionMode.High };
+        var coder = new S3tcTextureCoder(TextureFormats.Dxt1Rgb, options);
+        var rowPitch = coder.GetDefaultPitch(source.Width);
+        var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
+        var decoded = new ArrayBitmap<Rgba8UNorm>(4, 4);
+        var boundsDecoded = new ArrayBitmap<Rgba8UNorm>(4, 4);
+
+        coder.Encode(source.AsView(), encoded, rowPitch);
+        coder.Decode(encoded, decoded.AsView(), rowPitch);
+        coder.Decode(EncodeBoundsDxt1RgbBlock(pixels), boundsDecoded.AsView(), rowPitch);
+
+        Assert.Equal(0, RgbSquaredError(source, decoded));
+        Assert.True(RgbSquaredError(source, decoded) < RgbSquaredError(source, boundsDecoded));
+    }
+
+    [Fact]
     public void EncodeAndDecodeDxt5RgbaRoundTripsSolidRgba8WithinQuantization()
     {
         var source = new ArrayBitmap<Rgba8UNorm>(
@@ -463,6 +505,123 @@ public sealed class S3tcTextureCoderTests
         BinaryPrimitives.WriteUInt32LittleEndian(destination[4..], indices);
     }
 
+    private static byte[] EncodeBoundsDxt1RgbBlock(ReadOnlySpan<Rgba8UNorm> source)
+    {
+        var min = new Rgb24(byte.MaxValue, byte.MaxValue, byte.MaxValue);
+        var max = new Rgb24(byte.MinValue, byte.MinValue, byte.MinValue);
+        for (var i = 0; i < source.Length; i++)
+        {
+            min = new Rgb24(
+                Math.Min(min.Red, source[i].Red),
+                Math.Min(min.Green, source[i].Green),
+                Math.Min(min.Blue, source[i].Blue));
+            max = new Rgb24(
+                Math.Max(max.Red, source[i].Red),
+                Math.Max(max.Green, source[i].Green),
+                Math.Max(max.Blue, source[i].Blue));
+        }
+
+        var color0 = PackRgb565(max);
+        var color1 = PackRgb565(min);
+        if (color0 < color1)
+        {
+            (color0, color1) = (color1, color0);
+        }
+
+        Span<Rgba8UNorm> palette = stackalloc Rgba8UNorm[4];
+        BuildDxt1RgbPalette(color0, color1, palette);
+        uint indices = 0;
+        for (var i = 0; i < source.Length; i++)
+        {
+            indices |= (uint)FindNearestColorIndex(source[i], palette) << (i * 2);
+        }
+
+        var encoded = new byte[8];
+        WriteColorBlock(encoded, color0, color1, indices);
+        return encoded;
+    }
+
+    private static void BuildDxt1RgbPalette(ushort color0, ushort color1, Span<Rgba8UNorm> palette)
+    {
+        var c0 = UnpackRgb565(color0);
+        var c1 = UnpackRgb565(color1);
+        palette[0] = new Rgba8UNorm(c0.Red, c0.Green, c0.Blue, 255);
+        palette[1] = new Rgba8UNorm(c1.Red, c1.Green, c1.Blue, 255);
+        if (color0 > color1)
+        {
+            palette[2] = Interpolate(c0, c1, 2, 1, 3);
+            palette[3] = Interpolate(c0, c1, 1, 2, 3);
+        }
+        else
+        {
+            palette[2] = Interpolate(c0, c1, 1, 1, 2);
+            palette[3] = new Rgba8UNorm(0, 0, 0, 255);
+        }
+    }
+
+    private static int FindNearestColorIndex(Rgba8UNorm color, ReadOnlySpan<Rgba8UNorm> palette)
+    {
+        var bestIndex = 0;
+        var bestDistance = int.MaxValue;
+        for (var i = 0; i < palette.Length; i++)
+        {
+            var red = color.Red - palette[i].Red;
+            var green = color.Green - palette[i].Green;
+            var blue = color.Blue - palette[i].Blue;
+            var distance = (red * red) + (green * green) + (blue * blue);
+            if (distance < bestDistance)
+            {
+                bestDistance = distance;
+                bestIndex = i;
+            }
+        }
+
+        return bestIndex;
+    }
+
+    private static Rgba8UNorm Interpolate(Rgb24 a, Rgb24 b, int weightA, int weightB, int divisor)
+    {
+        var bias = divisor == 3 ? 1 : 0;
+        return new Rgba8UNorm(
+            (byte)(((weightA * a.Red) + (weightB * b.Red) + bias) / divisor),
+            (byte)(((weightA * a.Green) + (weightB * b.Green) + bias) / divisor),
+            (byte)(((weightA * a.Blue) + (weightB * b.Blue) + bias) / divisor),
+            255);
+    }
+
+    private static Rgb24 UnpackRgb565(ushort value)
+    {
+        var red = (value >> 11) & 0x1f;
+        var green = (value >> 5) & 0x3f;
+        var blue = value & 0x1f;
+        return new Rgb24(
+            (byte)((red << 3) | (red >> 2)),
+            (byte)((green << 2) | (green >> 4)),
+            (byte)((blue << 3) | (blue >> 2)));
+    }
+
+    private static ushort PackRgb565(Rgb24 value)
+    {
+        var red = value.Red >> 3;
+        var green = value.Green >> 2;
+        var blue = value.Blue >> 3;
+        return (ushort)((red << 11) | (green << 5) | blue);
+    }
+
+    private static long RgbSquaredError(ArrayBitmap<Rgba8UNorm> expected, ArrayBitmap<Rgba8UNorm> actual)
+    {
+        long error = 0;
+        for (var i = 0; i < expected.Pixels.Length; i++)
+        {
+            var red = expected.Pixels[i].Red - actual.Pixels[i].Red;
+            var green = expected.Pixels[i].Green - actual.Pixels[i].Green;
+            var blue = expected.Pixels[i].Blue - actual.Pixels[i].Blue;
+            error += (red * red) + (green * green) + (blue * blue);
+        }
+
+        return error;
+    }
+
     private static void WriteAlphaBlock(Span<byte> destination, byte value0, byte value1, ulong indices)
     {
         destination[0] = value0;
@@ -508,6 +667,8 @@ public sealed class S3tcTextureCoderTests
 
         return (byte)MathF.Round(Math.Clamp(linear, 0f, 1f) * 255f);
     }
+
+    private readonly record struct Rgb24(byte Red, byte Green, byte Blue);
 
     public static TheoryData<TextureFormat> S3tcFormats() => new()
     {

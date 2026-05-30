@@ -12,8 +12,9 @@ public sealed class S3tcTextureCoder : IPitchTextureCoder
     private const byte AlphaCutoff = 128;
 
     private readonly S3tcTransfer _transfer;
+    private readonly S3tcCoderOptions _options;
 
-    public S3tcTextureCoder(TextureFormat format)
+    public S3tcTextureCoder(TextureFormat format, S3tcCoderOptions? options = null)
     {
         if (!TryGetTransfer(format, out _transfer))
         {
@@ -21,6 +22,7 @@ public sealed class S3tcTextureCoder : IPitchTextureCoder
         }
 
         Format = format;
+        _options = options ?? new S3tcCoderOptions();
     }
 
     public TextureFormat Format { get; }
@@ -255,7 +257,7 @@ public sealed class S3tcTextureCoder : IPitchTextureCoder
         }
     }
 
-    private static void Encode<TPixel, TTransfer>(BitmapView<TPixel> source, Span<byte> destination, int rowPitch)
+    private void Encode<TPixel, TTransfer>(BitmapView<TPixel> source, Span<byte> destination, int rowPitch)
         where TPixel : unmanaged, IPixel<TPixel>
         where TTransfer : IS3tcTransfer
     {
@@ -270,7 +272,10 @@ public sealed class S3tcTextureCoder : IPitchTextureCoder
             for (var blockX = 0; blockX < blockCountX; blockX++)
             {
                 LoadBlock(source, blockX, blockY, block);
-                TTransfer.EncodeBlock(block, destination.Slice(blockOffset, TTransfer.BytesPerBlock));
+                TTransfer.EncodeBlock(
+                    block,
+                    destination.Slice(blockOffset, TTransfer.BytesPerBlock),
+                    _options.CompressionMode);
                 blockOffset = checked(blockOffset + TTransfer.BytesPerBlock);
             }
 
@@ -284,7 +289,10 @@ public sealed class S3tcTextureCoder : IPitchTextureCoder
 
         static abstract void DecodeBlock(ReadOnlySpan<byte> source, Span<Rgba8UNorm> destination);
 
-        static abstract void EncodeBlock(ReadOnlySpan<Rgba8UNorm> source, Span<byte> destination);
+        static abstract void EncodeBlock(
+            ReadOnlySpan<Rgba8UNorm> source,
+            Span<byte> destination,
+            S3tcCompressionMode compressionMode);
     }
 
     private readonly struct Dxt1RgbTransfer : IS3tcTransfer
@@ -294,8 +302,11 @@ public sealed class S3tcTextureCoder : IPitchTextureCoder
         public static void DecodeBlock(ReadOnlySpan<byte> source, Span<Rgba8UNorm> destination) =>
             DecodeColorBlock(source, Dxt1ColorMode.Rgb, destination);
 
-        public static void EncodeBlock(ReadOnlySpan<Rgba8UNorm> source, Span<byte> destination) =>
-            EncodeColorBlock(source, Dxt1ColorMode.Rgb, destination);
+        public static void EncodeBlock(
+            ReadOnlySpan<Rgba8UNorm> source,
+            Span<byte> destination,
+            S3tcCompressionMode compressionMode) =>
+            EncodeColorBlock(source, Dxt1ColorMode.Rgb, destination, compressionMode);
     }
 
     private readonly struct Dxt1RgbSrgbTransfer : IS3tcTransfer
@@ -308,8 +319,11 @@ public sealed class S3tcTextureCoder : IPitchTextureCoder
             DecodeSrgbColors(destination);
         }
 
-        public static void EncodeBlock(ReadOnlySpan<Rgba8UNorm> source, Span<byte> destination) =>
-            EncodeSrgbColorBlock(source, Dxt1ColorMode.Rgb, destination);
+        public static void EncodeBlock(
+            ReadOnlySpan<Rgba8UNorm> source,
+            Span<byte> destination,
+            S3tcCompressionMode compressionMode) =>
+            EncodeSrgbColorBlock(source, Dxt1ColorMode.Rgb, destination, compressionMode);
     }
 
     private readonly struct Dxt1RgbTransferBigEndian : IS3tcTransfer
@@ -319,8 +333,11 @@ public sealed class S3tcTextureCoder : IPitchTextureCoder
         public static void DecodeBlock(ReadOnlySpan<byte> source, Span<Rgba8UNorm> destination) =>
             DecodeBigEndianBlock<Dxt1RgbTransfer>(source, destination, BigEndianByteSwapMode.Swap8In16);
 
-        public static void EncodeBlock(ReadOnlySpan<Rgba8UNorm> source, Span<byte> destination) =>
-            EncodeBigEndianBlock<Dxt1RgbTransfer>(source, destination, BigEndianByteSwapMode.Swap8In16);
+        public static void EncodeBlock(
+            ReadOnlySpan<Rgba8UNorm> source,
+            Span<byte> destination,
+            S3tcCompressionMode compressionMode) =>
+            EncodeBigEndianBlock<Dxt1RgbTransfer>(source, destination, BigEndianByteSwapMode.Swap8In16, compressionMode);
     }
 
     private readonly struct Dxt1RgbaTransfer : IS3tcTransfer
@@ -330,8 +347,11 @@ public sealed class S3tcTextureCoder : IPitchTextureCoder
         public static void DecodeBlock(ReadOnlySpan<byte> source, Span<Rgba8UNorm> destination) =>
             DecodeColorBlock(source, Dxt1ColorMode.Rgba, destination);
 
-        public static void EncodeBlock(ReadOnlySpan<Rgba8UNorm> source, Span<byte> destination) =>
-            EncodeColorBlock(source, Dxt1ColorMode.Rgba, destination);
+        public static void EncodeBlock(
+            ReadOnlySpan<Rgba8UNorm> source,
+            Span<byte> destination,
+            S3tcCompressionMode compressionMode) =>
+            EncodeColorBlock(source, Dxt1ColorMode.Rgba, destination, compressionMode);
     }
 
     private readonly struct Dxt1RgbaSrgbTransfer : IS3tcTransfer
@@ -344,8 +364,11 @@ public sealed class S3tcTextureCoder : IPitchTextureCoder
             DecodeSrgbColors(destination);
         }
 
-        public static void EncodeBlock(ReadOnlySpan<Rgba8UNorm> source, Span<byte> destination) =>
-            EncodeSrgbColorBlock(source, Dxt1ColorMode.Rgba, destination);
+        public static void EncodeBlock(
+            ReadOnlySpan<Rgba8UNorm> source,
+            Span<byte> destination,
+            S3tcCompressionMode compressionMode) =>
+            EncodeSrgbColorBlock(source, Dxt1ColorMode.Rgba, destination, compressionMode);
     }
 
     private readonly struct Dxt1RgbaTransferBigEndian : IS3tcTransfer
@@ -355,8 +378,11 @@ public sealed class S3tcTextureCoder : IPitchTextureCoder
         public static void DecodeBlock(ReadOnlySpan<byte> source, Span<Rgba8UNorm> destination) =>
             DecodeBigEndianBlock<Dxt1RgbaTransfer>(source, destination, BigEndianByteSwapMode.Swap8In16);
 
-        public static void EncodeBlock(ReadOnlySpan<Rgba8UNorm> source, Span<byte> destination) =>
-            EncodeBigEndianBlock<Dxt1RgbaTransfer>(source, destination, BigEndianByteSwapMode.Swap8In16);
+        public static void EncodeBlock(
+            ReadOnlySpan<Rgba8UNorm> source,
+            Span<byte> destination,
+            S3tcCompressionMode compressionMode) =>
+            EncodeBigEndianBlock<Dxt1RgbaTransfer>(source, destination, BigEndianByteSwapMode.Swap8In16, compressionMode);
     }
 
     private readonly struct Dxt2RgbaTransfer : IS3tcTransfer
@@ -370,12 +396,15 @@ public sealed class S3tcTextureCoder : IPitchTextureCoder
             RecoverPremultipliedAlpha(destination);
         }
 
-        public static void EncodeBlock(ReadOnlySpan<Rgba8UNorm> source, Span<byte> destination)
+        public static void EncodeBlock(
+            ReadOnlySpan<Rgba8UNorm> source,
+            Span<byte> destination,
+            S3tcCompressionMode compressionMode)
         {
             Span<Rgba8UNorm> premultipliedBlock = stackalloc Rgba8UNorm[TexelsPerBlock];
             PremultiplyAlpha(source, premultipliedBlock);
-            EncodeExplicitAlphaBlock(source, destination[..8]);
-            EncodeColorBlock(premultipliedBlock, Dxt1ColorMode.FourColor, destination[8..]);
+            EncodeExplicitAlphaBlock(source, destination[..8], compressionMode);
+            EncodeColorBlock(premultipliedBlock, Dxt1ColorMode.FourColor, destination[8..], compressionMode);
         }
     }
 
@@ -386,8 +415,11 @@ public sealed class S3tcTextureCoder : IPitchTextureCoder
         public static void DecodeBlock(ReadOnlySpan<byte> source, Span<Rgba8UNorm> destination) =>
             DecodeBigEndianBlock<Dxt2RgbaTransfer>(source, destination, BigEndianByteSwapMode.Swap8In16);
 
-        public static void EncodeBlock(ReadOnlySpan<Rgba8UNorm> source, Span<byte> destination) =>
-            EncodeBigEndianBlock<Dxt2RgbaTransfer>(source, destination, BigEndianByteSwapMode.Swap8In16);
+        public static void EncodeBlock(
+            ReadOnlySpan<Rgba8UNorm> source,
+            Span<byte> destination,
+            S3tcCompressionMode compressionMode) =>
+            EncodeBigEndianBlock<Dxt2RgbaTransfer>(source, destination, BigEndianByteSwapMode.Swap8In16, compressionMode);
     }
 
     private readonly struct Dxt3RgbaTransfer : IS3tcTransfer
@@ -400,10 +432,13 @@ public sealed class S3tcTextureCoder : IPitchTextureCoder
             DecodeExplicitAlphaBlock(source[..8], destination);
         }
 
-        public static void EncodeBlock(ReadOnlySpan<Rgba8UNorm> source, Span<byte> destination)
+        public static void EncodeBlock(
+            ReadOnlySpan<Rgba8UNorm> source,
+            Span<byte> destination,
+            S3tcCompressionMode compressionMode)
         {
-            EncodeExplicitAlphaBlock(source, destination[..8]);
-            EncodeColorBlock(source, Dxt1ColorMode.FourColor, destination[8..]);
+            EncodeExplicitAlphaBlock(source, destination[..8], compressionMode);
+            EncodeColorBlock(source, Dxt1ColorMode.FourColor, destination[8..], compressionMode);
         }
     }
 
@@ -417,12 +452,15 @@ public sealed class S3tcTextureCoder : IPitchTextureCoder
             DecodeSrgbColors(destination);
         }
 
-        public static void EncodeBlock(ReadOnlySpan<Rgba8UNorm> source, Span<byte> destination)
+        public static void EncodeBlock(
+            ReadOnlySpan<Rgba8UNorm> source,
+            Span<byte> destination,
+            S3tcCompressionMode compressionMode)
         {
             Span<Rgba8UNorm> srgbBlock = stackalloc Rgba8UNorm[TexelsPerBlock];
             EncodeSrgbColors(source, srgbBlock);
-            EncodeExplicitAlphaBlock(source, destination[..8]);
-            EncodeColorBlock(srgbBlock, Dxt1ColorMode.FourColor, destination[8..]);
+            EncodeExplicitAlphaBlock(source, destination[..8], compressionMode);
+            EncodeColorBlock(srgbBlock, Dxt1ColorMode.FourColor, destination[8..], compressionMode);
         }
     }
 
@@ -433,8 +471,11 @@ public sealed class S3tcTextureCoder : IPitchTextureCoder
         public static void DecodeBlock(ReadOnlySpan<byte> source, Span<Rgba8UNorm> destination) =>
             DecodeBigEndianBlock<Dxt3RgbaTransfer>(source, destination, BigEndianByteSwapMode.Swap8In16);
 
-        public static void EncodeBlock(ReadOnlySpan<Rgba8UNorm> source, Span<byte> destination) =>
-            EncodeBigEndianBlock<Dxt3RgbaTransfer>(source, destination, BigEndianByteSwapMode.Swap8In16);
+        public static void EncodeBlock(
+            ReadOnlySpan<Rgba8UNorm> source,
+            Span<byte> destination,
+            S3tcCompressionMode compressionMode) =>
+            EncodeBigEndianBlock<Dxt3RgbaTransfer>(source, destination, BigEndianByteSwapMode.Swap8In16, compressionMode);
     }
 
     private readonly struct Dxt3ATransfer : IS3tcTransfer
@@ -444,8 +485,11 @@ public sealed class S3tcTextureCoder : IPitchTextureCoder
         public static void DecodeBlock(ReadOnlySpan<byte> source, Span<Rgba8UNorm> destination) =>
             DecodeExplicitAlphaOnlyBlock(source, destination);
 
-        public static void EncodeBlock(ReadOnlySpan<Rgba8UNorm> source, Span<byte> destination) =>
-            EncodeExplicitAlphaOnlyBlock(source, destination);
+        public static void EncodeBlock(
+            ReadOnlySpan<Rgba8UNorm> source,
+            Span<byte> destination,
+            S3tcCompressionMode compressionMode) =>
+            EncodeExplicitAlphaOnlyBlock(source, destination, compressionMode);
     }
 
     private readonly struct Dxt3ATransferBigEndian : IS3tcTransfer
@@ -455,8 +499,11 @@ public sealed class S3tcTextureCoder : IPitchTextureCoder
         public static void DecodeBlock(ReadOnlySpan<byte> source, Span<Rgba8UNorm> destination) =>
             DecodeBigEndianBlock<Dxt3ATransfer>(source, destination, BigEndianByteSwapMode.Swap8In16);
 
-        public static void EncodeBlock(ReadOnlySpan<Rgba8UNorm> source, Span<byte> destination) =>
-            EncodeBigEndianBlock<Dxt3ATransfer>(source, destination, BigEndianByteSwapMode.Swap8In16);
+        public static void EncodeBlock(
+            ReadOnlySpan<Rgba8UNorm> source,
+            Span<byte> destination,
+            S3tcCompressionMode compressionMode) =>
+            EncodeBigEndianBlock<Dxt3ATransfer>(source, destination, BigEndianByteSwapMode.Swap8In16, compressionMode);
     }
 
     private readonly struct Dxt3A1111Transfer : IS3tcTransfer
@@ -466,7 +513,10 @@ public sealed class S3tcTextureCoder : IPitchTextureCoder
         public static void DecodeBlock(ReadOnlySpan<byte> source, Span<Rgba8UNorm> destination) =>
             DecodeDxt3A1111Block(source, destination);
 
-        public static void EncodeBlock(ReadOnlySpan<Rgba8UNorm> source, Span<byte> destination) =>
+        public static void EncodeBlock(
+            ReadOnlySpan<Rgba8UNorm> source,
+            Span<byte> destination,
+            S3tcCompressionMode _) =>
             EncodeDxt3A1111Block(source, destination);
     }
 
@@ -477,8 +527,11 @@ public sealed class S3tcTextureCoder : IPitchTextureCoder
         public static void DecodeBlock(ReadOnlySpan<byte> source, Span<Rgba8UNorm> destination) =>
             DecodeBigEndianBlock<Dxt3A1111Transfer>(source, destination, BigEndianByteSwapMode.Swap8In16);
 
-        public static void EncodeBlock(ReadOnlySpan<Rgba8UNorm> source, Span<byte> destination) =>
-            EncodeBigEndianBlock<Dxt3A1111Transfer>(source, destination, BigEndianByteSwapMode.Swap8In16);
+        public static void EncodeBlock(
+            ReadOnlySpan<Rgba8UNorm> source,
+            Span<byte> destination,
+            S3tcCompressionMode compressionMode) =>
+            EncodeBigEndianBlock<Dxt3A1111Transfer>(source, destination, BigEndianByteSwapMode.Swap8In16, compressionMode);
     }
 
     private readonly struct Dxt4RgbaTransfer : IS3tcTransfer
@@ -492,12 +545,15 @@ public sealed class S3tcTextureCoder : IPitchTextureCoder
             RecoverPremultipliedAlpha(destination);
         }
 
-        public static void EncodeBlock(ReadOnlySpan<Rgba8UNorm> source, Span<byte> destination)
+        public static void EncodeBlock(
+            ReadOnlySpan<Rgba8UNorm> source,
+            Span<byte> destination,
+            S3tcCompressionMode compressionMode)
         {
             Span<Rgba8UNorm> premultipliedBlock = stackalloc Rgba8UNorm[TexelsPerBlock];
             PremultiplyAlpha(source, premultipliedBlock);
-            EncodeInterpolatedAlphaBlock(source, destination[..8]);
-            EncodeColorBlock(premultipliedBlock, Dxt1ColorMode.FourColor, destination[8..]);
+            EncodeInterpolatedAlphaBlock(source, destination[..8], compressionMode);
+            EncodeColorBlock(premultipliedBlock, Dxt1ColorMode.FourColor, destination[8..], compressionMode);
         }
     }
 
@@ -508,8 +564,11 @@ public sealed class S3tcTextureCoder : IPitchTextureCoder
         public static void DecodeBlock(ReadOnlySpan<byte> source, Span<Rgba8UNorm> destination) =>
             DecodeBigEndianBlock<Dxt4RgbaTransfer>(source, destination, BigEndianByteSwapMode.Swap8In16);
 
-        public static void EncodeBlock(ReadOnlySpan<Rgba8UNorm> source, Span<byte> destination) =>
-            EncodeBigEndianBlock<Dxt4RgbaTransfer>(source, destination, BigEndianByteSwapMode.Swap8In16);
+        public static void EncodeBlock(
+            ReadOnlySpan<Rgba8UNorm> source,
+            Span<byte> destination,
+            S3tcCompressionMode compressionMode) =>
+            EncodeBigEndianBlock<Dxt4RgbaTransfer>(source, destination, BigEndianByteSwapMode.Swap8In16, compressionMode);
     }
 
     private readonly struct Dxt5RgbaTransfer : IS3tcTransfer
@@ -522,10 +581,13 @@ public sealed class S3tcTextureCoder : IPitchTextureCoder
             DecodeInterpolatedAlphaBlock(source[..8], destination);
         }
 
-        public static void EncodeBlock(ReadOnlySpan<Rgba8UNorm> source, Span<byte> destination)
+        public static void EncodeBlock(
+            ReadOnlySpan<Rgba8UNorm> source,
+            Span<byte> destination,
+            S3tcCompressionMode compressionMode)
         {
-            EncodeInterpolatedAlphaBlock(source, destination[..8]);
-            EncodeColorBlock(source, Dxt1ColorMode.FourColor, destination[8..]);
+            EncodeInterpolatedAlphaBlock(source, destination[..8], compressionMode);
+            EncodeColorBlock(source, Dxt1ColorMode.FourColor, destination[8..], compressionMode);
         }
     }
 
@@ -539,12 +601,15 @@ public sealed class S3tcTextureCoder : IPitchTextureCoder
             DecodeSrgbColors(destination);
         }
 
-        public static void EncodeBlock(ReadOnlySpan<Rgba8UNorm> source, Span<byte> destination)
+        public static void EncodeBlock(
+            ReadOnlySpan<Rgba8UNorm> source,
+            Span<byte> destination,
+            S3tcCompressionMode compressionMode)
         {
             Span<Rgba8UNorm> srgbBlock = stackalloc Rgba8UNorm[TexelsPerBlock];
             EncodeSrgbColors(source, srgbBlock);
-            EncodeInterpolatedAlphaBlock(source, destination[..8]);
-            EncodeColorBlock(srgbBlock, Dxt1ColorMode.FourColor, destination[8..]);
+            EncodeInterpolatedAlphaBlock(source, destination[..8], compressionMode);
+            EncodeColorBlock(srgbBlock, Dxt1ColorMode.FourColor, destination[8..], compressionMode);
         }
     }
 
@@ -555,8 +620,11 @@ public sealed class S3tcTextureCoder : IPitchTextureCoder
         public static void DecodeBlock(ReadOnlySpan<byte> source, Span<Rgba8UNorm> destination) =>
             DecodeBigEndianBlock<Dxt5RgbaTransfer>(source, destination, BigEndianByteSwapMode.Swap8In16);
 
-        public static void EncodeBlock(ReadOnlySpan<Rgba8UNorm> source, Span<byte> destination) =>
-            EncodeBigEndianBlock<Dxt5RgbaTransfer>(source, destination, BigEndianByteSwapMode.Swap8In16);
+        public static void EncodeBlock(
+            ReadOnlySpan<Rgba8UNorm> source,
+            Span<byte> destination,
+            S3tcCompressionMode compressionMode) =>
+            EncodeBigEndianBlock<Dxt5RgbaTransfer>(source, destination, BigEndianByteSwapMode.Swap8In16, compressionMode);
     }
 
     private readonly struct Dxt5ATransfer : IS3tcTransfer
@@ -566,8 +634,11 @@ public sealed class S3tcTextureCoder : IPitchTextureCoder
         public static void DecodeBlock(ReadOnlySpan<byte> source, Span<Rgba8UNorm> destination) =>
             DecodeInterpolatedAlphaOnlyBlock(source, destination);
 
-        public static void EncodeBlock(ReadOnlySpan<Rgba8UNorm> source, Span<byte> destination) =>
-            EncodeInterpolatedAlphaOnlyBlock(source, destination);
+        public static void EncodeBlock(
+            ReadOnlySpan<Rgba8UNorm> source,
+            Span<byte> destination,
+            S3tcCompressionMode compressionMode) =>
+            EncodeInterpolatedAlphaOnlyBlock(source, destination, compressionMode);
     }
 
     private readonly struct Dxt5ATransferBigEndian : IS3tcTransfer
@@ -577,8 +648,11 @@ public sealed class S3tcTextureCoder : IPitchTextureCoder
         public static void DecodeBlock(ReadOnlySpan<byte> source, Span<Rgba8UNorm> destination) =>
             DecodeBigEndianBlock<Dxt5ATransfer>(source, destination, BigEndianByteSwapMode.Swap8In16);
 
-        public static void EncodeBlock(ReadOnlySpan<Rgba8UNorm> source, Span<byte> destination) =>
-            EncodeBigEndianBlock<Dxt5ATransfer>(source, destination, BigEndianByteSwapMode.Swap8In16);
+        public static void EncodeBlock(
+            ReadOnlySpan<Rgba8UNorm> source,
+            Span<byte> destination,
+            S3tcCompressionMode compressionMode) =>
+            EncodeBigEndianBlock<Dxt5ATransfer>(source, destination, BigEndianByteSwapMode.Swap8In16, compressionMode);
     }
 
     private readonly struct DxnTransfer : IS3tcTransfer
@@ -592,10 +666,13 @@ public sealed class S3tcTextureCoder : IPitchTextureCoder
             DecodeInterpolatedComponentBlock(source[8..], S3tcScalarComponent.Green, destination);
         }
 
-        public static void EncodeBlock(ReadOnlySpan<Rgba8UNorm> source, Span<byte> destination)
+        public static void EncodeBlock(
+            ReadOnlySpan<Rgba8UNorm> source,
+            Span<byte> destination,
+            S3tcCompressionMode compressionMode)
         {
-            EncodeInterpolatedComponentBlock(source, S3tcScalarComponent.Red, destination[..8]);
-            EncodeInterpolatedComponentBlock(source, S3tcScalarComponent.Green, destination[8..]);
+            EncodeInterpolatedComponentBlock(source, S3tcScalarComponent.Red, destination[..8], compressionMode);
+            EncodeInterpolatedComponentBlock(source, S3tcScalarComponent.Green, destination[8..], compressionMode);
         }
     }
 
@@ -606,8 +683,11 @@ public sealed class S3tcTextureCoder : IPitchTextureCoder
         public static void DecodeBlock(ReadOnlySpan<byte> source, Span<Rgba8UNorm> destination) =>
             DecodeBigEndianBlock<DxnTransfer>(source, destination, BigEndianByteSwapMode.Swap8In16);
 
-        public static void EncodeBlock(ReadOnlySpan<Rgba8UNorm> source, Span<byte> destination) =>
-            EncodeBigEndianBlock<DxnTransfer>(source, destination, BigEndianByteSwapMode.Swap8In16);
+        public static void EncodeBlock(
+            ReadOnlySpan<Rgba8UNorm> source,
+            Span<byte> destination,
+            S3tcCompressionMode compressionMode) =>
+            EncodeBigEndianBlock<DxnTransfer>(source, destination, BigEndianByteSwapMode.Swap8In16, compressionMode);
     }
 
     private readonly struct Ctx1Transfer : IS3tcTransfer
@@ -617,7 +697,10 @@ public sealed class S3tcTextureCoder : IPitchTextureCoder
         public static void DecodeBlock(ReadOnlySpan<byte> source, Span<Rgba8UNorm> destination) =>
             DecodeCtx1Block(source, destination);
 
-        public static void EncodeBlock(ReadOnlySpan<Rgba8UNorm> source, Span<byte> destination) =>
+        public static void EncodeBlock(
+            ReadOnlySpan<Rgba8UNorm> source,
+            Span<byte> destination,
+            S3tcCompressionMode _) =>
             EncodeCtx1Block(source, destination);
     }
 
@@ -628,8 +711,11 @@ public sealed class S3tcTextureCoder : IPitchTextureCoder
         public static void DecodeBlock(ReadOnlySpan<byte> source, Span<Rgba8UNorm> destination) =>
             DecodeBigEndianBlock<Ctx1Transfer>(source, destination, BigEndianByteSwapMode.Swap8In16);
 
-        public static void EncodeBlock(ReadOnlySpan<Rgba8UNorm> source, Span<byte> destination) =>
-            EncodeBigEndianBlock<Ctx1Transfer>(source, destination, BigEndianByteSwapMode.Swap8In16);
+        public static void EncodeBlock(
+            ReadOnlySpan<Rgba8UNorm> source,
+            Span<byte> destination,
+            S3tcCompressionMode compressionMode) =>
+            EncodeBigEndianBlock<Ctx1Transfer>(source, destination, BigEndianByteSwapMode.Swap8In16, compressionMode);
     }
 
     private static void DecodeBigEndianBlock<TTransfer>(
@@ -646,19 +732,24 @@ public sealed class S3tcTextureCoder : IPitchTextureCoder
     private static void EncodeBigEndianBlock<TTransfer>(
         ReadOnlySpan<Rgba8UNorm> source,
         Span<byte> destination,
-        BigEndianByteSwapMode endianMode)
+        BigEndianByteSwapMode endianMode,
+        S3tcCompressionMode compressionMode)
         where TTransfer : IS3tcTransfer
     {
         Span<byte> littleEndianBlock = stackalloc byte[TTransfer.BytesPerBlock];
-        TTransfer.EncodeBlock(source, littleEndianBlock);
+        TTransfer.EncodeBlock(source, littleEndianBlock, compressionMode);
         BigEndianByteSwap.CopyFromLittleEndian(littleEndianBlock, destination, endianMode);
     }
 
-    private static void EncodeSrgbColorBlock(ReadOnlySpan<Rgba8UNorm> source, Dxt1ColorMode colorMode, Span<byte> destination)
+    private static void EncodeSrgbColorBlock(
+        ReadOnlySpan<Rgba8UNorm> source,
+        Dxt1ColorMode colorMode,
+        Span<byte> destination,
+        S3tcCompressionMode compressionMode)
     {
         Span<Rgba8UNorm> srgbBlock = stackalloc Rgba8UNorm[TexelsPerBlock];
         EncodeSrgbColors(source, srgbBlock);
-        EncodeColorBlock(srgbBlock, colorMode, destination);
+        EncodeColorBlock(srgbBlock, colorMode, destination, compressionMode);
     }
 
     private static void DecodeColorBlock(
@@ -681,9 +772,73 @@ public sealed class S3tcTextureCoder : IPitchTextureCoder
     private static void EncodeColorBlock(
         ReadOnlySpan<Rgba8UNorm> source,
         Dxt1ColorMode colorMode,
-        Span<byte> destination)
+        Span<byte> destination,
+        S3tcCompressionMode compressionMode)
     {
         var hasTransparent = colorMode == Dxt1ColorMode.Rgba && HasTransparentTexel(source);
+        if (compressionMode == S3tcCompressionMode.Fast)
+        {
+            EncodeColorBlockFast(source, colorMode, hasTransparent, destination);
+            return;
+        }
+
+        if (hasTransparent && !HasOpaqueTexel(source))
+        {
+            BinaryPrimitives.WriteUInt16LittleEndian(destination, 0);
+            BinaryPrimitives.WriteUInt16LittleEndian(destination[2..], 0);
+            BinaryPrimitives.WriteUInt32LittleEndian(destination[4..], 0xffffffff);
+            return;
+        }
+
+        Span<ColorEndpointPair> seeds = stackalloc ColorEndpointPair[8];
+        var seedCount = 0;
+        FindColorBounds(source, ignoreTransparent: hasTransparent, out var min, out var max);
+        AddColorSeed(seeds, ref seedCount, PackRgb565(max), PackRgb565(min), hasTransparent);
+
+        if (TryInsetColorBounds(min, max, out var insetMin, out var insetMax))
+        {
+            AddColorSeed(seeds, ref seedCount, PackRgb565(insetMax), PackRgb565(insetMin), hasTransparent);
+        }
+
+        if (TryFindPrincipalAxisColorEndpoints(source, hasTransparent, out var axisMin, out var axisMax))
+        {
+            AddColorSeed(
+                seeds,
+                ref seedCount,
+                PackRgb565Nearest(axisMax),
+                PackRgb565Nearest(axisMin),
+                hasTransparent);
+        }
+
+        if (TryFindFarthestColorEndpoints(source, hasTransparent, out var farA, out var farB))
+        {
+            AddColorSeed(seeds, ref seedCount, PackRgb565(farA), PackRgb565(farB), hasTransparent);
+        }
+
+        if (TryFindAverageColor(source, hasTransparent, out var average))
+        {
+            AddColorSeed(seeds, ref seedCount, PackRgb565Nearest(average), PackRgb565Nearest(average), hasTransparent);
+        }
+
+        var best = new ColorBlockEncoding { Error = long.MaxValue };
+        for (var i = 0; i < seedCount; i++)
+        {
+            OptimizeColorSeed(source, colorMode, hasTransparent, seeds[i].Color0, seeds[i].Color1, ref best);
+        }
+
+        RefineColorEndpoints(source, colorMode, hasTransparent, ref best);
+
+        BinaryPrimitives.WriteUInt16LittleEndian(destination, best.Color0);
+        BinaryPrimitives.WriteUInt16LittleEndian(destination[2..], best.Color1);
+        BinaryPrimitives.WriteUInt32LittleEndian(destination[4..], best.Indices);
+    }
+
+    private static void EncodeColorBlockFast(
+        ReadOnlySpan<Rgba8UNorm> source,
+        Dxt1ColorMode colorMode,
+        bool hasTransparent,
+        Span<byte> destination)
+    {
         FindColorBounds(source, ignoreTransparent: hasTransparent, out var min, out var max);
 
         ushort color0;
@@ -744,18 +899,28 @@ public sealed class S3tcTextureCoder : IPitchTextureCoder
         }
     }
 
-    private static void EncodeExplicitAlphaBlock(ReadOnlySpan<Rgba8UNorm> source, Span<byte> destination)
+    private static void EncodeExplicitAlphaBlock(
+        ReadOnlySpan<Rgba8UNorm> source,
+        Span<byte> destination,
+        S3tcCompressionMode compressionMode)
     {
         for (var i = 0; i < 8; i++)
         {
-            var low = source[i * 2].Alpha >> 4;
-            var high = source[(i * 2) + 1].Alpha >> 4;
+            var low = compressionMode == S3tcCompressionMode.Fast
+                ? source[i * 2].Alpha >> 4
+                : QuantizeAlpha4(source[i * 2].Alpha);
+            var high = compressionMode == S3tcCompressionMode.Fast
+                ? source[(i * 2) + 1].Alpha >> 4
+                : QuantizeAlpha4(source[(i * 2) + 1].Alpha);
             destination[i] = (byte)(low | (high << 4));
         }
     }
 
-    private static void EncodeExplicitAlphaOnlyBlock(ReadOnlySpan<Rgba8UNorm> source, Span<byte> destination) =>
-        EncodeExplicitAlphaBlock(source, destination);
+    private static void EncodeExplicitAlphaOnlyBlock(
+        ReadOnlySpan<Rgba8UNorm> source,
+        Span<byte> destination,
+        S3tcCompressionMode compressionMode) =>
+        EncodeExplicitAlphaBlock(source, destination, compressionMode);
 
     private static void DecodeDxt3A1111Block(ReadOnlySpan<byte> source, Span<Rgba8UNorm> destination)
     {
@@ -814,52 +979,27 @@ public sealed class S3tcTextureCoder : IPitchTextureCoder
         }
     }
 
-    private static void EncodeInterpolatedAlphaBlock(ReadOnlySpan<Rgba8UNorm> source, Span<byte> destination)
+    private static void EncodeInterpolatedAlphaBlock(
+        ReadOnlySpan<Rgba8UNorm> source,
+        Span<byte> destination,
+        S3tcCompressionMode compressionMode)
     {
-        FindAlphaBounds(source, out var min, out var max);
-        destination[0] = max;
-        destination[1] = min;
-
-        Span<byte> palette = stackalloc byte[8];
-        BuildAlphaPalette(max, min, palette);
-
-        ulong indices = 0;
-        for (var i = 0; i < TexelsPerBlock; i++)
-        {
-            indices |= (ulong)FindNearestAlphaIndex(source[i].Alpha, palette) << (i * 3);
-        }
-
-        for (var i = 0; i < 6; i++)
-        {
-            destination[2 + i] = (byte)(indices >> (8 * i));
-        }
+        EncodeInterpolatedScalarBlock(source, S3tcScalarComponent.Alpha, destination, compressionMode);
     }
 
-    private static void EncodeInterpolatedAlphaOnlyBlock(ReadOnlySpan<Rgba8UNorm> source, Span<byte> destination) =>
-        EncodeInterpolatedComponentBlock(source, S3tcScalarComponent.Alpha, destination);
+    private static void EncodeInterpolatedAlphaOnlyBlock(
+        ReadOnlySpan<Rgba8UNorm> source,
+        Span<byte> destination,
+        S3tcCompressionMode compressionMode) =>
+        EncodeInterpolatedComponentBlock(source, S3tcScalarComponent.Alpha, destination, compressionMode);
 
     private static void EncodeInterpolatedComponentBlock(
         ReadOnlySpan<Rgba8UNorm> source,
         S3tcScalarComponent component,
-        Span<byte> destination)
+        Span<byte> destination,
+        S3tcCompressionMode compressionMode)
     {
-        FindComponentBounds(source, component, out var min, out var max);
-        destination[0] = max;
-        destination[1] = min;
-
-        Span<byte> palette = stackalloc byte[8];
-        BuildAlphaPalette(max, min, palette);
-
-        ulong indices = 0;
-        for (var i = 0; i < TexelsPerBlock; i++)
-        {
-            indices |= (ulong)FindNearestAlphaIndex(GetComponent(source[i], component), palette) << (i * 3);
-        }
-
-        for (var i = 0; i < 6; i++)
-        {
-            destination[2 + i] = (byte)(indices >> (8 * i));
-        }
+        EncodeInterpolatedScalarBlock(source, component, destination, compressionMode);
     }
 
     private static void DecodeCtx1Block(ReadOnlySpan<byte> source, Span<Rgba8UNorm> destination)
@@ -968,6 +1108,62 @@ public sealed class S3tcTextureCoder : IPitchTextureCoder
         return (ushort)((red << 11) | (green << 5) | blue);
     }
 
+    private static ushort PackRgb565Nearest(RgbVector value) =>
+        PackRgb565Nearest(value.Red, value.Green, value.Blue);
+
+    private static ushort PackRgb565Nearest(double red, double green, double blue) =>
+        PackRgb565FromComponents(
+            QuantizeToBits(red, 31),
+            QuantizeToBits(green, 63),
+            QuantizeToBits(blue, 31));
+
+    private static ushort PackRgb565FromComponents(int red, int green, int blue) =>
+        (ushort)((red << 11) | (green << 5) | blue);
+
+    private static void GetRgb565Components(ushort value, out int red, out int green, out int blue)
+    {
+        red = (value >> 11) & 0x1f;
+        green = (value >> 5) & 0x3f;
+        blue = value & 0x1f;
+    }
+
+    private static int QuantizeToBits(double value, int max)
+    {
+        var clamped = Math.Clamp(value, byte.MinValue, byte.MaxValue);
+        return Math.Clamp((int)Math.Round(clamped * max / byte.MaxValue), 0, max);
+    }
+
+    private static byte ClampToByte(double value) =>
+        (byte)Math.Clamp((int)Math.Round(value), byte.MinValue, byte.MaxValue);
+
+    private static int QuantizeAlpha4(byte alpha) => (alpha * 15 + 127) / byte.MaxValue;
+
+    private static int ColorDistanceSquared(Rgb24 a, Rgb24 b)
+    {
+        var red = a.Red - b.Red;
+        var green = a.Green - b.Green;
+        var blue = a.Blue - b.Blue;
+        return (red * red) + (green * green) + (blue * blue);
+    }
+
+    private static void NormalizeColorOrder(ref ushort color0, ref ushort color1, bool useThreeColorMode)
+    {
+        if (useThreeColorMode)
+        {
+            if (color0 > color1)
+            {
+                (color0, color1) = (color1, color0);
+            }
+
+            return;
+        }
+
+        if (color0 < color1)
+        {
+            (color0, color1) = (color1, color0);
+        }
+    }
+
     private static void BuildAlphaPalette(byte alpha0, byte alpha1, Span<byte> palette)
     {
         palette[0] = alpha0;
@@ -1042,17 +1238,6 @@ public sealed class S3tcTextureCoder : IPitchTextureCoder
             : new Rgb24(0, 0, 0);
     }
 
-    private static void FindAlphaBounds(ReadOnlySpan<Rgba8UNorm> source, out byte min, out byte max)
-    {
-        min = byte.MaxValue;
-        max = byte.MinValue;
-        for (var i = 0; i < TexelsPerBlock; i++)
-        {
-            min = Math.Min(min, source[i].Alpha);
-            max = Math.Max(max, source[i].Alpha);
-        }
-    }
-
     private static void FindComponentBounds(
         ReadOnlySpan<Rgba8UNorm> source,
         S3tcScalarComponent component,
@@ -1069,10 +1254,867 @@ public sealed class S3tcTextureCoder : IPitchTextureCoder
         }
     }
 
+    private static void AddColorSeed(
+        Span<ColorEndpointPair> seeds,
+        ref int seedCount,
+        ushort color0,
+        ushort color1,
+        bool useThreeColorMode)
+    {
+        NormalizeColorOrder(ref color0, ref color1, useThreeColorMode);
+
+        for (var i = 0; i < seedCount; i++)
+        {
+            if (seeds[i].Color0 == color0 && seeds[i].Color1 == color1)
+            {
+                return;
+            }
+        }
+
+        if (seedCount < seeds.Length)
+        {
+            seeds[seedCount++] = new ColorEndpointPair(color0, color1);
+        }
+    }
+
+    private static void OptimizeColorSeed(
+        ReadOnlySpan<Rgba8UNorm> source,
+        Dxt1ColorMode colorMode,
+        bool hasTransparent,
+        ushort color0,
+        ushort color1,
+        ref ColorBlockEncoding best)
+    {
+        NormalizeColorOrder(ref color0, ref color1, hasTransparent);
+
+        for (var iteration = 0; iteration < 8; iteration++)
+        {
+            var current = EvaluateColorCandidate(source, colorMode, hasTransparent, color0, color1);
+            UpdateBestColorEncoding(current, ref best);
+            if (current.Error == 0
+                || !TrySolveColorEndpoints(source, hasTransparent, current.Indices, out var nextColor0, out var nextColor1))
+            {
+                return;
+            }
+
+            if (nextColor0 == color0 && nextColor1 == color1)
+            {
+                return;
+            }
+
+            color0 = nextColor0;
+            color1 = nextColor1;
+        }
+    }
+
+    private static ColorBlockEncoding EvaluateColorCandidate(
+        ReadOnlySpan<Rgba8UNorm> source,
+        Dxt1ColorMode colorMode,
+        bool hasTransparent,
+        ushort color0,
+        ushort color1)
+    {
+        NormalizeColorOrder(ref color0, ref color1, hasTransparent);
+
+        Span<Rgba8UNorm> palette = stackalloc Rgba8UNorm[4];
+        BuildColorPalette(color0, color1, colorMode, palette);
+
+        var paletteCount = hasTransparent ? 3 : 4;
+        uint indices = 0;
+        long error = 0;
+        for (var i = 0; i < TexelsPerBlock; i++)
+        {
+            int index;
+            if (hasTransparent && source[i].Alpha < AlphaCutoff)
+            {
+                index = 3;
+            }
+            else
+            {
+                index = FindNearestColorIndex(source[i], palette, paletteCount, out var distance);
+                error += distance;
+            }
+
+            indices |= (uint)index << (i * 2);
+        }
+
+        return new ColorBlockEncoding
+        {
+            Color0 = color0,
+            Color1 = color1,
+            Indices = indices,
+            Error = error
+        };
+    }
+
+    private static bool TrySolveColorEndpoints(
+        ReadOnlySpan<Rgba8UNorm> source,
+        bool hasTransparent,
+        uint indices,
+        out ushort color0,
+        out ushort color1)
+    {
+        var a00 = 0d;
+        var a01 = 0d;
+        var a11 = 0d;
+        var b0Red = 0d;
+        var b0Green = 0d;
+        var b0Blue = 0d;
+        var b1Red = 0d;
+        var b1Green = 0d;
+        var b1Blue = 0d;
+
+        for (var i = 0; i < TexelsPerBlock; i++)
+        {
+            if (hasTransparent && source[i].Alpha < AlphaCutoff)
+            {
+                continue;
+            }
+
+            var index = (int)((indices >> (i * 2)) & 0x3u);
+            if (!TryGetColorEndpointWeights(index, hasTransparent, out var weight0, out var weight1))
+            {
+                continue;
+            }
+
+            a00 += weight0 * weight0;
+            a01 += weight0 * weight1;
+            a11 += weight1 * weight1;
+            b0Red += weight0 * source[i].Red;
+            b0Green += weight0 * source[i].Green;
+            b0Blue += weight0 * source[i].Blue;
+            b1Red += weight1 * source[i].Red;
+            b1Green += weight1 * source[i].Green;
+            b1Blue += weight1 * source[i].Blue;
+        }
+
+        var determinant = (a00 * a11) - (a01 * a01);
+        if (Math.Abs(determinant) < 0.000001d)
+        {
+            color0 = 0;
+            color1 = 0;
+            return false;
+        }
+
+        color0 = PackRgb565Nearest(
+            ((b0Red * a11) - (b1Red * a01)) / determinant,
+            ((b0Green * a11) - (b1Green * a01)) / determinant,
+            ((b0Blue * a11) - (b1Blue * a01)) / determinant);
+        color1 = PackRgb565Nearest(
+            ((a00 * b1Red) - (a01 * b0Red)) / determinant,
+            ((a00 * b1Green) - (a01 * b0Green)) / determinant,
+            ((a00 * b1Blue) - (a01 * b0Blue)) / determinant);
+        NormalizeColorOrder(ref color0, ref color1, hasTransparent);
+        return true;
+    }
+
+    private static bool TryGetColorEndpointWeights(
+        int index,
+        bool hasTransparent,
+        out double weight0,
+        out double weight1)
+    {
+        switch (index)
+        {
+            case 0:
+                weight0 = 1d;
+                weight1 = 0d;
+                return true;
+            case 1:
+                weight0 = 0d;
+                weight1 = 1d;
+                return true;
+            case 2:
+                weight0 = hasTransparent ? 0.5d : 2d / 3d;
+                weight1 = hasTransparent ? 0.5d : 1d / 3d;
+                return true;
+            case 3 when !hasTransparent:
+                weight0 = 1d / 3d;
+                weight1 = 2d / 3d;
+                return true;
+            default:
+                weight0 = 0d;
+                weight1 = 0d;
+                return false;
+        }
+    }
+
+    private static void RefineColorEndpoints(
+        ReadOnlySpan<Rgba8UNorm> source,
+        Dxt1ColorMode colorMode,
+        bool hasTransparent,
+        ref ColorBlockEncoding best)
+    {
+        for (var pass = 0; pass < 8; pass++)
+        {
+            var improved = false;
+            for (var endpoint = 0; endpoint < 2; endpoint++)
+            {
+                for (var component = 0; component < 3; component++)
+                {
+                    improved |= TryRefineColorEndpoint(source, colorMode, hasTransparent, endpoint, component, -1, ref best);
+                    improved |= TryRefineColorEndpoint(source, colorMode, hasTransparent, endpoint, component, 1, ref best);
+                }
+            }
+
+            if (!improved || best.Error == 0)
+            {
+                return;
+            }
+        }
+    }
+
+    private static bool TryRefineColorEndpoint(
+        ReadOnlySpan<Rgba8UNorm> source,
+        Dxt1ColorMode colorMode,
+        bool hasTransparent,
+        int endpoint,
+        int component,
+        int delta,
+        ref ColorBlockEncoding best)
+    {
+        GetRgb565Components(best.Color0, out var red0, out var green0, out var blue0);
+        GetRgb565Components(best.Color1, out var red1, out var green1, out var blue1);
+
+        if (endpoint == 0)
+        {
+            if (!TryOffsetRgb565Component(ref red0, ref green0, ref blue0, component, delta))
+            {
+                return false;
+            }
+        }
+        else if (!TryOffsetRgb565Component(ref red1, ref green1, ref blue1, component, delta))
+        {
+            return false;
+        }
+
+        var color0 = PackRgb565FromComponents(red0, green0, blue0);
+        var color1 = PackRgb565FromComponents(red1, green1, blue1);
+        NormalizeColorOrder(ref color0, ref color1, hasTransparent);
+        if (color0 == best.Color0 && color1 == best.Color1)
+        {
+            return false;
+        }
+
+        var candidate = EvaluateColorCandidate(source, colorMode, hasTransparent, color0, color1);
+        if (candidate.Error >= best.Error)
+        {
+            return false;
+        }
+
+        best = candidate;
+        return true;
+    }
+
+    private static bool TryOffsetRgb565Component(
+        ref int red,
+        ref int green,
+        ref int blue,
+        int component,
+        int delta)
+    {
+        switch (component)
+        {
+            case 0:
+                return TryOffsetComponent(ref red, delta, 31);
+            case 1:
+                return TryOffsetComponent(ref green, delta, 63);
+            case 2:
+                return TryOffsetComponent(ref blue, delta, 31);
+            default:
+                throw new ArgumentOutOfRangeException(nameof(component));
+        }
+    }
+
+    private static bool TryOffsetComponent(ref int value, int delta, int max)
+    {
+        var next = value + delta;
+        if (next < 0 || next > max)
+        {
+            return false;
+        }
+
+        value = next;
+        return true;
+    }
+
+    private static void UpdateBestColorEncoding(ColorBlockEncoding candidate, ref ColorBlockEncoding best)
+    {
+        if (candidate.Error < best.Error)
+        {
+            best = candidate;
+        }
+    }
+
+    private static bool TryFindPrincipalAxisColorEndpoints(
+        ReadOnlySpan<Rgba8UNorm> source,
+        bool ignoreTransparent,
+        out RgbVector minEndpoint,
+        out RgbVector maxEndpoint)
+    {
+        var count = 0;
+        var meanRed = 0d;
+        var meanGreen = 0d;
+        var meanBlue = 0d;
+        var minRed = 255d;
+        var minGreen = 255d;
+        var minBlue = 255d;
+        var maxRed = 0d;
+        var maxGreen = 0d;
+        var maxBlue = 0d;
+
+        for (var i = 0; i < TexelsPerBlock; i++)
+        {
+            if (ignoreTransparent && source[i].Alpha < AlphaCutoff)
+            {
+                continue;
+            }
+
+            var red = source[i].Red;
+            var green = source[i].Green;
+            var blue = source[i].Blue;
+            meanRed += red;
+            meanGreen += green;
+            meanBlue += blue;
+            minRed = Math.Min(minRed, red);
+            minGreen = Math.Min(minGreen, green);
+            minBlue = Math.Min(minBlue, blue);
+            maxRed = Math.Max(maxRed, red);
+            maxGreen = Math.Max(maxGreen, green);
+            maxBlue = Math.Max(maxBlue, blue);
+            count++;
+        }
+
+        if (count == 0)
+        {
+            minEndpoint = default;
+            maxEndpoint = default;
+            return false;
+        }
+
+        meanRed /= count;
+        meanGreen /= count;
+        meanBlue /= count;
+
+        var covRedRed = 0d;
+        var covRedGreen = 0d;
+        var covRedBlue = 0d;
+        var covGreenGreen = 0d;
+        var covGreenBlue = 0d;
+        var covBlueBlue = 0d;
+
+        for (var i = 0; i < TexelsPerBlock; i++)
+        {
+            if (ignoreTransparent && source[i].Alpha < AlphaCutoff)
+            {
+                continue;
+            }
+
+            var red = source[i].Red - meanRed;
+            var green = source[i].Green - meanGreen;
+            var blue = source[i].Blue - meanBlue;
+            covRedRed += red * red;
+            covRedGreen += red * green;
+            covRedBlue += red * blue;
+            covGreenGreen += green * green;
+            covGreenBlue += green * blue;
+            covBlueBlue += blue * blue;
+        }
+
+        var axisRed = maxRed - minRed;
+        var axisGreen = maxGreen - minGreen;
+        var axisBlue = maxBlue - minBlue;
+        if (!NormalizeVector(ref axisRed, ref axisGreen, ref axisBlue))
+        {
+            minEndpoint = default;
+            maxEndpoint = default;
+            return false;
+        }
+
+        for (var iteration = 0; iteration < 8; iteration++)
+        {
+            var nextRed = (covRedRed * axisRed) + (covRedGreen * axisGreen) + (covRedBlue * axisBlue);
+            var nextGreen = (covRedGreen * axisRed) + (covGreenGreen * axisGreen) + (covGreenBlue * axisBlue);
+            var nextBlue = (covRedBlue * axisRed) + (covGreenBlue * axisGreen) + (covBlueBlue * axisBlue);
+            if (!NormalizeVector(ref nextRed, ref nextGreen, ref nextBlue))
+            {
+                break;
+            }
+
+            axisRed = nextRed;
+            axisGreen = nextGreen;
+            axisBlue = nextBlue;
+        }
+
+        var minProjection = double.PositiveInfinity;
+        var maxProjection = double.NegativeInfinity;
+        for (var i = 0; i < TexelsPerBlock; i++)
+        {
+            if (ignoreTransparent && source[i].Alpha < AlphaCutoff)
+            {
+                continue;
+            }
+
+            var projection = ((source[i].Red - meanRed) * axisRed)
+                + ((source[i].Green - meanGreen) * axisGreen)
+                + ((source[i].Blue - meanBlue) * axisBlue);
+            minProjection = Math.Min(minProjection, projection);
+            maxProjection = Math.Max(maxProjection, projection);
+        }
+
+        if (maxProjection - minProjection < 0.5d)
+        {
+            minEndpoint = default;
+            maxEndpoint = default;
+            return false;
+        }
+
+        minEndpoint = new RgbVector(
+            meanRed + (axisRed * minProjection),
+            meanGreen + (axisGreen * minProjection),
+            meanBlue + (axisBlue * minProjection));
+        maxEndpoint = new RgbVector(
+            meanRed + (axisRed * maxProjection),
+            meanGreen + (axisGreen * maxProjection),
+            meanBlue + (axisBlue * maxProjection));
+        return true;
+    }
+
+    private static bool TryFindFarthestColorEndpoints(
+        ReadOnlySpan<Rgba8UNorm> source,
+        bool ignoreTransparent,
+        out Rgb24 endpoint0,
+        out Rgb24 endpoint1)
+    {
+        Span<Rgb24> colors = stackalloc Rgb24[TexelsPerBlock];
+        var count = 0;
+        for (var i = 0; i < TexelsPerBlock; i++)
+        {
+            if (ignoreTransparent && source[i].Alpha < AlphaCutoff)
+            {
+                continue;
+            }
+
+            colors[count++] = new Rgb24(source[i].Red, source[i].Green, source[i].Blue);
+        }
+
+        var bestDistance = -1;
+        endpoint0 = default;
+        endpoint1 = default;
+        for (var i = 0; i < count; i++)
+        {
+            for (var j = i + 1; j < count; j++)
+            {
+                var distance = ColorDistanceSquared(colors[i], colors[j]);
+                if (distance > bestDistance)
+                {
+                    bestDistance = distance;
+                    endpoint0 = colors[i];
+                    endpoint1 = colors[j];
+                }
+            }
+        }
+
+        return bestDistance > 0;
+    }
+
+    private static bool TryFindAverageColor(
+        ReadOnlySpan<Rgba8UNorm> source,
+        bool ignoreTransparent,
+        out RgbVector average)
+    {
+        var count = 0;
+        var red = 0d;
+        var green = 0d;
+        var blue = 0d;
+        for (var i = 0; i < TexelsPerBlock; i++)
+        {
+            if (ignoreTransparent && source[i].Alpha < AlphaCutoff)
+            {
+                continue;
+            }
+
+            red += source[i].Red;
+            green += source[i].Green;
+            blue += source[i].Blue;
+            count++;
+        }
+
+        if (count == 0)
+        {
+            average = default;
+            return false;
+        }
+
+        average = new RgbVector(red / count, green / count, blue / count);
+        return true;
+    }
+
+    private static bool TryInsetColorBounds(Rgb24 min, Rgb24 max, out Rgb24 insetMin, out Rgb24 insetMax)
+    {
+        var redRange = max.Red - min.Red;
+        var greenRange = max.Green - min.Green;
+        var blueRange = max.Blue - min.Blue;
+        if (redRange == 0 && greenRange == 0 && blueRange == 0)
+        {
+            insetMin = default;
+            insetMax = default;
+            return false;
+        }
+
+        insetMin = new Rgb24(
+            (byte)(min.Red + (redRange / 16)),
+            (byte)(min.Green + (greenRange / 16)),
+            (byte)(min.Blue + (blueRange / 16)));
+        insetMax = new Rgb24(
+            (byte)(max.Red - (redRange / 16)),
+            (byte)(max.Green - (greenRange / 16)),
+            (byte)(max.Blue - (blueRange / 16)));
+        return true;
+    }
+
+    private static bool NormalizeVector(ref double x, ref double y, ref double z)
+    {
+        var lengthSquared = (x * x) + (y * y) + (z * z);
+        if (lengthSquared < 0.000001d)
+        {
+            return false;
+        }
+
+        var scale = 1d / Math.Sqrt(lengthSquared);
+        x *= scale;
+        y *= scale;
+        z *= scale;
+        return true;
+    }
+
+    private static void EncodeInterpolatedScalarBlock(
+        ReadOnlySpan<Rgba8UNorm> source,
+        S3tcScalarComponent component,
+        Span<byte> destination,
+        S3tcCompressionMode compressionMode)
+    {
+        FindComponentBounds(source, component, out var min, out var max);
+        if (compressionMode == S3tcCompressionMode.Fast)
+        {
+            destination[0] = max;
+            destination[1] = min;
+
+            Span<byte> palette = stackalloc byte[8];
+            BuildAlphaPalette(max, min, palette);
+
+            ulong indices = 0;
+            for (var i = 0; i < TexelsPerBlock; i++)
+            {
+                indices |= (ulong)FindNearestAlphaIndex(GetComponent(source[i], component), palette) << (i * 3);
+            }
+
+            for (var i = 0; i < 6; i++)
+            {
+                destination[2 + i] = (byte)(indices >> (8 * i));
+            }
+
+            return;
+        }
+
+        var best = new ScalarBlockEncoding { Error = long.MaxValue };
+        OptimizeScalarSeed(source, component, min, max, AlphaEndpointMode.SixAlpha, ref best);
+        if (max > min)
+        {
+            OptimizeScalarSeed(source, component, max, min, AlphaEndpointMode.EightAlpha, ref best);
+
+            var padding = Math.Max(1, (max - min + 13) / 14);
+            var expandedMin = (byte)Math.Max(byte.MinValue, min - padding);
+            var expandedMax = (byte)Math.Min(byte.MaxValue, max + padding);
+            OptimizeScalarSeed(source, component, expandedMin, expandedMax, AlphaEndpointMode.SixAlpha, ref best);
+            OptimizeScalarSeed(source, component, expandedMax, expandedMin, AlphaEndpointMode.EightAlpha, ref best);
+        }
+
+        RefineScalarEndpoints(source, component, ref best);
+        WriteScalarBlock(best, destination);
+    }
+
+    private static void OptimizeScalarSeed(
+        ReadOnlySpan<Rgba8UNorm> source,
+        S3tcScalarComponent component,
+        byte endpoint0,
+        byte endpoint1,
+        AlphaEndpointMode mode,
+        ref ScalarBlockEncoding best)
+    {
+        NormalizeScalarOrder(ref endpoint0, ref endpoint1, mode);
+
+        for (var iteration = 0; iteration < 8; iteration++)
+        {
+            var current = EvaluateScalarCandidate(source, component, endpoint0, endpoint1);
+            UpdateBestScalarEncoding(current, ref best);
+            if (current.Error == 0
+                || !TrySolveScalarEndpoints(source, component, mode, current.Indices, out var nextEndpoint0, out var nextEndpoint1))
+            {
+                return;
+            }
+
+            if (nextEndpoint0 == endpoint0 && nextEndpoint1 == endpoint1)
+            {
+                return;
+            }
+
+            endpoint0 = nextEndpoint0;
+            endpoint1 = nextEndpoint1;
+        }
+    }
+
+    private static ScalarBlockEncoding EvaluateScalarCandidate(
+        ReadOnlySpan<Rgba8UNorm> source,
+        S3tcScalarComponent component,
+        byte endpoint0,
+        byte endpoint1)
+    {
+        Span<byte> palette = stackalloc byte[8];
+        BuildAlphaPalette(endpoint0, endpoint1, palette);
+
+        ulong indices = 0;
+        long error = 0;
+        for (var i = 0; i < TexelsPerBlock; i++)
+        {
+            var value = GetComponent(source[i], component);
+            var index = FindNearestAlphaIndex(value, palette);
+            var difference = value - palette[index];
+            error += difference * difference;
+            indices |= (ulong)index << (i * 3);
+        }
+
+        return new ScalarBlockEncoding
+        {
+            Endpoint0 = endpoint0,
+            Endpoint1 = endpoint1,
+            Indices = indices,
+            Error = error
+        };
+    }
+
+    private static bool TrySolveScalarEndpoints(
+        ReadOnlySpan<Rgba8UNorm> source,
+        S3tcScalarComponent component,
+        AlphaEndpointMode mode,
+        ulong indices,
+        out byte endpoint0,
+        out byte endpoint1)
+    {
+        var a00 = 0d;
+        var a01 = 0d;
+        var a11 = 0d;
+        var b0 = 0d;
+        var b1 = 0d;
+
+        for (var i = 0; i < TexelsPerBlock; i++)
+        {
+            var index = (int)((indices >> (i * 3)) & 0x7u);
+            if (!TryGetScalarEndpointWeights(index, mode, out var weight0, out var weight1))
+            {
+                continue;
+            }
+
+            var value = GetComponent(source[i], component);
+            a00 += weight0 * weight0;
+            a01 += weight0 * weight1;
+            a11 += weight1 * weight1;
+            b0 += weight0 * value;
+            b1 += weight1 * value;
+        }
+
+        var determinant = (a00 * a11) - (a01 * a01);
+        if (Math.Abs(determinant) < 0.000001d)
+        {
+            endpoint0 = 0;
+            endpoint1 = 0;
+            return false;
+        }
+
+        endpoint0 = ClampToByte(((b0 * a11) - (b1 * a01)) / determinant);
+        endpoint1 = ClampToByte(((a00 * b1) - (a01 * b0)) / determinant);
+        NormalizeScalarOrder(ref endpoint0, ref endpoint1, mode);
+        return true;
+    }
+
+    private static bool TryGetScalarEndpointWeights(
+        int index,
+        AlphaEndpointMode mode,
+        out double weight0,
+        out double weight1)
+    {
+        if (mode == AlphaEndpointMode.EightAlpha)
+        {
+            switch (index)
+            {
+                case 0:
+                    weight0 = 1d;
+                    weight1 = 0d;
+                    return true;
+                case 1:
+                    weight0 = 0d;
+                    weight1 = 1d;
+                    return true;
+                default:
+                    weight0 = (8d - index) / 7d;
+                    weight1 = (index - 1d) / 7d;
+                    return true;
+            }
+        }
+
+        switch (index)
+        {
+            case 0:
+                weight0 = 1d;
+                weight1 = 0d;
+                return true;
+            case 1:
+                weight0 = 0d;
+                weight1 = 1d;
+                return true;
+            case >= 2 and <= 5:
+                weight0 = (6d - index) / 5d;
+                weight1 = (index - 1d) / 5d;
+                return true;
+            default:
+                weight0 = 0d;
+                weight1 = 0d;
+                return false;
+        }
+    }
+
+    private static void RefineScalarEndpoints(
+        ReadOnlySpan<Rgba8UNorm> source,
+        S3tcScalarComponent component,
+        ref ScalarBlockEncoding best)
+    {
+        for (var pass = 0; pass < 8; pass++)
+        {
+            var mode = best.Endpoint0 > best.Endpoint1
+                ? AlphaEndpointMode.EightAlpha
+                : AlphaEndpointMode.SixAlpha;
+            var improved = false;
+            improved |= TryRefineScalarEndpoint(source, component, mode, endpointIndex: 0, delta: -1, ref best);
+            improved |= TryRefineScalarEndpoint(source, component, mode, endpointIndex: 0, delta: 1, ref best);
+            improved |= TryRefineScalarEndpoint(source, component, mode, endpointIndex: 1, delta: -1, ref best);
+            improved |= TryRefineScalarEndpoint(source, component, mode, endpointIndex: 1, delta: 1, ref best);
+            if (!improved || best.Error == 0)
+            {
+                return;
+            }
+        }
+    }
+
+    private static bool TryRefineScalarEndpoint(
+        ReadOnlySpan<Rgba8UNorm> source,
+        S3tcScalarComponent component,
+        AlphaEndpointMode mode,
+        int endpointIndex,
+        int delta,
+        ref ScalarBlockEncoding best)
+    {
+        var endpoint0 = best.Endpoint0;
+        var endpoint1 = best.Endpoint1;
+        if (endpointIndex == 0)
+        {
+            if (!TryOffsetByte(ref endpoint0, delta))
+            {
+                return false;
+            }
+        }
+        else if (!TryOffsetByte(ref endpoint1, delta))
+        {
+            return false;
+        }
+
+        NormalizeScalarOrder(ref endpoint0, ref endpoint1, mode);
+        if (endpoint0 == best.Endpoint0 && endpoint1 == best.Endpoint1)
+        {
+            return false;
+        }
+
+        var candidate = EvaluateScalarCandidate(source, component, endpoint0, endpoint1);
+        if (candidate.Error >= best.Error)
+        {
+            return false;
+        }
+
+        best = candidate;
+        return true;
+    }
+
+    private static bool TryOffsetByte(ref byte value, int delta)
+    {
+        var next = value + delta;
+        if (next < byte.MinValue || next > byte.MaxValue)
+        {
+            return false;
+        }
+
+        value = (byte)next;
+        return true;
+    }
+
+    private static void NormalizeScalarOrder(ref byte endpoint0, ref byte endpoint1, AlphaEndpointMode mode)
+    {
+        if (mode == AlphaEndpointMode.EightAlpha)
+        {
+            if (endpoint0 < endpoint1)
+            {
+                (endpoint0, endpoint1) = (endpoint1, endpoint0);
+            }
+            else if (endpoint0 == endpoint1)
+            {
+                if (endpoint0 < byte.MaxValue)
+                {
+                    endpoint0++;
+                }
+                else
+                {
+                    endpoint1--;
+                }
+            }
+
+            return;
+        }
+
+        if (endpoint0 > endpoint1)
+        {
+            (endpoint0, endpoint1) = (endpoint1, endpoint0);
+        }
+    }
+
+    private static void UpdateBestScalarEncoding(ScalarBlockEncoding candidate, ref ScalarBlockEncoding best)
+    {
+        if (candidate.Error < best.Error)
+        {
+            best = candidate;
+        }
+    }
+
+    private static void WriteScalarBlock(ScalarBlockEncoding encoding, Span<byte> destination)
+    {
+        destination[0] = encoding.Endpoint0;
+        destination[1] = encoding.Endpoint1;
+        for (var i = 0; i < 6; i++)
+        {
+            destination[2 + i] = (byte)(encoding.Indices >> (8 * i));
+        }
+    }
+
     private static int FindNearestColorIndex(Rgba8UNorm color, ReadOnlySpan<Rgba8UNorm> palette, int paletteCount)
     {
+        return FindNearestColorIndex(color, palette, paletteCount, out _);
+    }
+
+    private static int FindNearestColorIndex(
+        Rgba8UNorm color,
+        ReadOnlySpan<Rgba8UNorm> palette,
+        int paletteCount,
+        out int bestDistance)
+    {
         var bestIndex = 0;
-        var bestDistance = int.MaxValue;
+        bestDistance = int.MaxValue;
         for (var i = 0; i < paletteCount; i++)
         {
             var red = color.Red - palette[i].Red;
@@ -1133,6 +2175,19 @@ public sealed class S3tcTextureCoder : IPitchTextureCoder
         for (var i = 0; i < TexelsPerBlock; i++)
         {
             if (source[i].Alpha < AlphaCutoff)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool HasOpaqueTexel(ReadOnlySpan<Rgba8UNorm> source)
+    {
+        for (var i = 0; i < TexelsPerBlock; i++)
+        {
+            if (source[i].Alpha >= AlphaCutoff)
             {
                 return true;
             }
@@ -1502,11 +2557,37 @@ public sealed class S3tcTextureCoder : IPitchTextureCoder
 
     private readonly record struct Rgb24(byte Red, byte Green, byte Blue);
 
+    private readonly record struct RgbVector(double Red, double Green, double Blue);
+
+    private readonly record struct ColorEndpointPair(ushort Color0, ushort Color1);
+
+    private struct ColorBlockEncoding
+    {
+        public ushort Color0;
+        public ushort Color1;
+        public uint Indices;
+        public long Error;
+    }
+
+    private struct ScalarBlockEncoding
+    {
+        public byte Endpoint0;
+        public byte Endpoint1;
+        public ulong Indices;
+        public long Error;
+    }
+
     private enum S3tcScalarComponent
     {
         Red,
         Green,
         Alpha
+    }
+
+    private enum AlphaEndpointMode
+    {
+        EightAlpha,
+        SixAlpha
     }
 
     private enum S3tcTransfer

@@ -3,6 +3,7 @@ using System.Globalization;
 using TextureCompressor.Analysis;
 using TextureCompressor.Bitmaps;
 using TextureCompressor.Colors;
+using TextureCompressor.Codecs;
 using TextureCompressor.FileFormats.Astc;
 using TextureCompressor.FileFormats.Dds;
 using TextureCompressor.FileFormats.Gif;
@@ -98,6 +99,11 @@ internal static class Cli
                 result.AddError("--jpeg-quality must be between 1 and 100.");
             }
         });
+        var s3tcQualityOption = new Option<S3tcCompressionMode>("--s3tc-quality")
+        {
+            Description = "S3TC encoding quality.",
+            DefaultValueFactory = _ => S3tcCompressionMode.Fast
+        };
 
         var command = new Command("convert", "Convert between supported texture and image containers.");
         command.Arguments.Add(inputArgument);
@@ -110,6 +116,7 @@ internal static class Cli
         command.Options.Add(gifColorSpaceOption);
         command.Options.Add(ktxVersionOption);
         command.Options.Add(jpegQualityOption);
+        command.Options.Add(s3tcQualityOption);
         command.SetAction(parseResult => RunCommand(() =>
         {
             var inputPath = RequireFile(parseResult.GetValue(inputArgument), "input").FullName;
@@ -118,6 +125,7 @@ internal static class Cli
             var outputKind = parseResult.GetValue(containerOption) ?? GetContainer(outputPath);
             var ktxVersion = parseResult.GetValue(ktxVersionOption);
             var jpegQuality = parseResult.GetValue(jpegQualityOption);
+            var s3tcQuality = parseResult.GetValue(s3tcQualityOption);
             var colorSpaces = new ImageColorSpaces(
                 parseResult.GetValue(pngColorSpaceOption),
                 parseResult.GetValue(jpgColorSpaceOption),
@@ -125,7 +133,7 @@ internal static class Cli
             var printMetrics = parseResult.GetValue(metricsOption);
 
             var source = Decode(inputPath, colorSpaces);
-            Encode(source, outputPath, outputKind, format, ktxVersion, jpegQuality, colorSpaces);
+            Encode(source, outputPath, outputKind, format, ktxVersion, jpegQuality, s3tcQuality, colorSpaces);
             Console.WriteLine($"wrote {outputPath}");
 
             if (printMetrics)
@@ -274,6 +282,7 @@ internal static class Cli
         TextureFormat format,
         int ktxVersion,
         int jpegQuality,
+        S3tcCompressionMode s3tcQuality,
         ImageColorSpaces? imageColorSpaces)
     {
         var imageColorSpace = GetImageColorSpace(container, imageColorSpaces);
@@ -281,6 +290,8 @@ internal static class Cli
         {
             EnsureImageColorSpaceContainer(container);
         }
+
+        using var s3tcRegistration = CreateS3tcRegistration(format, s3tcQuality);
 
         switch (container)
         {
@@ -312,6 +323,17 @@ internal static class Cli
             default:
                 throw new NotSupportedException($"Unsupported output container '{container}'.");
         }
+    }
+
+    private static IDisposable? CreateS3tcRegistration(TextureFormat format, S3tcCompressionMode compressionMode)
+    {
+        if (compressionMode == S3tcCompressionMode.Fast || !S3tcTextureCoder.IsSupported(format))
+        {
+            return null;
+        }
+
+        var options = new S3tcCoderOptions { CompressionMode = compressionMode };
+        return TextureCoderManager.Global.Register(format, new S3tcTextureCoder(format, options));
     }
 
     private static ArrayBitmap<Rgba8UNorm> ApplyInputImageColorSpace(
