@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="BasisUniversal.NET" Version="1.0.0-preview.3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\TextureCompressor.Bitmap\TextureCompressor.Bitmap.csproj" />
+    <ProjectReference Include="..\TextureCompressor\TextureCompressor.csproj" />
+  </ItemGroup>
+
+</Project>
