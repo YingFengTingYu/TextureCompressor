@@ -2,6 +2,7 @@
   <Folder Name="/src/">
     <Project Path="src/TextureCompressor.FileFormats.Astc/TextureCompressor.FileFormats.Astc.csproj" />
     <Project Path="src/TextureCompressor.FileFormats.Dds/TextureCompressor.FileFormats.Dds.csproj" />
+    <Project Path="src/TextureCompressor.FileFormats.Gif/TextureCompressor.FileFormats.Gif.csproj" />
     <Project Path="src/TextureCompressor.FileFormats.Jpeg/TextureCompressor.FileFormats.Jpeg.csproj" />
     <Project Path="src/TextureCompressor.FileFormats.Ktx/TextureCompressor.FileFormats.Ktx.csproj" />
     <Project Path="src/TextureCompressor.FileFormats.Pvr/TextureCompressor.FileFormats.Pvr.csproj" />
@@ -19,6 +20,7 @@
   <Folder Name="/tests/">
     <Project Path="tests/TextureCompressor.FileFormats.Astc.Tests/TextureCompressor.FileFormats.Astc.Tests.csproj" />
     <Project Path="tests/TextureCompressor.FileFormats.Dds.Tests/TextureCompressor.FileFormats.Dds.Tests.csproj" />
+    <Project Path="tests/TextureCompressor.FileFormats.Gif.Tests/TextureCompressor.FileFormats.Gif.Tests.csproj" />
     <Project Path="tests/TextureCompressor.FileFormats.Jpeg.Tests/TextureCompressor.FileFormats.Jpeg.Tests.csproj" />
     <Project Path="tests/TextureCompressor.FileFormats.Ktx.Tests/TextureCompressor.FileFormats.Ktx.Tests.csproj" />
     <Project Path="tests/TextureCompressor.FileFormats.Pvr.Tests/TextureCompressor.FileFormats.Pvr.Tests.csproj" />
