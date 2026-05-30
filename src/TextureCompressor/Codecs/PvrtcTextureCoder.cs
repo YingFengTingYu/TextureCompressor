@@ -35,6 +35,7 @@ public sealed class PvrtcTextureCoder : ITextureCoder
     ];
 
     private static readonly int[] SRepVals0 = [0, 3, 5, 8];
+    private const float HdrMinLuma = 1e-6f;
 
     public PvrtcTextureCoder(TextureFormat format)
     {
@@ -521,8 +522,7 @@ public sealed class PvrtcTextureCoder : ITextureCoder
                     continue;
                 }
 
-                var lumaByte = (lumaSpan[i].Red + lumaSpan[i].Green) * 0.5f;
-                var decodedLuma = DecodeHdrLumaByte(lumaByte);
+                var decodedLuma = DecodeHdrLumaBytes(lumaSpan[i]);
                 destination[i] = new Rgba32Float(
                     decodedLuma * 4f * chromaRed,
                     decodedLuma * 2f * chromaGreen,
@@ -537,8 +537,9 @@ public sealed class PvrtcTextureCoder : ITextureCoder
         }
     }
 
-    // PVRTC HDR stores log2((R + 2G + B) / 4) in a 4bpp stream and normalized
-    // (R, 2G, B) chromaticity in a second 2bpp or 4bpp stream.
+    // PVRTC HDR stores log2((R + 2G + B) / 4) across two luma channels and
+    // derives chroma from the decoded luma stream so both payloads agree after
+    // PVRTC interpolation.
     private static void EncodeHdr(
         PvrtcFormatInfo info,
         int width,
@@ -551,44 +552,29 @@ public sealed class PvrtcTextureCoder : ITextureCoder
         var texelCount = checked(width * height);
         var lumaPixels = ArrayPool<Rgba8UNorm>.Shared.Rent(texelCount);
         var chromaPixels = ArrayPool<Rgba8UNorm>.Shared.Rent(texelCount);
+        var decodedLumaPixels = ArrayPool<Rgba8UNorm>.Shared.Rent(texelCount);
         try
         {
             var lumaSpan = lumaPixels.AsSpan(0, texelCount);
             var chromaSpan = chromaPixels.AsSpan(0, texelCount);
-            for (var i = 0; i < lumaSpan.Length; i++)
-            {
-                ValidateHdrInput(source[i].Red, nameof(Rgba32Float.Red));
-                ValidateHdrInput(source[i].Green, nameof(Rgba32Float.Green));
-                ValidateHdrInput(source[i].Blue, nameof(Rgba32Float.Blue));
+            var decodedLumaSpan = decodedLumaPixels.AsSpan(0, texelCount);
+            var lumaFormat = GetLumaFormat(info);
+            var chromaFormat = GetChromaFormat(info);
+            var lumaPayload = destination[..lumaByteCount];
+            var chromaPayload = destination.Slice(lumaByteCount, chromaByteCount);
 
-                var red = MathF.Max(source[i].Red, 0f);
-                var green = MathF.Max(source[i].Green, 0f);
-                var blue = MathF.Max(source[i].Blue, 0f);
-                var luma = HdrLuma(red, green, blue);
-                var encodedLumaByte = EncodeHdrLumaByte(luma);
-                lumaSpan[i] = new Rgba8UNorm(encodedLumaByte, encodedLumaByte, 0);
-
-                var denominator = (red + (2f * green) + blue);
-                chromaSpan[i] = denominator <= 0f
-                    ? new Rgba8UNorm(0, 0, 0)
-                    : new Rgba8UNorm(
-                        UnitToByte(red / denominator),
-                        UnitToByte((2f * green) / denominator),
-                        UnitToByte(blue / denominator));
-            }
-
-            EncodeRgba8(lumaSpan, width, height, GetLumaFormat(info), destination[..lumaByteCount]);
-            EncodeRgba8(
-                chromaSpan,
-                width,
-                height,
-                GetChromaFormat(info),
-                destination.Slice(lumaByteCount, chromaByteCount));
+            ValidateHdrSource(source);
+            BuildHdrLumaPlane(source, lumaSpan);
+            EncodeRgba8(lumaSpan, width, height, lumaFormat, lumaPayload);
+            DecodeRgba8(lumaFormat, width, height, lumaPayload, decodedLumaSpan);
+            BuildHdrChromaPlane(source, decodedLumaSpan, chromaSpan);
+            EncodeRgba8(chromaSpan, width, height, chromaFormat, chromaPayload);
         }
         finally
         {
             ArrayPool<Rgba8UNorm>.Shared.Return(lumaPixels);
             ArrayPool<Rgba8UNorm>.Shared.Return(chromaPixels);
+            ArrayPool<Rgba8UNorm>.Shared.Return(decodedLumaPixels);
         }
     }
 
@@ -1947,24 +1933,59 @@ public sealed class PvrtcTextureCoder : ITextureCoder
 
     private static float HdrLuma(float red, float green, float blue) => (red + (2f * green) + blue) * 0.25f;
 
-    private static byte EncodeHdrLumaByte(float value)
+    private static void ValidateHdrSource(ReadOnlySpan<Rgba32Float> source)
     {
-        if (value <= 0f)
+        for (var i = 0; i < source.Length; i++)
         {
-            return 0;
+            ValidateHdrInput(source[i].Red, nameof(Rgba32Float.Red));
+            ValidateHdrInput(source[i].Green, nameof(Rgba32Float.Green));
+            ValidateHdrInput(source[i].Blue, nameof(Rgba32Float.Blue));
         }
-
-        var encoded = 127.5f + (8f * MathF.Log2(value));
-        if (encoded <= byte.MinValue)
-        {
-            return byte.MinValue;
-        }
-
-        return encoded >= byte.MaxValue ? byte.MaxValue : (byte)MathF.Round(encoded);
     }
 
-    private static float DecodeHdrLumaByte(float value) =>
-        value <= 0f ? 0f : MathF.Pow(2f, (Math.Clamp(value, byte.MinValue, byte.MaxValue) - 127.5f) / 8f);
+    private static void BuildHdrLumaPlane(
+        ReadOnlySpan<Rgba32Float> source,
+        Span<Rgba8UNorm> luma)
+    {
+        for (var i = 0; i < luma.Length; i++)
+        {
+            var red = MathF.Max(source[i].Red, 0f);
+            var green = MathF.Max(source[i].Green, 0f);
+            var blue = MathF.Max(source[i].Blue, 0f);
+            var encodedLuma = EncodeHdrLumaValue(HdrLuma(red, green, blue));
+            luma[i] = new Rgba8UNorm(
+                (byte)MathF.Floor(encodedLuma),
+                (byte)MathF.Ceiling(encodedLuma),
+                0);
+        }
+    }
+
+    private static void BuildHdrChromaPlane(
+        ReadOnlySpan<Rgba32Float> source,
+        ReadOnlySpan<Rgba8UNorm> decodedLuma,
+        Span<Rgba8UNorm> chroma)
+    {
+        for (var i = 0; i < source.Length; i++)
+        {
+            var red = MathF.Max(source[i].Red, 0f);
+            var green = MathF.Max(source[i].Green, 0f);
+            var blue = MathF.Max(source[i].Blue, 0f);
+            var lumaValue = DecodeHdrLumaBytes(decodedLuma[i]);
+            chroma[i] = new Rgba8UNorm(
+                UnitToByte(red / (4f * lumaValue)),
+                UnitToByte(green / (2f * lumaValue)),
+                UnitToByte(blue / (4f * lumaValue)));
+        }
+    }
+
+    private static float EncodeHdrLumaValue(float value)
+    {
+        var encoded = 127.5f + (8f * MathF.Log2(MathF.Max(value, HdrMinLuma)));
+        return Math.Clamp(encoded, byte.MinValue, byte.MaxValue);
+    }
+
+    private static float DecodeHdrLumaBytes(Rgba8UNorm value) =>
+        MathF.Pow(2f, ((value.Red + value.Green) - 255f) / 16f);
 
     private static Rgba32Float StorageRgba8ToLinear(Rgba8UNorm rgba, bool srgb) => srgb
         ? new Rgba32Float(

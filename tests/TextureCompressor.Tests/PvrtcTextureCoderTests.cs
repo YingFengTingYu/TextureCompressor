@@ -14,6 +14,7 @@ public sealed unsafe class PvrtcTextureCoderTests
     private const int PixelTolerance = 36;
 
     private static readonly ulong Rgba8PixelFormat = PVRDefine.PVRTGENPIXELID4('r', 'g', 'b', 'a', 8, 8, 8, 8);
+    private static readonly ulong Rgba32PixelFormat = PVRDefine.PVRTGENPIXELID4('r', 'g', 'b', 'a', 32, 32, 32, 32);
 
     [Theory]
     [MemberData(nameof(PvrtcFormats))]
@@ -55,6 +56,36 @@ public sealed unsafe class PvrtcTextureCoderTests
 
         AssertAverageErrorIsReasonable(source.Pixels, expected, format);
         AssertPixelsNear(expected, actual.Pixels, format);
+    }
+
+    [Theory]
+    [MemberData(nameof(HdrPvrtcFormats))]
+    public void DecodePvrtTexLibHdrPayloadMatchesPvrtTexLibFloat(TextureFormat format)
+    {
+        var source = CreateHdrSource(Width, Height);
+        var payload = EncodeFloatWithPvrTexLib(format, Width, Height, source);
+        var expected = DecodeFloatWithPvrTexLib(format, Width, Height, payload);
+        var actual = new ArrayBitmap<Rgba32Float>(Width, Height);
+        var coder = new PvrtcTextureCoder(format);
+
+        coder.Decode(payload, actual.AsView());
+
+        AssertFloatPixelsNear(expected, actual.Pixels, format, absoluteTolerance: 0.5f);
+    }
+
+    [Theory]
+    [MemberData(nameof(HdrPvrtcFormats))]
+    public void EncodeHdrPayloadIsDecodableByPvrtTexLibFloat(TextureFormat format)
+    {
+        var pixels = CreateHdrSource(Width, Height);
+        var source = new ArrayBitmap<Rgba32Float>(Width, Height, pixels);
+        var coder = new PvrtcTextureCoder(format);
+        var payload = new byte[coder.GetEncodedByteCount(Width, Height)];
+
+        coder.Encode(source.AsView(), payload);
+        var decoded = DecodeFloatWithPvrTexLib(format, Width, Height, payload);
+
+        AssertAverageFloatErrorIsReasonable(pixels, decoded, format, maxAverageError: 1.25f);
     }
 
     [Theory]
@@ -195,6 +226,14 @@ public sealed unsafe class PvrtcTextureCoderTests
         TextureFormats.RgbPvrtcI4BppUNorm
     };
 
+    public static TheoryData<TextureFormat> HdrPvrtcFormats() => new()
+    {
+        TextureFormats.RgbPvrtcI6BppFloat,
+        TextureFormats.RgbPvrtcI8BppFloat,
+        TextureFormats.RgbPvrtcII6BppFloat,
+        TextureFormats.RgbPvrtcII8BppFloat
+    };
+
     public static TheoryData<TextureFormat, int, int, int> PvrtcStorageSizeCases() => new()
     {
         { TextureFormats.RgbPvrtcI4BppUNorm, 1, 1, 32 },
@@ -250,6 +289,24 @@ public sealed unsafe class PvrtcTextureCoderTests
         return pixels;
     }
 
+    private static Rgba32Float[] CreateHdrSource(int width, int height)
+    {
+        var pixels = new Rgba32Float[checked(width * height)];
+        for (var y = 0; y < height; y++)
+        {
+            for (var x = 0; x < width; x++)
+            {
+                pixels[(y * width) + x] = new Rgba32Float(
+                    0.125f + (x * 4f / Math.Max(1, width - 1)),
+                    0.25f + (y * 6f / Math.Max(1, height - 1)),
+                    0.5f + ((x + y) * 3f / Math.Max(1, width + height - 2)),
+                    1f);
+            }
+        }
+
+        return pixels;
+    }
+
     private static byte[] EncodeWithPvrTexLib(TextureFormat format, int width, int height, Rgba8UNorm[] source)
     {
         fixed (Rgba8UNorm* sourcePtr = source)
@@ -264,6 +321,32 @@ public sealed unsafe class PvrtcTextureCoderTests
                 numFaces: 1,
                 PVRTexLibColourSpace.Linear,
                 PVRTexLibVariableType.UnsignedByteNorm,
+                preMultiplied: false);
+            using var texture = new PVRTexture(header, sourcePtr);
+            Transcode(
+                texture,
+                GetPvrTexLibPixelFormat(format),
+                GetChannelType(format),
+                GetColourSpace(format),
+                PVRTexLibCompressorQuality.PVRTCNormal);
+            return CopyTextureData(texture);
+        }
+    }
+
+    private static byte[] EncodeFloatWithPvrTexLib(TextureFormat format, int width, int height, Rgba32Float[] source)
+    {
+        fixed (Rgba32Float* sourcePtr = source)
+        {
+            using var header = new PVRTextureHeader(
+                Rgba32PixelFormat,
+                checked((uint)width),
+                checked((uint)height),
+                depth: 1,
+                numMipMaps: 1,
+                numArrayMembers: 1,
+                numFaces: 1,
+                PVRTexLibColourSpace.Linear,
+                PVRTexLibVariableType.SignedFloat,
                 preMultiplied: false);
             using var texture = new PVRTexture(header, sourcePtr);
             Transcode(
@@ -294,6 +377,28 @@ public sealed unsafe class PvrtcTextureCoderTests
             Assert.True(rgba.Length >= requiredBytes, $"PVRTexLib returned {rgba.Length} bytes; expected at least {requiredBytes}.");
             var pixels = new Rgba8UNorm[checked(width * height)];
             MemoryMarshal.Cast<byte, Rgba8UNorm>(rgba.AsSpan(0, requiredBytes)).CopyTo(pixels);
+            return pixels;
+        }
+    }
+
+    private static Rgba32Float[] DecodeFloatWithPvrTexLib(TextureFormat format, int width, int height, byte[] payload)
+    {
+        fixed (byte* payloadPtr = payload)
+        {
+            using var header = CreateCompressedHeader(format, width, height);
+            using var texture = new PVRTexture(header, payloadPtr);
+            Transcode(
+                texture,
+                Rgba32PixelFormat,
+                PVRTexLibVariableType.SignedFloat,
+                PVRTexLibColourSpace.Linear,
+                PVRTexLibCompressorQuality.PVRTCNormal);
+
+            var rgba = CopyTextureData(texture);
+            var requiredBytes = checked(width * height * sizeof(float) * 4);
+            Assert.True(rgba.Length >= requiredBytes, $"PVRTexLib returned {rgba.Length} bytes; expected at least {requiredBytes}.");
+            var pixels = new Rgba32Float[checked(width * height)];
+            MemoryMarshal.Cast<byte, Rgba32Float>(rgba.AsSpan(0, requiredBytes)).CopyTo(pixels);
             return pixels;
         }
     }
@@ -372,12 +477,56 @@ public sealed unsafe class PvrtcTextureCoderTests
         Assert.True(average <= 40d, $"{format.Name} average encode error was {average:0.00}.");
     }
 
+    private static void AssertFloatPixelsNear(Rgba32Float[] expected, Rgba32Float[] actual, TextureFormat format, float absoluteTolerance)
+    {
+        Assert.Equal(expected.Length, actual.Length);
+        for (var i = 0; i < expected.Length; i++)
+        {
+            AssertFloatChannelNear(expected[i].Red, actual[i].Red, format, i, nameof(Rgba32Float.Red), absoluteTolerance);
+            AssertFloatChannelNear(expected[i].Green, actual[i].Green, format, i, nameof(Rgba32Float.Green), absoluteTolerance);
+            AssertFloatChannelNear(expected[i].Blue, actual[i].Blue, format, i, nameof(Rgba32Float.Blue), absoluteTolerance);
+        }
+    }
+
+    private static void AssertAverageFloatErrorIsReasonable(
+        Rgba32Float[] source,
+        Rgba32Float[] decoded,
+        TextureFormat format,
+        float maxAverageError)
+    {
+        Assert.Equal(source.Length, decoded.Length);
+        var total = 0d;
+        for (var i = 0; i < source.Length; i++)
+        {
+            total += Math.Abs(source[i].Red - decoded[i].Red);
+            total += Math.Abs(source[i].Green - decoded[i].Green);
+            total += Math.Abs(source[i].Blue - decoded[i].Blue);
+        }
+
+        var average = total / (source.Length * 3d);
+        Assert.True(average <= maxAverageError, $"{format.Name} average HDR encode error was {average:0.00}.");
+    }
+
     private static void AssertChannelNear(byte expected, byte actual, TextureFormat format, int pixel, string channel)
     {
         var delta = Math.Abs(expected - actual);
         Assert.True(
             delta <= PixelTolerance,
             $"{format.Name} pixel {pixel} {channel}: expected {expected}, actual {actual}, delta {delta}.");
+    }
+
+    private static void AssertFloatChannelNear(
+        float expected,
+        float actual,
+        TextureFormat format,
+        int pixel,
+        string channel,
+        float absoluteTolerance)
+    {
+        var delta = Math.Abs(expected - actual);
+        Assert.True(
+            delta <= absoluteTolerance,
+            $"{format.Name} pixel {pixel} {channel}: expected {expected:0.###}, actual {actual:0.###}, delta {delta:0.###}.");
     }
 
     private static PVRTexLibColourSpace GetColourSpace(TextureFormat format) =>
