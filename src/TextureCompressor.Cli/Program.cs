@@ -104,6 +104,11 @@ internal static class Cli
             Description = "S3TC encoding quality.",
             DefaultValueFactory = _ => S3tcCompressionMode.Fast
         };
+        var fxtcQualityOption = new Option<FxtcCompressionMode>("--fxtc-quality")
+        {
+            Description = "FXT1 encoding quality.",
+            DefaultValueFactory = _ => FxtcCompressionMode.Fast
+        };
         var etcQualityOption = new Option<EtcCompressionMode>("--etc-quality")
         {
             Description = "ETC/EAC encoding quality.",
@@ -132,6 +137,7 @@ internal static class Cli
         command.Options.Add(ktxVersionOption);
         command.Options.Add(jpegQualityOption);
         command.Options.Add(s3tcQualityOption);
+        command.Options.Add(fxtcQualityOption);
         command.Options.Add(etcQualityOption);
         command.Options.Add(atcQualityOption);
         command.Options.Add(pvrtcQualityOption);
@@ -144,6 +150,7 @@ internal static class Cli
             var ktxVersion = parseResult.GetValue(ktxVersionOption);
             var jpegQuality = parseResult.GetValue(jpegQualityOption);
             var s3tcQuality = parseResult.GetValue(s3tcQualityOption);
+            var fxtcQuality = parseResult.GetValue(fxtcQualityOption);
             var etcQuality = parseResult.GetValue(etcQualityOption);
             var atcQuality = parseResult.GetValue(atcQualityOption);
             var pvrtcQuality = parseResult.GetValue(pvrtcQualityOption);
@@ -154,7 +161,7 @@ internal static class Cli
             var printMetrics = parseResult.GetValue(metricsOption);
 
             var source = Decode(inputPath, colorSpaces);
-            Encode(source, outputPath, outputKind, format, ktxVersion, jpegQuality, s3tcQuality, etcQuality, atcQuality, pvrtcQuality, colorSpaces);
+            Encode(source, outputPath, outputKind, format, ktxVersion, jpegQuality, s3tcQuality, fxtcQuality, etcQuality, atcQuality, pvrtcQuality, colorSpaces);
             Console.WriteLine($"wrote {outputPath}");
 
             if (printMetrics)
@@ -304,6 +311,7 @@ internal static class Cli
         int ktxVersion,
         int jpegQuality,
         S3tcCompressionMode s3tcQuality,
+        FxtcCompressionMode fxtcQuality,
         EtcCompressionMode etcQuality,
         AtcCompressionMode atcQuality,
         PvrtcCompressionMode pvrtcQuality,
@@ -316,6 +324,7 @@ internal static class Cli
         }
 
         using var s3tcRegistration = CreateS3tcRegistration(format, s3tcQuality);
+        using var fxtcRegistration = CreateFxtcRegistration(format, fxtcQuality);
         using var etcRegistration = CreateEtcRegistration(format, etcQuality);
         using var atcRegistration = CreateAtcRegistration(format, atcQuality);
         using var pvrtcRegistration = CreatePvrtcRegistration(format, pvrtcQuality);
@@ -361,6 +370,17 @@ internal static class Cli
 
         var options = new S3tcCoderOptions { CompressionMode = compressionMode };
         return TextureCoderManager.Global.Register(format, new S3tcTextureCoder(format, options));
+    }
+
+    private static IDisposable? CreateFxtcRegistration(TextureFormat format, FxtcCompressionMode compressionMode)
+    {
+        if (compressionMode == FxtcCompressionMode.Fast || !FxtcTextureCoder.IsSupported(format))
+        {
+            return null;
+        }
+
+        var options = new FxtcCoderOptions { CompressionMode = compressionMode };
+        return TextureCoderManager.Global.Register(format, new FxtcTextureCoder(format, options));
     }
 
     private static IDisposable? CreateEtcRegistration(TextureFormat format, EtcCompressionMode compressionMode)

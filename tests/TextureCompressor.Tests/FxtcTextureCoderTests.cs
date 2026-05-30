@@ -200,6 +200,45 @@ public sealed class FxtcTextureCoderTests
 
     [Theory]
     [MemberData(nameof(Fxt1Formats))]
+    public void EncodeAndDecodeHighQualityProducesDecodableFxt1(TextureFormat format)
+    {
+        const int width = 19;
+        const int height = 11;
+        var source = new ArrayBitmap<Rgba8UNorm>(width, height, CreateGradient(width, height, includeAlpha: format == TextureFormats.RgbaFxt1UNorm));
+        var options = new FxtcCoderOptions { CompressionMode = FxtcCompressionMode.High };
+        var coder = new FxtcTextureCoder(format, options);
+        var rowPitch = coder.GetDefaultPitch(width);
+        var encoded = new byte[coder.GetEncodedByteCount(width, height, rowPitch)];
+        var decoded = new ArrayBitmap<Rgba8UNorm>(width, height);
+
+        coder.Encode(source.AsView(), encoded, rowPitch);
+        coder.Decode(encoded, decoded.AsView(), rowPitch);
+
+        Assert.True(
+            decoded.Pixels.Distinct().Count() > 2,
+            $"{format.Name} high-quality encoded output collapsed to too few decoded colors.");
+    }
+
+    [Fact]
+    public void EncodeRgbFxt1HighQualityImprovesGradientError()
+    {
+        const int width = 8;
+        const int height = 4;
+        var source = new ArrayBitmap<Rgba8UNorm>(width, height, CreateGradient(width, height, includeAlpha: false));
+        var fastDecoded = EncodeDecode(source, new FxtcTextureCoder(TextureFormats.RgbFxt1UNorm));
+        var highDecoded = EncodeDecode(
+            source,
+            new FxtcTextureCoder(
+                TextureFormats.RgbFxt1UNorm,
+                new FxtcCoderOptions { CompressionMode = FxtcCompressionMode.High }));
+
+        Assert.True(
+            RgbSquaredError(source, highDecoded) < RgbSquaredError(source, fastDecoded),
+            "High-quality FXT1 should improve this non-trivial gradient block over the fast endpoint heuristic.");
+    }
+
+    [Theory]
+    [MemberData(nameof(Fxt1Formats))]
     public void EncodeAndDecodeSolidImageRoundTripsExactly(TextureFormat format)
     {
         const int width = 11;
@@ -233,6 +272,32 @@ public sealed class FxtcTextureCoderTests
         }
 
         return source;
+    }
+
+    private static ArrayBitmap<Rgba8UNorm> EncodeDecode(ArrayBitmap<Rgba8UNorm> source, FxtcTextureCoder coder)
+    {
+        var rowPitch = coder.GetDefaultPitch(source.Width);
+        var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
+        var decoded = new ArrayBitmap<Rgba8UNorm>(source.Width, source.Height);
+
+        coder.Encode(source.AsView(), encoded, rowPitch);
+        coder.Decode(encoded, decoded.AsView(), rowPitch);
+
+        return decoded;
+    }
+
+    private static long RgbSquaredError(ArrayBitmap<Rgba8UNorm> expected, ArrayBitmap<Rgba8UNorm> actual)
+    {
+        long error = 0;
+        for (var i = 0; i < expected.Pixels.Length; i++)
+        {
+            var red = expected.Pixels[i].Red - actual.Pixels[i].Red;
+            var green = expected.Pixels[i].Green - actual.Pixels[i].Green;
+            var blue = expected.Pixels[i].Blue - actual.Pixels[i].Blue;
+            error += (red * red) + (green * green) + (blue * blue);
+        }
+
+        return error;
     }
 
     private static void AssertBlockRowPaddingRemainsZero(

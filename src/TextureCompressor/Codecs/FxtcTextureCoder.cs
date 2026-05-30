@@ -13,13 +13,15 @@ public sealed class FxtcTextureCoder : IPitchTextureCoder
     private const int LeftTexelCount = 16;
     private const byte AlphaCutoff = 128;
 
+    private readonly FxtcCoderOptions _options;
+
     private static readonly TextureFormat[] SSupportedFormats =
     [
         TextureFormats.RgbFxt1UNorm,
         TextureFormats.RgbaFxt1UNorm
     ];
 
-    public FxtcTextureCoder(TextureFormat format)
+    public FxtcTextureCoder(TextureFormat format, FxtcCoderOptions? options = null)
     {
         if (!IsSupported(format))
         {
@@ -27,6 +29,7 @@ public sealed class FxtcTextureCoder : IPitchTextureCoder
         }
 
         Format = format;
+        _options = options ?? new FxtcCoderOptions();
     }
 
     public TextureFormat Format { get; }
@@ -134,6 +137,24 @@ public sealed class FxtcTextureCoder : IPitchTextureCoder
 
     private void EncodeBlock(ReadOnlySpan<Rgba8UNorm> source, Span<byte> destination)
     {
+        switch (_options.CompressionMode)
+        {
+            case FxtcCompressionMode.Fast:
+                EncodeBlockFast(source, destination);
+                return;
+            case FxtcCompressionMode.High:
+                EncodeBlockHigh(source, destination);
+                return;
+            default:
+                throw new ArgumentOutOfRangeException(
+                    nameof(FxtcCoderOptions.CompressionMode),
+                    _options.CompressionMode,
+                    "Unsupported FXT1 compression mode.");
+        }
+    }
+
+    private void EncodeBlockFast(ReadOnlySpan<Rgba8UNorm> source, Span<byte> destination)
+    {
         Span<byte> best = stackalloc byte[BytesPerBlock];
         Span<byte> candidate = stackalloc byte[BytesPerBlock];
         var bestError = long.MaxValue;
@@ -153,6 +174,36 @@ public sealed class FxtcTextureCoder : IPitchTextureCoder
             UpdateBestCandidate(source, candidate, best, ref bestError);
 
             EncodeCcAlphaBlock(source, candidate);
+            UpdateBestCandidate(source, candidate, best, ref bestError);
+        }
+
+        best.CopyTo(destination);
+    }
+
+    private void EncodeBlockHigh(ReadOnlySpan<Rgba8UNorm> source, Span<byte> destination)
+    {
+        Span<byte> best = stackalloc byte[BytesPerBlock];
+        Span<byte> candidate = stackalloc byte[BytesPerBlock];
+        var bestError = long.MaxValue;
+
+        EncodeBlockFast(source, candidate);
+        UpdateBestCandidate(source, candidate, best, ref bestError);
+
+        EncodeCcMixedOpaqueBlockHigh(source, candidate);
+        UpdateBestCandidate(source, candidate, best, ref bestError);
+
+        EncodeCcHiBlockHigh(source, candidate);
+        UpdateBestCandidate(source, candidate, best, ref bestError);
+
+        EncodeCcChromaBlockHigh(source, candidate);
+        UpdateBestCandidate(source, candidate, best, ref bestError);
+
+        if (Format == TextureFormats.RgbaFxt1UNorm)
+        {
+            EncodeCcMixedAlphaBlockHigh(source, candidate);
+            UpdateBestCandidate(source, candidate, best, ref bestError);
+
+            EncodeCcAlphaBlockHigh(source, candidate);
             UpdateBestCandidate(source, candidate, best, ref bestError);
         }
 
@@ -228,6 +279,231 @@ public sealed class FxtcTextureCoder : IPitchTextureCoder
         WriteBits(destination, 111, color1, 15);
     }
 
+    private void EncodeCcHiBlockHigh(ReadOnlySpan<Rgba8UNorm> source, Span<byte> destination)
+    {
+        Span<CcHiEndpointPair> seeds = stackalloc CcHiEndpointPair[16];
+        var seedCount = 0;
+        var compareAlpha = Format == TextureFormats.RgbaFxt1UNorm;
+        var ignoreTransparent = compareAlpha && HasTransparentTexel(source);
+
+        if (ignoreTransparent && !HasOpaqueTexel(source))
+        {
+            destination.Clear();
+            for (var i = 0; i < TexelsPerBlock; i++)
+            {
+                WriteBits(destination, i * 3, 7, 3);
+            }
+
+            return;
+        }
+
+        FindColorBounds(source, 0, TexelsPerBlock, includeAlpha: false, ignoreTransparent, out var min, out var max);
+        AddCcHiSeed(seeds, ref seedCount, PackRgb555(min), PackRgb555(max));
+        AddCcHiSeed(seeds, ref seedCount, PackRgb555(max), PackRgb555(min));
+
+        if (TryInsetColorBounds(min, max, out var insetMin, out var insetMax))
+        {
+            AddCcHiSeed(seeds, ref seedCount, PackRgb555(insetMin), PackRgb555(insetMax));
+            AddCcHiSeed(seeds, ref seedCount, PackRgb555(insetMax), PackRgb555(insetMin));
+        }
+
+        if (TryFindPrincipalAxisColorEndpoints(source, ignoreTransparent, out var axisMin, out var axisMax))
+        {
+            AddCcHiSeed(seeds, ref seedCount, PackRgb555Nearest(axisMin), PackRgb555Nearest(axisMax));
+            AddCcHiSeed(seeds, ref seedCount, PackRgb555Nearest(axisMax), PackRgb555Nearest(axisMin));
+        }
+
+        if (TryFindFarthestColorEndpoints(source, ignoreTransparent, out var farA, out var farB))
+        {
+            AddCcHiSeed(seeds, ref seedCount, PackRgb555(farA), PackRgb555(farB));
+            AddCcHiSeed(seeds, ref seedCount, PackRgb555(farB), PackRgb555(farA));
+        }
+
+        if (TryFindAverageColor(source, ignoreTransparent, out var average))
+        {
+            AddCcHiSeed(seeds, ref seedCount, PackRgb555Nearest(average), PackRgb555Nearest(average));
+        }
+
+        var best = new CcHiEncoding { Error = long.MaxValue };
+        for (var i = 0; i < seedCount; i++)
+        {
+            OptimizeCcHiSeed(source, compareAlpha, ignoreTransparent, seeds[i].Color0, seeds[i].Color1, ref best);
+        }
+
+        RefineCcHiEndpoints(source, compareAlpha, ignoreTransparent, ref best);
+        WriteCcHiEncoding(source, best.Color0, best.Color1, compareAlpha, ignoreTransparent, destination);
+    }
+
+    private static void AddCcHiSeed(Span<CcHiEndpointPair> seeds, ref int seedCount, ushort color0, ushort color1)
+    {
+        for (var i = 0; i < seedCount; i++)
+        {
+            if (seeds[i].Color0 == color0 && seeds[i].Color1 == color1)
+            {
+                return;
+            }
+        }
+
+        if (seedCount < seeds.Length)
+        {
+            seeds[seedCount++] = new CcHiEndpointPair(color0, color1);
+        }
+    }
+
+    private void OptimizeCcHiSeed(
+        ReadOnlySpan<Rgba8UNorm> source,
+        bool compareAlpha,
+        bool forceTransparent,
+        ushort color0,
+        ushort color1,
+        ref CcHiEncoding best)
+    {
+        Span<int> indices = stackalloc int[TexelsPerBlock];
+        for (var iteration = 0; iteration < 8; iteration++)
+        {
+            var current = EvaluateCcHiCandidate(source, color0, color1, compareAlpha, forceTransparent, indices);
+            UpdateBestCcHiEncoding(current, ref best);
+            if (current.Error == 0
+                || !TrySolveRgb555Line(source, indices, paletteSteps: 6, out var nextColor0, out var nextColor1))
+            {
+                return;
+            }
+
+            if (nextColor0 == color0 && nextColor1 == color1)
+            {
+                return;
+            }
+
+            color0 = nextColor0;
+            color1 = nextColor1;
+        }
+    }
+
+    private CcHiEncoding EvaluateCcHiCandidate(
+        ReadOnlySpan<Rgba8UNorm> source,
+        ushort color0,
+        ushort color1,
+        bool compareAlpha,
+        bool forceTransparent,
+        Span<int> indices)
+    {
+        Span<byte> encoded = stackalloc byte[BytesPerBlock];
+        WriteCcHiEncoding(source, color0, color1, compareAlpha, forceTransparent, encoded, indices);
+        return new CcHiEncoding
+        {
+            Color0 = color0,
+            Color1 = color1,
+            Error = CalculateBlockError(source, encoded)
+        };
+    }
+
+    private void RefineCcHiEndpoints(
+        ReadOnlySpan<Rgba8UNorm> source,
+        bool compareAlpha,
+        bool forceTransparent,
+        ref CcHiEncoding best)
+    {
+        for (var pass = 0; pass < 8; pass++)
+        {
+            var improved = false;
+            for (var endpoint = 0; endpoint < 2; endpoint++)
+            {
+                for (var component = 0; component < 3; component++)
+                {
+                    improved |= TryRefineCcHiEndpoint(source, compareAlpha, forceTransparent, endpoint, component, -1, ref best);
+                    improved |= TryRefineCcHiEndpoint(source, compareAlpha, forceTransparent, endpoint, component, 1, ref best);
+                }
+            }
+
+            if (!improved || best.Error == 0)
+            {
+                return;
+            }
+        }
+    }
+
+    private bool TryRefineCcHiEndpoint(
+        ReadOnlySpan<Rgba8UNorm> source,
+        bool compareAlpha,
+        bool forceTransparent,
+        int endpoint,
+        int component,
+        int delta,
+        ref CcHiEncoding best)
+    {
+        GetRgb555Components(best.Color0, out var red0, out var green0, out var blue0);
+        GetRgb555Components(best.Color1, out var red1, out var green1, out var blue1);
+
+        if (endpoint == 0)
+        {
+            if (!TryOffsetRgb555Component(ref red0, ref green0, ref blue0, component, delta))
+            {
+                return false;
+            }
+        }
+        else if (!TryOffsetRgb555Component(ref red1, ref green1, ref blue1, component, delta))
+        {
+            return false;
+        }
+
+        var color0 = PackRgb555FromComponents(red0, green0, blue0);
+        var color1 = PackRgb555FromComponents(red1, green1, blue1);
+        if (color0 == best.Color0 && color1 == best.Color1)
+        {
+            return false;
+        }
+
+        Span<int> indices = stackalloc int[TexelsPerBlock];
+        var candidate = EvaluateCcHiCandidate(source, color0, color1, compareAlpha, forceTransparent, indices);
+        if (candidate.Error >= best.Error)
+        {
+            return false;
+        }
+
+        best = candidate;
+        return true;
+    }
+
+    private void WriteCcHiEncoding(
+        ReadOnlySpan<Rgba8UNorm> source,
+        ushort color0,
+        ushort color1,
+        bool compareAlpha,
+        bool forceTransparent,
+        Span<byte> destination)
+    {
+        Span<int> indices = stackalloc int[TexelsPerBlock];
+        WriteCcHiEncoding(source, color0, color1, compareAlpha, forceTransparent, destination, indices);
+    }
+
+    private static void WriteCcHiEncoding(
+        ReadOnlySpan<Rgba8UNorm> source,
+        ushort color0,
+        ushort color1,
+        bool compareAlpha,
+        bool forceTransparent,
+        Span<byte> destination,
+        Span<int> indices)
+    {
+        destination.Clear();
+        var decoded0 = UnpackRgb555(color0, byte.MaxValue);
+        var decoded1 = UnpackRgb555(color1, byte.MaxValue);
+        Span<Rgba8UNorm> palette = stackalloc Rgba8UNorm[8];
+        BuildCcHiPalette(decoded0, decoded1, palette);
+
+        for (var i = 0; i < TexelsPerBlock; i++)
+        {
+            var index = forceTransparent && IsTransparent(source[i])
+                ? 7
+                : FindNearestColorIndex(source[i], palette, 8, compareAlpha);
+            indices[i] = index == 7 ? -1 : index;
+            WriteBits(destination, i * 3, (ulong)index, 3);
+        }
+
+        WriteBits(destination, 96, color0, 15);
+        WriteBits(destination, 111, color1, 15);
+    }
+
     private static void DecodeCcChromaBlock(ReadOnlySpan<byte> source, Span<Rgba8UNorm> destination)
     {
         Span<Rgba8UNorm> palette = stackalloc Rgba8UNorm[4];
@@ -262,6 +538,187 @@ public sealed class FxtcTextureCoder : IPitchTextureCoder
         WriteBits(destination, 79, PackRgb555(palette[1]), 15);
         WriteBits(destination, 94, PackRgb555(palette[2]), 15);
         WriteBits(destination, 109, PackRgb555(palette[3]), 15);
+        WriteBits(destination, 125, 0b010, 3);
+    }
+
+    private static void EncodeCcChromaBlockHigh(ReadOnlySpan<Rgba8UNorm> source, Span<byte> destination)
+    {
+        Span<ushort> colors = stackalloc ushort[4];
+        Span<Rgba8UNorm> palette = stackalloc Rgba8UNorm[4];
+        BuildClusterPalette(source, palette, 4);
+        for (var i = 0; i < colors.Length; i++)
+        {
+            colors[i] = PackRgb555(palette[i]);
+        }
+
+        var best = EvaluateCcChromaCandidate(source, colors);
+        Span<int> sumsRed = stackalloc int[4];
+        Span<int> sumsGreen = stackalloc int[4];
+        Span<int> sumsBlue = stackalloc int[4];
+        Span<int> counts = stackalloc int[4];
+        Span<ushort> nextColors = stackalloc ushort[4];
+        for (var iteration = 0; iteration < 12; iteration++)
+        {
+            sumsRed.Clear();
+            sumsGreen.Clear();
+            sumsBlue.Clear();
+            counts.Clear();
+
+            for (var i = 0; i < TexelsPerBlock; i++)
+            {
+                var index = (int)((best.Indices >> (i * 2)) & 0x3UL);
+                sumsRed[index] += source[i].Red;
+                sumsGreen[index] += source[i].Green;
+                sumsBlue[index] += source[i].Blue;
+                counts[index]++;
+            }
+
+            for (var i = 0; i < nextColors.Length; i++)
+            {
+                if (counts[i] == 0)
+                {
+                    nextColors[i] = PackRgb555(source[FindWorstColorIndex(source, best)]);
+                    continue;
+                }
+
+                nextColors[i] = PackRgb555Nearest(
+                    (double)sumsRed[i] / counts[i],
+                    (double)sumsGreen[i] / counts[i],
+                    (double)sumsBlue[i] / counts[i]);
+            }
+
+            var candidate = EvaluateCcChromaCandidate(source, nextColors);
+            if (candidate.Error >= best.Error)
+            {
+                break;
+            }
+
+            best = candidate;
+            if (best.Error == 0)
+            {
+                break;
+            }
+        }
+
+        RefineCcChromaPalette(source, ref best);
+        WriteCcChromaEncoding(best, destination);
+    }
+
+    private static CcChromaEncoding EvaluateCcChromaCandidate(ReadOnlySpan<Rgba8UNorm> source, ReadOnlySpan<ushort> colors)
+    {
+        Span<Rgba8UNorm> palette = stackalloc Rgba8UNorm[4];
+        for (var i = 0; i < palette.Length; i++)
+        {
+            palette[i] = UnpackRgb555(colors[i], byte.MaxValue);
+        }
+
+        ulong indices = 0;
+        long error = 0;
+        for (var i = 0; i < TexelsPerBlock; i++)
+        {
+            var index = FindNearestColorIndex(source[i], palette, 4, compareAlpha: false);
+            indices |= (ulong)index << (i * 2);
+            error += ColorDistance(source[i], palette[index], compareAlpha: false);
+        }
+
+        return new CcChromaEncoding
+        {
+            Color0 = colors[0],
+            Color1 = colors[1],
+            Color2 = colors[2],
+            Color3 = colors[3],
+            Indices = indices,
+            Error = error
+        };
+    }
+
+    private static void RefineCcChromaPalette(ReadOnlySpan<Rgba8UNorm> source, ref CcChromaEncoding best)
+    {
+        for (var pass = 0; pass < 8; pass++)
+        {
+            var improved = false;
+            for (var colorIndex = 0; colorIndex < 4; colorIndex++)
+            {
+                for (var component = 0; component < 3; component++)
+                {
+                    improved |= TryRefineCcChromaColor(source, colorIndex, component, -1, ref best);
+                    improved |= TryRefineCcChromaColor(source, colorIndex, component, 1, ref best);
+                }
+            }
+
+            if (!improved || best.Error == 0)
+            {
+                return;
+            }
+        }
+    }
+
+    private static bool TryRefineCcChromaColor(
+        ReadOnlySpan<Rgba8UNorm> source,
+        int colorIndex,
+        int component,
+        int delta,
+        ref CcChromaEncoding best)
+    {
+        Span<ushort> colors = stackalloc ushort[4];
+        colors[0] = best.Color0;
+        colors[1] = best.Color1;
+        colors[2] = best.Color2;
+        colors[3] = best.Color3;
+
+        GetRgb555Components(colors[colorIndex], out var red, out var green, out var blue);
+        if (!TryOffsetRgb555Component(ref red, ref green, ref blue, component, delta))
+        {
+            return false;
+        }
+
+        colors[colorIndex] = PackRgb555FromComponents(red, green, blue);
+        var candidate = EvaluateCcChromaCandidate(source, colors);
+        if (candidate.Error >= best.Error)
+        {
+            return false;
+        }
+
+        best = candidate;
+        return true;
+    }
+
+    private static int FindWorstColorIndex(ReadOnlySpan<Rgba8UNorm> source, CcChromaEncoding encoding)
+    {
+        Span<Rgba8UNorm> palette = stackalloc Rgba8UNorm[4];
+        palette[0] = UnpackRgb555(encoding.Color0, byte.MaxValue);
+        palette[1] = UnpackRgb555(encoding.Color1, byte.MaxValue);
+        palette[2] = UnpackRgb555(encoding.Color2, byte.MaxValue);
+        palette[3] = UnpackRgb555(encoding.Color3, byte.MaxValue);
+
+        var worstIndex = 0;
+        var worstDistance = -1;
+        for (var i = 0; i < TexelsPerBlock; i++)
+        {
+            var index = (int)((encoding.Indices >> (i * 2)) & 0x3UL);
+            var distance = ColorDistance(source[i], palette[index], compareAlpha: false);
+            if (distance > worstDistance)
+            {
+                worstDistance = distance;
+                worstIndex = i;
+            }
+        }
+
+        return worstIndex;
+    }
+
+    private static void WriteCcChromaEncoding(CcChromaEncoding encoding, Span<byte> destination)
+    {
+        destination.Clear();
+        for (var i = 0; i < TexelsPerBlock; i++)
+        {
+            WriteBits(destination, i * 2, (encoding.Indices >> (i * 2)) & 0x3UL, 2);
+        }
+
+        WriteBits(destination, 64, encoding.Color0, 15);
+        WriteBits(destination, 79, encoding.Color1, 15);
+        WriteBits(destination, 94, encoding.Color2, 15);
+        WriteBits(destination, 109, encoding.Color3, 15);
         WriteBits(destination, 125, 0b010, 3);
     }
 
@@ -304,6 +761,293 @@ public sealed class FxtcTextureCoder : IPitchTextureCoder
         EncodeCcMixedOpaqueHalf(source, destination, 0, 64, 79, 125);
         EncodeCcMixedOpaqueHalf(source, destination, LeftTexelCount, 94, 109, 126);
         WriteBits(destination, 127, 1, 1);
+    }
+
+    private static void EncodeCcMixedOpaqueBlockHigh(ReadOnlySpan<Rgba8UNorm> source, Span<byte> destination)
+    {
+        destination.Clear();
+        var left = FindBestCcMixedOpaqueHalf(source, 0, 64, 79, 125);
+        var right = FindBestCcMixedOpaqueHalf(source, LeftTexelCount, 94, 109, 126);
+        WriteCcMixedOpaqueHalf(source, destination, 0, 64, 79, 125, left.Color0, left.Color1);
+        WriteCcMixedOpaqueHalf(source, destination, LeftTexelCount, 94, 109, 126, right.Color0, right.Color1);
+        WriteBits(destination, 127, 1, 1);
+    }
+
+    private static CcMixedOpaqueEncoding FindBestCcMixedOpaqueHalf(
+        ReadOnlySpan<Rgba8UNorm> source,
+        int start,
+        int color0BitOffset,
+        int color1BitOffset,
+        int greenLowBitOffset)
+    {
+        Span<Rgb565EndpointPair> seeds = stackalloc Rgb565EndpointPair[14];
+        var seedCount = 0;
+
+        FindColorBounds(source, start, LeftTexelCount, includeAlpha: false, ignoreTransparent: false, out var min, out var max);
+        AddRgb565Seed(seeds, ref seedCount, PackRgb565(min), PackRgb565(max));
+        AddRgb565Seed(seeds, ref seedCount, PackRgb565(max), PackRgb565(min));
+
+        if (TryInsetColorBounds(min, max, out var insetMin, out var insetMax))
+        {
+            AddRgb565Seed(seeds, ref seedCount, PackRgb565(insetMin), PackRgb565(insetMax));
+            AddRgb565Seed(seeds, ref seedCount, PackRgb565(insetMax), PackRgb565(insetMin));
+        }
+
+        if (TryFindPrincipalAxisColorEndpoints(source, start, LeftTexelCount, ignoreTransparent: false, out var axisMin, out var axisMax))
+        {
+            AddRgb565Seed(seeds, ref seedCount, PackRgb565Nearest(axisMin), PackRgb565Nearest(axisMax));
+            AddRgb565Seed(seeds, ref seedCount, PackRgb565Nearest(axisMax), PackRgb565Nearest(axisMin));
+        }
+
+        if (TryFindFarthestColorEndpoints(source, start, LeftTexelCount, ignoreTransparent: false, out var farA, out var farB))
+        {
+            AddRgb565Seed(seeds, ref seedCount, PackRgb565(farA), PackRgb565(farB));
+            AddRgb565Seed(seeds, ref seedCount, PackRgb565(farB), PackRgb565(farA));
+        }
+
+        if (TryFindAverageColor(source, start, LeftTexelCount, ignoreTransparent: false, out var average))
+        {
+            AddRgb565Seed(seeds, ref seedCount, PackRgb565Nearest(average), PackRgb565Nearest(average));
+        }
+
+        var best = new CcMixedOpaqueEncoding { Error = long.MaxValue };
+        for (var i = 0; i < seedCount; i++)
+        {
+            OptimizeCcMixedOpaqueSeed(
+                source,
+                start,
+                color0BitOffset,
+                color1BitOffset,
+                greenLowBitOffset,
+                seeds[i].Color0,
+                seeds[i].Color1,
+                ref best);
+        }
+
+        RefineCcMixedOpaqueEndpoints(source, start, color0BitOffset, color1BitOffset, greenLowBitOffset, ref best);
+        return best;
+    }
+
+    private static void AddRgb565Seed(Span<Rgb565EndpointPair> seeds, ref int seedCount, ushort color0, ushort color1)
+    {
+        for (var i = 0; i < seedCount; i++)
+        {
+            if (seeds[i].Color0 == color0 && seeds[i].Color1 == color1)
+            {
+                return;
+            }
+        }
+
+        if (seedCount < seeds.Length)
+        {
+            seeds[seedCount++] = new Rgb565EndpointPair(color0, color1);
+        }
+    }
+
+    private static void OptimizeCcMixedOpaqueSeed(
+        ReadOnlySpan<Rgba8UNorm> source,
+        int start,
+        int color0BitOffset,
+        int color1BitOffset,
+        int greenLowBitOffset,
+        ushort color0,
+        ushort color1,
+        ref CcMixedOpaqueEncoding best)
+    {
+        Span<int> indices = stackalloc int[LeftTexelCount];
+        for (var iteration = 0; iteration < 8; iteration++)
+        {
+            var current = EvaluateCcMixedOpaqueCandidate(
+                source,
+                start,
+                color0BitOffset,
+                color1BitOffset,
+                greenLowBitOffset,
+                color0,
+                color1,
+                indices);
+            UpdateBestCcMixedOpaqueEncoding(current, ref best);
+            if (current.Error == 0
+                || !TrySolveRgb565Line(source, start, LeftTexelCount, indices, out var nextColor0, out var nextColor1))
+            {
+                return;
+            }
+
+            if (nextColor0 == color0 && nextColor1 == color1)
+            {
+                return;
+            }
+
+            color0 = nextColor0;
+            color1 = nextColor1;
+        }
+    }
+
+    private static CcMixedOpaqueEncoding EvaluateCcMixedOpaqueCandidate(
+        ReadOnlySpan<Rgba8UNorm> source,
+        int start,
+        int color0BitOffset,
+        int color1BitOffset,
+        int greenLowBitOffset,
+        ushort color0,
+        ushort color1,
+        Span<int> solvedIndices)
+    {
+        Span<byte> encoded = stackalloc byte[BytesPerBlock];
+        encoded.Clear();
+        WriteCcMixedOpaqueHalf(source, encoded, start, color0BitOffset, color1BitOffset, greenLowBitOffset, color0, color1, solvedIndices);
+        WriteBits(encoded, 127, 1, 1);
+
+        Span<Rgba8UNorm> decoded = stackalloc Rgba8UNorm[TexelsPerBlock];
+        DecodeCcMixedBlock(encoded, decoded);
+
+        long error = 0;
+        for (var i = 0; i < LeftTexelCount; i++)
+        {
+            var sourceIndex = start + i;
+            error += ColorDistance(source[sourceIndex], decoded[sourceIndex], compareAlpha: false);
+        }
+
+        return new CcMixedOpaqueEncoding { Color0 = color0, Color1 = color1, Error = error };
+    }
+
+    private static void RefineCcMixedOpaqueEndpoints(
+        ReadOnlySpan<Rgba8UNorm> source,
+        int start,
+        int color0BitOffset,
+        int color1BitOffset,
+        int greenLowBitOffset,
+        ref CcMixedOpaqueEncoding best)
+    {
+        for (var pass = 0; pass < 8; pass++)
+        {
+            var improved = false;
+            for (var endpoint = 0; endpoint < 2; endpoint++)
+            {
+                for (var component = 0; component < 3; component++)
+                {
+                    improved |= TryRefineCcMixedOpaqueEndpoint(source, start, color0BitOffset, color1BitOffset, greenLowBitOffset, endpoint, component, -1, ref best);
+                    improved |= TryRefineCcMixedOpaqueEndpoint(source, start, color0BitOffset, color1BitOffset, greenLowBitOffset, endpoint, component, 1, ref best);
+                }
+            }
+
+            if (!improved || best.Error == 0)
+            {
+                return;
+            }
+        }
+    }
+
+    private static bool TryRefineCcMixedOpaqueEndpoint(
+        ReadOnlySpan<Rgba8UNorm> source,
+        int start,
+        int color0BitOffset,
+        int color1BitOffset,
+        int greenLowBitOffset,
+        int endpoint,
+        int component,
+        int delta,
+        ref CcMixedOpaqueEncoding best)
+    {
+        GetRgb565Components(best.Color0, out var red0, out var green0, out var blue0);
+        GetRgb565Components(best.Color1, out var red1, out var green1, out var blue1);
+
+        if (endpoint == 0)
+        {
+            if (!TryOffsetRgb565Component(ref red0, ref green0, ref blue0, component, delta))
+            {
+                return false;
+            }
+        }
+        else if (!TryOffsetRgb565Component(ref red1, ref green1, ref blue1, component, delta))
+        {
+            return false;
+        }
+
+        var color0 = PackRgb565FromComponents(red0, green0, blue0);
+        var color1 = PackRgb565FromComponents(red1, green1, blue1);
+        if (color0 == best.Color0 && color1 == best.Color1)
+        {
+            return false;
+        }
+
+        Span<int> indices = stackalloc int[LeftTexelCount];
+        var candidate = EvaluateCcMixedOpaqueCandidate(
+            source,
+            start,
+            color0BitOffset,
+            color1BitOffset,
+            greenLowBitOffset,
+            color0,
+            color1,
+            indices);
+        if (candidate.Error >= best.Error)
+        {
+            return false;
+        }
+
+        best = candidate;
+        return true;
+    }
+
+    private static void WriteCcMixedOpaqueHalf(
+        ReadOnlySpan<Rgba8UNorm> source,
+        Span<byte> destination,
+        int start,
+        int color0BitOffset,
+        int color1BitOffset,
+        int greenLowBitOffset,
+        ushort color0,
+        ushort color1)
+    {
+        Span<int> indices = stackalloc int[LeftTexelCount];
+        WriteCcMixedOpaqueHalf(source, destination, start, color0BitOffset, color1BitOffset, greenLowBitOffset, color0, color1, indices);
+    }
+
+    private static void WriteCcMixedOpaqueHalf(
+        ReadOnlySpan<Rgba8UNorm> source,
+        Span<byte> destination,
+        int start,
+        int color0BitOffset,
+        int color1BitOffset,
+        int greenLowBitOffset,
+        ushort color0,
+        ushort color1,
+        Span<int> solvedIndices)
+    {
+        var decoded0 = UnpackRgb565(color0, byte.MaxValue);
+        var decoded1 = UnpackRgb565(color1, byte.MaxValue);
+        Span<Rgba8UNorm> palette = stackalloc Rgba8UNorm[4];
+        BuildFourColorPalette(decoded0, decoded1, includeAlpha: false, palette);
+
+        Span<int> indices = stackalloc int[LeftTexelCount];
+        for (var i = 0; i < LeftTexelCount; i++)
+        {
+            indices[i] = FindNearestColorIndex(source[start + i], palette, 4, compareAlpha: false);
+            solvedIndices[i] = indices[i];
+        }
+
+        var green0LowBit = GetRgb565Green(color0) & 1;
+        var green1LowBit = GetRgb565Green(color1) & 1;
+        if (((indices[0] >> 1) & 1) != (green0LowBit ^ green1LowBit))
+        {
+            (color0, color1) = (color1, color0);
+            for (var i = 0; i < indices.Length; i++)
+            {
+                indices[i] = 3 - indices[i];
+            }
+
+            green1LowBit = GetRgb565Green(color1) & 1;
+        }
+
+        for (var i = 0; i < LeftTexelCount; i++)
+        {
+            WriteBits(destination, (start + i) * 2, (ulong)indices[i], 2);
+        }
+
+        WriteBits(destination, color0BitOffset, PackRgb565WithoutGreenLowBit(color0), 15);
+        WriteBits(destination, color1BitOffset, PackRgb565WithoutGreenLowBit(color1), 15);
+        WriteBits(destination, greenLowBitOffset, (ulong)green1LowBit, 1);
     }
 
     private static void EncodeCcMixedOpaqueHalf(
@@ -364,6 +1108,296 @@ public sealed class FxtcTextureCoder : IPitchTextureCoder
         EncodeCcMixedAlphaHalf(source, destination, LeftTexelCount, 94, 109, 126);
         WriteBits(destination, 124, 1, 1);
         WriteBits(destination, 127, 1, 1);
+    }
+
+    private static void EncodeCcMixedAlphaBlockHigh(ReadOnlySpan<Rgba8UNorm> source, Span<byte> destination)
+    {
+        destination.Clear();
+        var left = FindBestCcMixedAlphaHalf(source, 0, 64, 79, 125);
+        var right = FindBestCcMixedAlphaHalf(source, LeftTexelCount, 94, 109, 126);
+        WriteCcMixedAlphaHalf(source, destination, 0, 64, 79, 125, left.Color0, left.Color1);
+        WriteCcMixedAlphaHalf(source, destination, LeftTexelCount, 94, 109, 126, right.Color0, right.Color1);
+        WriteBits(destination, 124, 1, 1);
+        WriteBits(destination, 127, 1, 1);
+    }
+
+    private static CcMixedAlphaEncoding FindBestCcMixedAlphaHalf(
+        ReadOnlySpan<Rgba8UNorm> source,
+        int start,
+        int color0BitOffset,
+        int color1BitOffset,
+        int greenLowBitOffset)
+    {
+        if (!HasOpaqueTexel(source, start, LeftTexelCount))
+        {
+            return new CcMixedAlphaEncoding { Color0 = 0, Color1 = 0, Error = 0 };
+        }
+
+        Span<MixedAlphaEndpointPair> seeds = stackalloc MixedAlphaEndpointPair[14];
+        var seedCount = 0;
+
+        FindColorBounds(source, start, LeftTexelCount, includeAlpha: false, ignoreTransparent: true, out var min, out var max);
+        AddMixedAlphaSeed(seeds, ref seedCount, PackRgb555(min), PackRgb565(max));
+        AddMixedAlphaSeed(seeds, ref seedCount, PackRgb555(max), PackRgb565(min));
+
+        if (TryInsetColorBounds(min, max, out var insetMin, out var insetMax))
+        {
+            AddMixedAlphaSeed(seeds, ref seedCount, PackRgb555(insetMin), PackRgb565(insetMax));
+            AddMixedAlphaSeed(seeds, ref seedCount, PackRgb555(insetMax), PackRgb565(insetMin));
+        }
+
+        if (TryFindPrincipalAxisColorEndpoints(source, start, LeftTexelCount, ignoreTransparent: true, out var axisMin, out var axisMax))
+        {
+            AddMixedAlphaSeed(seeds, ref seedCount, PackRgb555Nearest(axisMin), PackRgb565Nearest(axisMax));
+            AddMixedAlphaSeed(seeds, ref seedCount, PackRgb555Nearest(axisMax), PackRgb565Nearest(axisMin));
+        }
+
+        if (TryFindFarthestColorEndpoints(source, start, LeftTexelCount, ignoreTransparent: true, out var farA, out var farB))
+        {
+            AddMixedAlphaSeed(seeds, ref seedCount, PackRgb555(farA), PackRgb565(farB));
+            AddMixedAlphaSeed(seeds, ref seedCount, PackRgb555(farB), PackRgb565(farA));
+        }
+
+        if (TryFindAverageColor(source, start, LeftTexelCount, ignoreTransparent: true, out var average))
+        {
+            AddMixedAlphaSeed(seeds, ref seedCount, PackRgb555Nearest(average), PackRgb565Nearest(average));
+        }
+
+        var best = new CcMixedAlphaEncoding { Error = long.MaxValue };
+        for (var i = 0; i < seedCount; i++)
+        {
+            OptimizeCcMixedAlphaSeed(
+                source,
+                start,
+                color0BitOffset,
+                color1BitOffset,
+                greenLowBitOffset,
+                seeds[i].Color0,
+                seeds[i].Color1,
+                ref best);
+        }
+
+        RefineCcMixedAlphaEndpoints(source, start, color0BitOffset, color1BitOffset, greenLowBitOffset, ref best);
+        return best;
+    }
+
+    private static void AddMixedAlphaSeed(Span<MixedAlphaEndpointPair> seeds, ref int seedCount, ushort color0, ushort color1)
+    {
+        for (var i = 0; i < seedCount; i++)
+        {
+            if (seeds[i].Color0 == color0 && seeds[i].Color1 == color1)
+            {
+                return;
+            }
+        }
+
+        if (seedCount < seeds.Length)
+        {
+            seeds[seedCount++] = new MixedAlphaEndpointPair(color0, color1);
+        }
+    }
+
+    private static void OptimizeCcMixedAlphaSeed(
+        ReadOnlySpan<Rgba8UNorm> source,
+        int start,
+        int color0BitOffset,
+        int color1BitOffset,
+        int greenLowBitOffset,
+        ushort color0,
+        ushort color1,
+        ref CcMixedAlphaEncoding best)
+    {
+        Span<int> indices = stackalloc int[LeftTexelCount];
+        for (var iteration = 0; iteration < 8; iteration++)
+        {
+            var current = EvaluateCcMixedAlphaCandidate(
+                source,
+                start,
+                color0BitOffset,
+                color1BitOffset,
+                greenLowBitOffset,
+                color0,
+                color1,
+                indices);
+            UpdateBestCcMixedAlphaEncoding(current, ref best);
+            if (current.Error == 0
+                || !TrySolveMixedAlphaLine(source, start, indices, out var nextColor0, out var nextColor1))
+            {
+                return;
+            }
+
+            if (nextColor0 == color0 && nextColor1 == color1)
+            {
+                return;
+            }
+
+            color0 = nextColor0;
+            color1 = nextColor1;
+        }
+    }
+
+    private static CcMixedAlphaEncoding EvaluateCcMixedAlphaCandidate(
+        ReadOnlySpan<Rgba8UNorm> source,
+        int start,
+        int color0BitOffset,
+        int color1BitOffset,
+        int greenLowBitOffset,
+        ushort color0,
+        ushort color1,
+        Span<int> solvedIndices)
+    {
+        Span<byte> encoded = stackalloc byte[BytesPerBlock];
+        encoded.Clear();
+        WriteCcMixedAlphaHalf(source, encoded, start, color0BitOffset, color1BitOffset, greenLowBitOffset, color0, color1, solvedIndices);
+        WriteBits(encoded, 124, 1, 1);
+        WriteBits(encoded, 127, 1, 1);
+
+        Span<Rgba8UNorm> decoded = stackalloc Rgba8UNorm[TexelsPerBlock];
+        DecodeCcMixedBlock(encoded, decoded);
+
+        long error = 0;
+        for (var i = 0; i < LeftTexelCount; i++)
+        {
+            var sourceIndex = start + i;
+            error += ColorDistance(source[sourceIndex], decoded[sourceIndex], compareAlpha: true);
+        }
+
+        return new CcMixedAlphaEncoding { Color0 = color0, Color1 = color1, Error = error };
+    }
+
+    private static void RefineCcMixedAlphaEndpoints(
+        ReadOnlySpan<Rgba8UNorm> source,
+        int start,
+        int color0BitOffset,
+        int color1BitOffset,
+        int greenLowBitOffset,
+        ref CcMixedAlphaEncoding best)
+    {
+        for (var pass = 0; pass < 8; pass++)
+        {
+            var improved = false;
+            for (var endpoint = 0; endpoint < 2; endpoint++)
+            {
+                for (var component = 0; component < 3; component++)
+                {
+                    improved |= TryRefineCcMixedAlphaEndpoint(source, start, color0BitOffset, color1BitOffset, greenLowBitOffset, endpoint, component, -1, ref best);
+                    improved |= TryRefineCcMixedAlphaEndpoint(source, start, color0BitOffset, color1BitOffset, greenLowBitOffset, endpoint, component, 1, ref best);
+                }
+            }
+
+            if (!improved || best.Error == 0)
+            {
+                return;
+            }
+        }
+    }
+
+    private static bool TryRefineCcMixedAlphaEndpoint(
+        ReadOnlySpan<Rgba8UNorm> source,
+        int start,
+        int color0BitOffset,
+        int color1BitOffset,
+        int greenLowBitOffset,
+        int endpoint,
+        int component,
+        int delta,
+        ref CcMixedAlphaEncoding best)
+    {
+        GetRgb555Components(best.Color0, out var red0, out var green0, out var blue0);
+        GetRgb565Components(best.Color1, out var red1, out var green1, out var blue1);
+
+        if (endpoint == 0)
+        {
+            if (!TryOffsetRgb555Component(ref red0, ref green0, ref blue0, component, delta))
+            {
+                return false;
+            }
+        }
+        else if (!TryOffsetRgb565Component(ref red1, ref green1, ref blue1, component, delta))
+        {
+            return false;
+        }
+
+        var color0 = PackRgb555FromComponents(red0, green0, blue0);
+        var color1 = PackRgb565FromComponents(red1, green1, blue1);
+        if (color0 == best.Color0 && color1 == best.Color1)
+        {
+            return false;
+        }
+
+        Span<int> indices = stackalloc int[LeftTexelCount];
+        var candidate = EvaluateCcMixedAlphaCandidate(
+            source,
+            start,
+            color0BitOffset,
+            color1BitOffset,
+            greenLowBitOffset,
+            color0,
+            color1,
+            indices);
+        if (candidate.Error >= best.Error)
+        {
+            return false;
+        }
+
+        best = candidate;
+        return true;
+    }
+
+    private static void WriteCcMixedAlphaHalf(
+        ReadOnlySpan<Rgba8UNorm> source,
+        Span<byte> destination,
+        int start,
+        int color0BitOffset,
+        int color1BitOffset,
+        int greenLowBitOffset,
+        ushort color0,
+        ushort color1)
+    {
+        Span<int> indices = stackalloc int[LeftTexelCount];
+        WriteCcMixedAlphaHalf(source, destination, start, color0BitOffset, color1BitOffset, greenLowBitOffset, color0, color1, indices);
+    }
+
+    private static void WriteCcMixedAlphaHalf(
+        ReadOnlySpan<Rgba8UNorm> source,
+        Span<byte> destination,
+        int start,
+        int color0BitOffset,
+        int color1BitOffset,
+        int greenLowBitOffset,
+        ushort color0,
+        ushort color1,
+        Span<int> solvedIndices)
+    {
+        if (!HasOpaqueTexel(source, start, LeftTexelCount))
+        {
+            for (var i = 0; i < LeftTexelCount; i++)
+            {
+                solvedIndices[i] = -1;
+                WriteBits(destination, (start + i) * 2, 3, 2);
+            }
+
+            return;
+        }
+
+        var decoded0 = UnpackRgb555(color0, byte.MaxValue);
+        var decoded1 = UnpackRgb565(color1, byte.MaxValue);
+        Span<Rgba8UNorm> palette = stackalloc Rgba8UNorm[4];
+        BuildCcMixedPalette(decoded0, decoded1, alphaMode: true, palette);
+
+        for (var i = 0; i < LeftTexelCount; i++)
+        {
+            var sourceIndex = start + i;
+            var index = IsTransparent(source[sourceIndex])
+                ? 3
+                : FindNearestColorIndex(source[sourceIndex], palette, 3, compareAlpha: true);
+            solvedIndices[i] = index == 3 ? -1 : index;
+            WriteBits(destination, sourceIndex * 2, (ulong)index, 2);
+        }
+
+        WriteBits(destination, color0BitOffset, color0, 15);
+        WriteBits(destination, color1BitOffset, PackRgb565WithoutGreenLowBit(color1), 15);
+        WriteBits(destination, greenLowBitOffset, (ulong)(GetRgb565Green(color1) & 1), 1);
     }
 
     private static void EncodeCcMixedAlphaHalf(
@@ -469,6 +1503,86 @@ public sealed class FxtcTextureCoder : IPitchTextureCoder
         WriteBits(destination, 125, 0b011, 3);
     }
 
+    private static void EncodeCcAlphaBlockHigh(ReadOnlySpan<Rgba8UNorm> source, Span<byte> destination)
+    {
+        Span<byte> best = stackalloc byte[BytesPerBlock];
+        Span<byte> candidate = stackalloc byte[BytesPerBlock];
+        var bestError = long.MaxValue;
+
+        EncodeCcAlphaBlock(source, candidate);
+        UpdateBestAlphaCandidate(source, candidate, best, ref bestError);
+
+        EncodeCcAlphaExplicitBlockHigh(source, candidate);
+        UpdateBestAlphaCandidate(source, candidate, best, ref bestError);
+
+        best.CopyTo(destination);
+    }
+
+    private static void UpdateBestAlphaCandidate(
+        ReadOnlySpan<Rgba8UNorm> source,
+        ReadOnlySpan<byte> candidate,
+        Span<byte> best,
+        ref long bestError)
+    {
+        Span<Rgba8UNorm> decoded = stackalloc Rgba8UNorm[TexelsPerBlock];
+        DecodeCcAlphaBlock(candidate, decoded);
+
+        long error = 0;
+        for (var i = 0; i < TexelsPerBlock; i++)
+        {
+            error += ColorDistance(source[i], decoded[i], compareAlpha: true);
+        }
+
+        if (error < bestError)
+        {
+            bestError = error;
+            candidate.CopyTo(best);
+        }
+    }
+
+    private static void EncodeCcAlphaExplicitBlockHigh(ReadOnlySpan<Rgba8UNorm> source, Span<byte> destination)
+    {
+        destination.Clear();
+        if (!HasOpaqueTexel(source))
+        {
+            for (var i = 0; i < TexelsPerBlock; i++)
+            {
+                WriteBits(destination, i * 2, 3, 2);
+            }
+
+            WriteBits(destination, 125, 0b011, 3);
+            return;
+        }
+
+        Span<Rgba8UNorm> palette = stackalloc Rgba8UNorm[3];
+        BuildRgbaClusterPalette(source, palette, 3, ignoreTransparent: true);
+
+        Span<ushort> colors = stackalloc ushort[3];
+        Span<byte> alphas = stackalloc byte[3];
+        for (var i = 0; i < palette.Length; i++)
+        {
+            colors[i] = PackRgb555(palette[i]);
+            alphas[i] = QuantizeAlpha5(palette[i].Alpha);
+            palette[i] = UnpackRgb555(colors[i], alphas[i]);
+        }
+
+        for (var i = 0; i < TexelsPerBlock; i++)
+        {
+            var index = IsTransparent(source[i])
+                ? 3
+                : FindNearestColorIndex(source[i], palette, 3, compareAlpha: true);
+            WriteBits(destination, i * 2, (ulong)index, 2);
+        }
+
+        WriteBits(destination, 64, colors[0], 15);
+        WriteBits(destination, 79, colors[1], 15);
+        WriteBits(destination, 94, colors[2], 15);
+        WriteBits(destination, 109, (ulong)Quantize5(alphas[0]), 5);
+        WriteBits(destination, 114, (ulong)Quantize5(alphas[1]), 5);
+        WriteBits(destination, 119, (ulong)Quantize5(alphas[2]), 5);
+        WriteBits(destination, 125, 0b011, 3);
+    }
+
     private static void ChooseCcAlphaEndpoints(
         Rgba8UNorm leftMin,
         Rgba8UNorm leftMax,
@@ -569,8 +1683,43 @@ public sealed class FxtcTextureCoder : IPitchTextureCoder
         return new Rgba8UNorm(Expand5To8(red), Expand6To8(green), Expand5To8(blue), alpha);
     }
 
+    private static Rgba8UNorm UnpackRgb565(ushort value, byte alpha)
+    {
+        var red = (value >> 11) & 0x1f;
+        var green = (value >> 5) & 0x3f;
+        var blue = value & 0x1f;
+        return new Rgba8UNorm(Expand5To8(red), Expand6To8(green), Expand5To8(blue), alpha);
+    }
+
     private static ushort PackRgb555(Rgba8UNorm value) =>
         (ushort)((Quantize5(value.Red) << 10) | (Quantize5(value.Green) << 5) | Quantize5(value.Blue));
+
+    private static ushort PackRgb555Nearest(RgbVector value) =>
+        PackRgb555Nearest(value.Red, value.Green, value.Blue);
+
+    private static ushort PackRgb555Nearest(double red, double green, double blue) =>
+        PackRgb555FromComponents(
+            QuantizeToBits(red, 31),
+            QuantizeToBits(green, 31),
+            QuantizeToBits(blue, 31));
+
+    private static ushort PackRgb555FromComponents(int red, int green, int blue) =>
+        (ushort)((red << 10) | (green << 5) | blue);
+
+    private static ushort PackRgb565(Rgba8UNorm value) =>
+        PackRgb565FromComponents(Quantize5(value.Red), Quantize6(value.Green), Quantize5(value.Blue));
+
+    private static ushort PackRgb565Nearest(RgbVector value) =>
+        PackRgb565Nearest(value.Red, value.Green, value.Blue);
+
+    private static ushort PackRgb565Nearest(double red, double green, double blue) =>
+        PackRgb565FromComponents(
+            QuantizeToBits(red, 31),
+            QuantizeToBits(green, 63),
+            QuantizeToBits(blue, 31));
+
+    private static ushort PackRgb565FromComponents(int red, int green, int blue) =>
+        (ushort)((red << 11) | (green << 5) | blue);
 
     private static ushort PackRgb565WithoutGreenLowBit(Rgba8UNorm value)
     {
@@ -578,11 +1727,25 @@ public sealed class FxtcTextureCoder : IPitchTextureCoder
         return (ushort)((Quantize5(value.Red) << 10) | ((green6 >> 1) << 5) | Quantize5(value.Blue));
     }
 
+    private static ushort PackRgb565WithoutGreenLowBit(ushort value)
+    {
+        GetRgb565Components(value, out var red, out var green, out var blue);
+        return (ushort)((red << 10) | ((green >> 1) << 5) | blue);
+    }
+
+    private static int GetRgb565Green(ushort value) => (value >> 5) & 0x3f;
+
     private static int Quantize5(byte value) => (value * 31 + 127) / 255;
 
     private static int Quantize6(byte value) => (value * 63 + 127) / 255;
 
     private static byte QuantizeAlpha5(byte value) => Expand5To8(Quantize5(value));
+
+    private static int QuantizeToBits(double value, int max)
+    {
+        var clamped = Math.Clamp(value, byte.MinValue, byte.MaxValue);
+        return Math.Clamp((int)Math.Round(clamped * max / byte.MaxValue), 0, max);
+    }
 
     private static byte Expand5To8(int value) => (byte)((value << 3) | (value >> 2));
 
@@ -829,6 +1992,576 @@ public sealed class FxtcTextureCoder : IPitchTextureCoder
         return bestChannel;
     }
 
+    private static bool TryInsetColorBounds(Rgba8UNorm min, Rgba8UNorm max, out Rgba8UNorm insetMin, out Rgba8UNorm insetMax)
+    {
+        var redRange = max.Red - min.Red;
+        var greenRange = max.Green - min.Green;
+        var blueRange = max.Blue - min.Blue;
+        if (redRange == 0 && greenRange == 0 && blueRange == 0)
+        {
+            insetMin = default;
+            insetMax = default;
+            return false;
+        }
+
+        insetMin = new Rgba8UNorm(
+            (byte)(min.Red + (redRange / 16)),
+            (byte)(min.Green + (greenRange / 16)),
+            (byte)(min.Blue + (blueRange / 16)));
+        insetMax = new Rgba8UNorm(
+            (byte)(max.Red - (redRange / 16)),
+            (byte)(max.Green - (greenRange / 16)),
+            (byte)(max.Blue - (blueRange / 16)));
+        return true;
+    }
+
+    private static bool TryFindPrincipalAxisColorEndpoints(
+        ReadOnlySpan<Rgba8UNorm> source,
+        bool ignoreTransparent,
+        out RgbVector minEndpoint,
+        out RgbVector maxEndpoint) =>
+        TryFindPrincipalAxisColorEndpoints(source, 0, TexelsPerBlock, ignoreTransparent, out minEndpoint, out maxEndpoint);
+
+    private static bool TryFindPrincipalAxisColorEndpoints(
+        ReadOnlySpan<Rgba8UNorm> source,
+        int start,
+        int count,
+        bool ignoreTransparent,
+        out RgbVector minEndpoint,
+        out RgbVector maxEndpoint)
+    {
+        var colorCount = 0;
+        var meanRed = 0d;
+        var meanGreen = 0d;
+        var meanBlue = 0d;
+        var minRed = 255d;
+        var minGreen = 255d;
+        var minBlue = 255d;
+        var maxRed = 0d;
+        var maxGreen = 0d;
+        var maxBlue = 0d;
+
+        for (var i = start; i < start + count; i++)
+        {
+            if (ignoreTransparent && IsTransparent(source[i]))
+            {
+                continue;
+            }
+
+            var red = source[i].Red;
+            var green = source[i].Green;
+            var blue = source[i].Blue;
+            meanRed += red;
+            meanGreen += green;
+            meanBlue += blue;
+            minRed = Math.Min(minRed, red);
+            minGreen = Math.Min(minGreen, green);
+            minBlue = Math.Min(minBlue, blue);
+            maxRed = Math.Max(maxRed, red);
+            maxGreen = Math.Max(maxGreen, green);
+            maxBlue = Math.Max(maxBlue, blue);
+            colorCount++;
+        }
+
+        if (colorCount == 0)
+        {
+            minEndpoint = default;
+            maxEndpoint = default;
+            return false;
+        }
+
+        meanRed /= colorCount;
+        meanGreen /= colorCount;
+        meanBlue /= colorCount;
+
+        var covRedRed = 0d;
+        var covRedGreen = 0d;
+        var covRedBlue = 0d;
+        var covGreenGreen = 0d;
+        var covGreenBlue = 0d;
+        var covBlueBlue = 0d;
+
+        for (var i = start; i < start + count; i++)
+        {
+            if (ignoreTransparent && IsTransparent(source[i]))
+            {
+                continue;
+            }
+
+            var red = source[i].Red - meanRed;
+            var green = source[i].Green - meanGreen;
+            var blue = source[i].Blue - meanBlue;
+            covRedRed += red * red;
+            covRedGreen += red * green;
+            covRedBlue += red * blue;
+            covGreenGreen += green * green;
+            covGreenBlue += green * blue;
+            covBlueBlue += blue * blue;
+        }
+
+        var axisRed = maxRed - minRed;
+        var axisGreen = maxGreen - minGreen;
+        var axisBlue = maxBlue - minBlue;
+        if (!NormalizeVector(ref axisRed, ref axisGreen, ref axisBlue))
+        {
+            minEndpoint = default;
+            maxEndpoint = default;
+            return false;
+        }
+
+        for (var iteration = 0; iteration < 8; iteration++)
+        {
+            var nextRed = (covRedRed * axisRed) + (covRedGreen * axisGreen) + (covRedBlue * axisBlue);
+            var nextGreen = (covRedGreen * axisRed) + (covGreenGreen * axisGreen) + (covGreenBlue * axisBlue);
+            var nextBlue = (covRedBlue * axisRed) + (covGreenBlue * axisGreen) + (covBlueBlue * axisBlue);
+            if (!NormalizeVector(ref nextRed, ref nextGreen, ref nextBlue))
+            {
+                break;
+            }
+
+            axisRed = nextRed;
+            axisGreen = nextGreen;
+            axisBlue = nextBlue;
+        }
+
+        var minProjection = double.PositiveInfinity;
+        var maxProjection = double.NegativeInfinity;
+        for (var i = start; i < start + count; i++)
+        {
+            if (ignoreTransparent && IsTransparent(source[i]))
+            {
+                continue;
+            }
+
+            var projection = ((source[i].Red - meanRed) * axisRed)
+                + ((source[i].Green - meanGreen) * axisGreen)
+                + ((source[i].Blue - meanBlue) * axisBlue);
+            minProjection = Math.Min(minProjection, projection);
+            maxProjection = Math.Max(maxProjection, projection);
+        }
+
+        if (maxProjection - minProjection < 0.5d)
+        {
+            minEndpoint = default;
+            maxEndpoint = default;
+            return false;
+        }
+
+        minEndpoint = new RgbVector(
+            meanRed + (axisRed * minProjection),
+            meanGreen + (axisGreen * minProjection),
+            meanBlue + (axisBlue * minProjection));
+        maxEndpoint = new RgbVector(
+            meanRed + (axisRed * maxProjection),
+            meanGreen + (axisGreen * maxProjection),
+            meanBlue + (axisBlue * maxProjection));
+        return true;
+    }
+
+    private static bool TryFindFarthestColorEndpoints(
+        ReadOnlySpan<Rgba8UNorm> source,
+        bool ignoreTransparent,
+        out Rgba8UNorm endpoint0,
+        out Rgba8UNorm endpoint1) =>
+        TryFindFarthestColorEndpoints(source, 0, TexelsPerBlock, ignoreTransparent, out endpoint0, out endpoint1);
+
+    private static bool TryFindFarthestColorEndpoints(
+        ReadOnlySpan<Rgba8UNorm> source,
+        int start,
+        int count,
+        bool ignoreTransparent,
+        out Rgba8UNorm endpoint0,
+        out Rgba8UNorm endpoint1)
+    {
+        endpoint0 = default;
+        endpoint1 = default;
+        var bestDistance = -1;
+
+        for (var i = start; i < start + count; i++)
+        {
+            if (ignoreTransparent && IsTransparent(source[i]))
+            {
+                continue;
+            }
+
+            for (var j = i + 1; j < start + count; j++)
+            {
+                if (ignoreTransparent && IsTransparent(source[j]))
+                {
+                    continue;
+                }
+
+                var distance = ColorDistance(source[i], source[j], compareAlpha: false);
+                if (distance > bestDistance)
+                {
+                    bestDistance = distance;
+                    endpoint0 = WithAlpha(source[i], byte.MaxValue);
+                    endpoint1 = WithAlpha(source[j], byte.MaxValue);
+                }
+            }
+        }
+
+        return bestDistance > 0;
+    }
+
+    private static bool TryFindAverageColor(
+        ReadOnlySpan<Rgba8UNorm> source,
+        bool ignoreTransparent,
+        out RgbVector average) =>
+        TryFindAverageColor(source, 0, TexelsPerBlock, ignoreTransparent, out average);
+
+    private static bool TryFindAverageColor(
+        ReadOnlySpan<Rgba8UNorm> source,
+        int start,
+        int count,
+        bool ignoreTransparent,
+        out RgbVector average)
+    {
+        var colorCount = 0;
+        var red = 0d;
+        var green = 0d;
+        var blue = 0d;
+        for (var i = start; i < start + count; i++)
+        {
+            if (ignoreTransparent && IsTransparent(source[i]))
+            {
+                continue;
+            }
+
+            red += source[i].Red;
+            green += source[i].Green;
+            blue += source[i].Blue;
+            colorCount++;
+        }
+
+        if (colorCount == 0)
+        {
+            average = default;
+            return false;
+        }
+
+        average = new RgbVector(red / colorCount, green / colorCount, blue / colorCount);
+        return true;
+    }
+
+    private static bool TrySolveRgb555Line(
+        ReadOnlySpan<Rgba8UNorm> source,
+        ReadOnlySpan<int> indices,
+        int paletteSteps,
+        out ushort color0,
+        out ushort color1)
+    {
+        return TrySolveRgbLine(source, 0, TexelsPerBlock, indices, paletteSteps, pack565: false, out color0, out color1);
+    }
+
+    private static bool TrySolveRgb565Line(
+        ReadOnlySpan<Rgba8UNorm> source,
+        int start,
+        int count,
+        ReadOnlySpan<int> indices,
+        out ushort color0,
+        out ushort color1)
+    {
+        return TrySolveRgbLine(source, start, count, indices, paletteSteps: 3, pack565: true, out color0, out color1);
+    }
+
+    private static bool TrySolveRgbLine(
+        ReadOnlySpan<Rgba8UNorm> source,
+        int start,
+        int count,
+        ReadOnlySpan<int> indices,
+        int paletteSteps,
+        bool pack565,
+        out ushort color0,
+        out ushort color1)
+    {
+        var a00 = 0d;
+        var a01 = 0d;
+        var a11 = 0d;
+        var b0Red = 0d;
+        var b0Green = 0d;
+        var b0Blue = 0d;
+        var b1Red = 0d;
+        var b1Green = 0d;
+        var b1Blue = 0d;
+
+        for (var i = 0; i < count; i++)
+        {
+            var index = indices[i];
+            if (index < 0 || index > paletteSteps)
+            {
+                continue;
+            }
+
+            var weight0 = (double)(paletteSteps - index) / paletteSteps;
+            var weight1 = (double)index / paletteSteps;
+            var sourceIndex = start + i;
+            a00 += weight0 * weight0;
+            a01 += weight0 * weight1;
+            a11 += weight1 * weight1;
+            b0Red += weight0 * source[sourceIndex].Red;
+            b0Green += weight0 * source[sourceIndex].Green;
+            b0Blue += weight0 * source[sourceIndex].Blue;
+            b1Red += weight1 * source[sourceIndex].Red;
+            b1Green += weight1 * source[sourceIndex].Green;
+            b1Blue += weight1 * source[sourceIndex].Blue;
+        }
+
+        var determinant = (a00 * a11) - (a01 * a01);
+        if (Math.Abs(determinant) < 0.000001d)
+        {
+            color0 = 0;
+            color1 = 0;
+            return false;
+        }
+
+        var red0 = ((b0Red * a11) - (b1Red * a01)) / determinant;
+        var green0 = ((b0Green * a11) - (b1Green * a01)) / determinant;
+        var blue0 = ((b0Blue * a11) - (b1Blue * a01)) / determinant;
+        var red1 = ((a00 * b1Red) - (a01 * b0Red)) / determinant;
+        var green1 = ((a00 * b1Green) - (a01 * b0Green)) / determinant;
+        var blue1 = ((a00 * b1Blue) - (a01 * b0Blue)) / determinant;
+
+        if (pack565)
+        {
+            color0 = PackRgb565Nearest(red0, green0, blue0);
+            color1 = PackRgb565Nearest(red1, green1, blue1);
+        }
+        else
+        {
+            color0 = PackRgb555Nearest(red0, green0, blue0);
+            color1 = PackRgb555Nearest(red1, green1, blue1);
+        }
+
+        return true;
+    }
+
+    private static bool TrySolveMixedAlphaLine(
+        ReadOnlySpan<Rgba8UNorm> source,
+        int start,
+        ReadOnlySpan<int> indices,
+        out ushort color0,
+        out ushort color1)
+    {
+        var a00 = 0d;
+        var a01 = 0d;
+        var a11 = 0d;
+        var b0Red = 0d;
+        var b0Green = 0d;
+        var b0Blue = 0d;
+        var b1Red = 0d;
+        var b1Green = 0d;
+        var b1Blue = 0d;
+
+        for (var i = 0; i < LeftTexelCount; i++)
+        {
+            var index = indices[i];
+            if (index < 0 || index > 2)
+            {
+                continue;
+            }
+
+            var weight0 = index switch
+            {
+                0 => 1d,
+                1 => 0.5d,
+                _ => 0d
+            };
+            var weight1 = index switch
+            {
+                0 => 0d,
+                1 => 0.5d,
+                _ => 1d
+            };
+            var sourceIndex = start + i;
+            a00 += weight0 * weight0;
+            a01 += weight0 * weight1;
+            a11 += weight1 * weight1;
+            b0Red += weight0 * source[sourceIndex].Red;
+            b0Green += weight0 * source[sourceIndex].Green;
+            b0Blue += weight0 * source[sourceIndex].Blue;
+            b1Red += weight1 * source[sourceIndex].Red;
+            b1Green += weight1 * source[sourceIndex].Green;
+            b1Blue += weight1 * source[sourceIndex].Blue;
+        }
+
+        var determinant = (a00 * a11) - (a01 * a01);
+        if (Math.Abs(determinant) < 0.000001d)
+        {
+            color0 = 0;
+            color1 = 0;
+            return false;
+        }
+
+        color0 = PackRgb555Nearest(
+            ((b0Red * a11) - (b1Red * a01)) / determinant,
+            ((b0Green * a11) - (b1Green * a01)) / determinant,
+            ((b0Blue * a11) - (b1Blue * a01)) / determinant);
+        color1 = PackRgb565Nearest(
+            ((a00 * b1Red) - (a01 * b0Red)) / determinant,
+            ((a00 * b1Green) - (a01 * b0Green)) / determinant,
+            ((a00 * b1Blue) - (a01 * b0Blue)) / determinant);
+        return true;
+    }
+
+    private static void BuildRgbaClusterPalette(
+        ReadOnlySpan<Rgba8UNorm> source,
+        Span<Rgba8UNorm> palette,
+        int paletteCount,
+        bool ignoreTransparent)
+    {
+        FindColorBounds(source, 0, TexelsPerBlock, includeAlpha: true, ignoreTransparent, out var min, out var max);
+        for (var i = 0; i < paletteCount; i++)
+        {
+            palette[i] = paletteCount == 1
+                ? min
+                : Interpolate(min, max, paletteCount - 1 - i, i, paletteCount - 1, includeAlpha: true);
+        }
+
+        Span<int> sumsRed = stackalloc int[4];
+        Span<int> sumsGreen = stackalloc int[4];
+        Span<int> sumsBlue = stackalloc int[4];
+        Span<int> sumsAlpha = stackalloc int[4];
+        Span<int> counts = stackalloc int[4];
+
+        for (var iteration = 0; iteration < 12; iteration++)
+        {
+            sumsRed.Clear();
+            sumsGreen.Clear();
+            sumsBlue.Clear();
+            sumsAlpha.Clear();
+            counts.Clear();
+
+            for (var i = 0; i < TexelsPerBlock; i++)
+            {
+                if (ignoreTransparent && IsTransparent(source[i]))
+                {
+                    continue;
+                }
+
+                var index = FindNearestColorIndex(source[i], palette, paletteCount, compareAlpha: true);
+                sumsRed[index] += source[i].Red;
+                sumsGreen[index] += source[i].Green;
+                sumsBlue[index] += source[i].Blue;
+                sumsAlpha[index] += source[i].Alpha;
+                counts[index]++;
+            }
+
+            for (var i = 0; i < paletteCount; i++)
+            {
+                if (counts[i] == 0)
+                {
+                    palette[i] = source[FindWorstRgbaColorIndex(source, palette, paletteCount, ignoreTransparent)];
+                    continue;
+                }
+
+                palette[i] = new Rgba8UNorm(
+                    (byte)((sumsRed[i] + (counts[i] / 2)) / counts[i]),
+                    (byte)((sumsGreen[i] + (counts[i] / 2)) / counts[i]),
+                    (byte)((sumsBlue[i] + (counts[i] / 2)) / counts[i]),
+                    (byte)((sumsAlpha[i] + (counts[i] / 2)) / counts[i]));
+            }
+        }
+    }
+
+    private static int FindWorstRgbaColorIndex(
+        ReadOnlySpan<Rgba8UNorm> source,
+        ReadOnlySpan<Rgba8UNorm> palette,
+        int paletteCount,
+        bool ignoreTransparent)
+    {
+        var worstIndex = 0;
+        var worstDistance = -1;
+        for (var i = 0; i < TexelsPerBlock; i++)
+        {
+            if (ignoreTransparent && IsTransparent(source[i]))
+            {
+                continue;
+            }
+
+            var nearest = palette[FindNearestColorIndex(source[i], palette, paletteCount, compareAlpha: true)];
+            var distance = ColorDistance(source[i], nearest, compareAlpha: true);
+            if (distance > worstDistance)
+            {
+                worstDistance = distance;
+                worstIndex = i;
+            }
+        }
+
+        return worstIndex;
+    }
+
+    private static void GetRgb555Components(ushort value, out int red, out int green, out int blue)
+    {
+        red = (value >> 10) & 0x1f;
+        green = (value >> 5) & 0x1f;
+        blue = value & 0x1f;
+    }
+
+    private static void GetRgb565Components(ushort value, out int red, out int green, out int blue)
+    {
+        red = (value >> 11) & 0x1f;
+        green = (value >> 5) & 0x3f;
+        blue = value & 0x1f;
+    }
+
+    private static bool TryOffsetRgb555Component(ref int red, ref int green, ref int blue, int component, int delta)
+    {
+        switch (component)
+        {
+            case 0:
+                return TryOffsetComponent(ref red, delta, 31);
+            case 1:
+                return TryOffsetComponent(ref green, delta, 31);
+            case 2:
+                return TryOffsetComponent(ref blue, delta, 31);
+            default:
+                throw new ArgumentOutOfRangeException(nameof(component));
+        }
+    }
+
+    private static bool TryOffsetRgb565Component(ref int red, ref int green, ref int blue, int component, int delta)
+    {
+        switch (component)
+        {
+            case 0:
+                return TryOffsetComponent(ref red, delta, 31);
+            case 1:
+                return TryOffsetComponent(ref green, delta, 63);
+            case 2:
+                return TryOffsetComponent(ref blue, delta, 31);
+            default:
+                throw new ArgumentOutOfRangeException(nameof(component));
+        }
+    }
+
+    private static bool TryOffsetComponent(ref int value, int delta, int max)
+    {
+        var next = value + delta;
+        if (next < 0 || next > max)
+        {
+            return false;
+        }
+
+        value = next;
+        return true;
+    }
+
+    private static bool NormalizeVector(ref double x, ref double y, ref double z)
+    {
+        var lengthSquared = (x * x) + (y * y) + (z * z);
+        if (lengthSquared < 0.000001d)
+        {
+            return false;
+        }
+
+        var scale = 1d / Math.Sqrt(lengthSquared);
+        x *= scale;
+        y *= scale;
+        z *= scale;
+        return true;
+    }
+
     private static byte GetColorChannel(Rgba8UNorm color, int channel) => channel switch
     {
         0 => color.Red,
@@ -871,6 +2604,59 @@ public sealed class FxtcTextureCoder : IPitchTextureCoder
     private static Rgba8UNorm WithAlpha(Rgba8UNorm color, byte alpha) => new(color.Red, color.Green, color.Blue, alpha);
 
     private static bool IsTransparent(Rgba8UNorm color) => color.Alpha < AlphaCutoff;
+
+    private static bool HasTransparentTexel(ReadOnlySpan<Rgba8UNorm> source)
+    {
+        for (var i = 0; i < TexelsPerBlock; i++)
+        {
+            if (IsTransparent(source[i]))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool HasOpaqueTexel(ReadOnlySpan<Rgba8UNorm> source) =>
+        HasOpaqueTexel(source, 0, TexelsPerBlock);
+
+    private static bool HasOpaqueTexel(ReadOnlySpan<Rgba8UNorm> source, int start, int count)
+    {
+        for (var i = start; i < start + count; i++)
+        {
+            if (!IsTransparent(source[i]))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static void UpdateBestCcHiEncoding(CcHiEncoding candidate, ref CcHiEncoding best)
+    {
+        if (candidate.Error < best.Error)
+        {
+            best = candidate;
+        }
+    }
+
+    private static void UpdateBestCcMixedOpaqueEncoding(CcMixedOpaqueEncoding candidate, ref CcMixedOpaqueEncoding best)
+    {
+        if (candidate.Error < best.Error)
+        {
+            best = candidate;
+        }
+    }
+
+    private static void UpdateBestCcMixedAlphaEncoding(CcMixedAlphaEncoding candidate, ref CcMixedAlphaEncoding best)
+    {
+        if (candidate.Error < best.Error)
+        {
+            best = candidate;
+        }
+    }
 
     private static void LoadBlock<TPixel>(BitmapView<TPixel> source, int blockX, int blockY, Span<Rgba8UNorm> destination)
         where TPixel : unmanaged, IPixel<TPixel>
@@ -979,4 +2765,43 @@ public sealed class FxtcTextureCoder : IPitchTextureCoder
 
     private static NotSupportedException CreateUnsupportedFormatException(TextureFormat format) =>
         new($"FXT1 texture coder does not support texture format '{format.Name}'.");
+
+    private readonly record struct RgbVector(double Red, double Green, double Blue);
+
+    private readonly record struct CcHiEndpointPair(ushort Color0, ushort Color1);
+
+    private readonly record struct Rgb565EndpointPair(ushort Color0, ushort Color1);
+
+    private readonly record struct MixedAlphaEndpointPair(ushort Color0, ushort Color1);
+
+    private struct CcHiEncoding
+    {
+        public ushort Color0;
+        public ushort Color1;
+        public long Error;
+    }
+
+    private struct CcChromaEncoding
+    {
+        public ushort Color0;
+        public ushort Color1;
+        public ushort Color2;
+        public ushort Color3;
+        public ulong Indices;
+        public long Error;
+    }
+
+    private struct CcMixedOpaqueEncoding
+    {
+        public ushort Color0;
+        public ushort Color1;
+        public long Error;
+    }
+
+    private struct CcMixedAlphaEncoding
+    {
+        public ushort Color0;
+        public ushort Color1;
+        public long Error;
+    }
 }

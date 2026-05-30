@@ -104,11 +104,11 @@ coder.Decode(encoded, decoded.AsView());
 PngCodec.Encode(decoded, "roundtrip.png");
 ```
 
-`TextureCoderManager.Global` creates built-in coders by format. Built-in S3TC, ETC/EAC, ATC, and PVRTC coders also expose compression-mode options when you construct and register them yourself; see the next section. Register an external coder when you need a different implementation or higher production compression quality.
+`TextureCoderManager.Global` creates built-in coders by format. Built-in S3TC, FXT1, ETC/EAC, ATC, and PVRTC coders also expose compression-mode options when you construct and register them yourself; see the next section. Register an external coder when you need a different implementation or higher production compression quality.
 
 ## Use Built-In High-Quality Encoding Modes
 
-The default built-in coders favor fast, predictable baseline conversion. The built-in S3TC, ETC/EAC, ATC, and PVRTC implementations expose higher-quality search modes. Register an optioned coder with `TextureCoderManager`, and later `TextureCoderManager.Global.GetCoder(...)`, `DdsCodec.Encode(...)`, `KtxCodec.Encode(...)`, or `PvrCodec.Encode(...)` calls will prefer your registered coder. The default behavior is restored when the `using var` registration is disposed.
+The default built-in coders favor fast, predictable baseline conversion. The built-in S3TC, FXT1, ETC/EAC, ATC, and PVRTC implementations expose higher-quality search modes. Register an optioned coder with `TextureCoderManager`, and later `TextureCoderManager.Global.GetCoder(...)`, `DdsCodec.Encode(...)`, `KtxCodec.Encode(...)`, or `PvrCodec.Encode(...)` calls will prefer your registered coder. The default behavior is restored when the `using var` registration is disposed.
 
 ```csharp
 using TextureCompressor.Codecs;
@@ -120,6 +120,13 @@ using var highQualityS3tc = TextureCoderManager.Global.Register(
     new S3tcTextureCoder(
         s3tcFormat,
         new S3tcCoderOptions { CompressionMode = S3tcCompressionMode.High }));
+
+var fxt1Format = TextureFormats.RgbaFxt1UNorm;
+using var highQualityFxt1 = TextureCoderManager.Global.Register(
+    fxt1Format,
+    new FxtcTextureCoder(
+        fxt1Format,
+        new FxtcCoderOptions { CompressionMode = FxtcCompressionMode.High }));
 
 var etcFormat = TextureFormats.RgbaEtc2EacUNorm;
 using var highQualityEtc = TextureCoderManager.Global.Register(
@@ -145,7 +152,7 @@ using var exhaustivePvrtc = TextureCoderManager.Global.Register(
 var coder = TextureCoderManager.Global.GetCoder(s3tcFormat);
 ```
 
-These built-in quality modes currently cover S3TC, ETC/EAC, ATC, and PVRTC. For production-quality BC6H/BC7, ASTC, and other formats, use the optional third-party encoder adapters below.
+These built-in quality modes currently cover S3TC, FXT1, ETC/EAC, ATC, and PVRTC. For production-quality BC6H/BC7, ASTC, and other formats, use the optional third-party encoder adapters below.
 
 ## Read And Write PNG
 
@@ -390,7 +397,7 @@ Common commands:
 - `convert <input> <output>`: convert between image and texture containers. The output container is inferred from the extension unless `--container` is passed explicitly.
 - `quality <expected> <actual>`: decode two image/texture files and print MSE, RMSE, and PSNR; add `--ignore-alpha` to ignore alpha.
 
-Image containers support PNG, JPEG, and GIF. `convert` provides `--png-color-space`, `--jpg-color-space`, and `--gif-color-space` conversions between Linear and Srgb. JPEG output quality is controlled with `--jpeg-quality`; S3TC, ETC/EAC, ATC, and PVRTC built-in texture encoding quality can be selected with `--s3tc-quality`, `--etc-quality`, `--atc-quality`, and `--pvrtc-quality`.
+Image containers support PNG, JPEG, and GIF. `convert` provides `--png-color-space`, `--jpg-color-space`, and `--gif-color-space` conversions between Linear and Srgb. JPEG output quality is controlled with `--jpeg-quality`; S3TC, FXT1, ETC/EAC, ATC, and PVRTC built-in texture encoding quality can be selected with `--s3tc-quality`, `--fxtc-quality`, `--etc-quality`, `--atc-quality`, and `--pvrtc-quality`.
 
 ## Common Workflows
 
