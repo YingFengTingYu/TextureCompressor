@@ -337,7 +337,8 @@ public sealed class PvrtcTextureCoder : ITextureCoder
         int height,
         TextureFormat format,
         Span<byte> destination,
-        bool encodeSrgbColors)
+        bool encodeSrgbColors,
+        bool scoreEndpointCandidates = false)
     {
         var info = GetFormatInfo(format);
         ValidateDimensions(info, width, height);
@@ -368,7 +369,7 @@ public sealed class PvrtcTextureCoder : ITextureCoder
         var colorCount = checked(width * height);
         if (!encodeSrgbColors)
         {
-            EncodeFromRgba8Storage(info, width, height, source[..colorCount], destination);
+            EncodeFromRgba8Storage(info, width, height, source[..colorCount], destination, scoreEndpointCandidates);
             return;
         }
 
@@ -377,7 +378,7 @@ public sealed class PvrtcTextureCoder : ITextureCoder
         {
             var colorSpan = colors.AsSpan(0, colorCount);
             CopyToStorageRgba8(source, colorSpan, encodeSrgb: true, hasAlpha: info.HasAlpha);
-            EncodeFromRgba8Storage(info, width, height, colorSpan, destination);
+            EncodeFromRgba8Storage(info, width, height, colorSpan, destination, scoreEndpointCandidates);
         }
         finally
         {
@@ -565,10 +566,24 @@ public sealed class PvrtcTextureCoder : ITextureCoder
 
             ValidateHdrSource(source);
             BuildHdrLumaPlane(source, lumaSpan);
-            EncodeRgba8(lumaSpan, width, height, lumaFormat, lumaPayload);
+            EncodeStorageOrNormalizedRgba8(
+                lumaSpan,
+                width,
+                height,
+                lumaFormat,
+                lumaPayload,
+                encodeSrgbColors: false,
+                scoreEndpointCandidates: true);
             DecodeRgba8(lumaFormat, width, height, lumaPayload, decodedLumaSpan);
             BuildHdrChromaPlane(source, decodedLumaSpan, chromaSpan);
-            EncodeRgba8(chromaSpan, width, height, chromaFormat, chromaPayload);
+            EncodeStorageOrNormalizedRgba8(
+                chromaSpan,
+                width,
+                height,
+                chromaFormat,
+                chromaPayload,
+                encodeSrgbColors: false,
+                scoreEndpointCandidates: true);
         }
         finally
         {
@@ -1271,7 +1286,8 @@ public sealed class PvrtcTextureCoder : ITextureCoder
         int width,
         int height,
         ReadOnlySpan<Rgba8UNorm> image,
-        Span<byte> destination)
+        Span<byte> destination,
+        bool scoreEndpointCandidates = false)
     {
         var storageExtent = GetStorageExtent(info, width, height, info.BitsPerPixel);
         var storageTexelCount = checked(storageExtent.Width * storageExtent.Height);
@@ -1299,7 +1315,8 @@ public sealed class PvrtcTextureCoder : ITextureCoder
                     wordWidth,
                     imageASpan,
                     imageBSpan,
-                    info.HasAlpha);
+                    info.HasAlpha,
+                    scoreEndpointCandidates);
                 Modulate2Bpp(
                     image,
                     width,
@@ -1331,7 +1348,8 @@ public sealed class PvrtcTextureCoder : ITextureCoder
                     wordWidth,
                     imageASpan,
                     imageBSpan,
-                    info.HasAlpha);
+                    info.HasAlpha,
+                    scoreEndpointCandidates);
                 Modulate4Bpp(
                     image,
                     width,
@@ -1370,13 +1388,24 @@ public sealed class PvrtcTextureCoder : ITextureCoder
         int wordWidth,
         Span<Rgba8UNorm> outA,
         Span<Rgba8UNorm> outB,
-        bool hasAlpha)
+        bool hasAlpha,
+        bool scoreEndpointCandidates)
     {
         for (var y = 0; y < storageHeight; y += WordHeight)
         {
             for (var x = 0; x < storageWidth; x += wordWidth)
             {
-                GetExtremesFast(image, imageWidth, imageHeight, x, y, wordWidth, hasAlpha, out var indexA, out var indexB);
+                GetExtremesFast(
+                    image,
+                    imageWidth,
+                    imageHeight,
+                    x,
+                    y,
+                    wordWidth,
+                    hasAlpha,
+                    scoreEndpointCandidates,
+                    out var indexA,
+                    out var indexB);
                 var outputIndex = (y / WordHeight * (storageWidth / wordWidth)) + (x / wordWidth);
                 outA[outputIndex] = ApplyColorChannelReduction(image[indexA], isB: false, hasAlpha);
                 outB[outputIndex] = ApplyColorChannelReduction(image[indexB], isB: true, hasAlpha);
@@ -1731,14 +1760,20 @@ public sealed class PvrtcTextureCoder : ITextureCoder
 
     private static byte ApplyBitDepthReduction(byte input, int bitDepth)
     {
-        var encodedBits = (byte)(input & (GetMask(bitDepth) << (8 - bitDepth)));
-        var result = (byte)(encodedBits | (encodedBits >> bitDepth));
-        if (bitDepth <= 3)
-        {
-            result |= (byte)(encodedBits >> (bitDepth << 1));
-        }
+        var quantized = QuantizeToBitDepth(input, bitDepth);
+        return ExpandFromBitDepth(quantized, bitDepth);
+    }
 
-        return result;
+    private static int QuantizeToBitDepth(byte input, int bitDepth)
+    {
+        var maxValue = (1 << bitDepth) - 1;
+        return (input * maxValue + 127) / byte.MaxValue;
+    }
+
+    private static byte ExpandFromBitDepth(int input, int bitDepth)
+    {
+        var maxValue = (1 << bitDepth) - 1;
+        return (byte)((input * byte.MaxValue + (maxValue >> 1)) / maxValue);
     }
 
     private static Rgba8UNorm GetInterpolatedColor(ReadOnlySpan<Rgba8UNorm> source, int width, int height, int wordWidth, int x, int y)
@@ -1785,6 +1820,7 @@ public sealed class PvrtcTextureCoder : ITextureCoder
         int y0,
         int wordWidth,
         bool hasAlpha,
+        bool scoreEndpointCandidates,
         out int indexA,
         out int indexB)
     {
@@ -1814,21 +1850,51 @@ public sealed class PvrtcTextureCoder : ITextureCoder
             }
         }
 
-        var bestPairDiff = 0u;
         var bestPair = 0;
-        for (var i = 0; i < 5; i++)
+        var bestReversed = false;
+        if (scoreEndpointCandidates)
         {
-            var diff = ColorDiff(image[bestIndex[i * 2]], image[bestIndex[(i * 2) + 1]], hasAlpha);
-            if (diff > bestPairDiff)
+            var bestError = uint.MaxValue;
+            for (var i = 0; i < 5; i++)
             {
-                bestPair = i;
-                bestPairDiff = diff;
+                var lowIndex = bestIndex[i * 2];
+                var highIndex = bestIndex[(i * 2) + 1];
+                var error = EndpointPairError(image, width, height, x0, y0, wordWidth, hasAlpha, lowIndex, highIndex);
+                if (error < bestError)
+                {
+                    bestError = error;
+                    bestPair = i;
+                    bestReversed = false;
+                }
+
+                error = EndpointPairError(image, width, height, x0, y0, wordWidth, hasAlpha, highIndex, lowIndex);
+                if (error < bestError)
+                {
+                    bestError = error;
+                    bestPair = i;
+                    bestReversed = true;
+                }
+            }
+        }
+        else
+        {
+            var bestPairDiff = 0u;
+            for (var i = 0; i < 5; i++)
+            {
+                var diff = ColorDiff(image[bestIndex[i * 2]], image[bestIndex[(i * 2) + 1]], hasAlpha);
+                if (diff > bestPairDiff)
+                {
+                    bestPair = i;
+                    bestPairDiff = diff;
+                }
             }
         }
 
         indexA = bestIndex[bestPair * 2];
         indexB = bestIndex[(bestPair * 2) + 1];
-        if (ColorBrightnessOrder(image[indexB], hasAlpha) < ColorBrightnessOrder(image[indexA], hasAlpha))
+        if (scoreEndpointCandidates
+                ? bestReversed
+                : ColorBrightnessOrder(image[indexB], hasAlpha) < ColorBrightnessOrder(image[indexA], hasAlpha))
         {
             (indexA, indexB) = (indexB, indexA);
         }
@@ -1849,6 +1915,61 @@ public sealed class PvrtcTextureCoder : ITextureCoder
             bestFitness[high] = value;
             bestIndex[high] = index;
         }
+    }
+
+    private static uint EndpointPairError(
+        ReadOnlySpan<Rgba8UNorm> image,
+        int width,
+        int height,
+        int x0,
+        int y0,
+        int wordWidth,
+        bool hasAlpha,
+        int indexA,
+        int indexB)
+    {
+        var colorA = ApplyColorChannelReduction(image[indexA], isB: false, hasAlpha);
+        var colorB = ApplyColorChannelReduction(image[indexB], isB: true, hasAlpha);
+        return EndpointPairError(image, width, height, x0, y0, wordWidth, hasAlpha, colorA, colorB);
+    }
+
+    private static uint EndpointPairError(
+        ReadOnlySpan<Rgba8UNorm> image,
+        int width,
+        int height,
+        int x0,
+        int y0,
+        int wordWidth,
+        bool hasAlpha,
+        Rgba8UNorm colorA,
+        Rgba8UNorm colorB)
+    {
+        var error = 0u;
+
+        for (var y = y0; y < y0 + WordHeight; y++)
+        {
+            for (var x = x0; x < x0 + wordWidth; x++)
+            {
+                error += BestEndpointPixelError(
+                    SampleImage(image, width, height, x, y),
+                    colorA,
+                    colorB,
+                    hasAlpha);
+            }
+        }
+
+        return error;
+    }
+
+    private static uint BestEndpointPixelError(Rgba8UNorm color, Rgba8UNorm colorA, Rgba8UNorm colorB, bool hasAlpha)
+    {
+        var bestDiff = ColorDiff(color, colorA, hasAlpha);
+        for (var currentMod = 1u; currentMod < 4; currentMod++)
+        {
+            bestDiff = Math.Min(bestDiff, ColorDiff(color, ApplyModulation4Bpp(colorA, colorB, currentMod), hasAlpha));
+        }
+
+        return bestDiff;
     }
 
     private static uint BestModulation4Bpp(Rgba8UNorm color, Rgba8UNorm colorA, Rgba8UNorm colorB, bool hasAlpha)
@@ -1879,10 +2000,6 @@ public sealed class PvrtcTextureCoder : ITextureCoder
             {
                 bestDiff = diff;
                 bestMod = currentMod;
-            }
-            else
-            {
-                return bestMod;
             }
         }
 
@@ -1972,9 +2089,9 @@ public sealed class PvrtcTextureCoder : ITextureCoder
             var blue = MathF.Max(source[i].Blue, 0f);
             var lumaValue = DecodeHdrLumaBytes(decodedLuma[i]);
             chroma[i] = new Rgba8UNorm(
-                UnitToByte(red / (4f * lumaValue)),
-                UnitToByte(green / (2f * lumaValue)),
-                UnitToByte(blue / (4f * lumaValue)));
+                HdrChromaToByte(red / (4f * lumaValue)),
+                HdrChromaToByte(green / (2f * lumaValue)),
+                HdrChromaToByte(blue / (4f * lumaValue)));
         }
     }
 
@@ -1986,6 +2103,17 @@ public sealed class PvrtcTextureCoder : ITextureCoder
 
     private static float DecodeHdrLumaBytes(Rgba8UNorm value) =>
         MathF.Pow(2f, ((value.Red + value.Green) - 255f) / 16f);
+
+    private static byte HdrChromaToByte(float value)
+    {
+        if (value <= 0f)
+        {
+            return byte.MinValue;
+        }
+
+        var encoded = MathF.Ceiling(value * byte.MaxValue);
+        return encoded >= byte.MaxValue ? byte.MaxValue : (byte)encoded;
+    }
 
     private static Rgba32Float StorageRgba8ToLinear(Rgba8UNorm rgba, bool srgb) => srgb
         ? new Rgba32Float(
