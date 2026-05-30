@@ -37,7 +37,9 @@ public sealed class PvrtcTextureCoder : ITextureCoder
     private static readonly int[] SRepVals0 = [0, 3, 5, 8];
     private const float HdrMinLuma = 1e-6f;
 
-    public PvrtcTextureCoder(TextureFormat format)
+    private readonly PvrtcCoderOptions _options;
+
+    public PvrtcTextureCoder(TextureFormat format, PvrtcCoderOptions? options = null)
     {
         if (!IsSupported(format))
         {
@@ -45,9 +47,12 @@ public sealed class PvrtcTextureCoder : ITextureCoder
         }
 
         Format = format;
+        _options = options ?? new PvrtcCoderOptions();
     }
 
     public TextureFormat Format { get; }
+
+    public PvrtcCoderOptions Options => _options;
 
     public static ReadOnlySpan<TextureFormat> SupportedFormats => SSupportedFormats;
 
@@ -164,7 +169,8 @@ public sealed class PvrtcTextureCoder : ITextureCoder
                     source.Width,
                     source.Height,
                     Format,
-                    destination);
+                    destination,
+                    _options);
                 return;
             }
 
@@ -174,7 +180,7 @@ public sealed class PvrtcTextureCoder : ITextureCoder
             {
                 var linearSpan = linear.AsSpan(0, texelCount);
                 CopyToLinear(source, linearSpan);
-                EncodeLinear(linearSpan, source.Width, source.Height, Format, destination);
+                EncodeLinear(linearSpan, source.Width, source.Height, Format, destination, _options);
                 return;
             }
             finally
@@ -192,7 +198,8 @@ public sealed class PvrtcTextureCoder : ITextureCoder
                 source.Height,
                 Format,
                 destination,
-                IsSrgb(Format));
+                IsSrgb(Format),
+                _options);
             return;
         }
 
@@ -209,7 +216,7 @@ public sealed class PvrtcTextureCoder : ITextureCoder
                 colorSpan[i] = EncodeStorageColor(TPixel.ToRgba8UNorm(pixels[i]), encodeSrgb, hasAlpha);
             }
 
-            EncodeFromRgba8Storage(info, source.Width, source.Height, colorSpan, destination);
+            EncodeFromRgba8Storage(info, source.Width, source.Height, colorSpan, destination, _options);
         }
         finally
         {
@@ -221,10 +228,11 @@ public sealed class PvrtcTextureCoder : ITextureCoder
         ReadOnlySpan<Rgba8UNorm> source,
         int width,
         int height,
-        TextureFormat format)
+        TextureFormat format,
+        PvrtcCoderOptions? options = null)
     {
         var result = new byte[GetEncodedByteCount(format, width, height)];
-        EncodeRgba8(source, width, height, format, result);
+        EncodeRgba8(source, width, height, format, result, options);
         return result;
     }
 
@@ -232,10 +240,11 @@ public sealed class PvrtcTextureCoder : ITextureCoder
         ReadOnlySpan<Rgba32Float> source,
         int width,
         int height,
-        TextureFormat format)
+        TextureFormat format,
+        PvrtcCoderOptions? options = null)
     {
         var result = new byte[GetEncodedByteCount(format, width, height)];
-        EncodeLinear(source, width, height, format, result);
+        EncodeLinear(source, width, height, format, result, options);
         return result;
     }
 
@@ -328,8 +337,9 @@ public sealed class PvrtcTextureCoder : ITextureCoder
         int width,
         int height,
         TextureFormat format,
-        Span<byte> destination) =>
-        EncodeStorageOrNormalizedRgba8(source, width, height, format, destination, encodeSrgbColors: false);
+        Span<byte> destination,
+        PvrtcCoderOptions? options = null) =>
+        EncodeStorageOrNormalizedRgba8(source, width, height, format, destination, encodeSrgbColors: false, options);
 
     private static void EncodeStorageOrNormalizedRgba8(
         ReadOnlySpan<Rgba8UNorm> source,
@@ -338,8 +348,10 @@ public sealed class PvrtcTextureCoder : ITextureCoder
         TextureFormat format,
         Span<byte> destination,
         bool encodeSrgbColors,
+        PvrtcCoderOptions? options = null,
         bool scoreEndpointCandidates = false)
     {
+        options ??= new PvrtcCoderOptions();
         var info = GetFormatInfo(format);
         ValidateDimensions(info, width, height);
         ValidateTexelSpan(width, height, source.Length, nameof(source));
@@ -357,7 +369,7 @@ public sealed class PvrtcTextureCoder : ITextureCoder
                     linearSpan[i] = Rgba8UNorm.ToRgba32Float(source[i]);
                 }
 
-                EncodeHdr(info, width, height, linearSpan, destination);
+                EncodeHdr(info, width, height, linearSpan, destination, options);
                 return;
             }
             finally
@@ -369,7 +381,7 @@ public sealed class PvrtcTextureCoder : ITextureCoder
         var colorCount = checked(width * height);
         if (!encodeSrgbColors)
         {
-            EncodeFromRgba8Storage(info, width, height, source[..colorCount], destination, scoreEndpointCandidates);
+            EncodeFromRgba8Storage(info, width, height, source[..colorCount], destination, options, scoreEndpointCandidates);
             return;
         }
 
@@ -378,7 +390,7 @@ public sealed class PvrtcTextureCoder : ITextureCoder
         {
             var colorSpan = colors.AsSpan(0, colorCount);
             CopyToStorageRgba8(source, colorSpan, encodeSrgb: true, hasAlpha: info.HasAlpha);
-            EncodeFromRgba8Storage(info, width, height, colorSpan, destination, scoreEndpointCandidates);
+            EncodeFromRgba8Storage(info, width, height, colorSpan, destination, options, scoreEndpointCandidates);
         }
         finally
         {
@@ -394,8 +406,10 @@ public sealed class PvrtcTextureCoder : ITextureCoder
         int width,
         int height,
         TextureFormat format,
-        Span<byte> destination)
+        Span<byte> destination,
+        PvrtcCoderOptions? options = null)
     {
+        options ??= new PvrtcCoderOptions();
         var info = GetFormatInfo(format);
         ValidateDimensions(info, width, height);
         ValidateTexelSpan(width, height, source.Length, nameof(source));
@@ -404,7 +418,7 @@ public sealed class PvrtcTextureCoder : ITextureCoder
 
         if (info.IsHdr)
         {
-            EncodeHdr(info, width, height, source, destination);
+            EncodeHdr(info, width, height, source, destination, options);
             return;
         }
 
@@ -426,7 +440,7 @@ public sealed class PvrtcTextureCoder : ITextureCoder
                 colorSpan[i] = LinearToStorageRgba8(info.HasAlpha ? source[i] : WithAlpha(source[i], 1f), srgb);
             }
 
-            EncodeFromRgba8Storage(info, width, height, colorSpan, destination);
+            EncodeFromRgba8Storage(info, width, height, colorSpan, destination, options);
         }
         finally
         {
@@ -546,11 +560,13 @@ public sealed class PvrtcTextureCoder : ITextureCoder
         int width,
         int height,
         ReadOnlySpan<Rgba32Float> source,
-        Span<byte> destination)
+        Span<byte> destination,
+        PvrtcCoderOptions options)
     {
         var lumaByteCount = GetPvrtcByteCount(info, width, height, 4);
         var chromaByteCount = GetPvrtcByteCount(info, width, height, info.ChromaBitsPerPixel);
         var texelCount = checked(width * height);
+        var scoreEndpointCandidates = UsesEndpointCandidateScoring(options);
         var lumaPixels = ArrayPool<Rgba8UNorm>.Shared.Rent(texelCount);
         var chromaPixels = ArrayPool<Rgba8UNorm>.Shared.Rent(texelCount);
         var decodedLumaPixels = ArrayPool<Rgba8UNorm>.Shared.Rent(texelCount);
@@ -573,7 +589,8 @@ public sealed class PvrtcTextureCoder : ITextureCoder
                 lumaFormat,
                 lumaPayload,
                 encodeSrgbColors: false,
-                scoreEndpointCandidates: true);
+                options,
+                scoreEndpointCandidates);
             DecodeRgba8(lumaFormat, width, height, lumaPayload, decodedLumaSpan);
             BuildHdrChromaPlane(source, decodedLumaSpan, chromaSpan);
             EncodeStorageOrNormalizedRgba8(
@@ -583,7 +600,8 @@ public sealed class PvrtcTextureCoder : ITextureCoder
                 chromaFormat,
                 chromaPayload,
                 encodeSrgbColors: false,
-                scoreEndpointCandidates: true);
+                options,
+                scoreEndpointCandidates);
         }
         finally
         {
@@ -592,6 +610,50 @@ public sealed class PvrtcTextureCoder : ITextureCoder
             ArrayPool<Rgba8UNorm>.Shared.Return(decodedLumaPixels);
         }
     }
+
+    private static bool UsesEndpointCandidateScoring(PvrtcCoderOptions options) =>
+        options.CompressionMode switch
+        {
+            PvrtcCompressionMode.Fast or PvrtcCompressionMode.Normal => false,
+            PvrtcCompressionMode.High or PvrtcCompressionMode.Exhaustive => true,
+            _ => throw new ArgumentOutOfRangeException(
+                nameof(PvrtcCoderOptions.CompressionMode),
+                options.CompressionMode,
+                "Unsupported PVRTC compression mode.")
+        };
+
+    private static bool UsesHardTransitionSearch(PvrtcCoderOptions options) =>
+        options.CompressionMode switch
+        {
+            PvrtcCompressionMode.Fast or PvrtcCompressionMode.Normal => false,
+            PvrtcCompressionMode.High or PvrtcCompressionMode.Exhaustive => true,
+            _ => throw new ArgumentOutOfRangeException(
+                nameof(PvrtcCoderOptions.CompressionMode),
+                options.CompressionMode,
+                "Unsupported PVRTC compression mode.")
+        };
+
+    private static bool UsesModulationModeSearch(PvrtcCoderOptions options) =>
+        options.CompressionMode switch
+        {
+            PvrtcCompressionMode.Fast or PvrtcCompressionMode.Normal or PvrtcCompressionMode.High => false,
+            PvrtcCompressionMode.Exhaustive => true,
+            _ => throw new ArgumentOutOfRangeException(
+                nameof(PvrtcCoderOptions.CompressionMode),
+                options.CompressionMode,
+                "Unsupported PVRTC compression mode.")
+        };
+
+    private static bool UsesEndpointRefinement(PvrtcCoderOptions options) =>
+        options.CompressionMode switch
+        {
+            PvrtcCompressionMode.Fast or PvrtcCompressionMode.Normal or PvrtcCompressionMode.High => false,
+            PvrtcCompressionMode.Exhaustive => true,
+            _ => throw new ArgumentOutOfRangeException(
+                nameof(PvrtcCoderOptions.CompressionMode),
+                options.CompressionMode,
+                "Unsupported PVRTC compression mode.")
+        };
 
     private static void DecodeToRgba8Storage(
         PvrtcFormatInfo info,
@@ -651,11 +713,16 @@ public sealed class PvrtcTextureCoder : ITextureCoder
         var wordCount = GetWordCount(info, width, height);
         for (var i = 0; i < wordCount; i++)
         {
-            var offset = i * 8;
-            destination[i] = new PvrtcWord(
-                BinaryPrimitives.ReadUInt32LittleEndian(source.Slice(offset, 4)),
-                BinaryPrimitives.ReadUInt32LittleEndian(source.Slice(offset + 4, 4)));
+            destination[i] = ReadWord(source, i);
         }
+    }
+
+    private static PvrtcWord ReadWord(ReadOnlySpan<byte> source, int wordIndex)
+    {
+        var offset = wordIndex * 8;
+        return new PvrtcWord(
+            BinaryPrimitives.ReadUInt32LittleEndian(source.Slice(offset, 4)),
+            BinaryPrimitives.ReadUInt32LittleEndian(source.Slice(offset + 4, 4)));
     }
 
     private static ColorBlock DecompressWord(
@@ -1287,12 +1354,17 @@ public sealed class PvrtcTextureCoder : ITextureCoder
         int height,
         ReadOnlySpan<Rgba8UNorm> image,
         Span<byte> destination,
+        PvrtcCoderOptions? options = null,
         bool scoreEndpointCandidates = false)
     {
+        options ??= new PvrtcCoderOptions();
         var storageExtent = GetStorageExtent(info, width, height, info.BitsPerPixel);
         var storageTexelCount = checked(storageExtent.Width * storageExtent.Height);
         var wordWidth = GetWordWidth(info.BitsPerPixel);
         var wordCount = GetWordCount(info, storageExtent.Width, storageExtent.Height);
+        var useHardTransitionSearch = UsesHardTransitionSearch(options);
+        var useModulationModeSearch = UsesModulationModeSearch(options);
+        var useEndpointRefinement = UsesEndpointRefinement(options);
         var imageA = ArrayPool<Rgba8UNorm>.Shared.Rent(wordCount);
         var imageB = ArrayPool<Rgba8UNorm>.Shared.Rent(wordCount);
         var modulation = ArrayPool<byte>.Shared.Rent(storageTexelCount);
@@ -1368,7 +1440,13 @@ public sealed class PvrtcTextureCoder : ITextureCoder
                     modulationSpan,
                     destination,
                     info.VersionII,
-                    info.HasAlpha);
+                    info.HasAlpha,
+                    image,
+                    width,
+                    height,
+                    useHardTransitionSearch,
+                    useModulationModeSearch,
+                    useEndpointRefinement);
             }
         }
         finally
@@ -1473,7 +1551,13 @@ public sealed class PvrtcTextureCoder : ITextureCoder
         ReadOnlySpan<byte> modulation,
         Span<byte> destination,
         bool versionII,
-        bool hasAlpha)
+        bool hasAlpha,
+        ReadOnlySpan<Rgba8UNorm> image,
+        int imageWidth,
+        int imageHeight,
+        bool useHardTransitionSearch,
+        bool useModulationModeSearch,
+        bool useEndpointRefinement)
     {
         var blockCountX = width / 4;
         var blockCountY = height / 4;
@@ -1489,6 +1573,615 @@ public sealed class PvrtcTextureCoder : ITextureCoder
                 hasAlpha);
             WriteWord(destination, i, modData, colorData);
         }
+
+        if (versionII && useHardTransitionSearch)
+        {
+            OptimizeHardTransitions4Bpp(
+                image,
+                imageWidth,
+                imageHeight,
+                blockCountX,
+                blockCountY,
+                destination,
+                hasAlpha);
+        }
+
+        if (versionII && useEndpointRefinement)
+        {
+            OptimizeOpaqueEndpoints4Bpp(
+                image,
+                imageWidth,
+                imageHeight,
+                blockCountX,
+                blockCountY,
+                destination,
+                hasAlpha);
+        }
+
+        if (versionII && useModulationModeSearch)
+        {
+            OptimizeModulationModes4Bpp(
+                image,
+                imageWidth,
+                imageHeight,
+                blockCountX,
+                blockCountY,
+                destination,
+                hasAlpha);
+        }
+
+        if (versionII && useHardTransitionSearch && useModulationModeSearch)
+        {
+            OptimizeHardTransitions4Bpp(
+                image,
+                imageWidth,
+                imageHeight,
+                blockCountX,
+                blockCountY,
+                destination,
+                hasAlpha);
+        }
+
+        if (versionII && useEndpointRefinement)
+        {
+            OptimizeOpaqueEndpoints4Bpp(
+                image,
+                imageWidth,
+                imageHeight,
+                blockCountX,
+                blockCountY,
+                destination,
+                hasAlpha);
+
+            if (useModulationModeSearch)
+            {
+                OptimizeModulationModes4Bpp(
+                    image,
+                    imageWidth,
+                    imageHeight,
+                    blockCountX,
+                    blockCountY,
+                    destination,
+                    hasAlpha);
+            }
+
+            if (useHardTransitionSearch)
+            {
+                OptimizeHardTransitions4Bpp(
+                    image,
+                    imageWidth,
+                    imageHeight,
+                    blockCountX,
+                    blockCountY,
+                    destination,
+                    hasAlpha);
+            }
+        }
+    }
+
+    private static void OptimizeOpaqueEndpoints4Bpp(
+        ReadOnlySpan<Rgba8UNorm> image,
+        int imageWidth,
+        int imageHeight,
+        int blockCountX,
+        int blockCountY,
+        Span<byte> words,
+        bool hasAlpha)
+    {
+        const uint opaqueEndpointBit = 0x80000000u;
+        ReadOnlySpan<EndpointField> fields =
+        [
+            new EndpointField(1, 4),
+            new EndpointField(5, 5),
+            new EndpointField(10, 5),
+            new EndpointField(16, 5),
+            new EndpointField(21, 5),
+            new EndpointField(26, 5)
+        ];
+
+        for (var pass = 0; pass < 2; pass++)
+        {
+            for (var blockY = 0; blockY < blockCountY; blockY++)
+            {
+                for (var blockX = 0; blockX < blockCountX; blockX++)
+                {
+                    var wordIndex = GetStorageIndex(blockCountX, blockCountY, blockX, blockY, versionII: true);
+                    var current = ReadWord(words, wordIndex);
+                    if ((current.ColorData & opaqueEndpointBit) == 0)
+                    {
+                        continue;
+                    }
+
+                    var bestError = CalculateAffectedWordError4Bpp(
+                        image,
+                        imageWidth,
+                        imageHeight,
+                        blockCountX,
+                        blockCountY,
+                        blockX,
+                        blockY,
+                        current,
+                        words,
+                        hasAlpha);
+
+                    for (var i = 0; i < fields.Length; i++)
+                    {
+                        current = OptimizeEndpointField4Bpp(
+                            image,
+                            imageWidth,
+                            imageHeight,
+                            blockCountX,
+                            blockCountY,
+                            blockX,
+                            blockY,
+                            current,
+                            words,
+                            fields[i],
+                            hasAlpha,
+                            ref bestError);
+                    }
+
+                    WriteWord(words, wordIndex, current);
+                }
+            }
+        }
+    }
+
+    private static PvrtcWord OptimizeEndpointField4Bpp(
+        ReadOnlySpan<Rgba8UNorm> image,
+        int imageWidth,
+        int imageHeight,
+        int blockCountX,
+        int blockCountY,
+        int blockX,
+        int blockY,
+        PvrtcWord word,
+        Span<byte> words,
+        EndpointField field,
+        bool hasAlpha,
+        ref ulong bestError)
+    {
+        const int searchRadius = 2;
+        var code = GetBits(word.ColorData, field.StartBit, field.BitCount);
+        var minCode = Math.Max(0, code - searchRadius);
+        var maxCode = Math.Min((int)GetMask(field.BitCount), code + searchRadius);
+        var best = word;
+
+        for (var candidateCode = minCode; candidateCode <= maxCode; candidateCode++)
+        {
+            if (candidateCode == code)
+            {
+                continue;
+            }
+
+            var candidate = new PvrtcWord(
+                word.ModulationData,
+                WithBits(field.StartBit, field.BitCount, candidateCode, word.ColorData));
+            var error = CalculateAffectedWordError4Bpp(
+                image,
+                imageWidth,
+                imageHeight,
+                blockCountX,
+                blockCountY,
+                blockX,
+                blockY,
+                candidate,
+                words,
+                hasAlpha);
+
+            if (error < bestError)
+            {
+                best = candidate;
+                bestError = error;
+            }
+        }
+
+        return best;
+    }
+
+    private static void OptimizeModulationModes4Bpp(
+        ReadOnlySpan<Rgba8UNorm> image,
+        int imageWidth,
+        int imageHeight,
+        int blockCountX,
+        int blockCountY,
+        Span<byte> words,
+        bool hasAlpha)
+    {
+        const uint modeBit = 1u;
+
+        for (var blockY = 0; blockY < blockCountY; blockY++)
+        {
+            for (var blockX = 0; blockX < blockCountX; blockX++)
+            {
+                var wordIndex = GetStorageIndex(blockCountX, blockCountY, blockX, blockY, versionII: true);
+                var current = ReadWord(words, wordIndex);
+                var best = current;
+                var bestError = CalculateAffectedWordError4Bpp(
+                    image,
+                    imageWidth,
+                    imageHeight,
+                    blockCountX,
+                    blockCountY,
+                    blockX,
+                    blockY,
+                    current,
+                    words,
+                    hasAlpha);
+
+                for (var mode = 0u; mode <= 1u; mode++)
+                {
+                    var colorData = (current.ColorData & ~modeBit) | mode;
+                    var modulationData = OptimizeModulationData4Bpp(
+                        image,
+                        imageWidth,
+                        imageHeight,
+                        blockCountX,
+                        blockCountY,
+                        blockX,
+                        blockY,
+                        new PvrtcWord(current.ModulationData, colorData),
+                        words,
+                        hasAlpha);
+                    var candidate = new PvrtcWord(modulationData, colorData);
+                    var error = CalculateAffectedWordError4Bpp(
+                        image,
+                        imageWidth,
+                        imageHeight,
+                        blockCountX,
+                        blockCountY,
+                        blockX,
+                        blockY,
+                        candidate,
+                        words,
+                        hasAlpha);
+
+                    if (error < bestError)
+                    {
+                        best = candidate;
+                        bestError = error;
+                    }
+                }
+
+                WriteWord(words, wordIndex, best);
+            }
+        }
+    }
+
+    private static uint OptimizeModulationData4Bpp(
+        ReadOnlySpan<Rgba8UNorm> image,
+        int imageWidth,
+        int imageHeight,
+        int blockCountX,
+        int blockCountY,
+        int blockX,
+        int blockY,
+        PvrtcWord word,
+        Span<byte> words,
+        bool hasAlpha)
+    {
+        var result = word.ModulationData;
+        for (var bitPosition = 0; bitPosition < 32; bitPosition += 2)
+        {
+            var bestBits = result;
+            var bestError = ulong.MaxValue;
+            for (var code = 0; code < 4; code++)
+            {
+                var candidateBits = WithBits(bitPosition, 2, code, result);
+                var candidate = new PvrtcWord(candidateBits, word.ColorData);
+                var error = CalculateAffectedWordError4Bpp(
+                    image,
+                    imageWidth,
+                    imageHeight,
+                    blockCountX,
+                    blockCountY,
+                    blockX,
+                    blockY,
+                    candidate,
+                    words,
+                    hasAlpha);
+                if (error < bestError)
+                {
+                    bestBits = candidateBits;
+                    bestError = error;
+                }
+            }
+
+            result = bestBits;
+        }
+
+        return result;
+    }
+
+    private static ulong CalculateAffectedWordError4Bpp(
+        ReadOnlySpan<Rgba8UNorm> image,
+        int imageWidth,
+        int imageHeight,
+        int blockCountX,
+        int blockCountY,
+        int blockX,
+        int blockY,
+        PvrtcWord word,
+        Span<byte> words,
+        bool hasAlpha)
+    {
+        var error = 0ul;
+        error += CalculateWordGroupError4Bpp(
+            image,
+            imageWidth,
+            imageHeight,
+            blockCountX,
+            blockCountY,
+            blockX,
+            blockY,
+            blockX,
+            blockY,
+            word,
+            words,
+            hasAlpha);
+        error += CalculateWordGroupError4Bpp(
+            image,
+            imageWidth,
+            imageHeight,
+            blockCountX,
+            blockCountY,
+            blockX - 1,
+            blockY,
+            blockX,
+            blockY,
+            word,
+            words,
+            hasAlpha);
+        error += CalculateWordGroupError4Bpp(
+            image,
+            imageWidth,
+            imageHeight,
+            blockCountX,
+            blockCountY,
+            blockX,
+            blockY - 1,
+            blockX,
+            blockY,
+            word,
+            words,
+            hasAlpha);
+        error += CalculateWordGroupError4Bpp(
+            image,
+            imageWidth,
+            imageHeight,
+            blockCountX,
+            blockCountY,
+            blockX - 1,
+            blockY - 1,
+            blockX,
+            blockY,
+            word,
+            words,
+            hasAlpha);
+        return error;
+    }
+
+    private static ulong CalculateWordGroupError4Bpp(
+        ReadOnlySpan<Rgba8UNorm> image,
+        int imageWidth,
+        int imageHeight,
+        int blockCountX,
+        int blockCountY,
+        int groupBlockX,
+        int groupBlockY,
+        int targetBlockX,
+        int targetBlockY,
+        PvrtcWord targetWord,
+        Span<byte> words,
+        bool hasAlpha)
+    {
+        groupBlockX = WrapWordIndex(blockCountX, groupBlockX);
+        groupBlockY = WrapWordIndex(blockCountY, groupBlockY);
+        var qBlockX = WrapWordIndex(blockCountX, groupBlockX + 1);
+        var rBlockY = WrapWordIndex(blockCountY, groupBlockY + 1);
+        var p = ReadWordOrTarget4Bpp(words, blockCountX, blockCountY, groupBlockX, groupBlockY, targetBlockX, targetBlockY, targetWord);
+        var q = ReadWordOrTarget4Bpp(words, blockCountX, blockCountY, qBlockX, groupBlockY, targetBlockX, targetBlockY, targetWord);
+        var r = ReadWordOrTarget4Bpp(words, blockCountX, blockCountY, groupBlockX, rBlockY, targetBlockX, targetBlockY, targetWord);
+        var s = ReadWordOrTarget4Bpp(words, blockCountX, blockCountY, qBlockX, rBlockY, targetBlockX, targetBlockY, targetWord);
+
+        return CalculateMappedWordError4Bpp(
+            image,
+            imageWidth,
+            imageHeight,
+            blockCountX,
+            blockCountY,
+            groupBlockX,
+            groupBlockY,
+            p,
+            q,
+            r,
+            s,
+            hasAlpha);
+    }
+
+    private static PvrtcWord ReadWordOrTarget4Bpp(
+        Span<byte> words,
+        int blockCountX,
+        int blockCountY,
+        int blockX,
+        int blockY,
+        int targetBlockX,
+        int targetBlockY,
+        PvrtcWord targetWord)
+    {
+        if (blockX == targetBlockX && blockY == targetBlockY)
+        {
+            return targetWord;
+        }
+
+        return ReadWord(words, GetStorageIndex(blockCountX, blockCountY, blockX, blockY, versionII: true));
+    }
+
+    private static void OptimizeHardTransitions4Bpp(
+        ReadOnlySpan<Rgba8UNorm> image,
+        int imageWidth,
+        int imageHeight,
+        int blockCountX,
+        int blockCountY,
+        Span<byte> words,
+        bool hasAlpha)
+    {
+        const uint hardTransitionBit = 0x8000u;
+        const uint opaqueEndpointBit = 0x80000000u;
+
+        for (var blockY = 0; blockY < blockCountY; blockY++)
+        {
+            for (var blockX = 0; blockX < blockCountX; blockX++)
+            {
+                var pIndex = GetStorageIndex(blockCountX, blockCountY, blockX, blockY, versionII: true);
+                var p = ReadWord(words, pIndex);
+                if ((p.ColorData & opaqueEndpointBit) == 0)
+                {
+                    WriteWord(words, pIndex, new PvrtcWord(p.ModulationData, p.ColorData & ~hardTransitionBit));
+                    continue;
+                }
+
+                var qIndex = GetStorageIndex(blockCountX, blockCountY, WrapWordIndex(blockCountX, blockX + 1), blockY, versionII: true);
+                var rIndex = GetStorageIndex(blockCountX, blockCountY, blockX, WrapWordIndex(blockCountY, blockY + 1), versionII: true);
+                var sIndex = GetStorageIndex(blockCountX, blockCountY, WrapWordIndex(blockCountX, blockX + 1), WrapWordIndex(blockCountY, blockY + 1), versionII: true);
+                var q = ReadWord(words, qIndex);
+                var r = ReadWord(words, rIndex);
+                var s = ReadWord(words, sIndex);
+
+                var softP = new PvrtcWord(p.ModulationData, p.ColorData & ~hardTransitionBit);
+                var hardP = new PvrtcWord(p.ModulationData, p.ColorData | hardTransitionBit);
+                var softError = CalculateMappedWordError4Bpp(
+                    image,
+                    imageWidth,
+                    imageHeight,
+                    blockCountX,
+                    blockCountY,
+                    blockX,
+                    blockY,
+                    softP,
+                    q,
+                    r,
+                    s,
+                    hasAlpha);
+                var hardError = CalculateMappedWordError4Bpp(
+                    image,
+                    imageWidth,
+                    imageHeight,
+                    blockCountX,
+                    blockCountY,
+                    blockX,
+                    blockY,
+                    hardP,
+                    q,
+                    r,
+                    s,
+                    hasAlpha);
+
+                WriteWord(words, pIndex, hardError < softError ? hardP : softP);
+            }
+        }
+    }
+
+    private static ulong CalculateMappedWordError4Bpp(
+        ReadOnlySpan<Rgba8UNorm> image,
+        int imageWidth,
+        int imageHeight,
+        int blockCountX,
+        int blockCountY,
+        int blockX,
+        int blockY,
+        PvrtcWord p,
+        PvrtcWord q,
+        PvrtcWord r,
+        PvrtcWord s,
+        bool hasAlpha)
+    {
+        var pixels = DecompressWord(p, q, r, s, bitsPerPixel: 4, versionII: true);
+        var indices = new WordIndices(
+            new WordCoordinate(blockX, blockY),
+            new WordCoordinate(WrapWordIndex(blockCountX, blockX + 1), blockY),
+            new WordCoordinate(blockX, WrapWordIndex(blockCountY, blockY + 1)),
+            new WordCoordinate(WrapWordIndex(blockCountX, blockX + 1), WrapWordIndex(blockCountY, blockY + 1)));
+
+        return CalculateMappedError(image, imageWidth, imageHeight, ref pixels, indices, bitsPerPixel: 4, hasAlpha);
+    }
+
+    private static ulong CalculateMappedError(
+        ReadOnlySpan<Rgba8UNorm> image,
+        int imageWidth,
+        int imageHeight,
+        ref ColorBlock word,
+        WordIndices words,
+        byte bitsPerPixel,
+        bool hasAlpha)
+    {
+        var wordWidth = GetWordWidth(bitsPerPixel);
+        var dw = wordWidth >> 1;
+        const int dh = WordHeight >> 1;
+        var error = 0ul;
+
+        for (var y = 0; y < dh; y++)
+        {
+            for (var x = 0; x < dw; x++)
+            {
+                error += MappedPixelError(
+                    image,
+                    imageWidth,
+                    imageHeight,
+                    ((words.P.Y * WordHeight) + y + dh, (words.P.X * wordWidth) + x + dw),
+                    word[(y * wordWidth) + x],
+                    hasAlpha);
+                error += MappedPixelError(
+                    image,
+                    imageWidth,
+                    imageHeight,
+                    ((words.Q.Y * WordHeight) + y + dh, (words.Q.X * wordWidth) + x),
+                    word[(y * wordWidth) + x + dw],
+                    hasAlpha);
+                error += MappedPixelError(
+                    image,
+                    imageWidth,
+                    imageHeight,
+                    ((words.R.Y * WordHeight) + y, (words.R.X * wordWidth) + x + dw),
+                    word[((y + dh) * wordWidth) + x],
+                    hasAlpha);
+                error += MappedPixelError(
+                    image,
+                    imageWidth,
+                    imageHeight,
+                    ((words.S.Y * WordHeight) + y, (words.S.X * wordWidth) + x),
+                    word[((y + dh) * wordWidth) + x + dw],
+                    hasAlpha);
+            }
+        }
+
+        return error;
+    }
+
+    private static ulong MappedPixelError(
+        ReadOnlySpan<Rgba8UNorm> image,
+        int imageWidth,
+        int imageHeight,
+        (int Y, int X) position,
+        Rgba8UNorm color,
+        bool hasAlpha)
+    {
+        if ((uint)position.X >= (uint)imageWidth || (uint)position.Y >= (uint)imageHeight)
+        {
+            return 0;
+        }
+
+        var expected = image[(position.Y * imageWidth) + position.X];
+        return SquaredColorError(expected, color, hasAlpha);
+    }
+
+    private static ulong SquaredColorError(Rgba8UNorm expected, Rgba8UNorm actual, bool hasAlpha)
+    {
+        var red = expected.Red - actual.Red;
+        var green = expected.Green - actual.Green;
+        var blue = expected.Blue - actual.Blue;
+        var alpha = hasAlpha ? expected.Alpha - actual.Alpha : 0;
+        return (ulong)((red * red) + (green * green) + (blue * blue) + (alpha * alpha));
     }
 
     private static void EncodeWords2Bpp(
@@ -1525,6 +2218,9 @@ public sealed class PvrtcTextureCoder : ITextureCoder
         BinaryPrimitives.WriteUInt32LittleEndian(destination.Slice(offset, 4), modulationData);
         BinaryPrimitives.WriteUInt32LittleEndian(destination.Slice(offset + 4, 4), colorData);
     }
+
+    private static void WriteWord(Span<byte> destination, int wordIndex, PvrtcWord word) =>
+        WriteWord(destination, wordIndex, word.ModulationData, word.ColorData);
 
     private static uint CalculateBlockModulationData4Bpp(ReadOnlySpan<byte> modulation, int width, int blockX, int blockY)
     {
@@ -2286,6 +2982,15 @@ public sealed class PvrtcTextureCoder : ITextureCoder
     private static void SetBits(int startBit, int bitCount, byte value, ref uint bits) =>
         SetBits(startBit, bitCount, (int)value, ref bits);
 
+    private static uint WithBits(int startBit, int bitCount, int value, uint bits)
+    {
+        SetBits(startBit, bitCount, value, ref bits);
+        return bits;
+    }
+
+    private static int GetBits(uint bits, int startBit, int bitCount) =>
+        (int)((bits >> startBit) & GetMask(bitCount));
+
     private static int GetWordWidth(byte bitsPerPixel) => bitsPerPixel == 2 ? 8 : 4;
 
     private static int GetWordCount(PvrtcFormatInfo info, int width, int height) =>
@@ -2459,6 +3164,8 @@ public sealed class PvrtcTextureCoder : ITextureCoder
     private readonly record struct WordCoordinate(int X, int Y);
 
     private readonly record struct WordIndices(WordCoordinate P, WordCoordinate Q, WordCoordinate R, WordCoordinate S);
+
+    private readonly record struct EndpointField(int StartBit, int BitCount);
 
     private enum ModulationMode2Bpp
     {

@@ -26,6 +26,15 @@ public sealed unsafe class PvrtcTextureCoderTests
         Assert.IsType<PvrtcTextureCoder>(coder);
     }
 
+    [Fact]
+    public void ConstructorStoresCompressionOptions()
+    {
+        var options = new PvrtcCoderOptions { CompressionMode = PvrtcCompressionMode.High };
+        var coder = new PvrtcTextureCoder(TextureFormats.RgbaPvrtcII4BppUNorm, options);
+
+        Assert.Same(options, coder.Options);
+    }
+
     [Theory]
     [MemberData(nameof(PvrtcFormats))]
     public void DecodePvrtTexLibPayloadMatchesPvrtTexLib(TextureFormat format)
