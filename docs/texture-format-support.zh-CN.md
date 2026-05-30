@@ -1,0 +1,625 @@
+﻿# 纹理格式支持情况
+
+核心库内置以下 texture coder，均可通过 `TextureCoderManager.Global.GetCoder(format)` 获取。容器格式是否能写出某个格式，还取决于 DDS/KTX/PVR/ASTC 容器本身是否有对应映射。
+
+## 压缩纹理
+
+- S3TC / DXT / BC1-BC3
+    - DXT1 / BC1 RGB
+        - `Bc1Rgb`
+        - `Bc1RgbSrgb`
+        - `Dxt1Rgb`
+        - `Dxt1RgbSrgb`
+        - `Dxt1RgbBigEndian`
+    - DXT1 / BC1 RGBA
+        - `Bc1Rgba`
+        - `Bc1RgbaSrgb`
+        - `Dxt1Rgba`
+        - `Dxt1RgbaSrgb`
+        - `Dxt1RgbaBigEndian`
+    - DXT2
+        - `Dxt2Rgba`
+        - `Dxt2RgbaBigEndian`
+    - DXT3 / BC2
+        - `Bc2Rgba`
+        - `Bc2RgbaSrgb`
+        - `Dxt3Rgba`
+        - `Dxt3RgbaSrgb`
+        - `Dxt3RgbaBigEndian`
+        - `Dxt3A`
+        - `Dxt3ABigEndian`
+        - `Dxt3A1111`
+        - `Dxt3A1111BigEndian`
+    - DXT4
+        - `Dxt4Rgba`
+        - `Dxt4RgbaBigEndian`
+    - DXT5 / BC3
+        - `Bc3Rgba`
+        - `Bc3RgbaSrgb`
+        - `Dxt5Rgba`
+        - `Dxt5RgbaSrgb`
+        - `Dxt5RgbaBigEndian`
+        - `Dxt5A`
+        - `Dxt5ABigEndian`
+    - 其他 S3TC 派生格式
+        - `Dxn`
+        - `DxnBigEndian`
+        - `Ctx1`
+        - `Ctx1BigEndian`
+- RGTC / LATC / ATI
+    - BC4 / RGTC1 / ATI1 UNorm
+        - `Bc4UNorm`
+        - `Ati1UNorm`
+        - `Rgtc1UNorm`
+    - BC4 / RGTC1 / ATI1 SNorm
+        - `Bc4SNorm`
+        - `Ati1SNorm`
+        - `Rgtc1SNorm`
+    - BC5 / RGTC2 / ATI2 UNorm
+        - `Bc5UNorm`
+        - `Ati2UNorm`
+        - `Rgtc2UNorm`
+    - BC5 / RGTC2 / ATI2 SNorm
+        - `Bc5SNorm`
+        - `Ati2SNorm`
+        - `Rgtc2SNorm`
+    - LATC
+        - `Latc1UNorm`
+        - `Latc1SNorm`
+        - `Latc2UNorm`
+        - `Latc2SNorm`
+- BPTC / BC6H / BC7
+    - BC6H unsigned float
+        - `Bc6HUFloat`
+        - `RgbBptcUFloat`
+    - BC6H signed float
+        - `Bc6HSFloat`
+        - `RgbBptcSFloat`
+    - BC7 UNorm
+        - `Bc7UNorm`
+        - `RgbaBptcUNorm`
+    - BC7 sRGB
+        - `Bc7Srgb`
+        - `RgbaBptcSrgb`
+- ETC / EAC
+    - ETC1
+        - `RgbEtc1UNorm`
+    - ETC2 RGB
+        - `RgbEtc2UNorm`
+        - `RgbEtc2Srgb`
+    - ETC2 RGB punch-through alpha
+        - `RgbA1Etc2UNorm`
+        - `RgbA1Etc2Srgb`
+    - ETC2 RGBA + EAC alpha
+        - `RgbaEtc2EacUNorm`
+        - `RgbaEtc2EacSrgb`
+    - EAC one/two channel
+        - `R11EacUNorm`
+        - `R11EacSNorm`
+        - `Rg11EacUNorm`
+        - `Rg11EacSNorm`
+- ASTC 2D
+    - RGBA ASTC 4x4
+        - `RgbaAstc4x4UNorm`
+        - `RgbaAstc4x4Srgb`
+        - `RgbaAstc4x4Float`
+    - RGBA ASTC 5x4
+        - `RgbaAstc5x4UNorm`
+        - `RgbaAstc5x4Srgb`
+        - `RgbaAstc5x4Float`
+    - RGBA ASTC 5x5
+        - `RgbaAstc5x5UNorm`
+        - `RgbaAstc5x5Srgb`
+        - `RgbaAstc5x5Float`
+    - RGBA ASTC 6x5
+        - `RgbaAstc6x5UNorm`
+        - `RgbaAstc6x5Srgb`
+        - `RgbaAstc6x5Float`
+    - RGBA ASTC 6x6
+        - `RgbaAstc6x6UNorm`
+        - `RgbaAstc6x6Srgb`
+        - `RgbaAstc6x6Float`
+    - RGBA ASTC 8x5
+        - `RgbaAstc8x5UNorm`
+        - `RgbaAstc8x5Srgb`
+        - `RgbaAstc8x5Float`
+    - RGBA ASTC 8x6
+        - `RgbaAstc8x6UNorm`
+        - `RgbaAstc8x6Srgb`
+        - `RgbaAstc8x6Float`
+    - RGBA ASTC 8x8
+        - `RgbaAstc8x8UNorm`
+        - `RgbaAstc8x8Srgb`
+        - `RgbaAstc8x8Float`
+    - RGBA ASTC 10x5
+        - `RgbaAstc10x5UNorm`
+        - `RgbaAstc10x5Srgb`
+        - `RgbaAstc10x5Float`
+    - RGBA ASTC 10x6
+        - `RgbaAstc10x6UNorm`
+        - `RgbaAstc10x6Srgb`
+        - `RgbaAstc10x6Float`
+    - RGBA ASTC 10x8
+        - `RgbaAstc10x8UNorm`
+        - `RgbaAstc10x8Srgb`
+        - `RgbaAstc10x8Float`
+    - RGBA ASTC 10x10
+        - `RgbaAstc10x10UNorm`
+        - `RgbaAstc10x10Srgb`
+        - `RgbaAstc10x10Float`
+    - RGBA ASTC 12x10
+        - `RgbaAstc12x10UNorm`
+        - `RgbaAstc12x10Srgb`
+        - `RgbaAstc12x10Float`
+    - RGBA ASTC 12x12
+        - `RgbaAstc12x12UNorm`
+        - `RgbaAstc12x12Srgb`
+        - `RgbaAstc12x12Float`
+- ATC
+    - `AtcRgb`
+    - `AtcRgbaExplicitAlpha`
+    - `AtcRgbaInterpolatedAlpha`
+- PVRTC
+    - PVRTC I 2 bpp
+        - `RgbPvrtcI2BppUNorm`
+        - `RgbPvrtcI2BppSrgb`
+        - `RgbaPvrtcI2BppUNorm`
+        - `RgbaPvrtcI2BppSrgb`
+    - PVRTC I 4 bpp
+        - `RgbPvrtcI4BppUNorm`
+        - `RgbPvrtcI4BppSrgb`
+        - `RgbaPvrtcI4BppUNorm`
+        - `RgbaPvrtcI4BppSrgb`
+    - PVRTC II
+        - `RgbaPvrtcII2BppUNorm`
+        - `RgbaPvrtcII2BppSrgb`
+        - `RgbaPvrtcII4BppUNorm`
+        - `RgbaPvrtcII4BppSrgb`
+    - PVRTC HDR / Float
+        - `RgbPvrtcI6BppFloat`
+        - `RgbPvrtcI8BppFloat`
+        - `RgbPvrtcII6BppFloat`
+        - `RgbPvrtcII8BppFloat`
+- FXT1
+    - `RgbFxt1UNorm`
+    - `RgbaFxt1UNorm`
+
+## 未压缩和非块压缩纹理
+
+下面列出当前 `TextureFormatCatalog` 暴露的未压缩格式。每个条目包含 `TextureFormats` 字段名和规范纹理格式名。
+
+- Alpha 格式
+    - `Alpha12UNorm` (ALPHA12_UNORM)
+    - `Alpha16Float` (ALPHA16_FLOAT)
+    - `Alpha16SInt` (ALPHA16_SINT)
+    - `Alpha16SNorm` (ALPHA16_SNORM)
+    - `Alpha16UInt` (ALPHA16_UINT)
+    - `Alpha16UNorm` (ALPHA16_UNORM)
+    - `Alpha32Float` (ALPHA32_FLOAT)
+    - `Alpha32SInt` (ALPHA32_SINT)
+    - `Alpha32SNorm` (ALPHA32_SNORM)
+    - `Alpha32UInt` (ALPHA32_UINT)
+    - `Alpha32UNorm` (ALPHA32_UNORM)
+    - `Alpha4UNorm` (ALPHA4_UNORM)
+    - `Alpha8SInt` (ALPHA8_SINT)
+    - `Alpha8SNorm` (ALPHA8_SNORM)
+    - `Alpha8UInt` (ALPHA8_UINT)
+    - `Alpha8UNorm` (ALPHA8_UNORM)
+    - `Alpha8UNormBigEndian` (ALPHA8_UNORM_BE)
+- Luminance 格式
+    - `Luminance12Alpha12UNorm` (LUMINANCE12_ALPHA12_UNORM)
+    - `Luminance12Alpha4UNorm` (LUMINANCE12_ALPHA4_UNORM)
+    - `Luminance12UNorm` (LUMINANCE12_UNORM)
+    - `Luminance16Alpha16Float` (LUMINANCE16_ALPHA16_FLOAT)
+    - `Luminance16Alpha16SInt` (LUMINANCE16_ALPHA16_SINT)
+    - `Luminance16Alpha16SNorm` (LUMINANCE16_ALPHA16_SNORM)
+    - `Luminance16Alpha16UInt` (LUMINANCE16_ALPHA16_UINT)
+    - `Luminance16Alpha16UNorm` (LUMINANCE16_ALPHA16_UNORM)
+    - `Luminance16Alpha16UNormBigEndian` (LUMINANCE16_ALPHA16_UNORM_BE)
+    - `Luminance16Float` (LUMINANCE16_FLOAT)
+    - `Luminance16SInt` (LUMINANCE16_SINT)
+    - `Luminance16UInt` (LUMINANCE16_UINT)
+    - `Luminance16UNorm` (LUMINANCE16_UNORM)
+    - `Luminance16UNormBigEndian` (LUMINANCE16_UNORM_BE)
+    - `Luminance32Alpha32Float` (LUMINANCE32_ALPHA32_FLOAT)
+    - `Luminance32Alpha32SInt` (LUMINANCE32_ALPHA32_SINT)
+    - `Luminance32Alpha32SNorm` (LUMINANCE32_ALPHA32_SNORM)
+    - `Luminance32Alpha32UInt` (LUMINANCE32_ALPHA32_UINT)
+    - `Luminance32Alpha32UNorm` (LUMINANCE32_ALPHA32_UNORM)
+    - `Luminance32Alpha32UNormBigEndian` (LUMINANCE32_ALPHA32_UNORM_BE)
+    - `Luminance32Float` (LUMINANCE32_FLOAT)
+    - `Luminance32SInt` (LUMINANCE32_SINT)
+    - `Luminance32SNorm` (LUMINANCE32_SNORM)
+    - `Luminance32UInt` (LUMINANCE32_UINT)
+    - `Luminance32UNorm` (LUMINANCE32_UNORM)
+    - `Luminance32UNormBigEndian` (LUMINANCE32_UNORM_BE)
+    - `Luminance4Alpha4UNorm` (LUMINANCE4_ALPHA4_UNORM)
+    - `Luminance4UNorm` (LUMINANCE4_UNORM)
+    - `Luminance6Alpha2UNorm` (LUMINANCE6_ALPHA2_UNORM)
+    - `Luminance8Alpha8SInt` (LUMINANCE8_ALPHA8_SINT)
+    - `Luminance8Alpha8Srgb` (LUMINANCE8_ALPHA8_SRGB)
+    - `Luminance8Alpha8UInt` (LUMINANCE8_ALPHA8_UINT)
+    - `Luminance8Alpha8UNorm` (LUMINANCE8_ALPHA8_UNORM)
+    - `Luminance8Alpha8UNormBigEndian` (LUMINANCE8_ALPHA8_UNORM_BE)
+    - `Luminance8SInt` (LUMINANCE8_SINT)
+    - `Luminance8Srgb` (LUMINANCE8_SRGB)
+    - `Luminance8UInt` (LUMINANCE8_UINT)
+    - `Luminance8UNorm` (LUMINANCE8_UNORM)
+    - `Luminance8UNormBigEndian` (LUMINANCE8_UNORM_BE)
+- Intensity 格式
+    - `Intensity12UNorm` (INTENSITY12_UNORM)
+    - `Intensity16Float` (INTENSITY16_FLOAT)
+    - `Intensity16SInt` (INTENSITY16_SINT)
+    - `Intensity16SNorm` (INTENSITY16_SNORM)
+    - `Intensity16UInt` (INTENSITY16_UINT)
+    - `Intensity16UNorm` (INTENSITY16_UNORM)
+    - `Intensity32Float` (INTENSITY32_FLOAT)
+    - `Intensity32SInt` (INTENSITY32_SINT)
+    - `Intensity32SNorm` (INTENSITY32_SNORM)
+    - `Intensity32UInt` (INTENSITY32_UINT)
+    - `Intensity32UNorm` (INTENSITY32_UNORM)
+    - `Intensity4UNorm` (INTENSITY4_UNORM)
+    - `Intensity8SInt` (INTENSITY8_SINT)
+    - `Intensity8SNorm` (INTENSITY8_SNORM)
+    - `Intensity8UInt` (INTENSITY8_UINT)
+    - `Intensity8UNorm` (INTENSITY8_UNORM)
+- R / RG 格式
+    - `R10Gb11RevSNorm` (R10_GB11_REV_SNORM)
+    - `R10Gb11RevSNormBigEndian` (R10_GB11_REV_SNORM_BE)
+    - `R10Gb11RevUNorm` (R10_GB11_REV_UNORM)
+    - `R10Gb11RevUNormBigEndian` (R10_GB11_REV_UNORM_BE)
+    - `R10Gb11UNorm` (R10_GB11_UNORM)
+    - `R10Gb11UNormBigEndian` (R10_GB11_UNORM_BE)
+    - `R10X6G10X6B10X6A10X6UInt` (R10X6G10X6B10X6A10X6_UINT_4PACK16)
+    - `R10X6G10X6B10X6A10X6UNorm` (R10X6G10X6B10X6A10X6_UNORM_4PACK16)
+    - `R10X6G10X6UInt` (R10X6G10X6_UINT_2PACK16)
+    - `R10X6G10X6UNorm` (R10X6G10X6_UNORM_2PACK16)
+    - `R10X6UInt` (R10X6_UINT_PACK16)
+    - `R10X6UNorm` (R10X6_UNORM_PACK16)
+    - `R11G11B10Float` (R11G11B10_FLOAT)
+    - `R11G11B10FloatBigEndian` (R11G11B10_FLOAT_BE)
+    - `R12X4G12X4B12X4A12X4UInt` (R12X4G12X4B12X4A12X4_UINT_4PACK16)
+    - `R12X4G12X4B12X4A12X4UNorm` (R12X4G12X4B12X4A12X4_UNORM_4PACK16)
+    - `R12X4G12X4UInt` (R12X4G12X4_UINT_2PACK16)
+    - `R12X4G12X4UNorm` (R12X4G12X4_UNORM_2PACK16)
+    - `R12X4UInt` (R12X4_UINT_PACK16)
+    - `R12X4UNorm` (R12X4_UNORM_PACK16)
+    - `R14X2G14X2B14X2A14X2UInt` (R14X2G14X2B14X2A14X2_UINT_4PACK16)
+    - `R14X2G14X2B14X2A14X2UNorm` (R14X2G14X2B14X2A14X2_UNORM_4PACK16)
+    - `R14X2G14X2UInt` (R14X2G14X2_UINT_2PACK16)
+    - `R14X2G14X2UNorm` (R14X2G14X2_UNORM_2PACK16)
+    - `R14X2UInt` (R14X2_UINT_PACK16)
+    - `R14X2UNorm` (R14X2_UNORM_PACK16)
+    - `R16Float` (R16_FLOAT)
+    - `R16FloatBigEndian` (R16_FLOAT_BE)
+    - `R16SInt` (R16_SINT)
+    - `R16SNorm` (R16_SNORM)
+    - `R16UInt` (R16_UINT)
+    - `R16UNorm` (R16_UNORM)
+    - `R32Float` (R32_FLOAT)
+    - `R32FloatAbs` (R32_FLOAT_ABS)
+    - `R32FloatBigEndian` (R32_FLOAT_BE)
+    - `R32SInt` (R32_SINT)
+    - `R32SNorm` (R32_SNORM)
+    - `R32UInt` (R32_UINT)
+    - `R32UNorm` (R32_UNORM)
+    - `R3G3B2RevUNorm` (R3_G3_B2_REV_UNORM)
+    - `R3G3B2UNorm` (R3_G3_B2_UNORM)
+    - `R64Float` (R64_FLOAT)
+    - `R64SInt` (R64_SINT)
+    - `R64UInt` (R64_UINT)
+    - `R8` (R8_UNORM)
+    - `R8SInt` (R8_SINT)
+    - `R8SNorm` (R8_SNORM)
+    - `R8Srgb` (R8_SRGB)
+    - `R8UInt` (R8_UINT)
+    - `R8UNormG8B8SNormX8` (R8_UNORM_G8B8_SNORM_X8)
+    - `Rg11B10RevSNorm` (RG11_B10_REV_SNORM)
+    - `Rg11B10RevSNormBigEndian` (RG11_B10_REV_SNORM_BE)
+    - `Rg11B10RevUNorm` (RG11_B10_REV_UNORM)
+    - `Rg11B10RevUNormBigEndian` (RG11_B10_REV_UNORM_BE)
+    - `Rg11B10UNorm` (RG11_B10_UNORM)
+    - `Rg11B10UNormBigEndian` (RG11_B10_UNORM_BE)
+    - `Rg16Float` (RG16_FLOAT)
+    - `Rg16FloatBigEndian` (RG16_FLOAT_BE)
+    - `Rg16SInt` (RG16_SINT)
+    - `Rg16SNorm` (RG16_SNORM)
+    - `Rg16SNormBigEndian` (RG16_SNORM_BE)
+    - `Rg16UInt` (RG16_UINT)
+    - `Rg16UNorm` (RG16_UNORM)
+    - `Rg16UNormBigEndian` (RG16_UNORM_BE)
+    - `Rg32Float` (RG32_FLOAT)
+    - `Rg32FloatBigEndian` (RG32_FLOAT_BE)
+    - `Rg32SInt` (RG32_SINT)
+    - `Rg32SNorm` (RG32_SNORM)
+    - `Rg32SNormBigEndian` (RG32_SNORM_BE)
+    - `Rg32UInt` (RG32_UINT)
+    - `Rg32UNorm` (RG32_UNORM)
+    - `Rg32UNormBigEndian` (RG32_UNORM_BE)
+    - `Rg4UNorm` (RG4_UNORM)
+    - `Rg5SNormB6UNorm` (RG5_SNORM_B6_UNORM)
+    - `Rg5SNormB6UNormRev` (RG5_SNORM_B6_UNORM_REV)
+    - `Rg5SNormB6UNormRevBigEndian` (RG5_SNORM_B6_UNORM_REV_BE)
+    - `Rg64Float` (RG64_FLOAT)
+    - `Rg64SInt` (RG64_SINT)
+    - `Rg64UInt` (RG64_UINT)
+    - `Rg8` (RG8_UNORM)
+    - `Rg8SInt` (RG8_SINT)
+    - `Rg8SNorm` (RG8_SNORM)
+    - `Rg8SNormB8UNormX8Rev` (RG8_SNORM_B8_UNORM_X8_REV)
+    - `Rg8SNormB8UNormX8RevBigEndian` (RG8_SNORM_B8_UNORM_X8_REV_BE)
+    - `Rg8SNormBigEndian` (RG8_SNORM_BE)
+    - `Rg8Srgb` (RG8_SRGB)
+    - `Rg8UInt` (RG8_UINT)
+    - `Rg8UNormBigEndian` (RG8_UNORM_BE)
+- RGB / BGR 格式
+    - `A1Bgr5RevUNorm` (A1_BGR5_REV_UNORM)
+    - `A1Bgr5UNorm` (A1_BGR5_UNORM)
+    - `A1Rgb5RevUNorm` (A1_RGB5_REV_UNORM)
+    - `A1Rgb5UNorm` (A1_RGB5_UNORM)
+    - `A1Rgb5UNormBigEndian` (A1_RGB5_UNORM_BE)
+    - `A8Rgb332UNorm` (A8_RGB332_UNORM)
+    - `Bgr10A2RevSInt` (BGR10_A2_REV_SINT)
+    - `Bgr10A2RevSNorm` (BGR10_A2_REV_SNORM)
+    - `Bgr10A2RevUInt` (BGR10_A2_REV_UINT)
+    - `Bgr10A2RevUNorm` (BGR10_A2_REV_UNORM)
+    - `Bgr10A2RevUNormBigEndian` (BGR10_A2_REV_UNORM_BE)
+    - `Bgr10FloatA2UNormRev` (BGR10_FLOAT_A2_UNORM_REV)
+    - `Bgr10FloatX2UNormRev` (BGR10_FLOAT_X2_UNORM_REV)
+    - `Bgr10X2RevUNormBigEndian` (BGR10_X2_REV_UNORM_BE)
+    - `Bgr16Float` (BGR16_FLOAT)
+    - `Bgr16SInt` (BGR16_SINT)
+    - `Bgr16SNorm` (BGR16_SNORM)
+    - `Bgr16UInt` (BGR16_UINT)
+    - `Bgr16UNorm` (BGR16_UNORM)
+    - `Bgr32Float` (BGR32_FLOAT)
+    - `Bgr32SInt` (BGR32_SINT)
+    - `Bgr32SNorm` (BGR32_SNORM)
+    - `Bgr32UInt` (BGR32_UINT)
+    - `Bgr32UNorm` (BGR32_UNORM)
+    - `Bgr565RevUNorm` (BGR565_REV_UNORM)
+    - `Bgr565UNorm` (BGR565_UNORM)
+    - `Bgr5A1RevUNorm` (BGR5_A1_REV_UNORM)
+    - `Bgr5A1UNorm` (BGR5_A1_UNORM)
+    - `Bgr8SInt` (BGR8_SINT)
+    - `Bgr8SNorm` (BGR8_SNORM)
+    - `Bgr8Srgb` (BGR8_SRGB)
+    - `Bgr8UInt` (BGR8_UINT)
+    - `Bgr8UNorm` (BGR8_UNORM)
+    - `Bgrx8Srgb` (BGRX8_SRGB)
+    - `Bgrx8UNorm` (BGRX8_UNORM)
+    - `Bgrx8UNormBigEndian` (BGRX8_UNORM_BE)
+    - `Rgb10A2RevSInt` (RGB10_A2_REV_SINT)
+    - `Rgb10A2RevSNorm` (RGB10_A2_REV_SNORM)
+    - `Rgb10A2RevUInt` (RGB10_A2_REV_UINT)
+    - `Rgb10A2RevUNorm` (RGB10_A2_REV_UNORM)
+    - `Rgb10A2RevUNormBigEndian` (RGB10_A2_REV_UNORM_BE)
+    - `Rgb10A2UInt` (RGB10_A2_UINT)
+    - `Rgb10A2UNorm` (RGB10_A2_UNORM)
+    - `Rgb10FloatA2UNorm` (RGB10_FLOAT_A2_UNORM)
+    - `Rgb10FloatA2UNormRev` (RGB10_FLOAT_A2_UNORM_REV)
+    - `Rgb10FloatX2UNormRev` (RGB10_FLOAT_X2_UNORM_REV)
+    - `Rgb10SNormA2UNormRev` (RGB10_SNORM_A2_UNORM_REV)
+    - `Rgb10SNormA2UNormRevBigEndian` (RGB10_SNORM_A2_UNORM_REV_BE)
+    - `Rgb10UNorm` (RGB10_UNORM)
+    - `Rgb12UNorm` (RGB12_UNORM)
+    - `Rgb16Float` (RGB16_FLOAT)
+    - `Rgb16SInt` (RGB16_SINT)
+    - `Rgb16SNorm` (RGB16_SNORM)
+    - `Rgb16UInt` (RGB16_UINT)
+    - `Rgb16UNorm` (RGB16_UNORM)
+    - `Rgb32Float` (RGB32_FLOAT)
+    - `Rgb32SInt` (RGB32_SINT)
+    - `Rgb32SNorm` (RGB32_SNORM)
+    - `Rgb32UInt` (RGB32_UINT)
+    - `Rgb32UNorm` (RGB32_UNORM)
+    - `Rgb4UNorm` (RGB4_UNORM)
+    - `Rgb565RevUNorm` (RGB565_REV_UNORM)
+    - `Rgb565UNorm` (RGB565_UNORM)
+    - `Rgb565UNormBigEndian` (RGB565_UNORM_BE)
+    - `Rgb5A1RevUNorm` (RGB5_A1_REV_UNORM)
+    - `Rgb5A1UNorm` (RGB5_A1_UNORM)
+    - `Rgb5UNorm` (RGB5_UNORM)
+    - `Rgb64Float` (RGB64_FLOAT)
+    - `Rgb64SInt` (RGB64_SINT)
+    - `Rgb64UInt` (RGB64_UINT)
+    - `Rgb655UNorm` (RGB655_UNORM)
+    - `Rgb655UNormBigEndian` (RGB655_UNORM_BE)
+    - `Rgb8` (RGB8_UNORM)
+    - `Rgb8SInt` (RGB8_SINT)
+    - `Rgb8SNorm` (RGB8_SNORM)
+    - `Rgb8Srgb` (RGB8_SRGB)
+    - `Rgb8UInt` (RGB8_UINT)
+    - `Rgb9E5` (RGB9_E5)
+    - `X1Rgb5UNormBigEndian` (X1_RGB5_UNORM_BE)
+- RGBA / BGRA / ABGR / ARGB 格式
+    - `Abgr4RevUNorm` (ABGR4_REV_UNORM)
+    - `Abgr4UNorm` (ABGR4_UNORM)
+    - `Abgr8SInt` (ABGR8_SINT)
+    - `Abgr8SNorm` (ABGR8_SNORM)
+    - `Abgr8Srgb` (ABGR8_SRGB)
+    - `Abgr8UInt` (ABGR8_UINT)
+    - `Abgr8UNorm` (ABGR8_UNORM)
+    - `Argb4RevUNorm` (ARGB4_REV_UNORM)
+    - `Argb4UNorm` (ARGB4_UNORM)
+    - `Argb4UNormBigEndian` (ARGB4_UNORM_BE)
+    - `Bgra16Float` (BGRA16_FLOAT)
+    - `Bgra16SInt` (BGRA16_SINT)
+    - `Bgra16SNorm` (BGRA16_SNORM)
+    - `Bgra16UInt` (BGRA16_UINT)
+    - `Bgra16UNorm` (BGRA16_UNORM)
+    - `Bgra32Float` (BGRA32_FLOAT)
+    - `Bgra32SInt` (BGRA32_SINT)
+    - `Bgra32SNorm` (BGRA32_SNORM)
+    - `Bgra32UInt` (BGRA32_UINT)
+    - `Bgra32UNorm` (BGRA32_UNORM)
+    - `Bgra4RevUNorm` (BGRA4_REV_UNORM)
+    - `Bgra4UNorm` (BGRA4_UNORM)
+    - `Bgra8` (BGRA8_UNORM)
+    - `Bgra8BigEndian` (BGRA8_UNORM_BE)
+    - `Bgra8SInt` (BGRA8_SINT)
+    - `Bgra8SNorm` (BGRA8_SNORM)
+    - `Bgra8Srgb` (BGRA8_SRGB)
+    - `Bgra8UInt` (BGRA8_UINT)
+    - `Rgba12UNorm` (RGBA12_UNORM)
+    - `Rgba16Float` (RGBA16_FLOAT)
+    - `Rgba16FloatBigEndian` (RGBA16_FLOAT_BE)
+    - `Rgba16SInt` (RGBA16_SINT)
+    - `Rgba16SNorm` (RGBA16_SNORM)
+    - `Rgba16SNormBigEndian` (RGBA16_SNORM_BE)
+    - `Rgba16UInt` (RGBA16_UINT)
+    - `Rgba16UNorm` (RGBA16_UNORM)
+    - `Rgba16UNormBigEndian` (RGBA16_UNORM_BE)
+    - `Rgba2UNorm` (RGBA2_UNORM)
+    - `Rgba32Float` (RGBA32_FLOAT)
+    - `Rgba32FloatBigEndian` (RGBA32_FLOAT_BE)
+    - `Rgba32SInt` (RGBA32_SINT)
+    - `Rgba32SNorm` (RGBA32_SNORM)
+    - `Rgba32SNormBigEndian` (RGBA32_SNORM_BE)
+    - `Rgba32UInt` (RGBA32_UINT)
+    - `Rgba32UNorm` (RGBA32_UNORM)
+    - `Rgba32UNormBigEndian` (RGBA32_UNORM_BE)
+    - `Rgba4RevSNorm` (RGBA4_REV_SNORM)
+    - `Rgba4RevSNormBigEndian` (RGBA4_REV_SNORM_BE)
+    - `Rgba4RevUNorm` (RGBA4_REV_UNORM)
+    - `Rgba4UNorm` (RGBA4_UNORM)
+    - `Rgba64Float` (RGBA64_FLOAT)
+    - `Rgba64SInt` (RGBA64_SINT)
+    - `Rgba64UInt` (RGBA64_UINT)
+    - `Rgba8SInt` (RGBA8_SINT)
+    - `Rgba8SNorm` (RGBA8_SNORM)
+    - `Rgba8SNormBigEndian` (RGBA8_SNORM_BE)
+    - `Rgba8Srgb` (RGBA8_SRGB)
+    - `Rgba8UInt` (RGBA8_UINT)
+    - `Rgba8UNorm` (RGBA8_UNORM)
+    - `Rgba8UNormBigEndian` (RGBA8_UNORM_BE)
+    - `Xrgb4UNormBigEndian` (XRGB4_UNORM_BE)
+- 索引和调色板格式
+    - `A8P8` (A8P8)
+    - `Ai44` (AI44)
+    - `Ia44` (IA44)
+    - `P8` (P8)
+- YUV 和视频格式
+    - `Ayuv444UNorm` (AYUV444_UNORM)
+    - `B10X6G10X6R10X6G10X6_422UNorm` (B10X6G10X6R10X6G10X6_422_UNORM_4PACK16)
+    - `B12X4G12X4R12X4G12X4_422UNorm` (B12X4G12X4R12X4G12X4_422_UNORM_4PACK16)
+    - `B16G16R16G16_422UNorm` (B16G16_R16G16_422_UNORM)
+    - `B8G8R8G8_422UNorm` (B8G8_R8G8_422_UNORM)
+    - `G10X6B10X6G10X6R10X6_422UNorm` (G10X6B10X6G10X6R10X6_422_UNORM_4PACK16)
+    - `G12X4B12X4G12X4R12X4_422UNorm` (G12X4B12X4G12X4R12X4_422_UNORM_4PACK16)
+    - `G16B16G16R16_422UNorm` (G16B16_G16R16_422_UNORM)
+    - `G8B8G8R8_422UNorm` (G8B8_G8R8_422_UNORM)
+    - `G8R8G8B8_422UNorm` (G8R8_G8B8_422_UNORM)
+    - `G8R8G8B8_422UNormBigEndian` (G8R8_G8B8_422_UNORM_BE)
+    - `Nv11UNorm` (NV11_UNORM)
+    - `R8G8B8G8_422UNorm` (R8G8_B8G8_422_UNORM)
+    - `R8G8B8G8_422UNormBigEndian` (R8G8_B8G8_422_UNORM_BE)
+    - `Uyv10A2_444UNorm` (UYV10A2_444_UNORM)
+    - `Uyva16_444UNorm` (UYVA16_444_UNORM)
+    - `Uyvy10Lsb422UNorm` (UYVY10LSB_422_UNORM)
+    - `Uyvy10Msb422UNorm` (UYVY10MSB_422_UNORM)
+    - `Uyvy12Lsb422UNorm` (UYVY12LSB_422_UNORM)
+    - `Uyvy12Msb422UNorm` (UYVY12MSB_422_UNORM)
+    - `Uyvy16_422UNorm` (UYVY16_422_UNORM)
+    - `Uyvy422UNorm` (UYVY422_UNORM)
+    - `Uyvy422UNormBigEndian` (UYVY422_UNORM_BE)
+    - `V208UNorm` (V208_UNORM)
+    - `V408UNorm` (V408_UNORM)
+    - `Vy1Uy0422UNorm` (VY1UY0422_UNORM)
+    - `Vyua10Lsb444UNorm` (VYUA10LSB_444_UNORM)
+    - `Vyua10Msb444UNorm` (VYUA10MSB_444_UNORM)
+    - `Vyua12Lsb444UNorm` (VYUA12LSB_444_UNORM)
+    - `Vyua12Msb444UNorm` (VYUA12MSB_444_UNORM)
+    - `Vyuy422UNorm` (VYUY422_UNORM)
+    - `Y1Vy0U422UNorm` (Y1VY0U422_UNORM)
+    - `Yuv10Lsb2P420UNorm` (YUV10LSB_2P_420_UNORM)
+    - `Yuv10Lsb2P422UNorm` (YUV10LSB_2P_422_UNORM)
+    - `Yuv10Lsb2P444UNorm` (YUV10LSB_2P_444_UNORM)
+    - `Yuv10Lsb3P420UNorm` (YUV10LSB_3P_420_UNORM)
+    - `Yuv10Lsb3P422UNorm` (YUV10LSB_3P_422_UNORM)
+    - `Yuv10Lsb3P444UNorm` (YUV10LSB_3P_444_UNORM)
+    - `Yuv10Msb2P420UNorm` (YUV10MSB_2P_420_UNORM)
+    - `Yuv10Msb2P422UNorm` (YUV10MSB_2P_422_UNORM)
+    - `Yuv10Msb2P444UNorm` (YUV10MSB_2P_444_UNORM)
+    - `Yuv10Msb3P420UNorm` (YUV10MSB_3P_420_UNORM)
+    - `Yuv10Msb3P422UNorm` (YUV10MSB_3P_422_UNORM)
+    - `Yuv10Msb3P444UNorm` (YUV10MSB_3P_444_UNORM)
+    - `Yuv12Lsb2P420UNorm` (YUV12LSB_2P_420_UNORM)
+    - `Yuv12Lsb2P422UNorm` (YUV12LSB_2P_422_UNORM)
+    - `Yuv12Lsb3P420UNorm` (YUV12LSB_3P_420_UNORM)
+    - `Yuv12Lsb3P422UNorm` (YUV12LSB_3P_422_UNORM)
+    - `Yuv12Lsb3P444UNorm` (YUV12LSB_3P_444_UNORM)
+    - `Yuv12Msb2P420UNorm` (YUV12MSB_2P_420_UNORM)
+    - `Yuv12Msb2P422UNorm` (YUV12MSB_2P_422_UNORM)
+    - `Yuv12Msb2P444UNorm` (YUV12MSB_2P_444_UNORM)
+    - `Yuv12Msb3P420UNorm` (YUV12MSB_3P_420_UNORM)
+    - `Yuv12Msb3P422UNorm` (YUV12MSB_3P_422_UNORM)
+    - `Yuv12Msb3P444UNorm` (YUV12MSB_3P_444_UNORM)
+    - `Yuv14Msb2P420UNorm` (YUV14MSB_2P_420_UNORM)
+    - `Yuv14Msb2P422UNorm` (YUV14MSB_2P_422_UNORM)
+    - `Yuv16_2P420UNorm` (YUV16_2P_420_UNORM)
+    - `Yuv16_2P422UNorm` (YUV16_2P_422_UNORM)
+    - `Yuv16_2P444UNorm` (YUV16_2P_444_UNORM)
+    - `Yuv16_3P420UNorm` (YUV16_3P_420_UNORM)
+    - `Yuv16_3P422UNorm` (YUV16_3P_422_UNORM)
+    - `Yuv16_3P444UNorm` (YUV16_3P_444_UNORM)
+    - `Yuv2P420UNorm` (YUV_2P_420_UNORM)
+    - `Yuv2P422UNorm` (YUV_2P_422_UNORM)
+    - `Yuv2P444UNorm` (YUV_2P_444_UNORM)
+    - `Yuv3P420UNorm` (YUV_3P_420_UNORM)
+    - `Yuv3P422UNorm` (YUV_3P_422_UNORM)
+    - `Yuv3P444UNorm` (YUV_3P_444_UNORM)
+    - `Yuy2UNorm` (YUY2_UNORM)
+    - `Yuy2UNormBigEndian` (YUY2_UNORM_BE)
+    - `Yuyv10Lsb422UNorm` (YUYV10LSB_422_UNORM)
+    - `Yuyv10Msb422UNorm` (YUYV10MSB_422_UNORM)
+    - `Yuyv12Lsb422UNorm` (YUYV12LSB_422_UNORM)
+    - `Yuyv12Msb422UNorm` (YUYV12MSB_422_UNORM)
+    - `Yuyv16_422UNorm` (YUYV16_422_UNORM)
+    - `Yvu10Lsb2P420UNorm` (YVU10LSB_2P_420_UNORM)
+    - `Yvu10Lsb2P422UNorm` (YVU10LSB_2P_422_UNORM)
+    - `Yvu10Lsb2P444UNorm` (YVU10LSB_2P_444_UNORM)
+    - `Yvu10Msb2P420UNorm` (YVU10MSB_2P_420_UNORM)
+    - `Yvu10Msb2P422UNorm` (YVU10MSB_2P_422_UNORM)
+    - `Yvu10Msb2P444UNorm` (YVU10MSB_2P_444_UNORM)
+    - `Yvu2P420UNorm` (YVU_2P_420_UNORM)
+    - `Yvu2P422UNorm` (YVU_2P_422_UNORM)
+    - `Yvu2P444UNorm` (YVU_2P_444_UNORM)
+    - `Yvu3P420UNorm` (YVU_3P_420_UNORM)
+    - `Yvyu422UNorm` (YVYU422_UNORM)
+- 深度和模板格式
+    - `Depth16Stencil8` (DEPTH16_STENCIL8)
+    - `Depth24FloatStencil8` (D24FS8)
+    - `Depth24FloatStencil8BigEndian` (D24FS8_BE)
+    - `Depth24Stencil8` (DEPTH24_STENCIL8)
+    - `Depth24Stencil8BigEndian` (DEPTH24_STENCIL8_BE)
+    - `Depth24X8` (DEPTH24_X8)
+    - `Depth24X8BigEndian` (DEPTH24_X8_BE)
+    - `Depth32FloatStencil8` (DEPTH32F_STENCIL8)
+    - `Depth32Stencil8` (DEPTH32_STENCIL8)
+    - `DepthComponent16` (DEPTH_COMPONENT16)
+    - `DepthComponent16BigEndian` (DEPTH_COMPONENT16_BE)
+    - `DepthComponent24` (DEPTH_COMPONENT24)
+    - `DepthComponent32` (DEPTH_COMPONENT32)
+    - `DepthComponent32Float` (DEPTH_COMPONENT32_FLOAT)
+    - `DepthComponent8` (DEPTH_COMPONENT8)
+    - `Stencil8Depth24` (STENCIL8_DEPTH24)
+    - `StencilIndex1` (STENCIL_INDEX1)
+    - `StencilIndex16` (STENCIL_INDEX16)
+    - `StencilIndex4` (STENCIL_INDEX4)
+    - `StencilIndex8` (STENCIL_INDEX8)
+    - `X24Stencil8` (X24_STENCIL8)
+    - `X32Stencil8` (X32_STENCIL8)
+- XR、RGBM、RGBD 和显示特殊格式
+    - `Bgr10XR` (BGR10_XR)
+    - `Bgr10XRSrgb` (BGR10_XR_SRGB)
+    - `Bgra10XR` (BGRA10_XR)
+    - `Bgra10XRSrgb` (BGRA10_XR_SRGB)
+    - `Rgb10XRA2UNorm` (RGB10_XR_BIAS_A2_UNORM)
+    - `Rgbd` (RGBD)
+    - `Rgbm` (RGBM)
+- 位打包单色格式
+    - `Bw1BppUNorm` (BW1BPP_UNORM)
+- 其他打包格式
+    - `B6UNormG5R5SNorm` (B6_UNORM_G5R5_SNORM)
+    - `B8G8SNormR8UNormX8` (B8G8_SNORM_R8_UNORM_X8)

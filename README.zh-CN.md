@@ -1,55 +1,53 @@
 ﻿# TextureCompressor
 
-[中文文档](README.zh-CN.md)
+TextureCompressor 是一个面向 .NET 的纹理编解码库，用于把普通位图数据转换为常见 GPU 纹理格式，也可以读取和写入 DDS、KTX、PVR、PNG、ASTC 等文件容器。
 
-TextureCompressor is a .NET texture codec library for converting bitmap data to common GPU texture formats and for reading or writing DDS, KTX, PVR, PNG, and ASTC containers.
+> 当前公共 API 仍处于早期阶段，在首个稳定版本发布前可能会调整。
 
-> The public API is still early and may change before the first stable release.
+## 功能概览
 
-## Features
+- 位图基础类型：`ArrayBitmap<TPixel>`、`BitmapView<TPixel>` 和常用 RGBA 像素结构。
+- 纹理格式元数据：`TextureFormats` 提供未压缩、打包、调色板、平面 YUV、块压缩等格式定义。
+- 内置纹理 coder：支持 S3TC/DXT、RGTC/LATC、BPTC、ETC/EAC、ASTC、ATC、PVRTC、FXT1、RGBM/RGBD、YUV、深度/模板和 XR 风格格式中的代表性格式。
+- 核心 `TextureCompressor` 包和内置 coder 为纯托管实现，不依赖外部原生库或压缩工具。
+- 文件格式包：PNG、JPEG、GIF、DDS、KTX、PVR、ASTC 的读取、写入和位图转换。
+- 质量分析：对两张位图计算整体和逐通道 MSE、RMSE、PSNR。
+- 开发 CLI：可进行格式查询、容器转换和质量指标输出。
+- Source generator：自动生成 `TextureFormatCatalog`，用于按字段名或格式名查询纹理格式。
+- 可选外部编码器适配：BCnEncoder、AstcEncoderCSharp、Basis Universal、DirectXTex、PVRTexLib。
 
-- Bitmap primitives: `ArrayBitmap<TPixel>`, `BitmapView<TPixel>`, and common RGBA pixel structs.
-- Texture metadata: `TextureFormats` definitions for uncompressed, packed, paletted, planar YUV, and block-compressed formats.
-- Built-in texture coders: representative coverage for S3TC/DXT, RGTC/LATC, BPTC, ETC/EAC, ASTC, ATC, PVRTC, FXT1, RGBM/RGBD, YUV, depth/stencil, and XR-style formats.
-- The core `TextureCompressor` package and built-in coders are fully managed and do not require external native libraries or texture-compression tools.
-- File-format packages: PNG, JPEG, GIF, DDS, KTX, PVR, and ASTC read/write helpers.
-- Quality analysis: whole-image and per-channel MSE, RMSE, and PSNR.
-- Development CLI: format search, container conversion, and quality metric output.
-- Source generator: automatically generates `TextureFormatCatalog` for format enumeration and name lookup.
-- Optional external encoder adapters: BCnEncoder, AstcEncoderCSharp, Basis Universal, DirectXTex, and PVRTexLib.
+## 纹理格式支持情况
 
-## Texture Format Support
+README 只列主要支持的大类。完整支持列表见 [docs/texture-format-support.zh-CN.md](docs/texture-format-support.zh-CN.md)。
 
-README only lists the major supported families. See [docs/texture-format-support.en.md](docs/texture-format-support.en.md) for the full support list.
+- 压缩纹理：S3TC / DXT / BC1-BC3、RGTC / LATC / ATI、BPTC / BC6H / BC7、ETC / EAC、ASTC 2D、ATC、PVRTC、FXT1。
+- 未压缩和非块压缩纹理：顺序像素、Alpha/Luminance/Intensity、打包格式、调色板/索引格式、YUV、深度/模板、XR/RGBM/RGBD 等。
 
-- Compressed textures: S3TC / DXT / BC1-BC3, RGTC / LATC / ATI, BPTC / BC6H / BC7, ETC / EAC, ASTC 2D, ATC, PVRTC, and FXT1.
-- Uncompressed and non-block-compressed textures: sequential pixels, alpha/luminance/intensity, packed formats, paletted/indexed formats, YUV, depth/stencil, XR/RGBM/RGBD, and related layouts.
+## 项目结构
 
-## Project Layout
+- `src/TextureCompressor.Bitmap`：像素结构、位图和 view 抽象。
+- `src/TextureCompressor`：纹理格式定义、核心 coder 和 `TextureCoderManager`。
+- `src/TextureCompressor.SourceGenerators`：生成 `TextureFormatCatalog`，便于枚举和按名称查找格式。
+- `src/TextureCompressor.Analysis`：位图质量指标计算。
+- `src/TextureCompressor.Cli`：开发用命令行工具。
+- `src/TextureCompressor.FileFormats.Png`：PNG 解码和编码。
+- `src/TextureCompressor.FileFormats.Jpeg`：baseline JPEG 解码和编码。
+- `src/TextureCompressor.FileFormats.Gif`：静态 GIF 解码和编码。
+- `src/TextureCompressor.FileFormats.Dds`：DDS/DX10 与 legacy DDS 容器读写。
+- `src/TextureCompressor.FileFormats.Ktx`：KTX v1/v2 容器读写，KTX2 支持 Zstandard supercompression。
+- `src/TextureCompressor.FileFormats.Pvr`：PVR v1/v2/v3 容器读写。
+- `src/TextureCompressor.FileFormats.Astc`：`.astc` 容器读写。
+- `src/TextureCompressor.Codecs.*`：可选第三方编码器适配层。
+- `tests`：核心 codec、文件格式和第三方适配测试。
 
-- `src/TextureCompressor.Bitmap`: pixel structs plus bitmap and view abstractions.
-- `src/TextureCompressor`: texture format definitions, core coders, and `TextureCoderManager`.
-- `src/TextureCompressor.SourceGenerators`: generates `TextureFormatCatalog` for format enumeration and name lookup.
-- `src/TextureCompressor.Analysis`: bitmap quality metrics.
-- `src/TextureCompressor.Cli`: development command-line tool.
-- `src/TextureCompressor.FileFormats.Png`: PNG decoder and encoder.
-- `src/TextureCompressor.FileFormats.Jpeg`: baseline JPEG decoder and encoder.
-- `src/TextureCompressor.FileFormats.Gif`: static GIF decoder and encoder.
-- `src/TextureCompressor.FileFormats.Dds`: DDS/DX10 and legacy DDS container I/O.
-- `src/TextureCompressor.FileFormats.Ktx`: KTX v1/v2 container I/O, including KTX2 Zstandard supercompression.
-- `src/TextureCompressor.FileFormats.Pvr`: PVR v1/v2/v3 container I/O.
-- `src/TextureCompressor.FileFormats.Astc`: `.astc` container I/O.
-- `src/TextureCompressor.Codecs.*`: optional third-party encoder adapters.
-- `tests`: core codec, file-format, and adapter tests.
+## 环境要求
 
-## Requirements
+- .NET SDK 10.0 或更新版本。
+- 核心库不需要安装任何外部纹理压缩器或平台原生运行时。只有可选第三方编码器适配项目和部分附加工具会引入各自的 NuGet 依赖。
 
-- .NET SDK 10.0 or newer.
-- The core library does not require any external texture compressor or platform-native runtime. Optional third-party encoder adapters and some auxiliary tools bring their own NuGet dependencies.
+## 安装到你的项目
 
-## Add It To Your Project
-
-The repository currently ships as source projects. Add project references from your app or library:
+当前仓库以源码项目为主，可以在同一个 solution 中用项目引用接入：
 
 ```bash
 dotnet add YourApp.csproj reference src/TextureCompressor.Bitmap/TextureCompressor.Bitmap.csproj
@@ -59,7 +57,7 @@ dotnet add YourApp.csproj reference src/TextureCompressor.FileFormats.Jpeg/Textu
 dotnet add YourApp.csproj reference src/TextureCompressor.FileFormats.Gif/TextureCompressor.FileFormats.Gif.csproj
 ```
 
-Reference the container packages you need:
+如果需要 DDS、KTX、PVR 或 ASTC 容器，再引用对应项目：
 
 ```bash
 dotnet add YourApp.csproj reference src/TextureCompressor.FileFormats.Dds/TextureCompressor.FileFormats.Dds.csproj
@@ -68,21 +66,21 @@ dotnet add YourApp.csproj reference src/TextureCompressor.FileFormats.Pvr/Textur
 dotnet add YourApp.csproj reference src/TextureCompressor.FileFormats.Astc/TextureCompressor.FileFormats.Astc.csproj
 ```
 
-Reference the analysis package when you need quality metrics:
+如果需要质量指标计算或复用 CLI 里的格式查询能力，可以引用：
 
 ```bash
 dotnet add YourApp.csproj reference src/TextureCompressor.Analysis/TextureCompressor.Analysis.csproj
 ```
 
-Run the development CLI directly from the source project:
+开发 CLI 可直接通过源码项目运行：
 
 ```bash
 dotnet run --project src/TextureCompressor.Cli -- --help
 ```
 
-## Quick Start: PNG To BC7 And Back
+## 快速开始：PNG 转 BC7 再转回 PNG
 
-This example reads an RGBA8 PNG, encodes it to a BC7 texture payload, decodes it back, and writes a PNG preview:
+下面的示例从 PNG 读取 RGBA8 位图，编码为 BC7 纹理载荷，再解码回 PNG：
 
 ```csharp
 using TextureCompressor.Bitmaps;
@@ -104,9 +102,9 @@ coder.Decode(encoded, decoded.AsView());
 PngCodec.Encode(decoded, "roundtrip.png");
 ```
 
-`TextureCoderManager.Global` creates built-in coders by format. Register an external coder when you need a different implementation or higher production compression quality.
+`TextureCoderManager.Global` 会按格式自动创建内置 coder。如果没有内置支持或你想替换为高质量第三方编码器，可以注册自定义 coder，见后文。
 
-## Read And Write PNG
+## 读写 PNG
 
 ```csharp
 using TextureCompressor.FileFormats.Png;
@@ -115,7 +113,7 @@ var bitmap = PngCodec.DecodeRgba8("input.png");
 PngCodec.Encode(bitmap, "copy.png");
 ```
 
-Decode into another pixel type when needed:
+也可以解码成其他像素类型：
 
 ```csharp
 using TextureCompressor.Colors;
@@ -124,9 +122,9 @@ using TextureCompressor.FileFormats.Png;
 var hdrReady = PngCodec.Decode<Rgba32Float>("input.png");
 ```
 
-## Read And Write JPEG And GIF
+## 读写 JPEG 和 GIF
 
-The JPEG codec supports 8-bit baseline JPEG. Use `JpegEncodingOptions.Quality` to select an output quality from 1 to 100:
+JPEG codec 支持 8-bit baseline JPEG。编码时可通过 `JpegEncodingOptions.Quality` 设置 1 到 100 的质量值：
 
 ```csharp
 using TextureCompressor.FileFormats.Jpeg;
@@ -138,7 +136,7 @@ JpegCodec.Encode(bitmap, "photo-copy.jpg", new JpegEncodingOptions
 });
 ```
 
-The GIF codec targets static GIF files. Encoding keeps an exact palette when the image has 256 or fewer colors; otherwise it falls back to an RGB332 palette and preserves transparency:
+GIF codec 面向静态 GIF。编码时会优先保留 256 色以内的精确调色板；颜色超过限制时会降到 RGB332 调色板，并保留透明色：
 
 ```csharp
 using TextureCompressor.FileFormats.Gif;
@@ -147,9 +145,9 @@ var icon = GifCodec.DecodeRgba8("icon.gif");
 GifCodec.Encode(icon, "icon-copy.gif");
 ```
 
-## Query Texture Formats
+## 查询纹理格式
 
-`TextureFormatCatalog` is generated automatically by the source generator. Use it to enumerate all `TextureFormats` fields or resolve formats by field name or format name:
+`TextureFormatCatalog` 由 source generator 自动生成，可用于枚举所有 `TextureFormats` 字段，或者按字段名/格式名查询：
 
 ```csharp
 using TextureCompressor.Formats;
@@ -163,9 +161,9 @@ foreach (var format in TextureFormatCatalog.All.Where(static item => item.IsComp
 }
 ```
 
-## Compare Compression Quality
+## 比较压缩质量
 
-`TextureCompressor.Analysis` compares two same-sized bitmaps and reports whole-image and per-channel MSE, RMSE, and PSNR:
+`TextureCompressor.Analysis` 可以比较两张尺寸相同的位图，输出整体和逐通道的 MSE、RMSE、PSNR：
 
 ```csharp
 using TextureCompressor.Analysis;
@@ -180,9 +178,9 @@ Console.WriteLine($"PSNR: {quality.PeakSignalToNoiseRatio:F2} dB");
 Console.WriteLine($"R channel PSNR: {quality.Red.PeakSignalToNoiseRatio:F2} dB");
 ```
 
-## Write DDS
+## 写入 DDS
 
-DDS encoding writes a DX10 header by default. Use `DdsEncodingOptions` to select a DXGI format, a legacy header, or a legacy FourCC:
+默认写入 DX10 DDS header。通过 `DdsEncodingOptions` 可以选择 DXGI 格式、legacy header 或 legacy FourCC：
 
 ```csharp
 using TextureCompressor.FileFormats.Dds;
@@ -202,7 +200,7 @@ DdsCodec.Encode(bitmap, "albedo-dxt5.dds", new DdsEncodingOptions
 });
 ```
 
-Read a DDS and export a PNG preview:
+读取 DDS 并导出 PNG：
 
 ```csharp
 using TextureCompressor.FileFormats.Dds;
@@ -212,7 +210,7 @@ var decoded = DdsCodec.Decode("albedo-bc7.dds");
 PngCodec.Encode(decoded, "albedo-preview.png");
 ```
 
-## Write KTX / KTX2
+## 写入 KTX / KTX2
 
 ```csharp
 using TextureCompressor.FileFormats.Ktx;
@@ -234,14 +232,14 @@ KtxCodec.Encode(bitmap, "texture.ktx2", new KtxEncodingOptions
 });
 ```
 
-KTX APIs can either read container metadata or decode directly to a bitmap:
+KTX 读取同样分为读取容器元数据和直接解码到位图：
 
 ```csharp
 var texture = KtxCodec.Read("texture.ktx2");
 var bitmap = KtxCodec.Decode("texture.ktx2");
 ```
 
-## Write PVR
+## 写入 PVR
 
 ```csharp
 using TextureCompressor.FileFormats.Png;
@@ -256,9 +254,9 @@ PvrCodec.Encode(bitmap, "texture.pvr", new PvrEncodingOptions
 });
 ```
 
-PVR v1/v2/v3 files can be read. When writing legacy PVR, use `PvrEncodingOptions` to select the version and legacy pixel type preference.
+PVR v1/v2/v3 均可读取；写入 legacy PVR 时可使用 `PvrEncodingOptions` 选择版本和 legacy pixel type 偏好。
 
-## Write ASTC
+## 写入 ASTC
 
 ```csharp
 using TextureCompressor.FileFormats.Astc;
@@ -274,7 +272,7 @@ AstcCodec.Encode(bitmap, "texture.astc", new AstcEncodingOptions
 });
 ```
 
-When reading ASTC, pass `AstcReadOptions` if you need to choose the UNorm, sRGB, or Float profile:
+读取 ASTC 时，如果需要指定 UNorm、sRGB 或 Float profile，可以传入 `AstcReadOptions`：
 
 ```csharp
 var bitmap = AstcCodec.Decode("texture.astc", new AstcReadOptions
@@ -283,17 +281,17 @@ var bitmap = AstcCodec.Decode("texture.astc", new AstcReadOptions
 });
 ```
 
-## Register Optional External Encoders
+## 注册可选第三方编码器
 
-Built-in coders are useful for basic conversion and tests. For production compression quality, reference the adapter project and register it with `TextureCoderManager`. Later registrations take precedence over built-in coders; when multiple adapters support the same format, register them in the priority order you want.
+内置 coder 适合基础转换和测试。如果需要更成熟的压缩质量，可以引用相应适配项目并注册到 `TextureCoderManager`。后注册的 coder 会优先于内置 coder；如果多个第三方适配器支持同一格式，请按你希望的优先级注册。
 
-Available third-party encoder adapters:
+当前提供的第三方编码器适配：
 
-- `TextureCompressor.Codecs.BCnEncoder`: based on BCnEncoder.Net, targeting BC1/BC2/BC3/BC4/BC5/BC6H/BC7-related formats.
-- `TextureCompressor.Codecs.AstcEnc`: based on AstcEncoderCSharp, targeting ASTC 2D formats.
-- `TextureCompressor.Codecs.BasisUniversal`: based on BasisUniversal.NET, targeting ETC/EAC, BC/DXT, PVRTC, FXT1, ATC, and some ASTC LDR formats.
-- `TextureCompressor.Codecs.DirectXTex`: based on DirectXTex, targeting BC1-BC7, DXT, RGTC/ATI, and BPTC formats.
-- `TextureCompressor.Codecs.PVRTexLib`: based on PVRTexLib.NET, targeting ETC/EAC, PVRTC, BC/DXT, and ASTC formats.
+- `TextureCompressor.Codecs.BCnEncoder`：基于 BCnEncoder.Net，面向 BC1/BC2/BC3/BC4/BC5/BC6H/BC7 相关格式。
+- `TextureCompressor.Codecs.AstcEnc`：基于 AstcEncoderCSharp，面向 ASTC 2D 相关格式。
+- `TextureCompressor.Codecs.BasisUniversal`：基于 BasisUniversal.NET，面向 ETC/EAC、BC/DXT、PVRTC、FXT1、ATC、部分 ASTC LDR 相关格式。
+- `TextureCompressor.Codecs.DirectXTex`：基于 DirectXTex，面向 BC1-BC7、DXT、RGTC/ATI、BPTC 相关格式。
+- `TextureCompressor.Codecs.PVRTexLib`：基于 PVRTexLib.NET，面向 ETC/EAC、PVRTC、BC/DXT、ASTC 相关格式。
 
 ```bash
 dotnet add YourApp.csproj reference src/TextureCompressor.Codecs.BCnEncoder/TextureCompressor.Codecs.BCnEncoder.csproj
@@ -317,11 +315,11 @@ using var basis = TextureCoderManager.Global.RegisterBasisUniversalCoders();
 using var directXTex = TextureCoderManager.Global.RegisterDirectXTexCoders();
 using var pvrt = TextureCoderManager.Global.RegisterPVRTexLibCoders();
 
-// Later DdsCodec/KtxCodec/AstcCodec/TextureCoderManager.Global.GetCoder(...)
-// calls use the registered external coders.
+// 后续 DdsCodec/KtxCodec/AstcCodec/TextureCoderManager.Global.GetCoder(...)
+// 会使用已注册的外部 coder。
 ```
 
-You can also register one format:
+也可以只为特定格式注册：
 
 ```csharp
 using TextureCompressor.Codecs.BCnEncoder;
@@ -330,9 +328,9 @@ using TextureCompressor.Formats;
 using var registration = TextureCoderManager.Global.RegisterBCnEncoderCoder(TextureFormats.Bc7UNorm);
 ```
 
-## CLI Tool
+## CLI 工具
 
-`TextureCompressor.Cli` is a development command-line tool for format search, container conversion, and quality metric output:
+`TextureCompressor.Cli` 是开发用命令行工具，可以查询格式、转换容器并输出质量指标：
 
 ```bash
 dotnet run --project src/TextureCompressor.Cli -- --help
@@ -343,17 +341,17 @@ dotnet run --project src/TextureCompressor.Cli -- convert input.png output.ktx2 
 dotnet run --project src/TextureCompressor.Cli -- quality source.png output.dds
 ```
 
-Common commands:
+常用命令：
 
-- `formats [query]`: list or search texture formats accepted by `--format`; add `--compressed` or `--uncompressed` to filter.
-- `convert <input> <output>`: convert between image and texture containers. The output container is inferred from the extension unless `--container` is passed explicitly.
-- `quality <expected> <actual>`: decode two image/texture files and print MSE, RMSE, and PSNR; add `--ignore-alpha` to ignore alpha.
+- `formats [query]`：列出或搜索 `--format` 可用的纹理格式；可加 `--compressed` 或 `--uncompressed` 过滤。
+- `convert <input> <output>`：在图片和纹理容器之间转换。输出容器默认由扩展名推断，也可以用 `--container` 显式指定。
+- `quality <expected> <actual>`：解码两张图片/纹理并输出 MSE、RMSE、PSNR；可加 `--ignore-alpha` 忽略 Alpha。
 
-Image containers support PNG, JPEG, and GIF. `convert` provides `--png-color-space`, `--jpg-color-space`, and `--gif-color-space` conversions between Linear and Srgb. JPEG output quality is controlled with `--jpeg-quality`.
+图片容器支持 PNG、JPEG、GIF。`convert` 提供 `--png-color-space`、`--jpg-color-space`、`--gif-color-space` 在 Linear 与 Srgb 之间转换；JPEG 输出可用 `--jpeg-quality` 设置质量。
 
-## Common Workflows
+## 常见工作流
 
-### PNG To DDS BC3
+### PNG 转 DDS BC3
 
 ```csharp
 var bitmap = PngCodec.DecodeRgba8("input.png");
@@ -364,16 +362,16 @@ DdsCodec.Encode(bitmap, "output.dds", new DdsEncodingOptions
 });
 ```
 
-### DDS To PNG Preview
+### DDS 转 PNG 预览图
 
 ```csharp
 var bitmap = DdsCodec.Decode("input.dds");
 PngCodec.Encode(bitmap, "preview.png");
 ```
 
-### Work Directly With Container Payloads
+### 直接处理容器载荷
 
-If you already have a compressed payload, create the container object directly and write it:
+如果你已经有压缩后的 payload，可以直接创建容器对象并写出文件：
 
 ```csharp
 using TextureCompressor.FileFormats.Dds;
@@ -388,15 +386,15 @@ var texture = new DdsTexture(
 DdsCodec.Write(texture, "texture.dds");
 ```
 
-## Current Limitations
+## 当前限制
 
-- File-format helpers currently focus on single 2D textures.
-- DDS/KTX/PVR/ASTC mip-map chains, texture arrays, cube maps, and 3D textures are mostly not supported yet.
-- PNG supports common static PNG files. Animated PNG is not supported.
-- JPEG supports baseline JPEG. Progressive JPEG is not supported.
-- GIF reads the first image frame. Animation frame sequences are not emitted as animation.
+- 文件格式读写目前主要面向单张 2D texture。
+- DDS/KTX/PVR/ASTC 的 mip-map chain、texture array、cube map、3D texture 等高级形态多数尚未支持。
+- PNG 支持常见静态 PNG；Animated PNG 不支持。
+- JPEG 支持 baseline JPEG；progressive JPEG 不支持。
+- GIF 读取首个图像帧；动画帧序列不作为动画输出。
 
-## Build And Test
+## 构建与测试
 
 ```bash
 dotnet restore TextureCompressor.slnx
@@ -405,9 +403,8 @@ dotnet test TextureCompressor.slnx --configuration Release --no-build
 dotnet format TextureCompressor.slnx --verify-no-changes --verbosity minimal
 ```
 
-The test suite includes generated PNG fixtures under `tests/fixtures/images`.
-Texture codec tests consume the `source/*-source.png` entries from `assets-manifest.json`.
+测试图片位于 `tests/fixtures/images`。纹理 codec 测试会读取 `assets-manifest.json` 中的 `source/*-source.png` 条目。
 
-## License
+## 许可证
 
-This project is licensed under the MIT License.
+本项目使用 MIT License 授权。
