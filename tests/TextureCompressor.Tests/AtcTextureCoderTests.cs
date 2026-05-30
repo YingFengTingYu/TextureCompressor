@@ -197,6 +197,65 @@ public sealed class AtcTextureCoderTests
     }
 
     [Fact]
+    public void EncodeAtcRgbUsesFastBoundsByDefault()
+    {
+        var pixels = CreateAlternatingRedGreenBlock();
+        var source = new ArrayBitmap<Rgba8UNorm>(4, 4, pixels);
+        var coder = new AtcTextureCoder(TextureFormats.AtcRgb);
+        var rowPitch = coder.GetDefaultPitch(source.Width);
+        var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
+
+        coder.Encode(source.AsView(), encoded, rowPitch);
+
+        Assert.Equal(EncodeFastAtcRgbBlock(pixels), encoded);
+    }
+
+    [Fact]
+    public void EncodeAtcRgbHighQualityFitsColorClustersInsteadOfRgbBounds()
+    {
+        var pixels = CreateAlternatingRedGreenBlock();
+        var source = new ArrayBitmap<Rgba8UNorm>(4, 4, pixels);
+        var options = new AtcCoderOptions { CompressionMode = AtcCompressionMode.High };
+        var coder = new AtcTextureCoder(TextureFormats.AtcRgb, options);
+        var rowPitch = coder.GetDefaultPitch(source.Width);
+        var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
+        var decoded = new ArrayBitmap<Rgba8UNorm>(4, 4);
+        var boundsDecoded = new ArrayBitmap<Rgba8UNorm>(4, 4);
+
+        coder.Encode(source.AsView(), encoded, rowPitch);
+        coder.Decode(encoded, decoded.AsView(), rowPitch);
+        coder.Decode(EncodeFastAtcRgbBlock(pixels), boundsDecoded.AsView(), rowPitch);
+
+        Assert.Equal(0, RgbSquaredError(source, decoded));
+        Assert.True(RgbSquaredError(source, decoded) < RgbSquaredError(source, boundsDecoded));
+    }
+
+    [Fact]
+    public void EncodeAtcRgbaInterpolatedAlphaHighQualityIsNoWorseThanFastSearch()
+    {
+        var pixels = Enumerable.Range(0, 16)
+            .Select(i => new Rgba8UNorm(64, 96, 128, (byte)((i * 17) + ((i & 1) * 11))))
+            .ToArray();
+        var source = new ArrayBitmap<Rgba8UNorm>(4, 4, pixels);
+        var fastCoder = new AtcTextureCoder(TextureFormats.AtcRgbaInterpolatedAlpha);
+        var highCoder = new AtcTextureCoder(
+            TextureFormats.AtcRgbaInterpolatedAlpha,
+            new AtcCoderOptions { CompressionMode = AtcCompressionMode.High });
+        var rowPitch = fastCoder.GetDefaultPitch(source.Width);
+        var fastEncoded = new byte[fastCoder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
+        var highEncoded = new byte[highCoder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
+        var fastDecoded = new ArrayBitmap<Rgba8UNorm>(4, 4);
+        var highDecoded = new ArrayBitmap<Rgba8UNorm>(4, 4);
+
+        fastCoder.Encode(source.AsView(), fastEncoded, rowPitch);
+        highCoder.Encode(source.AsView(), highEncoded, rowPitch);
+        fastCoder.Decode(fastEncoded, fastDecoded.AsView(), rowPitch);
+        highCoder.Decode(highEncoded, highDecoded.AsView(), rowPitch);
+
+        Assert.True(AlphaSquaredError(source, highDecoded) <= AlphaSquaredError(source, fastDecoded));
+    }
+
+    [Fact]
     public void AtcDecodeUsesPaddedBlockWidthForNonMultipleOfFourWidth()
     {
         var encoded = new byte[TextureFormats.AtcRgb.GetByteCount(5, 1)];
@@ -257,6 +316,162 @@ public sealed class AtcTextureCoderTests
         BinaryPrimitives.WriteUInt16LittleEndian(destination[2..], color1);
         BinaryPrimitives.WriteUInt32LittleEndian(destination[4..], indices);
     }
+
+    private static byte[] EncodeFastAtcRgbBlock(ReadOnlySpan<Rgba8UNorm> source)
+    {
+        var encoded = new byte[8];
+        WriteColorBlock(encoded, 0x0000, 0xffe0, GetNearestAtcColorIndices(source, 0x0000, 0xffe0));
+        Span<byte> candidate = stackalloc byte[8];
+        TryUseBetterColorCandidate(source, 0x7fe0, 0x0000, encoded, candidate);
+        TryUseBetterColorCandidate(source, 0xffe0, 0x0000, encoded, candidate);
+        TryUseBetterColorCandidate(source, 0xffe0, 0xffe0, encoded, candidate);
+        return encoded;
+    }
+
+    private static void TryUseBetterColorCandidate(
+        ReadOnlySpan<Rgba8UNorm> source,
+        ushort color0,
+        ushort color1,
+        Span<byte> best,
+        Span<byte> candidate)
+    {
+        WriteColorBlock(candidate, color0, color1, GetNearestAtcColorIndices(source, color0, color1));
+        if (RgbSquaredError(source, candidate) < RgbSquaredError(source, best))
+        {
+            candidate.CopyTo(best);
+        }
+    }
+
+    private static uint GetNearestAtcColorIndices(ReadOnlySpan<Rgba8UNorm> source, ushort color0, ushort color1)
+    {
+        Span<Rgba8UNorm> palette = stackalloc Rgba8UNorm[4];
+        BuildAtcColorPalette(color0, color1, palette);
+        uint indices = 0;
+        for (var i = 0; i < 16; i++)
+        {
+            var index = 0;
+            var bestDistance = int.MaxValue;
+            for (var paletteIndex = 0; paletteIndex < palette.Length; paletteIndex++)
+            {
+                var distance = RgbSquaredDistance(source[i], palette[paletteIndex]);
+                if (distance < bestDistance)
+                {
+                    bestDistance = distance;
+                    index = paletteIndex;
+                }
+            }
+
+            indices |= (uint)index << (i * 2);
+        }
+
+        return indices;
+    }
+
+    private static void BuildAtcColorPalette(ushort color0, ushort color1, Span<Rgba8UNorm> palette)
+    {
+        var c1 = UnpackRgb565(color1);
+        if ((color0 & 0x8000) == 0)
+        {
+            var c0 = UnpackRgb555(color0);
+            palette[0] = new Rgba8UNorm(c0.Red, c0.Green, c0.Blue);
+            palette[1] = Interpolate(c0, c1, 5, 3, 8);
+            palette[2] = Interpolate(c0, c1, 3, 5, 8);
+            palette[3] = new Rgba8UNorm(c1.Red, c1.Green, c1.Blue);
+            return;
+        }
+
+        var c2 = UnpackRgb555((ushort)(color0 & 0x7fff));
+        palette[0] = new Rgba8UNorm(0, 0, 0);
+        palette[1] = new Rgba8UNorm(
+            (byte)Math.Max(0, c2.Red - (c1.Red / 4)),
+            (byte)Math.Max(0, c2.Green - (c1.Green / 4)),
+            (byte)Math.Max(0, c2.Blue - (c1.Blue / 4)));
+        palette[2] = new Rgba8UNorm(c2.Red, c2.Green, c2.Blue);
+        palette[3] = new Rgba8UNorm(c1.Red, c1.Green, c1.Blue);
+    }
+
+    private static Rgba8UNorm Interpolate(Rgb24 a, Rgb24 b, int weightA, int weightB, int divisor) =>
+        new(
+            (byte)(((weightA * a.Red) + (weightB * b.Red)) / divisor),
+            (byte)(((weightA * a.Green) + (weightB * b.Green)) / divisor),
+            (byte)(((weightA * a.Blue) + (weightB * b.Blue)) / divisor));
+
+    private static Rgb24 UnpackRgb555(ushort value)
+    {
+        var red = (value >> 10) & 0x1f;
+        var green = (value >> 5) & 0x1f;
+        var blue = value & 0x1f;
+        return new Rgb24(Expand5(red), Expand5(green), Expand5(blue));
+    }
+
+    private static Rgb24 UnpackRgb565(ushort value)
+    {
+        var red = (value >> 11) & 0x1f;
+        var green = (value >> 5) & 0x3f;
+        var blue = value & 0x1f;
+        return new Rgb24(Expand5(red), Expand6(green), Expand5(blue));
+    }
+
+    private static byte Expand5(int value) => (byte)((value << 3) | (value >> 2));
+
+    private static byte Expand6(int value) => (byte)((value << 2) | (value >> 4));
+
+    private static int RgbSquaredError(ArrayBitmap<Rgba8UNorm> expected, ArrayBitmap<Rgba8UNorm> actual)
+    {
+        var error = 0;
+        for (var i = 0; i < expected.Pixels.Length; i++)
+        {
+            error += RgbSquaredDistance(expected.Pixels[i], actual.Pixels[i]);
+        }
+
+        return error;
+    }
+
+    private static int RgbSquaredError(ReadOnlySpan<Rgba8UNorm> source, ReadOnlySpan<byte> encoded)
+    {
+        Span<Rgba8UNorm> decoded = stackalloc Rgba8UNorm[16];
+        BuildAtcColorPalette(
+            BinaryPrimitives.ReadUInt16LittleEndian(encoded),
+            BinaryPrimitives.ReadUInt16LittleEndian(encoded[2..]),
+            decoded);
+        var indices = BinaryPrimitives.ReadUInt32LittleEndian(encoded[4..]);
+        var error = 0;
+        for (var i = 0; i < 16; i++)
+        {
+            error += RgbSquaredDistance(source[i], decoded[(int)((indices >> (i * 2)) & 0x3u)]);
+        }
+
+        return error;
+    }
+
+    private static int RgbSquaredDistance(Rgba8UNorm a, Rgba8UNorm b)
+    {
+        var red = a.Red - b.Red;
+        var green = a.Green - b.Green;
+        var blue = a.Blue - b.Blue;
+        return (red * red) + (green * green) + (blue * blue);
+    }
+
+    private static int AlphaSquaredError(ArrayBitmap<Rgba8UNorm> expected, ArrayBitmap<Rgba8UNorm> actual)
+    {
+        var error = 0;
+        for (var i = 0; i < expected.Pixels.Length; i++)
+        {
+            var alpha = expected.Pixels[i].Alpha - actual.Pixels[i].Alpha;
+            error += alpha * alpha;
+        }
+
+        return error;
+    }
+
+    private static Rgba8UNorm[] CreateAlternatingRedGreenBlock() =>
+        Enumerable.Range(0, 16)
+            .Select(i => (i & 1) == 0
+                ? new Rgba8UNorm(255, 0, 0, 255)
+                : new Rgba8UNorm(0, 255, 0, 255))
+            .ToArray();
+
+    private readonly record struct Rgb24(byte Red, byte Green, byte Blue);
 
     public static TheoryData<TextureFormat> AtcFormats() => new()
     {

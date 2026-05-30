@@ -12,8 +12,9 @@ public sealed class AtcTextureCoder : IPitchTextureCoder
     private const int TexelsPerBlock = BlockSize * BlockSize;
 
     private readonly AtcTransfer _transfer;
+    private readonly AtcCoderOptions _options;
 
-    public AtcTextureCoder(TextureFormat format)
+    public AtcTextureCoder(TextureFormat format, AtcCoderOptions? options = null)
     {
         if (!TryGetTransfer(format, out _transfer))
         {
@@ -21,6 +22,7 @@ public sealed class AtcTextureCoder : IPitchTextureCoder
         }
 
         Format = format;
+        _options = options ?? new AtcCoderOptions();
     }
 
     public TextureFormat Format { get; }
@@ -81,13 +83,13 @@ public sealed class AtcTextureCoder : IPitchTextureCoder
         switch (_transfer)
         {
             case AtcTransfer.Rgb:
-                Encode<TPixel, AtcRgbTransfer>(source, destination, rowPitch);
+                Encode<TPixel, AtcRgbTransfer>(source, destination, rowPitch, _options.CompressionMode);
                 return;
             case AtcTransfer.RgbaExplicitAlpha:
-                Encode<TPixel, AtcRgbaExplicitAlphaTransfer>(source, destination, rowPitch);
+                Encode<TPixel, AtcRgbaExplicitAlphaTransfer>(source, destination, rowPitch, _options.CompressionMode);
                 return;
             case AtcTransfer.RgbaInterpolatedAlpha:
-                Encode<TPixel, AtcRgbaInterpolatedAlphaTransfer>(source, destination, rowPitch);
+                Encode<TPixel, AtcRgbaInterpolatedAlphaTransfer>(source, destination, rowPitch, _options.CompressionMode);
                 return;
             default:
                 throw CreateUnsupportedFormatException(Format);
@@ -117,7 +119,11 @@ public sealed class AtcTextureCoder : IPitchTextureCoder
         }
     }
 
-    private static void Encode<TPixel, TTransfer>(BitmapView<TPixel> source, Span<byte> destination, int rowPitch)
+    private static void Encode<TPixel, TTransfer>(
+        BitmapView<TPixel> source,
+        Span<byte> destination,
+        int rowPitch,
+        AtcCompressionMode compressionMode)
         where TPixel : unmanaged, IPixel<TPixel>
         where TTransfer : IAtcTransfer
     {
@@ -132,7 +138,7 @@ public sealed class AtcTextureCoder : IPitchTextureCoder
             for (var blockX = 0; blockX < blockCountX; blockX++)
             {
                 LoadBlock(source, blockX, blockY, block);
-                TTransfer.EncodeBlock(block, destination.Slice(blockOffset, TTransfer.BytesPerBlock));
+                TTransfer.EncodeBlock(block, destination.Slice(blockOffset, TTransfer.BytesPerBlock), compressionMode);
                 blockOffset = checked(blockOffset + TTransfer.BytesPerBlock);
             }
 
@@ -146,7 +152,10 @@ public sealed class AtcTextureCoder : IPitchTextureCoder
 
         static abstract void DecodeBlock(ReadOnlySpan<byte> source, Span<Rgba8UNorm> destination);
 
-        static abstract void EncodeBlock(ReadOnlySpan<Rgba8UNorm> source, Span<byte> destination);
+        static abstract void EncodeBlock(
+            ReadOnlySpan<Rgba8UNorm> source,
+            Span<byte> destination,
+            AtcCompressionMode compressionMode);
     }
 
     private readonly struct AtcRgbTransfer : IAtcTransfer
@@ -156,8 +165,11 @@ public sealed class AtcTextureCoder : IPitchTextureCoder
         public static void DecodeBlock(ReadOnlySpan<byte> source, Span<Rgba8UNorm> destination) =>
             DecodeColorBlock(source, destination);
 
-        public static void EncodeBlock(ReadOnlySpan<Rgba8UNorm> source, Span<byte> destination) =>
-            EncodeColorBlock(source, destination);
+        public static void EncodeBlock(
+            ReadOnlySpan<Rgba8UNorm> source,
+            Span<byte> destination,
+            AtcCompressionMode compressionMode) =>
+            EncodeColorBlock(source, destination, compressionMode);
     }
 
     private readonly struct AtcRgbaExplicitAlphaTransfer : IAtcTransfer
@@ -170,10 +182,13 @@ public sealed class AtcTextureCoder : IPitchTextureCoder
             DecodeExplicitAlphaBlock(source[..8], destination);
         }
 
-        public static void EncodeBlock(ReadOnlySpan<Rgba8UNorm> source, Span<byte> destination)
+        public static void EncodeBlock(
+            ReadOnlySpan<Rgba8UNorm> source,
+            Span<byte> destination,
+            AtcCompressionMode compressionMode)
         {
             EncodeExplicitAlphaBlock(source, destination[..8]);
-            EncodeColorBlock(source, destination[8..]);
+            EncodeColorBlock(source, destination[8..], compressionMode);
         }
     }
 
@@ -187,10 +202,13 @@ public sealed class AtcTextureCoder : IPitchTextureCoder
             DecodeInterpolatedAlphaBlock(source[..8], destination);
         }
 
-        public static void EncodeBlock(ReadOnlySpan<Rgba8UNorm> source, Span<byte> destination)
+        public static void EncodeBlock(
+            ReadOnlySpan<Rgba8UNorm> source,
+            Span<byte> destination,
+            AtcCompressionMode compressionMode)
         {
-            EncodeInterpolatedAlphaBlock(source, destination[..8]);
-            EncodeColorBlock(source, destination[8..]);
+            EncodeInterpolatedAlphaBlock(source, destination[..8], compressionMode);
+            EncodeColorBlock(source, destination[8..], compressionMode);
         }
     }
 
@@ -208,7 +226,28 @@ public sealed class AtcTextureCoder : IPitchTextureCoder
         }
     }
 
-    private static void EncodeColorBlock(ReadOnlySpan<Rgba8UNorm> source, Span<byte> destination)
+    private static void EncodeColorBlock(
+        ReadOnlySpan<Rgba8UNorm> source,
+        Span<byte> destination,
+        AtcCompressionMode compressionMode)
+    {
+        switch (compressionMode)
+        {
+            case AtcCompressionMode.Fast:
+                EncodeColorBlockFast(source, destination);
+                return;
+            case AtcCompressionMode.High:
+                EncodeColorBlockHigh(source, destination);
+                return;
+            default:
+                throw new ArgumentOutOfRangeException(
+                    nameof(compressionMode),
+                    compressionMode,
+                    "Unsupported ATC compression mode.");
+        }
+    }
+
+    private static void EncodeColorBlockFast(ReadOnlySpan<Rgba8UNorm> source, Span<byte> destination)
     {
         FindColorBounds(source, out var min, out var max);
 
@@ -225,6 +264,57 @@ public sealed class AtcTextureCoder : IPitchTextureCoder
         BinaryPrimitives.WriteUInt16LittleEndian(destination, bestColor0);
         BinaryPrimitives.WriteUInt16LittleEndian(destination[2..], bestColor1);
         BinaryPrimitives.WriteUInt32LittleEndian(destination[4..], bestIndices);
+    }
+
+    private static void EncodeColorBlockHigh(ReadOnlySpan<Rgba8UNorm> source, Span<byte> destination)
+    {
+        Span<ColorEndpointPair> seeds = stackalloc ColorEndpointPair[24];
+        var seedCount = 0;
+        FindColorBounds(source, out var min, out var max);
+        AddColorSeed(seeds, ref seedCount, PackRgb555(min), PackRgb565(max));
+        AddColorSeed(seeds, ref seedCount, PackRgb555(max), PackRgb565(min));
+        AddColorSeed(seeds, ref seedCount, (ushort)(PackRgb555(max) | 0x8000), PackRgb565(min));
+        AddColorSeed(seeds, ref seedCount, (ushort)(PackRgb555(max) | 0x8000), PackRgb565(max));
+
+        if (TryInsetColorBounds(min, max, out var insetMin, out var insetMax))
+        {
+            AddColorSeed(seeds, ref seedCount, PackRgb555(insetMin), PackRgb565(insetMax));
+            AddColorSeed(seeds, ref seedCount, PackRgb555(insetMax), PackRgb565(insetMin));
+            AddColorSeed(seeds, ref seedCount, (ushort)(PackRgb555(insetMax) | 0x8000), PackRgb565(insetMin));
+        }
+
+        if (TryFindFarthestColorEndpoints(source, out var farA, out var farB))
+        {
+            AddColorSeed(seeds, ref seedCount, PackRgb555(farA), PackRgb565(farB));
+            AddColorSeed(seeds, ref seedCount, PackRgb555(farB), PackRgb565(farA));
+            AddColorSeed(seeds, ref seedCount, (ushort)(PackRgb555(farA) | 0x8000), PackRgb565(farB));
+            AddColorSeed(seeds, ref seedCount, (ushort)(PackRgb555(farB) | 0x8000), PackRgb565(farA));
+        }
+
+        if (TryFindPrincipalAxisColorEndpoints(source, out var axisMin, out var axisMax))
+        {
+            AddColorSeed(seeds, ref seedCount, PackRgb555(axisMin), PackRgb565(axisMax));
+            AddColorSeed(seeds, ref seedCount, PackRgb555(axisMax), PackRgb565(axisMin));
+            AddColorSeed(seeds, ref seedCount, (ushort)(PackRgb555(axisMax) | 0x8000), PackRgb565(axisMin));
+        }
+
+        if (TryFindAverageColor(source, out var average))
+        {
+            AddColorSeed(seeds, ref seedCount, PackRgb555(average), PackRgb565(average));
+            AddColorSeed(seeds, ref seedCount, (ushort)(PackRgb555(average) | 0x8000), PackRgb565(average));
+        }
+
+        var best = new ColorBlockEncoding { Error = long.MaxValue };
+        for (var i = 0; i < seedCount; i++)
+        {
+            OptimizeColorSeed(source, seeds[i].Color0, seeds[i].Color1, ref best);
+        }
+
+        RefineColorEndpoints(source, ref best);
+
+        BinaryPrimitives.WriteUInt16LittleEndian(destination, best.Color0);
+        BinaryPrimitives.WriteUInt16LittleEndian(destination[2..], best.Color1);
+        BinaryPrimitives.WriteUInt32LittleEndian(destination[4..], best.Indices);
     }
 
     private static void TryEncodeColorCandidate(
@@ -259,6 +349,247 @@ public sealed class AtcTextureCoder : IPitchTextureCoder
         bestIndices = indices;
     }
 
+    private static void AddColorSeed(Span<ColorEndpointPair> seeds, ref int count, ushort color0, ushort color1)
+    {
+        var seed = new ColorEndpointPair(color0, color1);
+        for (var i = 0; i < count; i++)
+        {
+            if (seeds[i] == seed)
+            {
+                return;
+            }
+        }
+
+        if (count < seeds.Length)
+        {
+            seeds[count++] = seed;
+        }
+    }
+
+    private static void OptimizeColorSeed(
+        ReadOnlySpan<Rgba8UNorm> source,
+        ushort color0,
+        ushort color1,
+        ref ColorBlockEncoding best)
+    {
+        for (var iteration = 0; iteration < 8; iteration++)
+        {
+            var current = EvaluateColorCandidate(source, color0, color1);
+            UpdateBestColorEncoding(current, ref best);
+            if (current.Error == 0
+                || !TrySolveColorEndpoints(current.Indices, source, IsSubtractiveColorMode(color0), out var nextColor0, out var nextColor1))
+            {
+                return;
+            }
+
+            if (nextColor0 == color0 && nextColor1 == color1)
+            {
+                return;
+            }
+
+            color0 = nextColor0;
+            color1 = nextColor1;
+        }
+    }
+
+    private static ColorBlockEncoding EvaluateColorCandidate(
+        ReadOnlySpan<Rgba8UNorm> source,
+        ushort color0,
+        ushort color1)
+    {
+        var palette = new InlineArray4<Rgba8UNorm>();
+        BuildColorPalette(color0, color1, palette);
+
+        long error = 0;
+        uint indices = 0;
+        for (var i = 0; i < TexelsPerBlock; i++)
+        {
+            var index = FindNearestColorIndex(source[i], palette, out var distance);
+            error += distance;
+            indices |= (uint)index << (i * 2);
+        }
+
+        return new ColorBlockEncoding(color0, color1, indices, error);
+    }
+
+    private static void UpdateBestColorEncoding(ColorBlockEncoding candidate, ref ColorBlockEncoding best)
+    {
+        if (candidate.Error < best.Error)
+        {
+            best = candidate;
+        }
+    }
+
+    private static bool TrySolveColorEndpoints(
+        uint indices,
+        ReadOnlySpan<Rgba8UNorm> source,
+        bool subtractiveMode,
+        out ushort color0,
+        out ushort color1)
+    {
+        var aa = 0d;
+        var ab = 0d;
+        var bb = 0d;
+        var ar = 0d;
+        var ag = 0d;
+        var ablu = 0d;
+        var br = 0d;
+        var bg = 0d;
+        var bblu = 0d;
+
+        for (var i = 0; i < TexelsPerBlock; i++)
+        {
+            var index = (int)((indices >> (i * 2)) & 0x3u);
+            GetColorEndpointWeights(index, subtractiveMode, out var weightA, out var weightB);
+            if (weightA == 0d && weightB == 0d)
+            {
+                continue;
+            }
+
+            var color = source[i];
+            aa += weightA * weightA;
+            ab += weightA * weightB;
+            bb += weightB * weightB;
+            ar += weightA * color.Red;
+            ag += weightA * color.Green;
+            ablu += weightA * color.Blue;
+            br += weightB * color.Red;
+            bg += weightB * color.Green;
+            bblu += weightB * color.Blue;
+        }
+
+        var determinant = (aa * bb) - (ab * ab);
+        if (Math.Abs(determinant) < 1e-8d)
+        {
+            color0 = 0;
+            color1 = 0;
+            return false;
+        }
+
+        var redA = SolveEndpointA(ar, br, aa, ab, bb, determinant);
+        var greenA = SolveEndpointA(ag, bg, aa, ab, bb, determinant);
+        var blueA = SolveEndpointA(ablu, bblu, aa, ab, bb, determinant);
+        var redB = SolveEndpointB(ar, br, aa, ab, determinant);
+        var greenB = SolveEndpointB(ag, bg, aa, ab, determinant);
+        var blueB = SolveEndpointB(ablu, bblu, aa, ab, determinant);
+
+        color0 = PackRgb555(new Rgb24(ClampToByte(redA), ClampToByte(greenA), ClampToByte(blueA)));
+        if (subtractiveMode)
+        {
+            color0 |= 0x8000;
+        }
+
+        color1 = PackRgb565(new Rgb24(ClampToByte(redB), ClampToByte(greenB), ClampToByte(blueB)));
+        return true;
+    }
+
+    private static void GetColorEndpointWeights(
+        int index,
+        bool subtractiveMode,
+        out double weightA,
+        out double weightB)
+    {
+        if (!subtractiveMode)
+        {
+            switch (index)
+            {
+                case 0:
+                    weightA = 1d;
+                    weightB = 0d;
+                    return;
+                case 1:
+                    weightA = 5d / 8d;
+                    weightB = 3d / 8d;
+                    return;
+                case 2:
+                    weightA = 3d / 8d;
+                    weightB = 5d / 8d;
+                    return;
+                default:
+                    weightA = 0d;
+                    weightB = 1d;
+                    return;
+            }
+        }
+
+        switch (index)
+        {
+            case 1:
+                weightA = 1d;
+                weightB = -0.25d;
+                return;
+            case 2:
+                weightA = 1d;
+                weightB = 0d;
+                return;
+            case 3:
+                weightA = 0d;
+                weightB = 1d;
+                return;
+            default:
+                weightA = 0d;
+                weightB = 0d;
+                return;
+        }
+    }
+
+    private static double SolveEndpointA(double ap, double bp, double aa, double ab, double bb, double determinant) =>
+        ((ap * bb) - (bp * ab)) / determinant;
+
+    private static double SolveEndpointB(double ap, double bp, double aa, double ab, double determinant) =>
+        ((aa * bp) - (ab * ap)) / determinant;
+
+    private static void RefineColorEndpoints(ReadOnlySpan<Rgba8UNorm> source, ref ColorBlockEncoding best)
+    {
+        for (var pass = 0; pass < 2; pass++)
+        {
+            var previousError = best.Error;
+            var baseColor0 = best.Color0;
+            var baseColor1 = best.Color1;
+            for (var delta0 = 0; delta0 < 27; delta0++)
+            {
+                var color0 = OffsetRgb555Endpoint(baseColor0, delta0);
+                for (var delta1 = 0; delta1 < 27; delta1++)
+                {
+                    var color1 = OffsetRgb565Endpoint(baseColor1, delta1);
+                    UpdateBestColorEncoding(EvaluateColorCandidate(source, color0, color1), ref best);
+                }
+            }
+
+            if (best.Error == 0 || best.Error == previousError)
+            {
+                return;
+            }
+        }
+    }
+
+    private static ushort OffsetRgb555Endpoint(ushort endpoint, int deltaIndex)
+    {
+        var flag = endpoint & 0x8000;
+        var value = endpoint & 0x7fff;
+        DecodeDeltaIndex(deltaIndex, out var redDelta, out var greenDelta, out var blueDelta);
+        var red = ClampToRange(((value >> 10) & 0x1f) + redDelta, 0x1f);
+        var green = ClampToRange(((value >> 5) & 0x1f) + greenDelta, 0x1f);
+        var blue = ClampToRange((value & 0x1f) + blueDelta, 0x1f);
+        return (ushort)(flag | (red << 10) | (green << 5) | blue);
+    }
+
+    private static ushort OffsetRgb565Endpoint(ushort endpoint, int deltaIndex)
+    {
+        DecodeDeltaIndex(deltaIndex, out var redDelta, out var greenDelta, out var blueDelta);
+        var red = ClampToRange(((endpoint >> 11) & 0x1f) + redDelta, 0x1f);
+        var green = ClampToRange(((endpoint >> 5) & 0x3f) + greenDelta, 0x3f);
+        var blue = ClampToRange((endpoint & 0x1f) + blueDelta, 0x1f);
+        return (ushort)((red << 11) | (green << 5) | blue);
+    }
+
+    private static void DecodeDeltaIndex(int deltaIndex, out int redDelta, out int greenDelta, out int blueDelta)
+    {
+        redDelta = (deltaIndex % 3) - 1;
+        greenDelta = ((deltaIndex / 3) % 3) - 1;
+        blueDelta = ((deltaIndex / 9) % 3) - 1;
+    }
+
     private static void DecodeExplicitAlphaBlock(ReadOnlySpan<byte> source, Span<Rgba8UNorm> destination)
     {
         for (var i = 0; i < TexelsPerBlock; i++)
@@ -291,7 +622,28 @@ public sealed class AtcTextureCoder : IPitchTextureCoder
         }
     }
 
-    private static void EncodeInterpolatedAlphaBlock(ReadOnlySpan<Rgba8UNorm> source, Span<byte> destination)
+    private static void EncodeInterpolatedAlphaBlock(
+        ReadOnlySpan<Rgba8UNorm> source,
+        Span<byte> destination,
+        AtcCompressionMode compressionMode)
+    {
+        switch (compressionMode)
+        {
+            case AtcCompressionMode.Fast:
+                EncodeInterpolatedAlphaBlockFast(source, destination);
+                return;
+            case AtcCompressionMode.High:
+                EncodeInterpolatedAlphaBlockHigh(source, destination);
+                return;
+            default:
+                throw new ArgumentOutOfRangeException(
+                    nameof(compressionMode),
+                    compressionMode,
+                    "Unsupported ATC compression mode.");
+        }
+    }
+
+    private static void EncodeInterpolatedAlphaBlockFast(ReadOnlySpan<Rgba8UNorm> source, Span<byte> destination)
     {
         FindAlphaBounds(source, out var min, out var max);
 
@@ -309,6 +661,26 @@ public sealed class AtcTextureCoder : IPitchTextureCoder
         {
             destination[2 + i] = (byte)(bestIndices >> (8 * i));
         }
+    }
+
+    private static void EncodeInterpolatedAlphaBlockHigh(ReadOnlySpan<Rgba8UNorm> source, Span<byte> destination)
+    {
+        FindAlphaBounds(source, out var min, out var max);
+        var best = new AlphaBlockEncoding { Error = long.MaxValue };
+        OptimizeAlphaSeed(source, max, min, AlphaEndpointMode.EightAlpha, ref best);
+        OptimizeAlphaSeed(source, min, max, AlphaEndpointMode.SixAlpha, ref best);
+
+        if (max > min)
+        {
+            var padding = Math.Max(1, (max - min + 13) / 14);
+            var expandedMin = (byte)Math.Max(byte.MinValue, min - padding);
+            var expandedMax = (byte)Math.Min(byte.MaxValue, max + padding);
+            OptimizeAlphaSeed(source, expandedMax, expandedMin, AlphaEndpointMode.EightAlpha, ref best);
+            OptimizeAlphaSeed(source, expandedMin, expandedMax, AlphaEndpointMode.SixAlpha, ref best);
+        }
+
+        RefineAlphaEndpoints(source, ref best);
+        WriteAlphaBlock(best, destination);
     }
 
     private static void TryEncodeInterpolatedAlphaCandidate(
@@ -341,6 +713,209 @@ public sealed class AtcTextureCoder : IPitchTextureCoder
         bestAlpha0 = alpha0;
         bestAlpha1 = alpha1;
         bestIndices = indices;
+    }
+
+    private static void OptimizeAlphaSeed(
+        ReadOnlySpan<Rgba8UNorm> source,
+        byte alpha0,
+        byte alpha1,
+        AlphaEndpointMode mode,
+        ref AlphaBlockEncoding best)
+    {
+        NormalizeAlphaEndpointOrder(ref alpha0, ref alpha1, mode);
+        for (var iteration = 0; iteration < 8; iteration++)
+        {
+            var current = EvaluateAlphaCandidate(source, alpha0, alpha1);
+            UpdateBestAlphaEncoding(current, ref best);
+            if (current.Error == 0
+                || !TrySolveAlphaEndpoints(current.Indices, source, mode, out var nextAlpha0, out var nextAlpha1))
+            {
+                return;
+            }
+
+            if (nextAlpha0 == alpha0 && nextAlpha1 == alpha1)
+            {
+                return;
+            }
+
+            alpha0 = nextAlpha0;
+            alpha1 = nextAlpha1;
+        }
+    }
+
+    private static AlphaBlockEncoding EvaluateAlphaCandidate(
+        ReadOnlySpan<Rgba8UNorm> source,
+        byte alpha0,
+        byte alpha1)
+    {
+        var palette = new InlineArray8<byte>();
+        BuildAlphaPalette(alpha0, alpha1, palette);
+
+        long error = 0;
+        ulong indices = 0;
+        for (var i = 0; i < TexelsPerBlock; i++)
+        {
+            var index = FindNearestAlphaIndex(source[i].Alpha, palette, out var distance);
+            error += distance * distance;
+            indices |= (ulong)index << (i * 3);
+        }
+
+        return new AlphaBlockEncoding(alpha0, alpha1, indices, error);
+    }
+
+    private static void UpdateBestAlphaEncoding(AlphaBlockEncoding candidate, ref AlphaBlockEncoding best)
+    {
+        if (candidate.Error < best.Error)
+        {
+            best = candidate;
+        }
+    }
+
+    private static bool TrySolveAlphaEndpoints(
+        ulong indices,
+        ReadOnlySpan<Rgba8UNorm> source,
+        AlphaEndpointMode mode,
+        out byte alpha0,
+        out byte alpha1)
+    {
+        var aa = 0d;
+        var ab = 0d;
+        var bb = 0d;
+        var ap = 0d;
+        var bp = 0d;
+        for (var i = 0; i < TexelsPerBlock; i++)
+        {
+            var index = (int)((indices >> (i * 3)) & 0x7u);
+            GetAlphaEndpointWeights(index, mode, out var weightA, out var weightB);
+            if (weightA == 0d && weightB == 0d)
+            {
+                continue;
+            }
+
+            var alpha = source[i].Alpha;
+            aa += weightA * weightA;
+            ab += weightA * weightB;
+            bb += weightB * weightB;
+            ap += weightA * alpha;
+            bp += weightB * alpha;
+        }
+
+        var determinant = (aa * bb) - (ab * ab);
+        if (Math.Abs(determinant) < 1e-8d)
+        {
+            alpha0 = 0;
+            alpha1 = 0;
+            return false;
+        }
+
+        alpha0 = ClampToByte(SolveEndpointA(ap, bp, aa, ab, bb, determinant));
+        alpha1 = ClampToByte(SolveEndpointB(ap, bp, aa, ab, determinant));
+        NormalizeAlphaEndpointOrder(ref alpha0, ref alpha1, mode);
+        return true;
+    }
+
+    private static void GetAlphaEndpointWeights(
+        int index,
+        AlphaEndpointMode mode,
+        out double weightA,
+        out double weightB)
+    {
+        if (index == 0)
+        {
+            weightA = 1d;
+            weightB = 0d;
+            return;
+        }
+
+        if (index == 1)
+        {
+            weightA = 0d;
+            weightB = 1d;
+            return;
+        }
+
+        if (mode == AlphaEndpointMode.EightAlpha)
+        {
+            var weight0 = 8 - index;
+            var weight1 = index - 1;
+            weightA = weight0 / 7d;
+            weightB = weight1 / 7d;
+            return;
+        }
+
+        if (index is 6 or 7)
+        {
+            weightA = 0d;
+            weightB = 0d;
+            return;
+        }
+
+        var sixWeight0 = 6 - index;
+        var sixWeight1 = index - 1;
+        weightA = sixWeight0 / 5d;
+        weightB = sixWeight1 / 5d;
+    }
+
+    private static void NormalizeAlphaEndpointOrder(ref byte alpha0, ref byte alpha1, AlphaEndpointMode mode)
+    {
+        if (mode == AlphaEndpointMode.EightAlpha)
+        {
+            if (alpha0 > alpha1)
+            {
+                return;
+            }
+
+            if (alpha1 < byte.MaxValue)
+            {
+                alpha0 = (byte)(alpha1 + 1);
+                return;
+            }
+
+            alpha0 = byte.MaxValue;
+            alpha1 = byte.MaxValue - 1;
+            return;
+        }
+
+        if (alpha0 > alpha1)
+        {
+            (alpha0, alpha1) = (alpha1, alpha0);
+        }
+    }
+
+    private static void RefineAlphaEndpoints(ReadOnlySpan<Rgba8UNorm> source, ref AlphaBlockEncoding best)
+    {
+        var mode = best.Alpha0 > best.Alpha1 ? AlphaEndpointMode.EightAlpha : AlphaEndpointMode.SixAlpha;
+        for (var pass = 0; pass < 2; pass++)
+        {
+            var previousError = best.Error;
+            var baseAlpha0 = best.Alpha0;
+            var baseAlpha1 = best.Alpha1;
+            for (var delta0 = -2; delta0 <= 2; delta0++)
+            {
+                for (var delta1 = -2; delta1 <= 2; delta1++)
+                {
+                    var alpha0 = OffsetByte(baseAlpha0, delta0);
+                    var alpha1 = OffsetByte(baseAlpha1, delta1);
+                    NormalizeAlphaEndpointOrder(ref alpha0, ref alpha1, mode);
+                    UpdateBestAlphaEncoding(EvaluateAlphaCandidate(source, alpha0, alpha1), ref best);
+                }
+            }
+
+            if (best.Error == 0 || best.Error == previousError)
+            {
+                return;
+            }
+        }
+    }
+
+    private static void WriteAlphaBlock(AlphaBlockEncoding best, Span<byte> destination)
+    {
+        destination[0] = best.Alpha0;
+        destination[1] = best.Alpha1;
+        for (var i = 0; i < 6; i++)
+        {
+            destination[2 + i] = (byte)(best.Indices >> (8 * i));
+        }
     }
 
     private static void BuildColorPalette(ushort color0, ushort color1, Span<Rgba8UNorm> palette)
@@ -473,6 +1048,159 @@ public sealed class AtcTextureCoder : IPitchTextureCoder
         max = new Rgb24(maxRed, maxGreen, maxBlue);
     }
 
+    private static bool TryInsetColorBounds(Rgb24 min, Rgb24 max, out Rgb24 insetMin, out Rgb24 insetMax)
+    {
+        var redRange = max.Red - min.Red;
+        var greenRange = max.Green - min.Green;
+        var blueRange = max.Blue - min.Blue;
+        if (redRange == 0 && greenRange == 0 && blueRange == 0)
+        {
+            insetMin = default;
+            insetMax = default;
+            return false;
+        }
+
+        insetMin = new Rgb24(
+            (byte)Math.Min(byte.MaxValue, min.Red + ((redRange + 8) / 16)),
+            (byte)Math.Min(byte.MaxValue, min.Green + ((greenRange + 8) / 16)),
+            (byte)Math.Min(byte.MaxValue, min.Blue + ((blueRange + 8) / 16)));
+        insetMax = new Rgb24(
+            (byte)Math.Max(byte.MinValue, max.Red - ((redRange + 8) / 16)),
+            (byte)Math.Max(byte.MinValue, max.Green - ((greenRange + 8) / 16)),
+            (byte)Math.Max(byte.MinValue, max.Blue - ((blueRange + 8) / 16)));
+        return insetMin != min || insetMax != max;
+    }
+
+    private static bool TryFindFarthestColorEndpoints(
+        ReadOnlySpan<Rgba8UNorm> source,
+        out Rgb24 endpointA,
+        out Rgb24 endpointB)
+    {
+        var bestDistance = 0;
+        endpointA = default;
+        endpointB = default;
+        for (var i = 0; i < TexelsPerBlock - 1; i++)
+        {
+            for (var j = i + 1; j < TexelsPerBlock; j++)
+            {
+                var distance = ColorDistance(source[i], source[j]);
+                if (distance > bestDistance)
+                {
+                    bestDistance = distance;
+                    endpointA = ToRgb24(source[i]);
+                    endpointB = ToRgb24(source[j]);
+                }
+            }
+        }
+
+        return bestDistance > 0;
+    }
+
+    private static bool TryFindPrincipalAxisColorEndpoints(
+        ReadOnlySpan<Rgba8UNorm> source,
+        out Rgb24 axisMin,
+        out Rgb24 axisMax)
+    {
+        var averageRed = 0d;
+        var averageGreen = 0d;
+        var averageBlue = 0d;
+        for (var i = 0; i < TexelsPerBlock; i++)
+        {
+            averageRed += source[i].Red;
+            averageGreen += source[i].Green;
+            averageBlue += source[i].Blue;
+        }
+
+        averageRed /= TexelsPerBlock;
+        averageGreen /= TexelsPerBlock;
+        averageBlue /= TexelsPerBlock;
+
+        var cxx = 0d;
+        var cxy = 0d;
+        var cxz = 0d;
+        var cyy = 0d;
+        var cyz = 0d;
+        var czz = 0d;
+        for (var i = 0; i < TexelsPerBlock; i++)
+        {
+            var red = source[i].Red - averageRed;
+            var green = source[i].Green - averageGreen;
+            var blue = source[i].Blue - averageBlue;
+            cxx += red * red;
+            cxy += red * green;
+            cxz += red * blue;
+            cyy += green * green;
+            cyz += green * blue;
+            czz += blue * blue;
+        }
+
+        var axisRed = 1d;
+        var axisGreen = 1d;
+        var axisBlue = 1d;
+        for (var iteration = 0; iteration < 8; iteration++)
+        {
+            var nextRed = (cxx * axisRed) + (cxy * axisGreen) + (cxz * axisBlue);
+            var nextGreen = (cxy * axisRed) + (cyy * axisGreen) + (cyz * axisBlue);
+            var nextBlue = (cxz * axisRed) + (cyz * axisGreen) + (czz * axisBlue);
+            if (!TryNormalizeVector(ref nextRed, ref nextGreen, ref nextBlue))
+            {
+                axisMin = default;
+                axisMax = default;
+                return false;
+            }
+
+            axisRed = nextRed;
+            axisGreen = nextGreen;
+            axisBlue = nextBlue;
+        }
+
+        var minProjection = double.PositiveInfinity;
+        var maxProjection = double.NegativeInfinity;
+        var minIndex = 0;
+        var maxIndex = 0;
+        for (var i = 0; i < TexelsPerBlock; i++)
+        {
+            var projection =
+                ((source[i].Red - averageRed) * axisRed) +
+                ((source[i].Green - averageGreen) * axisGreen) +
+                ((source[i].Blue - averageBlue) * axisBlue);
+            if (projection < minProjection)
+            {
+                minProjection = projection;
+                minIndex = i;
+            }
+
+            if (projection > maxProjection)
+            {
+                maxProjection = projection;
+                maxIndex = i;
+            }
+        }
+
+        axisMin = ToRgb24(source[minIndex]);
+        axisMax = ToRgb24(source[maxIndex]);
+        return minIndex != maxIndex;
+    }
+
+    private static bool TryFindAverageColor(ReadOnlySpan<Rgba8UNorm> source, out Rgb24 average)
+    {
+        var red = 0;
+        var green = 0;
+        var blue = 0;
+        for (var i = 0; i < TexelsPerBlock; i++)
+        {
+            red += source[i].Red;
+            green += source[i].Green;
+            blue += source[i].Blue;
+        }
+
+        average = new Rgb24(
+            (byte)((red + (TexelsPerBlock / 2)) / TexelsPerBlock),
+            (byte)((green + (TexelsPerBlock / 2)) / TexelsPerBlock),
+            (byte)((blue + (TexelsPerBlock / 2)) / TexelsPerBlock));
+        return true;
+    }
+
     private static void FindAlphaBounds(ReadOnlySpan<Rgba8UNorm> source, out byte min, out byte max)
     {
         min = byte.MaxValue;
@@ -520,6 +1248,41 @@ public sealed class AtcTextureCoder : IPitchTextureCoder
 
         return bestIndex;
     }
+
+    private static bool IsSubtractiveColorMode(ushort color0) => (color0 & 0x8000) != 0;
+
+    private static Rgb24 ToRgb24(Rgba8UNorm color) => new(color.Red, color.Green, color.Blue);
+
+    private static int ColorDistance(Rgba8UNorm a, Rgba8UNorm b)
+    {
+        var red = a.Red - b.Red;
+        var green = a.Green - b.Green;
+        var blue = a.Blue - b.Blue;
+        return (red * red) + (green * green) + (blue * blue);
+    }
+
+    private static bool TryNormalizeVector(ref double x, ref double y, ref double z)
+    {
+        var lengthSquared = (x * x) + (y * y) + (z * z);
+        if (lengthSquared <= double.Epsilon)
+        {
+            return false;
+        }
+
+        var scale = 1d / Math.Sqrt(lengthSquared);
+        x *= scale;
+        y *= scale;
+        z *= scale;
+        return true;
+    }
+
+    private static byte ClampToByte(double value) =>
+        (byte)Math.Clamp((int)Math.Round(value), byte.MinValue, byte.MaxValue);
+
+    private static int ClampToRange(int value, int max) => Math.Clamp(value, 0, max);
+
+    private static byte OffsetByte(byte value, int delta) =>
+        (byte)Math.Clamp(value + delta, byte.MinValue, byte.MaxValue);
 
     private static int Quantize5(byte value)
     {
@@ -647,10 +1410,22 @@ public sealed class AtcTextureCoder : IPitchTextureCoder
 
     private readonly record struct Rgb24(byte Red, byte Green, byte Blue);
 
+    private readonly record struct ColorEndpointPair(ushort Color0, ushort Color1);
+
+    private readonly record struct ColorBlockEncoding(ushort Color0, ushort Color1, uint Indices, long Error);
+
+    private readonly record struct AlphaBlockEncoding(byte Alpha0, byte Alpha1, ulong Indices, long Error);
+
     private enum AtcTransfer
     {
         Rgb,
         RgbaExplicitAlpha,
         RgbaInterpolatedAlpha
+    }
+
+    private enum AlphaEndpointMode
+    {
+        SixAlpha,
+        EightAlpha
     }
 }

@@ -109,6 +109,11 @@ internal static class Cli
             Description = "ETC/EAC encoding quality.",
             DefaultValueFactory = _ => EtcCompressionMode.Fast
         };
+        var atcQualityOption = new Option<AtcCompressionMode>("--atc-quality")
+        {
+            Description = "ATC encoding quality.",
+            DefaultValueFactory = _ => AtcCompressionMode.Fast
+        };
         var pvrtcQualityOption = new Option<PvrtcCompressionMode>("--pvrtc-quality")
         {
             Description = "PVRTC encoding quality.",
@@ -128,6 +133,7 @@ internal static class Cli
         command.Options.Add(jpegQualityOption);
         command.Options.Add(s3tcQualityOption);
         command.Options.Add(etcQualityOption);
+        command.Options.Add(atcQualityOption);
         command.Options.Add(pvrtcQualityOption);
         command.SetAction(parseResult => RunCommand(() =>
         {
@@ -139,6 +145,7 @@ internal static class Cli
             var jpegQuality = parseResult.GetValue(jpegQualityOption);
             var s3tcQuality = parseResult.GetValue(s3tcQualityOption);
             var etcQuality = parseResult.GetValue(etcQualityOption);
+            var atcQuality = parseResult.GetValue(atcQualityOption);
             var pvrtcQuality = parseResult.GetValue(pvrtcQualityOption);
             var colorSpaces = new ImageColorSpaces(
                 parseResult.GetValue(pngColorSpaceOption),
@@ -147,7 +154,7 @@ internal static class Cli
             var printMetrics = parseResult.GetValue(metricsOption);
 
             var source = Decode(inputPath, colorSpaces);
-            Encode(source, outputPath, outputKind, format, ktxVersion, jpegQuality, s3tcQuality, etcQuality, pvrtcQuality, colorSpaces);
+            Encode(source, outputPath, outputKind, format, ktxVersion, jpegQuality, s3tcQuality, etcQuality, atcQuality, pvrtcQuality, colorSpaces);
             Console.WriteLine($"wrote {outputPath}");
 
             if (printMetrics)
@@ -298,6 +305,7 @@ internal static class Cli
         int jpegQuality,
         S3tcCompressionMode s3tcQuality,
         EtcCompressionMode etcQuality,
+        AtcCompressionMode atcQuality,
         PvrtcCompressionMode pvrtcQuality,
         ImageColorSpaces? imageColorSpaces)
     {
@@ -309,6 +317,7 @@ internal static class Cli
 
         using var s3tcRegistration = CreateS3tcRegistration(format, s3tcQuality);
         using var etcRegistration = CreateEtcRegistration(format, etcQuality);
+        using var atcRegistration = CreateAtcRegistration(format, atcQuality);
         using var pvrtcRegistration = CreatePvrtcRegistration(format, pvrtcQuality);
 
         switch (container)
@@ -363,6 +372,17 @@ internal static class Cli
 
         var options = new EtcCoderOptions { CompressionMode = compressionMode };
         return TextureCoderManager.Global.Register(format, new EtcTextureCoder(format, options));
+    }
+
+    private static IDisposable? CreateAtcRegistration(TextureFormat format, AtcCompressionMode compressionMode)
+    {
+        if (compressionMode == AtcCompressionMode.Fast || !AtcTextureCoder.IsSupported(format))
+        {
+            return null;
+        }
+
+        var options = new AtcCoderOptions { CompressionMode = compressionMode };
+        return TextureCoderManager.Global.Register(format, new AtcTextureCoder(format, options));
     }
 
     private static IDisposable? CreatePvrtcRegistration(TextureFormat format, PvrtcCompressionMode compressionMode)
