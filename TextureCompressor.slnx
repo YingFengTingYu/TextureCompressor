@@ -5,6 +5,7 @@
     <Project Path="src/TextureCompressor.FileFormats.Ktx/TextureCompressor.FileFormats.Ktx.csproj" />
     <Project Path="src/TextureCompressor.FileFormats.Pvr/TextureCompressor.FileFormats.Pvr.csproj" />
     <Project Path="src/TextureCompressor.FileFormats.Png/TextureCompressor.FileFormats.Png.csproj" />
+    <Project Path="src/TextureCompressor.Codecs.PVRTexLib/TextureCompressor.Codecs.PVRTexLib.csproj" />
     <Project Path="src/TextureCompressor.Bitmap/TextureCompressor.Bitmap.csproj" />
     <Project Path="src/TextureCompressor/TextureCompressor.csproj" />
   </Folder>
@@ -14,6 +15,7 @@
     <Project Path="tests/TextureCompressor.FileFormats.Ktx.Tests/TextureCompressor.FileFormats.Ktx.Tests.csproj" />
     <Project Path="tests/TextureCompressor.FileFormats.Pvr.Tests/TextureCompressor.FileFormats.Pvr.Tests.csproj" />
     <Project Path="tests/TextureCompressor.FileFormats.Png.Tests/TextureCompressor.FileFormats.Png.Tests.csproj" />
+    <Project Path="tests/TextureCompressor.Codecs.PVRTexLib.Tests/TextureCompressor.Codecs.PVRTexLib.Tests.csproj" />
     <Project Path="tests/TextureCompressor.Tests/TextureCompressor.Tests.csproj" />
   </Folder>
 </Solution>
