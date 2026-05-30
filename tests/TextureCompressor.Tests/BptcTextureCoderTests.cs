@@ -18,6 +18,15 @@ public sealed class BptcTextureCoderTests
     }
 
     [Fact]
+    public void ConstructorStoresCompressionOptions()
+    {
+        var options = new BptcCoderOptions { CompressionMode = BptcCompressionMode.High };
+        var coder = new BptcTextureCoder(TextureFormats.Bc7UNorm, options);
+
+        Assert.Same(options, coder.Options);
+    }
+
+    [Fact]
     public void Bc7InvalidModeDecodesToTransparentRgba8()
     {
         var encoded = new byte[TextureFormats.Bc7UNorm.GetByteCount(4, 4)];
@@ -148,6 +157,125 @@ public sealed class BptcTextureCoderTests
         Assert.All(decoded.Pixels, pixel => Assert.Equal(new Rgba8UNorm(12, 34, 56, 78), pixel));
     }
 
+    [Fact]
+    public void FastEncodingUsesLegacyBc6HAndBc7Modes()
+    {
+        var bc6H = new BptcTextureCoder(TextureFormats.Bc6HUFloat);
+        var bc6HSource = new ArrayBitmap<Rgba32Float>(
+            4,
+            4,
+            Enumerable.Repeat(new Rgba32Float(1f, 2f, 4f, 1f), 16).ToArray());
+        var bc6HRowPitch = bc6H.GetDefaultPitch(bc6HSource.Width);
+        var bc6HEncoded = new byte[bc6H.GetEncodedByteCount(bc6HSource.Width, bc6HSource.Height, bc6HRowPitch)];
+
+        bc6H.Encode(bc6HSource.AsView(), bc6HEncoded, bc6HRowPitch);
+
+        var bc7 = new BptcTextureCoder(TextureFormats.Bc7UNorm);
+        var bc7Source = new ArrayBitmap<Rgba8UNorm>(
+            4,
+            4,
+            Enumerable.Repeat(new Rgba8UNorm(32, 96, 192, 224), 16).ToArray());
+        var bc7RowPitch = bc7.GetDefaultPitch(bc7Source.Width);
+        var bc7Encoded = new byte[bc7.GetEncodedByteCount(bc7Source.Width, bc7Source.Height, bc7RowPitch)];
+
+        bc7.Encode(bc7Source.AsView(), bc7Encoded, bc7RowPitch);
+
+        Assert.Equal(3, ReadBc6HMode(bc6HEncoded));
+        Assert.Equal(6, ReadBc7Mode(bc7Encoded));
+    }
+
+    [Fact]
+    public void ExhaustiveBc6HCanSelectNonLegacyMode()
+    {
+        var pixels = new Rgba32Float[16];
+        for (var y = 0; y < 4; y++)
+        {
+            for (var x = 0; x < 4; x++)
+            {
+                pixels[(y * 4) + x] = new Rgba32Float(
+                    1f + (x * 0.0004f),
+                    0.75f + (y * 0.0004f),
+                    0.5f + ((x + y) * 0.0002f),
+                    1f);
+            }
+        }
+
+        var source = new ArrayBitmap<Rgba32Float>(4, 4, pixels);
+        var coder = new BptcTextureCoder(
+            TextureFormats.Bc6HUFloat,
+            new BptcCoderOptions { CompressionMode = BptcCompressionMode.Exhaustive });
+        var rowPitch = coder.GetDefaultPitch(source.Width);
+        var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
+
+        coder.Encode(source.AsView(), encoded, rowPitch);
+
+        Assert.NotEqual(3, ReadBc6HMode(encoded));
+    }
+
+    [Fact]
+    public void ExhaustiveBc7CanSelectNonLegacyMode()
+    {
+        var pixels = new[]
+        {
+            new Rgba8UNorm(255, 0, 0, 255), new Rgba8UNorm(255, 0, 0, 255), new Rgba8UNorm(0, 255, 0, 64), new Rgba8UNorm(0, 255, 0, 64),
+            new Rgba8UNorm(255, 0, 0, 255), new Rgba8UNorm(255, 0, 0, 255), new Rgba8UNorm(0, 255, 0, 64), new Rgba8UNorm(0, 255, 0, 64),
+            new Rgba8UNorm(0, 0, 255, 160), new Rgba8UNorm(0, 0, 255, 160), new Rgba8UNorm(255, 255, 0, 16), new Rgba8UNorm(255, 255, 0, 16),
+            new Rgba8UNorm(0, 0, 255, 160), new Rgba8UNorm(0, 0, 255, 160), new Rgba8UNorm(255, 255, 0, 16), new Rgba8UNorm(255, 255, 0, 16)
+        };
+        var source = new ArrayBitmap<Rgba8UNorm>(4, 4, pixels);
+        var coder = new BptcTextureCoder(
+            TextureFormats.Bc7UNorm,
+            new BptcCoderOptions { CompressionMode = BptcCompressionMode.Exhaustive });
+        var rowPitch = coder.GetDefaultPitch(source.Width);
+        var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
+
+        coder.Encode(source.AsView(), encoded, rowPitch);
+
+        Assert.NotEqual(6, ReadBc7Mode(encoded));
+    }
+
+    [Theory]
+    [MemberData(nameof(BptcCompressionModes))]
+    public void Bc7CompressionModesEncodeDecodablePayloads(BptcCompressionMode compressionMode)
+    {
+        var source = new ArrayBitmap<Rgba8UNorm>(
+            4,
+            4,
+            Enumerable.Range(0, 16)
+                .Select(i => new Rgba8UNorm((byte)(16 + (i * 13)), (byte)(32 + (i * 7)), (byte)(48 + (i * 11)), (byte)(64 + (i * 9))))
+                .ToArray());
+        var decoded = new ArrayBitmap<Rgba8UNorm>(4, 4);
+        var coder = new BptcTextureCoder(TextureFormats.Bc7UNorm, new BptcCoderOptions { CompressionMode = compressionMode });
+        var rowPitch = coder.GetDefaultPitch(source.Width);
+        var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
+
+        coder.Encode(source.AsView(), encoded, rowPitch);
+        coder.Decode(encoded, decoded.AsView(), rowPitch);
+
+        Assert.Contains(decoded.Pixels, pixel => pixel.Alpha != 0);
+    }
+
+    [Theory]
+    [MemberData(nameof(BptcCompressionModes))]
+    public void Bc6HCompressionModesEncodeDecodablePayloads(BptcCompressionMode compressionMode)
+    {
+        var source = new ArrayBitmap<Rgba32Float>(
+            4,
+            4,
+            Enumerable.Range(0, 16)
+                .Select(i => new Rgba32Float(0.25f + (i * 0.125f), 0.5f + (i * 0.0625f), 1f + (i * 0.25f), 1f))
+                .ToArray());
+        var decoded = new ArrayBitmap<Rgba32Float>(4, 4);
+        var coder = new BptcTextureCoder(TextureFormats.Bc6HUFloat, new BptcCoderOptions { CompressionMode = compressionMode });
+        var rowPitch = coder.GetDefaultPitch(source.Width);
+        var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
+
+        coder.Encode(source.AsView(), encoded, rowPitch);
+        coder.Decode(encoded, decoded.AsView(), rowPitch);
+
+        Assert.Contains(decoded.Pixels, pixel => pixel.Blue > 0f);
+    }
+
     [Theory]
     [InlineData(1, 16)]
     [InlineData(4, 16)]
@@ -163,6 +291,47 @@ public sealed class BptcTextureCoderTests
 
     private static void AssertClose(int expected, int actual, int tolerance) =>
         Assert.InRange(actual, expected - tolerance, expected + tolerance);
+
+    private static int ReadBc6HMode(ReadOnlySpan<byte> encoded)
+    {
+        var mode = ReadBits(encoded, offset: 0, bitCount: 2);
+        if ((mode & 2) != 0)
+        {
+            mode |= ReadBits(encoded, offset: 2, bitCount: 3) << 2;
+        }
+
+        return mode;
+    }
+
+    private static int ReadBc7Mode(ReadOnlySpan<byte> encoded)
+    {
+        var mode = 0;
+        while (mode < 8 && ReadBits(encoded, mode, bitCount: 1) == 0)
+        {
+            mode++;
+        }
+
+        return mode;
+    }
+
+    private static int ReadBits(ReadOnlySpan<byte> encoded, int offset, int bitCount)
+    {
+        var value = 0;
+        for (var i = 0; i < bitCount; i++)
+        {
+            value |= ((encoded[(offset + i) >> 3] >> ((offset + i) & 7)) & 1) << i;
+        }
+
+        return value;
+    }
+
+    public static TheoryData<BptcCompressionMode> BptcCompressionModes() => new()
+    {
+        BptcCompressionMode.Fast,
+        BptcCompressionMode.Normal,
+        BptcCompressionMode.High,
+        BptcCompressionMode.Exhaustive
+    };
 
     public static TheoryData<TextureFormat> BptcFormats() => new()
     {

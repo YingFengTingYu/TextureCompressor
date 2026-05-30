@@ -102,11 +102,11 @@ coder.Decode(encoded, decoded.AsView());
 PngCodec.Encode(decoded, "roundtrip.png");
 ```
 
-`TextureCoderManager.Global` 会按格式自动创建内置 coder。内置 S3TC、FXT1、ETC/EAC、ATC、PVRTC coder 也支持自行构造并注册时传入压缩质量选项，见下一节。如果没有内置支持或你想替换为高质量第三方编码器，可以注册自定义 coder，见后文。
+`TextureCoderManager.Global` 会按格式自动创建内置 coder。内置 S3TC、FXT1、ETC/EAC、ATC、BPTC、PVRTC coder 也支持自行构造并注册时传入压缩质量选项，见下一节。如果没有内置支持或你想替换为高质量第三方编码器，可以注册自定义 coder，见后文。
 
 ## 使用内置高质量编码模式
 
-默认的内置 coder 偏向快速、可预测的基础转换。S3TC、FXT1、ETC/EAC、ATC、PVRTC 的内置实现提供更高质量的搜索模式；把带选项的 coder 注册到 `TextureCoderManager` 后，后续 `TextureCoderManager.Global.GetCoder(...)`、`DdsCodec.Encode(...)`、`KtxCodec.Encode(...)` 或 `PvrCodec.Encode(...)` 都会优先使用你注册的版本。`using var` 作用域结束后会自动恢复默认行为。
+默认的内置 coder 偏向快速、可预测的基础转换。S3TC、FXT1、ETC/EAC、ATC、BPTC、PVRTC 的内置实现提供更高质量的搜索模式；把带选项的 coder 注册到 `TextureCoderManager` 后，后续 `TextureCoderManager.Global.GetCoder(...)`、`DdsCodec.Encode(...)`、`KtxCodec.Encode(...)` 或 `PvrCodec.Encode(...)` 都会优先使用你注册的版本。`using var` 作用域结束后会自动恢复默认行为。
 
 ```csharp
 using TextureCompressor.Codecs;
@@ -140,6 +140,13 @@ using var highQualityAtc = TextureCoderManager.Global.Register(
         atcFormat,
         new AtcCoderOptions { CompressionMode = AtcCompressionMode.High }));
 
+var bptcFormat = TextureFormats.Bc7UNorm;
+using var highQualityBptc = TextureCoderManager.Global.Register(
+    bptcFormat,
+    new BptcTextureCoder(
+        bptcFormat,
+        new BptcCoderOptions { CompressionMode = BptcCompressionMode.High }));
+
 var pvrtcFormat = TextureFormats.RgbaPvrtcI4BppUNorm;
 using var exhaustivePvrtc = TextureCoderManager.Global.Register(
     pvrtcFormat,
@@ -150,7 +157,7 @@ using var exhaustivePvrtc = TextureCoderManager.Global.Register(
 var coder = TextureCoderManager.Global.GetCoder(s3tcFormat);
 ```
 
-这些高质量模式目前覆盖 S3TC、FXT1、ETC/EAC、ATC、PVRTC。BC6H/BC7、ASTC 等格式如果需要生产级压缩质量，建议使用后文的可选第三方编码器适配。
+这些高质量模式目前覆盖 S3TC、FXT1、ETC/EAC、ATC、BPTC/BC6H/BC7、PVRTC。专用生产级编码器、ASTC 质量模式以及其他格式可继续使用后文的可选第三方编码器适配。
 
 ## 读写 PNG
 
@@ -395,7 +402,7 @@ dotnet run --project src/TextureCompressor.Cli -- quality source.png output.dds
 - `convert <input> <output>`：在图片和纹理容器之间转换。输出容器默认由扩展名推断，也可以用 `--container` 显式指定。
 - `quality <expected> <actual>`：解码两张图片/纹理并输出 MSE、RMSE、PSNR；可加 `--ignore-alpha` 忽略 Alpha。
 
-图片容器支持 PNG、JPEG、GIF。`convert` 提供 `--png-color-space`、`--jpg-color-space`、`--gif-color-space` 在 Linear 与 Srgb 之间转换；JPEG 输出可用 `--jpeg-quality` 设置质量；内置 S3TC、FXT1、ETC/EAC、ATC、PVRTC 纹理编码质量可分别用 `--s3tc-quality`、`--fxtc-quality`、`--etc-quality`、`--atc-quality`、`--pvrtc-quality` 选择。
+图片容器支持 PNG、JPEG、GIF。`convert` 提供 `--png-color-space`、`--jpg-color-space`、`--gif-color-space` 在 Linear 与 Srgb 之间转换；JPEG 输出可用 `--jpeg-quality` 设置质量；内置 S3TC、FXT1、ETC/EAC、ATC、BPTC、PVRTC 纹理编码质量可分别用 `--s3tc-quality`、`--fxtc-quality`、`--etc-quality`、`--atc-quality`、`--bptc-quality`、`--pvrtc-quality` 选择。
 
 ## 常见工作流
 

@@ -11,6 +11,7 @@ public sealed class BptcTextureCoder : IPitchTextureCoder
     private const int TexelsPerBlock = BlockSize * BlockSize;
     private const int Bc6HEncoderMode = 3;
     private const int Bc7EncoderMode = 6;
+    private const int BytesPerBlock = 16;
 
     private static readonly TextureFormat[] SSupportedFormats =
     [
@@ -25,18 +26,22 @@ public sealed class BptcTextureCoder : IPitchTextureCoder
     ];
 
     private readonly BptcTransfer _transfer;
+    private readonly BptcCoderOptions _options;
 
-    public BptcTextureCoder(TextureFormat format)
+    public BptcTextureCoder(TextureFormat format, BptcCoderOptions? options = null)
     {
         if (!TryGetTransfer(format, out _transfer))
         {
             throw CreateUnsupportedFormatException(format);
         }
 
+        _options = options ?? new BptcCoderOptions();
         Format = format;
     }
 
     public TextureFormat Format { get; }
+
+    public BptcCoderOptions Options => _options;
 
     public static ReadOnlySpan<TextureFormat> SupportedFormats => SSupportedFormats;
 
@@ -99,16 +104,16 @@ public sealed class BptcTextureCoder : IPitchTextureCoder
         switch (_transfer)
         {
             case BptcTransfer.Bc6HUFloat:
-                EncodeBc6H<TPixel, Bc6HUFloatTransfer>(source, destination, rowPitch);
+                EncodeBc6H<TPixel, Bc6HUFloatTransfer>(source, destination, rowPitch, _options.CompressionMode);
                 return;
             case BptcTransfer.Bc6HSFloat:
-                EncodeBc6H<TPixel, Bc6HSFloatTransfer>(source, destination, rowPitch);
+                EncodeBc6H<TPixel, Bc6HSFloatTransfer>(source, destination, rowPitch, _options.CompressionMode);
                 return;
             case BptcTransfer.Bc7UNorm:
-                EncodeBc7<TPixel, Bc7UNormTransfer>(source, destination, rowPitch);
+                EncodeBc7<TPixel, Bc7UNormTransfer>(source, destination, rowPitch, _options.CompressionMode);
                 return;
             case BptcTransfer.Bc7Srgb:
-                EncodeBc7<TPixel, Bc7SrgbTransfer>(source, destination, rowPitch);
+                EncodeBc7<TPixel, Bc7SrgbTransfer>(source, destination, rowPitch, _options.CompressionMode);
                 return;
             default:
                 throw CreateUnsupportedFormatException(Format);
@@ -138,7 +143,11 @@ public sealed class BptcTextureCoder : IPitchTextureCoder
         }
     }
 
-    private static void EncodeBc6H<TPixel, TTransfer>(BitmapView<TPixel> source, Span<byte> destination, int rowPitch)
+    private static void EncodeBc6H<TPixel, TTransfer>(
+        BitmapView<TPixel> source,
+        Span<byte> destination,
+        int rowPitch,
+        BptcCompressionMode compressionMode)
         where TPixel : unmanaged, IPixel<TPixel>
         where TTransfer : IBc6HTransfer
     {
@@ -153,7 +162,7 @@ public sealed class BptcTextureCoder : IPitchTextureCoder
             for (var blockX = 0; blockX < blockCountX; blockX++)
             {
                 LoadFloatBlock(source, blockX, blockY, block);
-                TTransfer.EncodeBlock(block, destination.Slice(blockOffset, TTransfer.BytesPerBlock));
+                TTransfer.EncodeBlock(block, destination.Slice(blockOffset, TTransfer.BytesPerBlock), compressionMode);
                 blockOffset = checked(blockOffset + TTransfer.BytesPerBlock);
             }
 
@@ -184,7 +193,11 @@ public sealed class BptcTextureCoder : IPitchTextureCoder
         }
     }
 
-    private static void EncodeBc7<TPixel, TTransfer>(BitmapView<TPixel> source, Span<byte> destination, int rowPitch)
+    private static void EncodeBc7<TPixel, TTransfer>(
+        BitmapView<TPixel> source,
+        Span<byte> destination,
+        int rowPitch,
+        BptcCompressionMode compressionMode)
         where TPixel : unmanaged, IPixel<TPixel>
         where TTransfer : IBc7Transfer
     {
@@ -199,7 +212,7 @@ public sealed class BptcTextureCoder : IPitchTextureCoder
             for (var blockX = 0; blockX < blockCountX; blockX++)
             {
                 LoadUNormBlock(source, blockX, blockY, block);
-                TTransfer.EncodeBlock(block, destination.Slice(blockOffset, TTransfer.BytesPerBlock));
+                TTransfer.EncodeBlock(block, destination.Slice(blockOffset, TTransfer.BytesPerBlock), compressionMode);
                 blockOffset = checked(blockOffset + TTransfer.BytesPerBlock);
             }
 
@@ -213,7 +226,10 @@ public sealed class BptcTextureCoder : IPitchTextureCoder
 
         static abstract void DecodeBlock(ReadOnlySpan<byte> source, Span<Rgba32Float> destination);
 
-        static abstract void EncodeBlock(ReadOnlySpan<Rgba32Float> source, Span<byte> destination);
+        static abstract void EncodeBlock(
+            ReadOnlySpan<Rgba32Float> source,
+            Span<byte> destination,
+            BptcCompressionMode compressionMode);
     }
 
     private interface IBc7Transfer
@@ -222,7 +238,10 @@ public sealed class BptcTextureCoder : IPitchTextureCoder
 
         static abstract void DecodeBlock(ReadOnlySpan<byte> source, Span<Rgba8UNorm> destination);
 
-        static abstract void EncodeBlock(ReadOnlySpan<Rgba8UNorm> source, Span<byte> destination);
+        static abstract void EncodeBlock(
+            ReadOnlySpan<Rgba8UNorm> source,
+            Span<byte> destination,
+            BptcCompressionMode compressionMode);
     }
 
     private readonly struct Bc6HUFloatTransfer : IBc6HTransfer
@@ -232,8 +251,11 @@ public sealed class BptcTextureCoder : IPitchTextureCoder
         public static void DecodeBlock(ReadOnlySpan<byte> source, Span<Rgba32Float> destination) =>
             DecodeBc6HBlock(source, signed: false, destination);
 
-        public static void EncodeBlock(ReadOnlySpan<Rgba32Float> source, Span<byte> destination) =>
-            EncodeBc6HBlock(source, signed: false, destination);
+        public static void EncodeBlock(
+            ReadOnlySpan<Rgba32Float> source,
+            Span<byte> destination,
+            BptcCompressionMode compressionMode) =>
+            EncodeBc6HBlock(source, signed: false, destination, compressionMode);
     }
 
     private readonly struct Bc6HSFloatTransfer : IBc6HTransfer
@@ -243,8 +265,11 @@ public sealed class BptcTextureCoder : IPitchTextureCoder
         public static void DecodeBlock(ReadOnlySpan<byte> source, Span<Rgba32Float> destination) =>
             DecodeBc6HBlock(source, signed: true, destination);
 
-        public static void EncodeBlock(ReadOnlySpan<Rgba32Float> source, Span<byte> destination) =>
-            EncodeBc6HBlock(source, signed: true, destination);
+        public static void EncodeBlock(
+            ReadOnlySpan<Rgba32Float> source,
+            Span<byte> destination,
+            BptcCompressionMode compressionMode) =>
+            EncodeBc6HBlock(source, signed: true, destination, compressionMode);
     }
 
     private readonly struct Bc7UNormTransfer : IBc7Transfer
@@ -254,8 +279,11 @@ public sealed class BptcTextureCoder : IPitchTextureCoder
         public static void DecodeBlock(ReadOnlySpan<byte> source, Span<Rgba8UNorm> destination) =>
             DecodeBc7Block(source, srgb: false, destination);
 
-        public static void EncodeBlock(ReadOnlySpan<Rgba8UNorm> source, Span<byte> destination) =>
-            EncodeBc7Block(source, srgb: false, destination);
+        public static void EncodeBlock(
+            ReadOnlySpan<Rgba8UNorm> source,
+            Span<byte> destination,
+            BptcCompressionMode compressionMode) =>
+            EncodeBc7Block(source, srgb: false, destination, compressionMode);
     }
 
     private readonly struct Bc7SrgbTransfer : IBc7Transfer
@@ -265,8 +293,11 @@ public sealed class BptcTextureCoder : IPitchTextureCoder
         public static void DecodeBlock(ReadOnlySpan<byte> source, Span<Rgba8UNorm> destination) =>
             DecodeBc7Block(source, srgb: true, destination);
 
-        public static void EncodeBlock(ReadOnlySpan<Rgba8UNorm> source, Span<byte> destination) =>
-            EncodeBc7Block(source, srgb: true, destination);
+        public static void EncodeBlock(
+            ReadOnlySpan<Rgba8UNorm> source,
+            Span<byte> destination,
+            BptcCompressionMode compressionMode) =>
+            EncodeBc7Block(source, srgb: true, destination, compressionMode);
     }
 
     private static void DecodeBc6HBlock(ReadOnlySpan<byte> source, bool signed, Span<Rgba32Float> destination)
@@ -358,7 +389,31 @@ public sealed class BptcTextureCoder : IPitchTextureCoder
         }
     }
 
-    private static void EncodeBc6HBlock(ReadOnlySpan<Rgba32Float> source, bool signed, Span<byte> destination)
+    private static void EncodeBc6HBlock(
+        ReadOnlySpan<Rgba32Float> source,
+        bool signed,
+        Span<byte> destination,
+        BptcCompressionMode compressionMode)
+    {
+        switch (compressionMode)
+        {
+            case BptcCompressionMode.Fast:
+                WriteBc6HMode3Block(source, signed, destination);
+                return;
+            case BptcCompressionMode.Normal:
+            case BptcCompressionMode.High:
+            case BptcCompressionMode.Exhaustive:
+                EncodeBc6HBlockWithModeSearch(source, signed, destination, compressionMode);
+                return;
+            default:
+                throw new ArgumentOutOfRangeException(
+                    nameof(compressionMode),
+                    compressionMode,
+                    "Unsupported BPTC compression mode.");
+        }
+    }
+
+    private static void WriteBc6HMode3Block(ReadOnlySpan<Rgba32Float> source, bool signed, Span<byte> destination)
     {
         destination.Clear();
         FindBc6HEndpoints(source, signed, out var endpoint0, out var endpoint1);
@@ -396,6 +451,306 @@ public sealed class BptcTextureCoder : IPitchTextureCoder
         {
             writer.Write(indices[i], 4);
         }
+    }
+
+    private static void EncodeBc6HBlockWithModeSearch(
+        ReadOnlySpan<Rgba32Float> source,
+        bool signed,
+        Span<byte> destination,
+        BptcCompressionMode compressionMode)
+    {
+        Span<byte> best = stackalloc byte[BytesPerBlock];
+        Span<byte> candidate = stackalloc byte[BytesPerBlock];
+        var bestError = float.MaxValue;
+
+        TryBc6HModeCandidates(source, signed, Bc6HEncoderMode, compressionMode, candidate, best, ref bestError);
+        TryBc6HModeCandidates(source, signed, mode: 7, compressionMode, candidate, best, ref bestError);
+        TryBc6HModeCandidates(source, signed, mode: 11, compressionMode, candidate, best, ref bestError);
+        TryBc6HModeCandidates(source, signed, mode: 15, compressionMode, candidate, best, ref bestError);
+
+        best.CopyTo(destination);
+    }
+
+    private static void TryBc6HModeCandidates(
+        ReadOnlySpan<Rgba32Float> source,
+        bool signed,
+        int mode,
+        BptcCompressionMode compressionMode,
+        Span<byte> candidate,
+        Span<byte> best,
+        ref float bestError)
+    {
+        FindBc6HEndpoints(source, signed, out var endpoint0, out var endpoint1);
+        TryBc6HModeCandidate(source, signed, mode, endpoint0, endpoint1, candidate, best, ref bestError);
+
+        if (compressionMode is BptcCompressionMode.High or BptcCompressionMode.Exhaustive)
+        {
+            FindBc6HComponentBounds(source, signed, out endpoint0, out endpoint1);
+            TryBc6HModeCandidate(source, signed, mode, endpoint0, endpoint1, candidate, best, ref bestError);
+        }
+
+        if (compressionMode != BptcCompressionMode.Exhaustive)
+        {
+            return;
+        }
+
+        for (var i = 0; i < TexelsPerBlock; i++)
+        {
+            var a = ClampBc6HColor(source[i], signed);
+            for (var j = i + 1; j < TexelsPerBlock; j++)
+            {
+                var b = ClampBc6HColor(source[j], signed);
+                TryBc6HModeCandidate(source, signed, mode, a, b, candidate, best, ref bestError);
+            }
+        }
+    }
+
+    private static void TryBc6HModeCandidate(
+        ReadOnlySpan<Rgba32Float> source,
+        bool signed,
+        int mode,
+        Rgba32Float endpoint0,
+        Rgba32Float endpoint1,
+        Span<byte> candidate,
+        Span<byte> best,
+        ref float bestError)
+    {
+        WriteBc6HModeBlock(source, signed, mode, endpoint0, endpoint1, candidate);
+        var error = ScoreBc6HBlock(source, signed, candidate);
+        if (error < bestError)
+        {
+            bestError = error;
+            candidate.CopyTo(best);
+        }
+
+        WriteBc6HModeBlock(source, signed, mode, endpoint1, endpoint0, candidate);
+        error = ScoreBc6HBlock(source, signed, candidate);
+        if (error < bestError)
+        {
+            bestError = error;
+            candidate.CopyTo(best);
+        }
+    }
+
+    private static void WriteBc6HModeBlock(
+        ReadOnlySpan<Rgba32Float> source,
+        bool signed,
+        int mode,
+        Rgba32Float endpoint0,
+        Rgba32Float endpoint1,
+        Span<byte> destination)
+    {
+        destination.Clear();
+
+        var modeInfo = SBc6HModes[mode];
+        var q0 = new InlineArray3<int>();
+        var q1 = new InlineArray3<int>();
+        QuantizeBc6HModeEndpointPair(endpoint0, endpoint1, signed, modeInfo, q0, q1);
+
+        var palette = new InlineArray16<Rgba32Float>();
+        BuildBc6HPalette(mode, q0, q1, signed, palette);
+
+        var indices = new InlineArray16<int>();
+        for (var i = 0; i < TexelsPerBlock; i++)
+        {
+            var maxIndex = i == 0 ? 8 : 16;
+            indices[i] = FindNearestColorIndex(ClampBc6HColor(source[i], signed), palette, maxIndex);
+        }
+
+        var writer = new BptcBitWriter(destination);
+        WriteBc6HModeHeader(ref writer, mode);
+        WriteBc6HModeEndpoints(ref writer, mode, q0[0], q0[1], q0[2], q1[0], q1[1], q1[2]);
+        writer.Write(indices[0], 3);
+        for (var i = 1; i < TexelsPerBlock; i++)
+        {
+            writer.Write(indices[i], 4);
+        }
+    }
+
+    private static void QuantizeBc6HModeEndpointPair(
+        Rgba32Float endpoint0,
+        Rgba32Float endpoint1,
+        bool signed,
+        Bc6HModeInfo modeInfo,
+        Span<int> q0,
+        Span<int> q1)
+    {
+        q0[0] = QuantizeBc6HEndpoint(endpoint0.Red, signed, modeInfo.EndpointBits);
+        q0[1] = QuantizeBc6HEndpoint(endpoint0.Green, signed, modeInfo.EndpointBits);
+        q0[2] = QuantizeBc6HEndpoint(endpoint0.Blue, signed, modeInfo.EndpointBits);
+
+        var target1 = new InlineArray3<int>();
+        target1[0] = QuantizeBc6HEndpoint(endpoint1.Red, signed, modeInfo.EndpointBits);
+        target1[1] = QuantizeBc6HEndpoint(endpoint1.Green, signed, modeInfo.EndpointBits);
+        target1[2] = QuantizeBc6HEndpoint(endpoint1.Blue, signed, modeInfo.EndpointBits);
+
+        if (!modeInfo.Transformed)
+        {
+            q1[0] = target1[0];
+            q1[1] = target1[1];
+            q1[2] = target1[2];
+            return;
+        }
+
+        q1[0] = QuantizeBc6HDelta(q0[0], target1[0], modeInfo.EndpointBits, modeInfo.DeltaBitsR);
+        q1[1] = QuantizeBc6HDelta(q0[1], target1[1], modeInfo.EndpointBits, modeInfo.DeltaBitsG);
+        q1[2] = QuantizeBc6HDelta(q0[2], target1[2], modeInfo.EndpointBits, modeInfo.DeltaBitsB);
+    }
+
+    private static int QuantizeBc6HDelta(int anchor, int target, int endpointBits, int deltaBits)
+    {
+        var modulo = 1 << endpointBits;
+        var delta = target - anchor;
+        if (delta > modulo / 2)
+        {
+            delta -= modulo;
+        }
+        else if (delta < -modulo / 2)
+        {
+            delta += modulo;
+        }
+
+        var minimum = -(1 << (deltaBits - 1));
+        var maximum = (1 << (deltaBits - 1)) - 1;
+        delta = Math.Clamp(delta, minimum, maximum);
+        return delta & ((1 << deltaBits) - 1);
+    }
+
+    private static void BuildBc6HPalette(int mode, ReadOnlySpan<int> q0, ReadOnlySpan<int> q1, bool signed, Span<Rgba32Float> palette)
+    {
+        var modeInfo = SBc6HModes[mode];
+        var e0 = new InlineArray3<int>();
+        var e1 = new InlineArray3<int>();
+        var mask = (1 << modeInfo.EndpointBits) - 1;
+
+        for (var i = 0; i < 3; i++)
+        {
+            e0[i] = signed ? SignExtend(q0[i], modeInfo.EndpointBits) : q0[i];
+            if (modeInfo.Transformed)
+            {
+                var deltaBits = i switch
+                {
+                    0 => modeInfo.DeltaBitsR,
+                    1 => modeInfo.DeltaBitsG,
+                    _ => modeInfo.DeltaBitsB
+                };
+                e1[i] = (q0[i] + SignExtend(q1[i], deltaBits)) & mask;
+                if (signed)
+                {
+                    e1[i] = SignExtend(e1[i], modeInfo.EndpointBits);
+                }
+            }
+            else
+            {
+                e1[i] = signed ? SignExtend(q1[i], modeInfo.EndpointBits) : q1[i];
+            }
+
+            e0[i] = UnquantizeBc6HEndpoint(e0[i], signed, modeInfo.EndpointBits);
+            e1[i] = UnquantizeBc6HEndpoint(e1[i], signed, modeInfo.EndpointBits);
+        }
+
+        var weights = SBptcFactors[2];
+        for (var i = 0; i < 16; i++)
+        {
+            var weight = weights[i];
+            palette[i] = new Rgba32Float(
+                HalfBitsToSingle(InterpolateBc6HHalf(e0[0], e1[0], weight, signed)),
+                HalfBitsToSingle(InterpolateBc6HHalf(e0[1], e1[1], weight, signed)),
+                HalfBitsToSingle(InterpolateBc6HHalf(e0[2], e1[2], weight, signed)),
+                1f);
+        }
+    }
+
+    private static void WriteBc6HModeHeader(ref BptcBitWriter writer, int mode)
+    {
+        writer.Write(mode & 3, 2);
+        if ((mode & 2) != 0)
+        {
+            writer.Write(mode >> 2, 3);
+        }
+    }
+
+    private static void WriteBc6HModeEndpoints(
+        ref BptcBitWriter writer,
+        int mode,
+        int q0R,
+        int q0G,
+        int q0B,
+        int q1R,
+        int q1G,
+        int q1B)
+    {
+        switch (mode)
+        {
+            case 3:
+                writer.Write(q0R, 10);
+                writer.Write(q0G, 10);
+                writer.Write(q0B, 10);
+                writer.Write(q1R, 10);
+                writer.Write(q1G, 10);
+                writer.Write(q1B, 10);
+                break;
+            case 7:
+                writer.Write(q0R, 10);
+                writer.Write(q0G, 10);
+                writer.Write(q0B, 10);
+                writer.Write(q1R, 9);
+                writer.Write(q0R >> 10, 1);
+                writer.Write(q1G, 9);
+                writer.Write(q0G >> 10, 1);
+                writer.Write(q1B, 9);
+                writer.Write(q0B >> 10, 1);
+                break;
+            case 11:
+                writer.Write(q0R, 10);
+                writer.Write(q0G, 10);
+                writer.Write(q0B, 10);
+                writer.Write(q1R, 8);
+                writer.Write(q0R >> 11, 1);
+                writer.Write(q0R >> 10, 1);
+                writer.Write(q1G, 8);
+                writer.Write(q0G >> 11, 1);
+                writer.Write(q0G >> 10, 1);
+                writer.Write(q1B, 8);
+                writer.Write(q0B >> 11, 1);
+                writer.Write(q0B >> 10, 1);
+                break;
+            case 15:
+                writer.Write(q0R, 10);
+                writer.Write(q0G, 10);
+                writer.Write(q0B, 10);
+                writer.Write(q1R, 4);
+                WriteBitsDescending(ref writer, q0R, 15, 10);
+                writer.Write(q1G, 4);
+                WriteBitsDescending(ref writer, q0G, 15, 10);
+                writer.Write(q1B, 4);
+                WriteBitsDescending(ref writer, q0B, 15, 10);
+                break;
+            default:
+                throw new ArgumentOutOfRangeException(nameof(mode), mode, "Unsupported BC6H encoder mode.");
+        }
+    }
+
+    private static void WriteBitsDescending(ref BptcBitWriter writer, int value, int firstBit, int lastBit)
+    {
+        for (var bit = firstBit; bit >= lastBit; bit--)
+        {
+            writer.Write(value >> bit, 1);
+        }
+    }
+
+    private static float ScoreBc6HBlock(ReadOnlySpan<Rgba32Float> source, bool signed, ReadOnlySpan<byte> candidate)
+    {
+        var decoded = new InlineArray16<Rgba32Float>();
+        DecodeBc6HBlock(candidate, signed, decoded);
+
+        var error = 0f;
+        for (var i = 0; i < TexelsPerBlock; i++)
+        {
+            error += ColorDistance(ClampBc6HColor(source[i], signed), decoded[i]);
+        }
+
+        return error;
     }
 
     private static void DecodeBc7Block(ReadOnlySpan<byte> source, bool srgb, Span<Rgba8UNorm> destination)
@@ -546,7 +901,31 @@ public sealed class BptcTextureCoder : IPitchTextureCoder
         }
     }
 
-    private static void EncodeBc7Block(ReadOnlySpan<Rgba8UNorm> source, bool srgb, Span<byte> destination)
+    private static void EncodeBc7Block(
+        ReadOnlySpan<Rgba8UNorm> source,
+        bool srgb,
+        Span<byte> destination,
+        BptcCompressionMode compressionMode)
+    {
+        switch (compressionMode)
+        {
+            case BptcCompressionMode.Fast:
+                WriteBc7Mode6FastBlock(source, srgb, destination);
+                return;
+            case BptcCompressionMode.Normal:
+            case BptcCompressionMode.High:
+            case BptcCompressionMode.Exhaustive:
+                EncodeBc7BlockWithModeSearch(source, srgb, destination, compressionMode);
+                return;
+            default:
+                throw new ArgumentOutOfRangeException(
+                    nameof(compressionMode),
+                    compressionMode,
+                    "Unsupported BPTC compression mode.");
+        }
+    }
+
+    private static void WriteBc7Mode6FastBlock(ReadOnlySpan<Rgba8UNorm> source, bool srgb, Span<byte> destination)
     {
         var storage = new InlineArray16<Bc7Color32>();
         for (var i = 0; i < TexelsPerBlock; i++)
@@ -570,6 +949,219 @@ public sealed class BptcTextureCoder : IPitchTextureCoder
         TryBc7Candidate(storage, a, b, ref bestA, ref bestB, ref bestError);
 
         WriteBc7Mode6Block(storage, bestA, bestB, destination);
+    }
+
+    private static void EncodeBc7BlockWithModeSearch(
+        ReadOnlySpan<Rgba8UNorm> source,
+        bool srgb,
+        Span<byte> destination,
+        BptcCompressionMode compressionMode)
+    {
+        var storage = new InlineArray16<Bc7Color32>();
+        for (var i = 0; i < TexelsPerBlock; i++)
+        {
+            storage[i] = ToBc7StorageColor(source[i], srgb);
+        }
+
+        Span<byte> best = stackalloc byte[BytesPerBlock];
+        Span<byte> candidate = stackalloc byte[BytesPerBlock];
+        WriteBc7Mode6FastBlock(source, srgb, best);
+        var bestError = ScoreBc7Block(storage, best);
+
+        TryBc7ModeCandidates(storage, mode: 6, partitionLimit: 1, candidate, best, ref bestError);
+        TryBc7ModeCandidates(storage, mode: 5, partitionLimit: 1, candidate, best, ref bestError);
+
+        if (compressionMode is BptcCompressionMode.High or BptcCompressionMode.Exhaustive)
+        {
+            var partitionLimit = compressionMode == BptcCompressionMode.High ? 16 : 64;
+            TryBc7ModeCandidates(storage, mode: 1, partitionLimit, candidate, best, ref bestError);
+            TryBc7ModeCandidates(storage, mode: 3, partitionLimit, candidate, best, ref bestError);
+            TryBc7ModeCandidates(storage, mode: 7, partitionLimit, candidate, best, ref bestError);
+        }
+
+        if (compressionMode == BptcCompressionMode.Exhaustive)
+        {
+            TryBc7ModeCandidates(storage, mode: 0, partitionLimit: 64, candidate, best, ref bestError);
+            TryBc7ModeCandidates(storage, mode: 2, partitionLimit: 64, candidate, best, ref bestError);
+        }
+
+        best.CopyTo(destination);
+    }
+
+    private static void TryBc7ModeCandidates(
+        ReadOnlySpan<Bc7Color32> source,
+        int mode,
+        int partitionLimit,
+        Span<byte> candidate,
+        Span<byte> best,
+        ref int bestError)
+    {
+        var modeInfo = SBc7Modes[mode];
+        var partitionCount = modeInfo.PartitionBits == 0 ? 1 : Math.Min(partitionLimit, 1 << modeInfo.PartitionBits);
+        for (var partitionSet = 0; partitionSet < partitionCount; partitionSet++)
+        {
+            TryBc7ModePartitionCandidate(source, mode, partitionSet, candidate, best, ref bestError);
+        }
+    }
+
+    private static void TryBc7ModePartitionCandidate(
+        ReadOnlySpan<Bc7Color32> source,
+        int mode,
+        int partitionSet,
+        Span<byte> candidate,
+        Span<byte> best,
+        ref int bestError)
+    {
+        var modeInfo = SBc7Modes[mode];
+        var endpoints = new InlineArray6<Bc7Color32>();
+        for (var subset = 0; subset < modeInfo.SubsetCount; subset++)
+        {
+            FindBc7SubsetEndpoints(source, modeInfo, partitionSet, subset, out endpoints[subset * 2], out endpoints[(subset * 2) + 1]);
+        }
+
+        var orientationCount = 1 << modeInfo.SubsetCount;
+        var quantized = new InlineArray6<Bc7Endpoint>();
+        for (var orientation = 0; orientation < orientationCount; orientation++)
+        {
+            for (var subset = 0; subset < modeInfo.SubsetCount; subset++)
+            {
+                var endpoint0 = endpoints[subset * 2];
+                var endpoint1 = endpoints[(subset * 2) + 1];
+                if (((orientation >> subset) & 1) != 0)
+                {
+                    (endpoint0, endpoint1) = (endpoint1, endpoint0);
+                }
+
+                QuantizeBc7EndpointPair(endpoint0, endpoint1, modeInfo, out quantized[subset * 2], out quantized[(subset * 2) + 1]);
+            }
+
+            WriteBc7ModeBlock(source, mode, partitionSet, quantized, candidate);
+            var error = ScoreBc7Block(source, candidate);
+            if (error < bestError)
+            {
+                bestError = error;
+                candidate.CopyTo(best);
+            }
+        }
+    }
+
+    private static void WriteBc7ModeBlock(
+        ReadOnlySpan<Bc7Color32> source,
+        int mode,
+        int partitionSet,
+        ReadOnlySpan<Bc7Endpoint> endpoints,
+        Span<byte> destination)
+    {
+        destination.Clear();
+
+        var modeInfo = SBc7Modes[mode];
+        var hasSecondaryIndices = modeInfo.IndexBits1 != 0;
+        var primaryIndices = new InlineArray16<int>();
+        var secondaryIndices = new InlineArray16<int>();
+
+        for (var texel = 0; texel < TexelsPerBlock; texel++)
+        {
+            var subset = GetBc7Subset(modeInfo, partitionSet, texel);
+            var anchor = GetBc7Anchor(modeInfo, partitionSet, subset);
+            var primaryPaletteCount = 1 << (modeInfo.IndexBits0 - (texel == anchor ? 1 : 0));
+            var endpoint = subset * 2;
+
+            if (hasSecondaryIndices)
+            {
+                primaryIndices[texel] = FindNearestBc7RgbIndex(
+                    source[texel],
+                    endpoints[endpoint].Color,
+                    endpoints[endpoint + 1].Color,
+                    modeInfo.IndexBits0,
+                    primaryPaletteCount);
+
+                var secondaryPaletteCount = 1 << (modeInfo.IndexBits1 - (texel == anchor ? 1 : 0));
+                secondaryIndices[texel] = FindNearestBc7AlphaIndex(
+                    source[texel].Alpha,
+                    endpoints[endpoint].Color.Alpha,
+                    endpoints[endpoint + 1].Color.Alpha,
+                    modeInfo.IndexBits1,
+                    secondaryPaletteCount);
+            }
+            else
+            {
+                primaryIndices[texel] = FindNearestBc7Index(
+                    source[texel],
+                    endpoints[endpoint].Color,
+                    endpoints[endpoint + 1].Color,
+                    modeInfo.IndexBits0,
+                    primaryPaletteCount);
+            }
+        }
+
+        var writer = new BptcBitWriter(destination);
+        writer.Write(0, mode);
+        writer.Write(1, 1);
+        writer.Write(partitionSet, modeInfo.PartitionBits);
+        writer.Write(0, modeInfo.RotationBits);
+        writer.Write(0, modeInfo.IndexSelectionBits);
+
+        for (var subset = 0; subset < modeInfo.SubsetCount; subset++)
+        {
+            writer.Write(endpoints[subset * 2].Red, modeInfo.ColorBits);
+            writer.Write(endpoints[(subset * 2) + 1].Red, modeInfo.ColorBits);
+        }
+
+        for (var subset = 0; subset < modeInfo.SubsetCount; subset++)
+        {
+            writer.Write(endpoints[subset * 2].Green, modeInfo.ColorBits);
+            writer.Write(endpoints[(subset * 2) + 1].Green, modeInfo.ColorBits);
+        }
+
+        for (var subset = 0; subset < modeInfo.SubsetCount; subset++)
+        {
+            writer.Write(endpoints[subset * 2].Blue, modeInfo.ColorBits);
+            writer.Write(endpoints[(subset * 2) + 1].Blue, modeInfo.ColorBits);
+        }
+
+        if (modeInfo.AlphaBits != 0)
+        {
+            for (var subset = 0; subset < modeInfo.SubsetCount; subset++)
+            {
+                writer.Write(endpoints[subset * 2].Alpha, modeInfo.AlphaBits);
+                writer.Write(endpoints[(subset * 2) + 1].Alpha, modeInfo.AlphaBits);
+            }
+        }
+
+        if (modeInfo.EndpointPBits != 0)
+        {
+            for (var subset = 0; subset < modeInfo.SubsetCount; subset++)
+            {
+                writer.Write(endpoints[subset * 2].PBit, modeInfo.EndpointPBits);
+                writer.Write(endpoints[(subset * 2) + 1].PBit, modeInfo.EndpointPBits);
+            }
+        }
+        else if (modeInfo.SharedPBits != 0)
+        {
+            for (var subset = 0; subset < modeInfo.SubsetCount; subset++)
+            {
+                writer.Write(endpoints[subset * 2].PBit, modeInfo.SharedPBits);
+            }
+        }
+
+        for (var texel = 0; texel < TexelsPerBlock; texel++)
+        {
+            var subset = GetBc7Subset(modeInfo, partitionSet, texel);
+            var anchor = GetBc7Anchor(modeInfo, partitionSet, subset);
+            writer.Write(primaryIndices[texel], modeInfo.IndexBits0 - (texel == anchor ? 1 : 0));
+        }
+
+        if (!hasSecondaryIndices)
+        {
+            return;
+        }
+
+        for (var texel = 0; texel < TexelsPerBlock; texel++)
+        {
+            var subset = GetBc7Subset(modeInfo, partitionSet, texel);
+            var anchor = GetBc7Anchor(modeInfo, partitionSet, subset);
+            writer.Write(secondaryIndices[texel], modeInfo.IndexBits1 - (texel == anchor ? 1 : 0));
+        }
     }
 
     private static void ReadBc6HEndpoints(
@@ -954,6 +1546,27 @@ public sealed class BptcTextureCoder : IPitchTextureCoder
         }
     }
 
+    private static void FindBc6HComponentBounds(ReadOnlySpan<Rgba32Float> source, bool signed, out Rgba32Float minimum, out Rgba32Float maximum)
+    {
+        minimum = ClampBc6HColor(source[0], signed);
+        maximum = minimum;
+
+        for (var i = 1; i < TexelsPerBlock; i++)
+        {
+            var color = ClampBc6HColor(source[i], signed);
+            minimum = new Rgba32Float(
+                MathF.Min(minimum.Red, color.Red),
+                MathF.Min(minimum.Green, color.Green),
+                MathF.Min(minimum.Blue, color.Blue),
+                1f);
+            maximum = new Rgba32Float(
+                MathF.Max(maximum.Red, color.Red),
+                MathF.Max(maximum.Green, color.Green),
+                MathF.Max(maximum.Blue, color.Blue),
+                1f);
+        }
+    }
+
     private static Rgba32Float ClampBc6HColor(Rgba32Float color, bool signed) => new(
         ClampBc6HValue(color.Red, signed),
         ClampBc6HValue(color.Green, signed),
@@ -1076,6 +1689,212 @@ public sealed class BptcTextureCoder : IPitchTextureCoder
         EncodeStorageByte(color.Blue, srgb),
         color.Alpha);
 
+    private static void FindBc7SubsetEndpoints(
+        ReadOnlySpan<Bc7Color32> source,
+        Bc7ModeInfo modeInfo,
+        int partitionSet,
+        int subset,
+        out Bc7Color32 endpoint0,
+        out Bc7Color32 endpoint1)
+    {
+        if (modeInfo.IndexBits1 != 0)
+        {
+            FindBc7SubsetColorEndpoints(source, modeInfo, partitionSet, subset, includeAlpha: false, out var color0, out var color1);
+            FindBc7SubsetAlphaBounds(source, modeInfo, partitionSet, subset, out var alpha0, out var alpha1);
+            endpoint0 = new Bc7Color32(color0.Red, color0.Green, color0.Blue, alpha0);
+            endpoint1 = new Bc7Color32(color1.Red, color1.Green, color1.Blue, alpha1);
+            return;
+        }
+
+        FindBc7SubsetColorEndpoints(
+            source,
+            modeInfo,
+            partitionSet,
+            subset,
+            includeAlpha: modeInfo.AlphaBits != 0,
+            out endpoint0,
+            out endpoint1);
+
+        if (modeInfo.AlphaBits == 0)
+        {
+            endpoint0 = new Bc7Color32(endpoint0.Red, endpoint0.Green, endpoint0.Blue, byte.MaxValue);
+            endpoint1 = new Bc7Color32(endpoint1.Red, endpoint1.Green, endpoint1.Blue, byte.MaxValue);
+        }
+    }
+
+    private static void FindBc7SubsetColorEndpoints(
+        ReadOnlySpan<Bc7Color32> source,
+        Bc7ModeInfo modeInfo,
+        int partitionSet,
+        int subset,
+        bool includeAlpha,
+        out Bc7Color32 endpoint0,
+        out Bc7Color32 endpoint1)
+    {
+        endpoint0 = default;
+        endpoint1 = default;
+        var found = false;
+        var bestDistance = -1;
+
+        for (var i = 0; i < TexelsPerBlock; i++)
+        {
+            if (GetBc7Subset(modeInfo, partitionSet, i) != subset)
+            {
+                continue;
+            }
+
+            if (!found)
+            {
+                endpoint0 = source[i];
+                endpoint1 = source[i];
+                found = true;
+            }
+
+            for (var j = i + 1; j < TexelsPerBlock; j++)
+            {
+                if (GetBc7Subset(modeInfo, partitionSet, j) != subset)
+                {
+                    continue;
+                }
+
+                var distance = includeAlpha
+                    ? ColorDistance(source[i], source[j])
+                    : ColorDistanceRgb(source[i], source[j]);
+                if (distance > bestDistance)
+                {
+                    bestDistance = distance;
+                    endpoint0 = source[i];
+                    endpoint1 = source[j];
+                }
+            }
+        }
+    }
+
+    private static void FindBc7SubsetAlphaBounds(
+        ReadOnlySpan<Bc7Color32> source,
+        Bc7ModeInfo modeInfo,
+        int partitionSet,
+        int subset,
+        out byte minimum,
+        out byte maximum)
+    {
+        minimum = byte.MaxValue;
+        maximum = byte.MinValue;
+        for (var i = 0; i < TexelsPerBlock; i++)
+        {
+            if (GetBc7Subset(modeInfo, partitionSet, i) != subset)
+            {
+                continue;
+            }
+
+            minimum = Math.Min(minimum, source[i].Alpha);
+            maximum = Math.Max(maximum, source[i].Alpha);
+        }
+    }
+
+    private static void QuantizeBc7EndpointPair(
+        Bc7Color32 endpoint0,
+        Bc7Color32 endpoint1,
+        Bc7ModeInfo modeInfo,
+        out Bc7Endpoint quantized0,
+        out Bc7Endpoint quantized1)
+    {
+        var modePBits = modeInfo.EndpointPBits != 0 ? modeInfo.EndpointPBits : modeInfo.SharedPBits;
+        if (modeInfo.SharedPBits != 0)
+        {
+            var bestError = int.MaxValue;
+            quantized0 = default;
+            quantized1 = default;
+            for (var p = 0; p < (1 << modeInfo.SharedPBits); p++)
+            {
+                var candidate0 = QuantizeBc7Endpoint(endpoint0, modeInfo, modePBits, p, out var error0);
+                var candidate1 = QuantizeBc7Endpoint(endpoint1, modeInfo, modePBits, p, out var error1);
+                var error = error0 + error1;
+                if (error < bestError)
+                {
+                    bestError = error;
+                    quantized0 = candidate0;
+                    quantized1 = candidate1;
+                }
+            }
+
+            return;
+        }
+
+        quantized0 = QuantizeBc7EndpointWithBestPBit(endpoint0, modeInfo, modePBits);
+        quantized1 = QuantizeBc7EndpointWithBestPBit(endpoint1, modeInfo, modePBits);
+    }
+
+    private static Bc7Endpoint QuantizeBc7EndpointWithBestPBit(Bc7Color32 endpoint, Bc7ModeInfo modeInfo, int modePBits)
+    {
+        var bestError = int.MaxValue;
+        var best = default(Bc7Endpoint);
+        var pCount = modeInfo.EndpointPBits == 0 ? 1 : 1 << modeInfo.EndpointPBits;
+        for (var p = 0; p < pCount; p++)
+        {
+            var candidate = QuantizeBc7Endpoint(endpoint, modeInfo, modePBits, p, out var error);
+            if (error < bestError)
+            {
+                bestError = error;
+                best = candidate;
+            }
+        }
+
+        return best;
+    }
+
+    private static Bc7Endpoint QuantizeBc7Endpoint(
+        Bc7Color32 endpoint,
+        Bc7ModeInfo modeInfo,
+        int modePBits,
+        int pBit,
+        out int error)
+    {
+        var red = QuantizeBc7Scalar(endpoint.Red, modeInfo.ColorBits, modePBits, pBit, out var redValue);
+        var green = QuantizeBc7Scalar(endpoint.Green, modeInfo.ColorBits, modePBits, pBit, out var greenValue);
+        var blue = QuantizeBc7Scalar(endpoint.Blue, modeInfo.ColorBits, modePBits, pBit, out var blueValue);
+        error =
+            Squared(endpoint.Red - redValue) +
+            Squared(endpoint.Green - greenValue) +
+            Squared(endpoint.Blue - blueValue);
+
+        var alpha = 0;
+        var alphaValue = 255;
+        if (modeInfo.AlphaBits != 0)
+        {
+            alpha = QuantizeBc7Scalar(endpoint.Alpha, modeInfo.AlphaBits, modePBits, pBit, out alphaValue);
+            error += Squared(endpoint.Alpha - alphaValue);
+        }
+
+        return new Bc7Endpoint(
+            red,
+            green,
+            blue,
+            alpha,
+            pBit,
+            new Bc7Color32((byte)redValue, (byte)greenValue, (byte)blueValue, (byte)alphaValue));
+    }
+
+    private static int QuantizeBc7Scalar(byte value, int valueBits, int pBits, int pBit, out int reconstructed)
+    {
+        var best = 0;
+        var bestError = int.MaxValue;
+        reconstructed = 0;
+        for (var quantized = 0; quantized < (1 << valueBits); quantized++)
+        {
+            var expanded = ExpandQuantizedBc7((quantized << pBits) | pBit, valueBits + pBits);
+            var error = Squared(value - expanded);
+            if (error < bestError)
+            {
+                bestError = error;
+                best = quantized;
+                reconstructed = expanded;
+            }
+        }
+
+        return best;
+    }
+
     private static void FindBc7Endpoints(ReadOnlySpan<Bc7Color32> source, bool includeAlpha, out Bc7Color32 endpoint0, out Bc7Color32 endpoint1)
     {
         endpoint0 = source[0];
@@ -1141,6 +1960,82 @@ public sealed class BptcTextureCoder : IPitchTextureCoder
                 maximum = source[i];
             }
         }
+    }
+
+    private static int FindNearestBc7Index(
+        Bc7Color32 color,
+        Bc7Color32 endpoint0,
+        Bc7Color32 endpoint1,
+        int indexBits,
+        int paletteCount)
+    {
+        var palette = new InlineArray16<Bc7Color32>();
+        BuildBc7Palette(endpoint0, endpoint1, indexBits, palette);
+        return FindNearestBc7Index(color, palette, paletteCount);
+    }
+
+    private static int FindNearestBc7RgbIndex(
+        Bc7Color32 color,
+        Bc7Color32 endpoint0,
+        Bc7Color32 endpoint1,
+        int indexBits,
+        int paletteCount)
+    {
+        var weights = SBptcFactors[indexBits - 2];
+        var bestIndex = 0;
+        var bestDistance = int.MaxValue;
+        for (var i = 0; i < paletteCount; i++)
+        {
+            var weight = weights[i];
+            var red = InterpolateByte(endpoint0.Red, endpoint1.Red, weight);
+            var green = InterpolateByte(endpoint0.Green, endpoint1.Green, weight);
+            var blue = InterpolateByte(endpoint0.Blue, endpoint1.Blue, weight);
+            var distance =
+                Squared(color.Red - red) +
+                Squared(color.Green - green) +
+                Squared(color.Blue - blue);
+            if (distance < bestDistance)
+            {
+                bestDistance = distance;
+                bestIndex = i;
+            }
+        }
+
+        return bestIndex;
+    }
+
+    private static int FindNearestBc7AlphaIndex(byte alpha, byte endpoint0, byte endpoint1, int indexBits, int paletteCount)
+    {
+        var weights = SBptcFactors[indexBits - 2];
+        var bestIndex = 0;
+        var bestDistance = int.MaxValue;
+        for (var i = 0; i < paletteCount; i++)
+        {
+            var value = InterpolateByte(endpoint0, endpoint1, weights[i]);
+            var distance = Squared(alpha - value);
+            if (distance < bestDistance)
+            {
+                bestDistance = distance;
+                bestIndex = i;
+            }
+        }
+
+        return bestIndex;
+    }
+
+    private static int ScoreBc7Block(ReadOnlySpan<Bc7Color32> source, ReadOnlySpan<byte> candidate)
+    {
+        var decoded = new InlineArray16<Rgba8UNorm>();
+        DecodeBc7Block(candidate, srgb: false, decoded);
+
+        var error = 0;
+        for (var i = 0; i < TexelsPerBlock; i++)
+        {
+            var color = new Bc7Color32(decoded[i].Red, decoded[i].Green, decoded[i].Blue, decoded[i].Alpha);
+            error += ColorDistance(source[i], color);
+        }
+
+        return error;
     }
 
     private static void TryBc7Candidate(
@@ -1241,10 +2136,13 @@ public sealed class BptcTextureCoder : IPitchTextureCoder
         return quantized;
     }
 
-    private static void BuildBc7Palette(Bc7Color32 endpoint0, Bc7Color32 endpoint1, Span<Bc7Color32> palette)
+    private static void BuildBc7Palette(Bc7Color32 endpoint0, Bc7Color32 endpoint1, Span<Bc7Color32> palette) =>
+        BuildBc7Palette(endpoint0, endpoint1, indexBits: 4, palette);
+
+    private static void BuildBc7Palette(Bc7Color32 endpoint0, Bc7Color32 endpoint1, int indexBits, Span<Bc7Color32> palette)
     {
-        var weights = SBptcFactors[2];
-        for (var i = 0; i < 16; i++)
+        var weights = SBptcFactors[indexBits - 2];
+        for (var i = 0; i < (1 << indexBits); i++)
         {
             var weight = weights[i];
             palette[i] = new Bc7Color32(
@@ -1577,6 +2475,8 @@ public sealed class BptcTextureCoder : IPitchTextureCoder
         int IndexBits1);
 
     private readonly record struct Bc7Color32(byte Red, byte Green, byte Blue, byte Alpha);
+
+    private readonly record struct Bc7Endpoint(int Red, int Green, int Blue, int Alpha, int PBit, Bc7Color32 Color);
 
     private readonly record struct Bc7Mode6Endpoint(int Red7, int Green7, int Blue7, int Alpha7, int PBit, Bc7Color32 Color);
 
