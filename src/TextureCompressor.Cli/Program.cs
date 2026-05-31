@@ -80,7 +80,7 @@ internal static class Cli
         };
         var ktxVersionOption = new Option<int>("--ktx-version")
         {
-            Description = "KTX version to write.",
+            Description = "KTX version to write. Defaults to 2 for .ktx2 outputs and 1 otherwise.",
             DefaultValueFactory = _ => 1
         };
         ktxVersionOption.Validators.Add(result =>
@@ -137,21 +137,59 @@ internal static class Cli
         {
             var inputPath = RequireFile(parseResult.GetValue(inputArgument), "input").FullName;
             var outputPath = RequireFile(parseResult.GetValue(outputArgument), "output").FullName;
-            var format = TextureFormatCatalog.Get(parseResult.GetValue(formatOption) ?? nameof(TextureFormats.Rgba8UNorm));
+            var requestedFormat = TextureFormatCatalog.Get(parseResult.GetValue(formatOption) ?? nameof(TextureFormats.Rgba8UNorm));
+            var formatWasSpecified = IsOptionExplicit(parseResult, formatOption);
             var outputKind = parseResult.GetValue(containerOption) ?? GetContainer(outputPath);
-            var ktxVersion = parseResult.GetValue(ktxVersionOption);
+            var ktxVersion = IsOptionExplicit(parseResult, ktxVersionOption)
+                ? parseResult.GetValue(ktxVersionOption)
+                : GetDefaultKtxVersion(outputPath);
             var jpegQuality = parseResult.GetValue(jpegQualityOption);
             var quality = parseResult.GetValue(qualityOption);
             var mipmaps = parseResult.GetValue(mipmapsOption);
             var selection = GetSubresourceSelection(parseResult, mipOption, layerOption, faceOption);
+            var hasSubresourceSelection = IsOptionExplicit(parseResult, mipOption)
+                || IsOptionExplicit(parseResult, layerOption)
+                || IsOptionExplicit(parseResult, faceOption);
             var colorSpaces = new ImageColorSpaces(
                 parseResult.GetValue(pngColorSpaceOption),
                 parseResult.GetValue(jpgColorSpaceOption),
                 parseResult.GetValue(gifColorSpaceOption));
             var printMetrics = parseResult.GetValue(metricsOption);
 
+            var inputKind = GetContainer(inputPath);
+            if (IsStructuredTextureContainer(inputKind) && IsStructuredTextureContainer(outputKind))
+            {
+                var texture = ReadStructuredTexture(inputPath, inputKind);
+                var format = formatWasSpecified ? requestedFormat : texture.Format;
+                if (!hasSubresourceSelection && mipmaps == MipmapMode.None)
+                {
+                    WriteStructuredTexture(texture, outputPath, outputKind, format, ktxVersion, quality);
+                    Console.WriteLine($"wrote {outputPath}");
+
+                    if (printMetrics)
+                    {
+                        var decoded = Decode(outputPath, colorSpaces);
+                        PrintQuality(BitmapQuality.Compare(DecodeSubresource(texture.Format, texture.GetSubresource(default)), decoded));
+                    }
+
+                    return 0;
+                }
+
+                var selectedSource = DecodeSubresource(texture.Format, texture.GetSubresource(selection));
+                Encode(selectedSource, outputPath, outputKind, format, ktxVersion, jpegQuality, quality, mipmaps, colorSpaces);
+                Console.WriteLine($"wrote {outputPath}");
+
+                if (printMetrics)
+                {
+                    var decoded = Decode(outputPath, colorSpaces);
+                    PrintQuality(BitmapQuality.Compare(selectedSource, decoded));
+                }
+
+                return 0;
+            }
+
             var source = Decode(inputPath, colorSpaces, selection);
-            Encode(source, outputPath, outputKind, format, ktxVersion, jpegQuality, quality, mipmaps, colorSpaces);
+            Encode(source, outputPath, outputKind, requestedFormat, ktxVersion, jpegQuality, quality, mipmaps, colorSpaces);
             Console.WriteLine($"wrote {outputPath}");
 
             if (printMetrics)
@@ -379,6 +417,12 @@ internal static class Cli
 
     private static FileInfo RequireFile(FileInfo? file, string argumentName) =>
         file ?? throw new ArgumentException($"Missing required argument '{argumentName}'.");
+
+    private static bool IsOptionExplicit(ParseResult parseResult, Option option) =>
+        parseResult.GetResult(option) is { Implicit: false };
+
+    private static int GetDefaultKtxVersion(string outputPath) =>
+        string.Equals(Path.GetExtension(outputPath), ".ktx2", StringComparison.OrdinalIgnoreCase) ? 2 : 1;
 
     private static void PrintInfo(string path, bool printSubresources)
     {
@@ -759,6 +803,88 @@ internal static class Cli
 
     private static void PrintInfoLine(string label, object? value) =>
         Console.WriteLine($"{label}: {value}");
+
+    private static bool IsStructuredTextureContainer(TextureContainer container) =>
+        container is TextureContainer.Dds or TextureContainer.Ktx or TextureContainer.Pvr;
+
+    private static TexturePayload ReadStructuredTexture(string path, TextureContainer container) =>
+        container switch
+        {
+            TextureContainer.Dds => FromTexture(DdsCodec.Read(path)),
+            TextureContainer.Ktx => FromTexture(KtxCodec.Read(path)),
+            TextureContainer.Pvr => FromTexture(PvrCodec.Read(path)),
+            _ => throw new NotSupportedException($"'{FormatContainer(container)}' is not a structured texture container.")
+        };
+
+    private static TexturePayload FromTexture(DdsTexture texture) =>
+        new(texture.Format, texture.Subresources, texture.MipLevelCount, texture.ArrayLayerCount, texture.FaceCount);
+
+    private static TexturePayload FromTexture(KtxTexture texture) =>
+        new(texture.Format, texture.Subresources, texture.MipLevelCount, texture.ArrayLayerCount, texture.FaceCount);
+
+    private static TexturePayload FromTexture(PvrTexture texture) =>
+        new(texture.Format, texture.Subresources, texture.MipLevelCount, texture.ArrayLayerCount, texture.FaceCount);
+
+    private static void WriteStructuredTexture(
+        TexturePayload texture,
+        string path,
+        TextureContainer container,
+        TextureFormat format,
+        int ktxVersion,
+        TextureCompressionLevel? quality)
+    {
+        using var compressionRegistration = CreateTextureCompressionRegistration(format, quality);
+        var output = texture.Format == format && quality is null
+            ? texture
+            : ReencodeStructuredTexture(texture, format);
+
+        switch (container)
+        {
+            case TextureContainer.Dds:
+                DdsCodec.Write(
+                    new DdsTexture(output.Format, output.Subresources, output.ArrayLayerCount, output.FaceCount),
+                    path);
+                break;
+            case TextureContainer.Ktx:
+                KtxCodec.Write(
+                    new KtxTexture(output.Format, output.Subresources, output.ArrayLayerCount, output.FaceCount),
+                    path,
+                    new KtxEncodingOptions { Version = ktxVersion == 2 ? KtxVersion.Version2 : KtxVersion.Version1 });
+                break;
+            case TextureContainer.Pvr:
+                PvrCodec.Write(
+                    new PvrTexture(output.Format, output.Subresources, output.ArrayLayerCount, output.FaceCount),
+                    path);
+                break;
+            default:
+                throw new NotSupportedException($"Unsupported structured texture output container '{container}'.");
+        }
+    }
+
+    private static TexturePayload ReencodeStructuredTexture(TexturePayload texture, TextureFormat format)
+    {
+        var sourceCoder = TextureCoderManager.Global.GetCoder(texture.Format);
+        var targetCoder = TextureCoderManager.Global.GetCoder(format);
+        var subresources = new TextureSubresource[texture.Subresources.Count];
+        for (var i = 0; i < texture.Subresources.Count; i++)
+        {
+            var source = texture.Subresources[i];
+            var bitmap = new ArrayBitmap<Rgba8UNorm>(source.Width, source.Height);
+            sourceCoder.Decode(source.Payload, bitmap.AsView());
+
+            var payload = new byte[targetCoder.GetEncodedByteCount(source.Width, source.Height)];
+            targetCoder.Encode(bitmap.AsView(), payload);
+            subresources[i] = new TextureSubresource(
+                source.MipLevel,
+                source.ArrayLayer,
+                source.FaceIndex,
+                source.Width,
+                source.Height,
+                payload);
+        }
+
+        return new TexturePayload(format, subresources, texture.MipLevelCount, texture.ArrayLayerCount, texture.FaceCount);
+    }
 
     private static ArrayBitmap<Rgba8UNorm> Decode(
         string path,
@@ -1309,6 +1435,45 @@ internal readonly record struct TextureSubresourceSelection(int MipLevel, int Ar
     public bool HasFace => Face is not null;
 
     public bool IsDefault => MipLevel == 0 && ArrayLayer == 0 && Face is null;
+}
+
+internal sealed record TexturePayload(
+    TextureFormat Format,
+    IReadOnlyList<TextureSubresource> Subresources,
+    int MipLevelCount,
+    int ArrayLayerCount,
+    int FaceCount)
+{
+    public TextureSubresource GetSubresource(TextureSubresourceSelection selection)
+    {
+        if (selection.MipLevel >= MipLevelCount)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(selection),
+                $"Mip level {selection.MipLevel} is outside the texture mip level count {MipLevelCount}.");
+        }
+
+        if (selection.ArrayLayer >= ArrayLayerCount)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(selection),
+                $"Array layer {selection.ArrayLayer} is outside the texture array layer count {ArrayLayerCount}.");
+        }
+
+        if (selection.HasFace && FaceCount != 6)
+        {
+            throw new ArgumentOutOfRangeException(nameof(selection), "Face selection requires a cube-map texture.");
+        }
+
+        if (selection.FaceIndex >= FaceCount)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(selection),
+                $"Face index {selection.FaceIndex} is outside the texture face count {FaceCount}.");
+        }
+
+        return Subresources[checked((((selection.ArrayLayer * FaceCount) + selection.FaceIndex) * MipLevelCount) + selection.MipLevel)];
+    }
 }
 
 internal sealed record ImageColorSpaces(ImageColorSpace Png, ImageColorSpace Jpeg, ImageColorSpace Gif)

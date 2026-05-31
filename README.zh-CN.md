@@ -425,7 +425,7 @@ dotnet run --project src/TextureCompressor.Cli -- quality source.png output.dds
 
 - `formats [query]`：列出或搜索 `--format` 可用的纹理格式；可加 `--compressed` 或 `--uncompressed` 过滤。
 - `info <input>` / `inspect <input>`：输出容器元数据，例如尺寸、纹理格式、mip 级数、payload 大小和容器特有 header 字段；可加 `--subresources` 列出每个 mip/layer/face 的 payload。
-- `convert <input> <output>`：在图片和纹理容器之间转换。输出容器默认由扩展名推断，也可以用 `--container` 显式指定。纹理输入可用 `--mip`、`--layer`、`--face` 选择 subresource。
+- `convert <input> <output>`：在图片和纹理容器之间转换。输出容器默认由扩展名推断，也可以用 `--container` 显式指定。DDS/KTX/PVR 转 DDS/KTX/PVR 默认保留 mip level、array layer 和 cube face；省略 `--format` 会保留源纹理格式，传入 `--format` 会重编码所有 subresource。纹理输入可用 `--mip`、`--layer`、`--face` 只选择单个 subresource。
 - `quality <expected> <actual>`：解码两张图片/纹理并输出 MSE、RMSE、PSNR；可加 `--ignore-alpha` 忽略 Alpha。可用 `--mip`/`--layer`/`--face` 同时选择两个输入的 subresource，或用 `--expected-*` 与 `--actual-*` 分别选择。
 
 图片容器支持 PNG、JPEG、GIF。`convert` 提供 `--png-color-space`、`--jpg-color-space`、`--gif-color-space` 在 Linear 与 Srgb 之间转换；JPEG 输出可用 `--jpeg-quality` 设置质量；内置 S3TC、FXT1、ETC/EAC、ASTC、ATC、RGTC/LATC、BPTC、PVRTC 纹理编码质量可用统一的 `--quality` 选择。DDS、KTX、PVR 输出可用 `--mipmaps Generate` 生成完整 mip-map chain。
