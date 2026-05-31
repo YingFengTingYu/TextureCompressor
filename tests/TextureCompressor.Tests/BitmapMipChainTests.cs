@@ -61,6 +61,18 @@ public sealed class BitmapMipChainTests
     }
 
     [Fact]
+    public void GenerateRespectsMaxLevelCount()
+    {
+        var source = new ArrayBitmap<Rgba8UNorm>(8, 8);
+
+        var levels = BitmapMipChain.Generate(source, new MipmapGenerationOptions { MaxLevelCount = 2 });
+
+        Assert.Equal(2, levels.Count);
+        Assert.Equal(8, levels[0].Width);
+        Assert.Equal(4, levels[1].Width);
+    }
+
+    [Fact]
     public void GenerateFromViewCopiesBaseLevel()
     {
         var source = new ArrayBitmap<Rgba8UNorm>(
@@ -96,6 +108,39 @@ public sealed class BitmapMipChainTests
     }
 
     [Fact]
+    public void DownsampleCanUseStraightAlpha()
+    {
+        var source = new ArrayBitmap<Rgba8UNorm>(
+            2,
+            1,
+            [
+                new Rgba8UNorm(255, 0, 0, 0),
+                new Rgba8UNorm(0, 0, 255, 255)
+            ]);
+
+        var mip = BitmapMipChain.Downsample(source, new MipmapGenerationOptions { AlphaMode = MipmapAlphaMode.Straight });
+
+        Assert.Equal(new Rgba8UNorm(128, 0, 128, 128), mip.AsView()[0, 0]);
+    }
+
+    [Fact]
+    public void DownsampleCanUseSrgbColorSpace()
+    {
+        var source = new ArrayBitmap<Rgba8UNorm>(
+            2,
+            1,
+            [
+                new Rgba8UNorm(0, 0, 0),
+                new Rgba8UNorm(255, 255, 255)
+            ]);
+
+        var mip = BitmapMipChain.Downsample(source, new MipmapGenerationOptions { ColorSpace = MipmapColorSpace.Srgb });
+
+        var expected = RgbaColorConversions.LinearFloatToSrgb8(0.5f);
+        Assert.Equal(new Rgba8UNorm(expected, expected, expected), mip.AsView()[0, 0]);
+    }
+
+    [Fact]
     public void DownsampleRejectsOneByOneSource()
     {
         var source = new ArrayBitmap<Rgba8UNorm>(1, 1);
@@ -103,5 +148,14 @@ public sealed class BitmapMipChainTests
         var exception = Assert.Throws<ArgumentException>(() => BitmapMipChain.Downsample(source));
 
         Assert.Equal("source", exception.ParamName);
+    }
+
+    [Fact]
+    public void GenerateRejectsInvalidMaxLevelCount()
+    {
+        var source = new ArrayBitmap<Rgba8UNorm>(2, 2);
+
+        Assert.Throws<ArgumentOutOfRangeException>(() =>
+            BitmapMipChain.Generate(source, new MipmapGenerationOptions { MaxLevelCount = 0 }));
     }
 }

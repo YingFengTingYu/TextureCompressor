@@ -1,3 +1,4 @@
+using TextureCompressor.Bitmaps;
 using TextureCompressor.Formats;
 
 namespace TextureCompressor.FileFormats.Pvr;
@@ -7,6 +8,8 @@ public sealed class PvrEncodingOptions : IFileFormatOptions
     public TextureFormat? TextureFormat { get; init; }
 
     public bool GenerateMipmaps { get; init; }
+
+    public MipmapGenerationOptions? MipmapOptions { get; init; }
 
     public PvrPixelFormat? PvrPixelFormat { get; init; }
 

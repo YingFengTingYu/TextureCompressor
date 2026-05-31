@@ -116,6 +116,7 @@ PngCodec.Encode(decoded, "roundtrip.png");
 
 ```csharp
 using TextureCompressor.Conversion;
+using TextureCompressor.Bitmaps;
 using TextureCompressor.FileFormats;
 using TextureCompressor.FileFormats.Ktx;
 using TextureCompressor.FileFormats.Png;
@@ -134,12 +135,20 @@ converter.Convert(
     {
         TargetFormat = TextureFormats.Bc7Srgb,
         Mipmaps = TextureConversionMipmaps.Generate,
+        MipmapOptions = new MipmapGenerationOptions
+        {
+            ColorSpace = MipmapColorSpace.Srgb,
+            AlphaMode = MipmapAlphaMode.Premultiplied,
+            MaxLevelCount = 8
+        },
         WriteOptions = new KtxEncodingOptions
         {
             Version = KtxVersion.Version2
         }
     });
 ```
+
+When `MipmapOptions` is omitted in texture-aware APIs, the mip color space is inferred from the target format: `Srgb` and `XRSrgb` formats use sRGB-aware filtering, while other formats use linear filtering. Direct `BitmapMipChain.Generate(...)` calls keep the linear default unless options are supplied. The same options can be passed to `TextureAssembler.CreateMipChain(...)` and DDS/KTX/PVR encoding options when `GenerateMipmaps` is enabled.
 
 The same API supports texture-to-image previews and texture-to-texture container conversion. Texture-to-texture conversion preserves the full mip level, array layer, and cube face topology when no source subresource is selected. Set `SourceSubresource` to decode one subresource and write it as a single image or single 2D texture.
 

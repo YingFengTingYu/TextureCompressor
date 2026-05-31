@@ -114,6 +114,7 @@ PngCodec.Encode(decoded, "roundtrip.png");
 
 ```csharp
 using TextureCompressor.Conversion;
+using TextureCompressor.Bitmaps;
 using TextureCompressor.FileFormats;
 using TextureCompressor.FileFormats.Ktx;
 using TextureCompressor.FileFormats.Png;
@@ -132,12 +133,20 @@ converter.Convert(
     {
         TargetFormat = TextureFormats.Bc7Srgb,
         Mipmaps = TextureConversionMipmaps.Generate,
+        MipmapOptions = new MipmapGenerationOptions
+        {
+            ColorSpace = MipmapColorSpace.Srgb,
+            AlphaMode = MipmapAlphaMode.Premultiplied,
+            MaxLevelCount = 8
+        },
         WriteOptions = new KtxEncodingOptions
         {
             Version = KtxVersion.Version2
         }
     });
 ```
+
+在能看到目标纹理格式的 API 中省略 `MipmapOptions` 时，会根据目标格式推断 mip 色彩空间：`Srgb` 和 `XRSrgb` 格式使用 sRGB-aware filtering，其他格式使用 linear filtering。直接调用 `BitmapMipChain.Generate(...)` 时仍保持 linear 默认值，除非显式传入 options。同一组选项也可以传给 `TextureAssembler.CreateMipChain(...)`，以及启用 `GenerateMipmaps` 时的 DDS/KTX/PVR 编码选项。
 
 同一个 API 也支持纹理到图片预览、纹理到纹理容器转换。没有选择子资源时，纹理到纹理会保留完整 mip level、array layer 和 cube face；如果设置 `SourceSubresource`，则只解码选中的子资源并写成单图或单 2D 纹理。
 

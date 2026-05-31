@@ -1,3 +1,4 @@
+using TextureCompressor.Bitmaps;
 using TextureCompressor.Formats;
 
 namespace TextureCompressor.FileFormats.Ktx;
@@ -9,6 +10,8 @@ public sealed class KtxEncodingOptions : IFileFormatOptions
     public TextureFormat? TextureFormat { get; set; }
 
     public bool GenerateMipmaps { get; set; }
+
+    public MipmapGenerationOptions? MipmapOptions { get; set; }
 
     public KtxGlFormat? GlInternalFormat { get; set; }
 

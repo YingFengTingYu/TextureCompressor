@@ -1,4 +1,5 @@
 using TextureCompressor.Bitmaps;
+using TextureCompressor.Codecs;
 using TextureCompressor.Colors;
 using TextureCompressor.Conversion;
 using TextureCompressor.FileFormats;
@@ -9,6 +10,15 @@ namespace TextureCompressor.Tests;
 
 public sealed class TextureConverterTests
 {
+    private static readonly TextureFormat SFakeSrgbFormat = TextureFormat.Uncompressed(
+        "FAKE_RGBA8_SRGB",
+        TextureComponents.Rgba,
+        TextureValueKind.Srgb,
+        8,
+        8,
+        8,
+        8);
+
     [Fact]
     public void ConvertImageToTextureEncodesRequestedFormatAndMipmaps()
     {
@@ -34,6 +44,57 @@ public sealed class TextureConverterTests
         Assert.Equal(TextureConversionFileKind.Texture, result.TargetKind);
         Assert.Equal(TextureFormats.Rgba8UNorm, textureFormat.WrittenTexture?.Format);
         Assert.Equal(2, textureFormat.WrittenTexture?.MipLevelCount);
+    }
+
+    [Fact]
+    public void ConvertImageToTexturePassesMipmapOptions()
+    {
+        var manager = new TextureFileFormatManager();
+        var imageFormat = new FakeImageFileFormat(".img", CreateImage(4, 4));
+        var textureFormat = new FakeTextureFileFormat(".tex");
+        using var imageRegistration = manager.Register(imageFormat);
+        using var textureRegistration = manager.Register(textureFormat);
+        var converter = new TextureConverter(manager);
+
+        converter.Convert(
+            new MemoryStream(),
+            ".img",
+            new MemoryStream(),
+            ".tex",
+            new TextureConversionOptions
+            {
+                TargetFormat = TextureFormats.Rgba8UNorm,
+                Mipmaps = TextureConversionMipmaps.Generate,
+                MipmapOptions = new MipmapGenerationOptions { MaxLevelCount = 2 }
+            });
+
+        Assert.Equal(2, textureFormat.WrittenTexture?.MipLevelCount);
+    }
+
+    [Fact]
+    public void ConvertImageToSrgbTextureUsesSrgbMipmapDefault()
+    {
+        var texture = ConvertBlackWhiteToFakeSrgbTexture(mipmapOptions: null);
+
+        var mip = texture.GetSubresource(1).Payload;
+        var expected = RgbaColorConversions.LinearFloatToSrgb8(0.5f);
+        Assert.Equal(expected, mip[0]);
+        Assert.Equal(expected, mip[1]);
+        Assert.Equal(expected, mip[2]);
+    }
+
+    [Fact]
+    public void ConvertImageToSrgbTextureAllowsLinearMipmapOverride()
+    {
+        var texture = ConvertBlackWhiteToFakeSrgbTexture(new MipmapGenerationOptions
+        {
+            ColorSpace = MipmapColorSpace.Linear
+        });
+
+        var mip = texture.GetSubresource(1).Payload;
+        Assert.Equal(128, mip[0]);
+        Assert.Equal(128, mip[1]);
+        Assert.Equal(128, mip[2]);
     }
 
     [Fact]
@@ -107,6 +168,39 @@ public sealed class TextureConverterTests
         }
 
         return new ArrayBitmap<Rgba8UNorm>(width, height, pixels);
+    }
+
+    private static TextureImage ConvertBlackWhiteToFakeSrgbTexture(MipmapGenerationOptions? mipmapOptions)
+    {
+        var source = new ArrayBitmap<Rgba8UNorm>(
+            2,
+            1,
+            [
+                new Rgba8UNorm(0, 0, 0),
+                new Rgba8UNorm(255, 255, 255)
+            ]);
+        var fileFormats = new TextureFileFormatManager();
+        var imageFormat = new FakeImageFileFormat(".img", source);
+        var textureFormat = new FakeTextureFileFormat(".tex");
+        using var imageRegistration = fileFormats.Register(imageFormat);
+        using var textureRegistration = fileFormats.Register(textureFormat);
+
+        var coders = new TextureCoderManager();
+        using var coderRegistration = coders.Register(SFakeSrgbFormat, new RawRgbaTextureCoder(SFakeSrgbFormat));
+        var converter = new TextureConverter(fileFormats, coders);
+        converter.Convert(
+            new MemoryStream(),
+            ".img",
+            new MemoryStream(),
+            ".tex",
+            new TextureConversionOptions
+            {
+                TargetFormat = SFakeSrgbFormat,
+                Mipmaps = TextureConversionMipmaps.Generate,
+                MipmapOptions = mipmapOptions
+            });
+
+        return textureFormat.WrittenTexture ?? throw new InvalidOperationException("Expected a written texture.");
     }
 
     private static TextureImage CreateMipTexture()
@@ -189,5 +283,41 @@ public sealed class TextureConverterTests
     private sealed class FakeTextureFile(TextureImage texture) : ITextureFile
     {
         public TextureImage Texture { get; } = texture;
+    }
+
+    private sealed class RawRgbaTextureCoder(TextureFormat format) : ITextureCoder
+    {
+        public TextureFormat Format { get; } = format;
+
+        public void Decode<TPixel>(ReadOnlySpan<byte> source, BitmapView<TPixel> destination)
+            where TPixel : unmanaged, IPixel<TPixel>
+        {
+            for (var i = 0; i < destination.Pixels.Length; i++)
+            {
+                var byteOffset = i * 4;
+                destination.Pixels[i] = TPixel.FromRgba8UNorm(new Rgba8UNorm(
+                    source[byteOffset],
+                    source[byteOffset + 1],
+                    source[byteOffset + 2],
+                    source[byteOffset + 3]));
+            }
+        }
+
+        public void Encode<TPixel>(BitmapView<TPixel> source, Span<byte> destination)
+            where TPixel : unmanaged, IPixel<TPixel>
+        {
+            for (var i = 0; i < source.Pixels.Length; i++)
+            {
+                var pixel = TPixel.ToRgba8UNorm(source.Pixels[i]);
+                var byteOffset = i * 4;
+                destination[byteOffset] = pixel.Red;
+                destination[byteOffset + 1] = pixel.Green;
+                destination[byteOffset + 2] = pixel.Blue;
+                destination[byteOffset + 3] = pixel.Alpha;
+            }
+        }
+
+        public int GetEncodedByteCount(int width, int height) =>
+            checked(width * height * 4);
     }
 }

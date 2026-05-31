@@ -1,5 +1,6 @@
 using TextureCompressor.FileFormats;
 using TextureCompressor.Formats;
+using TextureCompressor.Bitmaps;
 using TextureCompressor.Options;
 
 namespace TextureCompressor.Conversion;
@@ -11,6 +12,8 @@ public sealed class TextureConversionOptions
     public TextureSubresourceSelection? SourceSubresource { get; init; }
 
     public TextureConversionMipmaps Mipmaps { get; init; }
+
+    public MipmapGenerationOptions? MipmapOptions { get; init; }
 
     public TextureCompressionLevel? CompressionLevel { get; init; }
 

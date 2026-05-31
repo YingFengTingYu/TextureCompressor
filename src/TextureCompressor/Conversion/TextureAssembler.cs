@@ -72,11 +72,15 @@ public sealed class TextureAssembler
     public TextureImage CreateMipChain(
         TextureFormat format,
         IBitmap<Rgba8UNorm> source,
-        TextureCompressionLevel? compressionLevel = null)
+        TextureCompressionLevel? compressionLevel = null,
+        MipmapGenerationOptions? mipmapOptions = null)
     {
         ArgumentNullException.ThrowIfNull(source);
 
-        return CreateMipChain(format, BitmapMipChain.Generate(source), compressionLevel);
+        return CreateMipChain(
+            format,
+            BitmapMipChain.Generate(source, TextureMipmapGenerationOptions.GetDefault(format, mipmapOptions)),
+            compressionLevel);
     }
 
     public TextureImage CreateMipChain(

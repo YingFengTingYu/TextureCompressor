@@ -1,3 +1,4 @@
+using TextureCompressor.Bitmaps;
 using TextureCompressor.Formats;
 
 namespace TextureCompressor.FileFormats.Dds;
@@ -7,6 +8,8 @@ public sealed class DdsEncodingOptions : IFileFormatOptions
     public TextureFormat? TextureFormat { get; init; }
 
     public bool GenerateMipmaps { get; init; }
+
+    public MipmapGenerationOptions? MipmapOptions { get; init; }
 
     public DdsHeaderKind HeaderKind { get; init; } = DdsHeaderKind.Dxt10;
 

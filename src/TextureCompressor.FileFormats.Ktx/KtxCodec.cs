@@ -205,7 +205,9 @@ public static class KtxCodec
         var coder = TextureCoderManager.Global.GetCoder(format);
         if (options?.GenerateMipmaps == true)
         {
-            var encodedSubresources = EncodeMipSubresources(BitmapMipChain.Generate(bitmap), coder);
+            var encodedSubresources = EncodeMipSubresources(
+                BitmapMipChain.Generate(bitmap, TextureMipmapGenerationOptions.GetDefault(format, options.MipmapOptions)),
+                coder);
             Write(new KtxTexture(format, encodedSubresources, faceCount: 1), stream, options);
             return;
         }

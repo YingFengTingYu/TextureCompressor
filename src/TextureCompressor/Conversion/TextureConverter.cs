@@ -71,12 +71,13 @@ public sealed class TextureConverter
         IBitmap<Rgba8UNorm> image,
         TextureFormat format,
         TextureConversionMipmaps mipmaps = TextureConversionMipmaps.None,
-        TextureCompressionLevel? compressionLevel = null)
+        TextureCompressionLevel? compressionLevel = null,
+        MipmapGenerationOptions? mipmapOptions = null)
     {
         ArgumentNullException.ThrowIfNull(image);
 
         using var compressionRegistration = TextureCompressionRegistrationFactory.Create(_coders, format, compressionLevel);
-        return EncodeTextureCore(image, format, mipmaps);
+        return EncodeTextureCore(image, format, mipmaps, mipmapOptions);
     }
 
     public ArrayBitmap<Rgba8UNorm> DecodeTexture(TextureImage texture, TextureSubresourceSelection selection = default)
@@ -114,7 +115,7 @@ public sealed class TextureConverter
 
         var format = options.TargetFormat ?? TextureFormats.Rgba8UNorm;
         using var compressionRegistration = TextureCompressionRegistrationFactory.Create(_coders, format, options.CompressionLevel);
-        var texture = EncodeTextureCore(image, format, options.Mipmaps);
+        var texture = EncodeTextureCore(image, format, options.Mipmaps, options.MipmapOptions);
         _fileFormats.WriteTexture(texture, output, outputPathOrExtension, options.WriteOptions);
         return CreateTextureResult(TextureConversionFileKind.Image, texture, sourceFormat: null);
     }
@@ -149,7 +150,7 @@ public sealed class TextureConverter
         using var compressionRegistration = TextureCompressionRegistrationFactory.Create(_coders, targetFormat, options.CompressionLevel);
         var texture = options.SourceSubresource is null && options.Mipmaps == TextureConversionMipmaps.None
             ? TranscodeTextureCore(source, targetFormat, options.CompressionLevel)
-            : EncodeTextureCore(DecodeTexture(source, options.SourceSubresource ?? default), targetFormat, options.Mipmaps);
+            : EncodeTextureCore(DecodeTexture(source, options.SourceSubresource ?? default), targetFormat, options.Mipmaps, options.MipmapOptions);
 
         _fileFormats.WriteTexture(texture, output, outputPathOrExtension, options.WriteOptions);
         return CreateTextureResult(TextureConversionFileKind.Texture, texture, source.Format);
@@ -185,6 +186,11 @@ public sealed class TextureConverter
                 throw new NotSupportedException("Mip-map generation applies only to texture outputs.");
             }
 
+            if (options.MipmapOptions is not null)
+            {
+                throw new NotSupportedException("Mip-map generation options apply only to texture outputs.");
+            }
+
             if (options.TargetFormat is not null)
             {
                 throw new NotSupportedException("Target texture format applies only to texture outputs.");
@@ -195,13 +201,24 @@ public sealed class TextureConverter
                 throw new NotSupportedException("Texture compression level applies only to texture outputs.");
             }
         }
+
+        if (options.MipmapOptions is not null && options.Mipmaps != TextureConversionMipmaps.Generate)
+        {
+            throw new NotSupportedException("Mip-map generation options require mip-map generation.");
+        }
     }
 
-    private TextureImage EncodeTextureCore(IBitmap<Rgba8UNorm> image, TextureFormat format, TextureConversionMipmaps mipmaps) =>
+    private TextureImage EncodeTextureCore(
+        IBitmap<Rgba8UNorm> image,
+        TextureFormat format,
+        TextureConversionMipmaps mipmaps,
+        MipmapGenerationOptions? mipmapOptions) =>
         mipmaps switch
         {
             TextureConversionMipmaps.None => new TextureImage(format, image.Width, image.Height, EncodeSubresourcePayload(format, image)),
-            TextureConversionMipmaps.Generate => EncodeMipChain(format, BitmapMipChain.Generate(image)),
+            TextureConversionMipmaps.Generate => EncodeMipChain(
+                format,
+                BitmapMipChain.Generate(image, TextureMipmapGenerationOptions.GetDefault(format, mipmapOptions))),
             _ => throw new ArgumentOutOfRangeException(nameof(mipmaps), mipmaps, "Unsupported mip-map conversion mode.")
         };
 

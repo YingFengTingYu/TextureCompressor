@@ -194,6 +194,23 @@ public sealed class DdsCodecTests
     }
 
     [Fact]
+    public void EncodeWithGenerateMipmapsUsesMipmapOptions()
+    {
+        var source = new ArrayBitmap<Rgba8UNorm>(8, 8);
+
+        var dds = DdsCodec.Encode(source, new DdsEncodingOptions
+        {
+            TextureFormat = TextureFormats.Rgba8UNorm,
+            GenerateMipmaps = true,
+            MipmapOptions = new MipmapGenerationOptions { MaxLevelCount = 2 }
+        });
+        var read = DdsCodec.Read(dds);
+
+        Assert.Equal(2, read.Texture.MipLevelCount);
+        Assert.Equal(new[] { 8, 4 }, read.Texture.Subresources.Select(level => level.Width));
+    }
+
+    [Fact]
     public void ReadDx10CubeMapReadsFacesAndMipChains()
     {
         var dds = CreateDx10Header(

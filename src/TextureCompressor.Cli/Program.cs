@@ -1837,7 +1837,10 @@ internal static class Cli
             case TextureContainer.Dds:
                 if (mipmaps == MipmapMode.Generate)
                 {
-                    DdsCodec.EncodeMipChain(BitmapMipChain.Generate(bitmap), path, new DdsEncodingOptions { TextureFormat = format });
+                    DdsCodec.EncodeMipChain(
+                        BitmapMipChain.Generate(bitmap, TextureMipmapGenerationOptions.GetDefault(format)),
+                        path,
+                        new DdsEncodingOptions { TextureFormat = format });
                 }
                 else
                 {
@@ -1853,7 +1856,10 @@ internal static class Cli
                 };
                 if (mipmaps == MipmapMode.Generate)
                 {
-                    KtxCodec.EncodeMipChain(BitmapMipChain.Generate(bitmap), path, ktxOptions);
+                    KtxCodec.EncodeMipChain(
+                        BitmapMipChain.Generate(bitmap, TextureMipmapGenerationOptions.GetDefault(format)),
+                        path,
+                        ktxOptions);
                 }
                 else
                 {
@@ -1864,7 +1870,10 @@ internal static class Cli
             case TextureContainer.Pvr:
                 if (mipmaps == MipmapMode.Generate)
                 {
-                    PvrCodec.EncodeMipChain(BitmapMipChain.Generate(bitmap), path, new PvrEncodingOptions { TextureFormat = format });
+                    PvrCodec.EncodeMipChain(
+                        BitmapMipChain.Generate(bitmap, TextureMipmapGenerationOptions.GetDefault(format)),
+                        path,
+                        new PvrEncodingOptions { TextureFormat = format });
                 }
                 else
                 {

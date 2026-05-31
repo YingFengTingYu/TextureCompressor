@@ -239,7 +239,9 @@ public static class DdsCodec
         var coder = TextureCoderManager.Global.GetCoder(format);
         if (options?.GenerateMipmaps == true)
         {
-            var encodedSubresources = EncodeMipSubresources(BitmapMipChain.Generate(bitmap), coder);
+            var encodedSubresources = EncodeMipSubresources(
+                BitmapMipChain.Generate(bitmap, TextureMipmapGenerationOptions.GetDefault(format, options.MipmapOptions)),
+                coder);
             Write(new DdsTexture(format, encodedSubresources, faceCount: 1), stream, options);
             return;
         }
