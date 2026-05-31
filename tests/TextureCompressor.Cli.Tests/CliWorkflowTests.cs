@@ -119,6 +119,35 @@ public sealed class CliWorkflowTests
     }
 
     [Fact]
+    public async Task ConvertCanConfigureGeneratedMipmaps()
+    {
+        using var workspace = new CliWorkspace();
+        var source = WriteSolidPng(workspace, "source.png", new Rgba8UNorm(32, 64, 128, 255));
+        var dds = workspace.GetPath("mips.dds");
+
+        await RunCliAsync(
+            workspace,
+            "convert",
+            source,
+            dds,
+            "--format",
+            "Rgba8UNorm",
+            "--mipmaps",
+            "Generate",
+            "--mipmap-color-space",
+            "Linear",
+            "--mipmap-alpha",
+            "Straight",
+            "--mipmap-levels",
+            "2");
+        var info = await RunCliAsync(workspace, "info", dds, "--subresources");
+
+        Assert.Contains("mip=0 layer=0 face=0 size=8x8", info.StandardOutput, StringComparison.Ordinal);
+        Assert.Contains("mip=1 layer=0 face=0 size=4x4", info.StandardOutput, StringComparison.Ordinal);
+        Assert.DoesNotContain("mip=2", info.StandardOutput, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task AssembleAndExtractPreserveKtxArrayLayerOrder()
     {
         using var workspace = new CliWorkspace();

@@ -533,6 +533,7 @@ dotnet run --project src/TextureCompressor.Cli -- formats rgba --uncompressed
 dotnet run --project src/TextureCompressor.Cli -- info input.ktx2
 dotnet run --project src/TextureCompressor.Cli -- info input.ktx2 --json --subresources
 dotnet run --project src/TextureCompressor.Cli -- convert input.png output.dds --format Bc7UNorm --mipmaps Generate --metrics
+dotnet run --project src/TextureCompressor.Cli -- convert input.png output.ktx2 --format Bc7Srgb --mipmaps Generate --mipmap-color-space Auto --mipmap-alpha Premultiplied --mipmap-levels 8
 dotnet run --project src/TextureCompressor.Cli -- convert input.png output.dds --format Bc7UNorm --metrics --json
 dotnet run --project src/TextureCompressor.Cli -- convert input.png output.ktx2 --format Bc7Srgb --ktx-version 2 --quality High
 dotnet run --project src/TextureCompressor.Cli -- assemble array.ktx2 --layers layer0.png layer1.png
@@ -552,7 +553,7 @@ dotnet run --project src/TextureCompressor.Cli -- quality source.png output.dds 
 - `extract <input> <output-directory>`：把 DDS/KTX/PVR 的 subresource 导出为 PNG/JPEG/GIF/HDR 图片。可用 `--mip`、`--layer`、`--face` 过滤，`--container` 选择图片类型，`--pattern` 控制文件名，`--manifest` 写出 JSON 元数据。
 - `quality <expected> <actual>`：解码两张图片/纹理并输出 MSE、RMSE、PSNR；可加 `--ignore-alpha` 忽略 Alpha，或用 `--json` 输出结构化结果。可用 `--mip`/`--layer`/`--face` 同时选择两个输入的 subresource，或用 `--expected-*` 与 `--actual-*` 分别选择。
 
-图片容器支持 PNG、JPEG、GIF、HDR。`convert`、`assemble` 和 `extract` 为 LDR 图片格式提供 `--png-color-space`、`--jpg-color-space`、`--gif-color-space` 在 Linear 与 Srgb 之间转换；JPEG 输出可用 `--jpeg-quality` 设置质量；内置 S3TC、FXT1、ETC/EAC、ASTC、ATC、RGTC/LATC、BPTC、PVRTC 纹理编码质量可用统一的 `--quality` 选择。单图转换到 DDS、KTX、PVR 时可用 `--mipmaps Generate` 生成完整 mip-map chain。
+图片容器支持 PNG、JPEG、GIF、HDR。`convert`、`assemble` 和 `extract` 为 LDR 图片格式提供 `--png-color-space`、`--jpg-color-space`、`--gif-color-space` 在 Linear 与 Srgb 之间转换；JPEG 输出可用 `--jpeg-quality` 设置质量；内置 S3TC、FXT1、ETC/EAC、ASTC、ATC、RGTC/LATC、BPTC、PVRTC 纹理编码质量可用统一的 `--quality` 选择。单图转换到 DDS、KTX、PVR 时可用 `--mipmaps Generate` 生成完整 mip-map chain；可用 `--mipmap-color-space Auto|Linear|Srgb`、`--mipmap-alpha Premultiplied|Straight` 和 `--mipmap-levels <count>` 调整生成的 mipmap。
 
 ## 常见工作流
 

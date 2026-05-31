@@ -111,6 +111,28 @@ internal static class Cli
             Description = "Mip-map handling for texture outputs.",
             DefaultValueFactory = _ => MipmapMode.None
         };
+        var mipmapColorSpaceOption = new Option<MipmapColorSpaceMode>("--mipmap-color-space")
+        {
+            Description = "Color space used for generated mip-map filtering.",
+            DefaultValueFactory = _ => MipmapColorSpaceMode.Auto
+        };
+        var mipmapAlphaOption = new Option<MipmapAlphaMode>("--mipmap-alpha")
+        {
+            Description = "Alpha handling used for generated mip-map filtering.",
+            DefaultValueFactory = _ => MipmapAlphaMode.Premultiplied
+        };
+        var mipmapLevelsOption = new Option<int?>("--mipmap-levels")
+        {
+            Description = "Maximum generated mip level count, including the base level."
+        };
+        mipmapLevelsOption.Validators.Add(result =>
+        {
+            var value = result.GetValueOrDefault<int?>();
+            if (value is <= 0)
+            {
+                result.AddError("--mipmap-levels must be greater than zero.");
+            }
+        });
         var mipOption = CreateMipOption();
         var layerOption = CreateLayerOption();
         var faceOption = CreateFaceOption();
@@ -129,6 +151,9 @@ internal static class Cli
         command.Options.Add(jpegQualityOption);
         command.Options.Add(qualityOption);
         command.Options.Add(mipmapsOption);
+        command.Options.Add(mipmapColorSpaceOption);
+        command.Options.Add(mipmapAlphaOption);
+        command.Options.Add(mipmapLevelsOption);
         command.Options.Add(mipOption);
         command.Options.Add(layerOption);
         command.Options.Add(faceOption);
@@ -145,6 +170,12 @@ internal static class Cli
             var jpegQuality = parseResult.GetValue(jpegQualityOption);
             var quality = parseResult.GetValue(qualityOption);
             var mipmaps = parseResult.GetValue(mipmapsOption);
+            EnsureMipmapOptionsAreSupported(
+                parseResult,
+                mipmaps,
+                mipmapColorSpaceOption,
+                mipmapAlphaOption,
+                mipmapLevelsOption);
             var selection = GetSubresourceSelection(parseResult, mipOption, layerOption, faceOption);
             var hasSubresourceSelection = IsOptionExplicit(parseResult, mipOption)
                 || IsOptionExplicit(parseResult, layerOption)
@@ -161,6 +192,11 @@ internal static class Cli
             {
                 var texture = ReadStructuredTexture(inputPath, inputKind);
                 var format = formatWasSpecified ? requestedFormat : texture.Format;
+                var mipmapOptions = CreateMipmapOptions(
+                    format,
+                    parseResult.GetValue(mipmapColorSpaceOption),
+                    parseResult.GetValue(mipmapAlphaOption),
+                    parseResult.GetValue(mipmapLevelsOption));
                 var extractor = new TextureExtractor();
                 if (!hasSubresourceSelection && mipmaps == MipmapMode.None)
                 {
@@ -177,7 +213,7 @@ internal static class Cli
                 }
 
                 var selectedSource = extractor.Decode(texture, selection);
-                Encode(selectedSource, outputPath, outputKind, format, ktxVersion, jpegQuality, quality, mipmaps, colorSpaces);
+                Encode(selectedSource, outputPath, outputKind, format, ktxVersion, jpegQuality, quality, mipmaps, mipmapOptions, colorSpaces);
                 BitmapQualityResult? selectedMetrics = null;
                 if (printMetrics)
                 {
@@ -190,7 +226,21 @@ internal static class Cli
             }
 
             var source = Decode(inputPath, colorSpaces, selection);
-            Encode(source, outputPath, outputKind, requestedFormat, ktxVersion, jpegQuality, quality, mipmaps, colorSpaces);
+            Encode(
+                source,
+                outputPath,
+                outputKind,
+                requestedFormat,
+                ktxVersion,
+                jpegQuality,
+                quality,
+                mipmaps,
+                CreateMipmapOptions(
+                    requestedFormat,
+                    parseResult.GetValue(mipmapColorSpaceOption),
+                    parseResult.GetValue(mipmapAlphaOption),
+                    parseResult.GetValue(mipmapLevelsOption)),
+                colorSpaces);
             BitmapQualityResult? imageMetrics = null;
             if (printMetrics)
             {
@@ -727,6 +777,47 @@ internal static class Cli
         {
             Description = description ?? "Cube-map face to decode from texture inputs."
         };
+
+    private static void EnsureMipmapOptionsAreSupported(
+        ParseResult parseResult,
+        MipmapMode mipmaps,
+        Option<MipmapColorSpaceMode> mipmapColorSpaceOption,
+        Option<MipmapAlphaMode> mipmapAlphaOption,
+        Option<int?> mipmapLevelsOption)
+    {
+        if (mipmaps == MipmapMode.Generate)
+        {
+            return;
+        }
+
+        if (IsOptionExplicit(parseResult, mipmapColorSpaceOption)
+            || IsOptionExplicit(parseResult, mipmapAlphaOption)
+            || IsOptionExplicit(parseResult, mipmapLevelsOption))
+        {
+            throw new NotSupportedException("Mip-map generation options require --mipmaps Generate.");
+        }
+    }
+
+    private static MipmapGenerationOptions CreateMipmapOptions(
+        TextureFormat format,
+        MipmapColorSpaceMode colorSpace,
+        MipmapAlphaMode alphaMode,
+        int? maxLevelCount)
+    {
+        var defaults = TextureMipmapGenerationOptions.GetDefault(format);
+        return new MipmapGenerationOptions
+        {
+            ColorSpace = colorSpace switch
+            {
+                MipmapColorSpaceMode.Auto => defaults.ColorSpace,
+                MipmapColorSpaceMode.Linear => MipmapColorSpace.Linear,
+                MipmapColorSpaceMode.Srgb => MipmapColorSpace.Srgb,
+                _ => throw new ArgumentOutOfRangeException(nameof(colorSpace), colorSpace, "Unsupported mip-map color space mode.")
+            },
+            AlphaMode = alphaMode,
+            MaxLevelCount = maxLevelCount
+        };
+    }
 
     private static TextureSubresourceSelection GetSubresourceSelection(
         ParseResult parseResult,
@@ -1562,7 +1653,17 @@ internal static class Cli
             }
 
             var outputPath = Path.Combine(outputDirectory, fileName);
-            Encode(image.Image, outputPath, imageContainer, TextureFormats.Rgba8UNorm, 1, jpegQuality, null, MipmapMode.None, colorSpaces);
+            Encode(
+                image.Image,
+                outputPath,
+                imageContainer,
+                TextureFormats.Rgba8UNorm,
+                1,
+                jpegQuality,
+                null,
+                MipmapMode.None,
+                mipmapOptions: null,
+                colorSpaces);
             entries.Add(new ExtractManifestImage(
                 image.MipLevel,
                 image.ArrayLayer,
@@ -1806,6 +1907,7 @@ internal static class Cli
         int jpegQuality,
         TextureCompressionLevel? quality,
         MipmapMode mipmaps,
+        MipmapGenerationOptions? mipmapOptions,
         ImageColorSpaces? imageColorSpaces)
     {
         var imageColorSpace = GetImageColorSpace(container, imageColorSpaces);
@@ -1838,7 +1940,7 @@ internal static class Cli
                 if (mipmaps == MipmapMode.Generate)
                 {
                     DdsCodec.EncodeMipChain(
-                        BitmapMipChain.Generate(bitmap, TextureMipmapGenerationOptions.GetDefault(format)),
+                        BitmapMipChain.Generate(bitmap, TextureMipmapGenerationOptions.GetDefault(format, mipmapOptions)),
                         path,
                         new DdsEncodingOptions { TextureFormat = format });
                 }
@@ -1857,7 +1959,7 @@ internal static class Cli
                 if (mipmaps == MipmapMode.Generate)
                 {
                     KtxCodec.EncodeMipChain(
-                        BitmapMipChain.Generate(bitmap, TextureMipmapGenerationOptions.GetDefault(format)),
+                        BitmapMipChain.Generate(bitmap, TextureMipmapGenerationOptions.GetDefault(format, mipmapOptions)),
                         path,
                         ktxOptions);
                 }
@@ -1871,7 +1973,7 @@ internal static class Cli
                 if (mipmaps == MipmapMode.Generate)
                 {
                     PvrCodec.EncodeMipChain(
-                        BitmapMipChain.Generate(bitmap, TextureMipmapGenerationOptions.GetDefault(format)),
+                        BitmapMipChain.Generate(bitmap, TextureMipmapGenerationOptions.GetDefault(format, mipmapOptions)),
                         path,
                         new PvrEncodingOptions { TextureFormat = format });
                 }
@@ -2344,6 +2446,13 @@ internal enum MipmapMode
 {
     None,
     Generate
+}
+
+internal enum MipmapColorSpaceMode
+{
+    Auto,
+    Linear,
+    Srgb
 }
 
 internal sealed record ImageColorSpaces(ImageColorSpace Png, ImageColorSpace Jpeg, ImageColorSpace Gif)
