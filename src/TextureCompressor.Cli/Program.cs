@@ -7,6 +7,7 @@ using TextureCompressor.Analysis;
 using TextureCompressor.Bitmaps;
 using TextureCompressor.Colors;
 using TextureCompressor.Codecs;
+using TextureCompressor.Conversion;
 using TextureCompressor.FileFormats.Astc;
 using TextureCompressor.FileFormats.Dds;
 using TextureCompressor.FileFormats.Gif;
@@ -160,6 +161,7 @@ internal static class Cli
             {
                 var texture = ReadStructuredTexture(inputPath, inputKind);
                 var format = formatWasSpecified ? requestedFormat : texture.Format;
+                var extractor = new TextureExtractor();
                 if (!hasSubresourceSelection && mipmaps == MipmapMode.None)
                 {
                     WriteStructuredTexture(texture, outputPath, outputKind, format, ktxVersion, quality);
@@ -167,14 +169,14 @@ internal static class Cli
                     if (printMetrics)
                     {
                         var decoded = Decode(outputPath, colorSpaces);
-                        structuredMetrics = BitmapQuality.Compare(DecodeSubresource(texture.Format, texture.GetSubresource(default)), decoded);
+                        structuredMetrics = BitmapQuality.Compare(extractor.Decode(texture), decoded);
                     }
 
                     PrintConvertResult(outputPath, structuredMetrics, printJson);
                     return 0;
                 }
 
-                var selectedSource = DecodeSubresource(texture.Format, texture.GetSubresource(selection));
+                var selectedSource = extractor.Decode(texture, selection);
                 Encode(selectedSource, outputPath, outputKind, format, ktxVersion, jpegQuality, quality, mipmaps, colorSpaces);
                 BitmapQualityResult? selectedMetrics = null;
                 if (printMetrics)
@@ -616,16 +618,17 @@ internal static class Cli
                 parseResult.GetValue(jpgColorSpaceOption),
                 parseResult.GetValue(gifColorSpaceOption));
             var texture = ReadStructuredTexture(inputPath, inputKind);
-            var subresources = SelectSubresources(
+            var extracted = new TextureExtractor().Extract(
                 texture,
-                parseResult.GetValue(mipOption),
-                parseResult.GetValue(layerOption),
-                parseResult.GetValue(faceOption));
+                new TextureSubresourceFilter(
+                    parseResult.GetValue(mipOption),
+                    parseResult.GetValue(layerOption),
+                    parseResult.GetValue(faceOption)));
 
             Directory.CreateDirectory(outputDirectory);
             var manifestEntries = ExtractSubresources(
-                texture,
-                subresources,
+                extracted,
+                texture.FaceCount,
                 outputDirectory,
                 imageKind,
                 pattern,
@@ -1355,7 +1358,7 @@ internal static class Cli
             _ => throw new NotSupportedException($"'{FormatContainer(container)}' is not an image container.")
         };
 
-    private static TexturePayload ReadStructuredTexture(string path, TextureContainer container) =>
+    private static TextureImage ReadStructuredTexture(string path, TextureContainer container) =>
         container switch
         {
             TextureContainer.Dds => FromTexture(DdsCodec.Read(path)),
@@ -1364,17 +1367,14 @@ internal static class Cli
             _ => throw new NotSupportedException($"'{FormatContainer(container)}' is not a structured texture container.")
         };
 
-    private static TexturePayload FromTexture(DdsTexture texture) =>
-        FromTexture(texture.Texture);
+    private static TextureImage FromTexture(DdsTexture texture) =>
+        texture.Texture;
 
-    private static TexturePayload FromTexture(KtxTexture texture) =>
-        FromTexture(texture.Texture);
+    private static TextureImage FromTexture(KtxTexture texture) =>
+        texture.Texture;
 
-    private static TexturePayload FromTexture(PvrTexture texture) =>
-        FromTexture(texture.Texture);
-
-    private static TexturePayload FromTexture(TextureImage texture) =>
-        new(texture.Format, texture.Subresources, texture.MipLevelCount, texture.ArrayLayerCount, texture.FaceCount);
+    private static TextureImage FromTexture(PvrTexture texture) =>
+        texture.Texture;
 
     private static TextureFormat ResolveAssembleFormat(
         ParseResult parseResult,
@@ -1419,7 +1419,7 @@ internal static class Cli
         return manifest ?? throw new InvalidDataException($"Manifest '{path}' is empty.");
     }
 
-    private static TexturePayload CreateManifestTexture(
+    private static TextureImage CreateManifestTexture(
         TextureFormat format,
         ImageColorSpaces colorSpaces,
         string manifestPath,
@@ -1470,7 +1470,7 @@ internal static class Cli
             }
         }
 
-        return new TexturePayload(format, subresources, manifest.MipLevels, manifest.ArrayLayers, manifest.Faces);
+        return new TextureImage(format, subresources, manifest.ArrayLayers, manifest.Faces);
     }
 
     private static void ValidateManifestTopology(ExtractManifest manifest)
@@ -1543,111 +1543,53 @@ internal static class Cli
             : Path.GetFullPath(Path.Combine(manifestDirectory, imageFile));
 
     private static IReadOnlyList<ExtractManifestImage> ExtractSubresources(
-        TexturePayload texture,
-        IReadOnlyList<TextureSubresource> subresources,
+        IReadOnlyList<TextureExtractedImage<Rgba8UNorm>> images,
+        int faceCount,
         string outputDirectory,
         TextureContainer imageContainer,
         string pattern,
         int jpegQuality,
         ImageColorSpaces colorSpaces)
     {
-        var entries = new List<ExtractManifestImage>(subresources.Count);
+        var entries = new List<ExtractManifestImage>(images.Count);
         var usedFileNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var subresource in subresources)
+        foreach (var image in images)
         {
-            var fileName = BuildExtractFileName(subresource, texture.FaceCount, imageContainer, pattern);
+            var fileName = BuildExtractFileName(image, faceCount, imageContainer, pattern);
             if (!usedFileNames.Add(fileName))
             {
                 throw new InvalidOperationException($"Pattern produced duplicate output file '{fileName}'.");
             }
 
             var outputPath = Path.Combine(outputDirectory, fileName);
-            var bitmap = DecodeSubresource(texture.Format, subresource);
-            Encode(bitmap, outputPath, imageContainer, TextureFormats.Rgba8UNorm, 1, jpegQuality, null, MipmapMode.None, colorSpaces);
+            Encode(image.Image, outputPath, imageContainer, TextureFormats.Rgba8UNorm, 1, jpegQuality, null, MipmapMode.None, colorSpaces);
             entries.Add(new ExtractManifestImage(
-                subresource.MipLevel,
-                subresource.ArrayLayer,
-                FormatFace(subresource.FaceIndex, texture.FaceCount),
-                subresource.FaceIndex,
-                subresource.Width,
-                subresource.Height,
+                image.MipLevel,
+                image.ArrayLayer,
+                FormatFace(image.FaceIndex, faceCount),
+                image.FaceIndex,
+                image.Image.Width,
+                image.Image.Height,
                 fileName));
         }
 
         return entries;
     }
 
-    private static IReadOnlyList<TextureSubresource> SelectSubresources(
-        TexturePayload texture,
-        int? mipLevel,
-        int? arrayLayer,
-        TextureCubeFace? face)
-    {
-        if (mipLevel is { } selectedMipLevel && selectedMipLevel >= texture.MipLevelCount)
-        {
-            throw new ArgumentOutOfRangeException(
-                nameof(mipLevel),
-                $"Mip level {selectedMipLevel} is outside the texture mip level count {texture.MipLevelCount}.");
-        }
-
-        if (arrayLayer is { } selectedArrayLayer && selectedArrayLayer >= texture.ArrayLayerCount)
-        {
-            throw new ArgumentOutOfRangeException(
-                nameof(arrayLayer),
-                $"Array layer {selectedArrayLayer} is outside the texture array layer count {texture.ArrayLayerCount}.");
-        }
-
-        var faceIndex = face is { } selectedFace ? (int)selectedFace : (int?)null;
-        if (faceIndex is not null && texture.FaceCount != 6)
-        {
-            throw new ArgumentOutOfRangeException(nameof(face), "Face selection requires a cube-map texture.");
-        }
-
-        if (faceIndex is { } selectedFaceIndex && selectedFaceIndex >= texture.FaceCount)
-        {
-            throw new ArgumentOutOfRangeException(
-                nameof(face),
-                $"Face index {selectedFaceIndex} is outside the texture face count {texture.FaceCount}.");
-        }
-
-        var selected = new List<TextureSubresource>();
-        foreach (var subresource in texture.Subresources)
-        {
-            if (mipLevel is { } mip && subresource.MipLevel != mip)
-            {
-                continue;
-            }
-
-            if (arrayLayer is { } layer && subresource.ArrayLayer != layer)
-            {
-                continue;
-            }
-
-            if (faceIndex is { } faceValue && subresource.FaceIndex != faceValue)
-            {
-                continue;
-            }
-
-            selected.Add(subresource);
-        }
-
-        return selected;
-    }
-
     private static string BuildExtractFileName(
-        TextureSubresource subresource,
+        TextureExtractedImage<Rgba8UNorm> image,
         int faceCount,
         TextureContainer imageContainer,
         string pattern)
     {
-        var face = FormatFace(subresource.FaceIndex, faceCount);
+        var face = FormatFace(image.FaceIndex, faceCount);
         var stem = pattern
-            .Replace("{mip}", FormatInvariant(subresource.MipLevel), StringComparison.OrdinalIgnoreCase)
-            .Replace("{layer}", FormatInvariant(subresource.ArrayLayer), StringComparison.OrdinalIgnoreCase)
+            .Replace("{mip}", FormatInvariant(image.MipLevel), StringComparison.OrdinalIgnoreCase)
+            .Replace("{layer}", FormatInvariant(image.ArrayLayer), StringComparison.OrdinalIgnoreCase)
             .Replace("{face}", face, StringComparison.OrdinalIgnoreCase)
-            .Replace("{faceIndex}", FormatInvariant(subresource.FaceIndex), StringComparison.OrdinalIgnoreCase)
-            .Replace("{width}", FormatInvariant(subresource.Width), StringComparison.OrdinalIgnoreCase)
-            .Replace("{height}", FormatInvariant(subresource.Height), StringComparison.OrdinalIgnoreCase);
+            .Replace("{faceIndex}", FormatInvariant(image.FaceIndex), StringComparison.OrdinalIgnoreCase)
+            .Replace("{width}", FormatInvariant(image.Image.Width), StringComparison.OrdinalIgnoreCase)
+            .Replace("{height}", FormatInvariant(image.Image.Height), StringComparison.OrdinalIgnoreCase);
         stem = SanitizeFileName(stem);
         if (string.IsNullOrWhiteSpace(stem))
         {
@@ -1676,12 +1618,12 @@ internal static class Cli
     private static void WriteExtractManifest(
         string inputPath,
         TextureContainer sourceContainer,
-        TexturePayload texture,
+        TextureImage texture,
         TextureContainer imageContainer,
         string manifestPath,
         IReadOnlyList<ExtractManifestImage> images)
     {
-        var baseSubresource = texture.GetSubresource(default);
+        var baseSubresource = texture.GetSubresource(0, 0, 0);
         var manifest = new ExtractManifest(
             inputPath,
             FormatContainer(sourceContainer),
@@ -1711,94 +1653,30 @@ internal static class Cli
             WriteIndented = writeIndented
         };
 
-    private static TexturePayload CreateAssembledTexture(
+    private static TextureImage CreateAssembledTexture(
         TextureFormat format,
         ImageColorSpaces colorSpaces,
         IReadOnlyList<FileInfo> layerFiles,
         IReadOnlyList<FileInfo> cubeFiles,
         IReadOnlyList<FileInfo> mipFiles)
     {
+        var assembler = new TextureAssembler();
         if (layerFiles.Count != 0)
         {
-            return CreateArrayLayerTexture(format, DecodeImageFiles(layerFiles, colorSpaces));
+            return assembler.CreateArray(format, DecodeImageFiles(layerFiles, colorSpaces));
         }
 
         if (cubeFiles.Count != 0)
         {
-            return CreateCubeTexture(format, DecodeImageFiles(cubeFiles, colorSpaces));
+            return assembler.CreateCube(format, DecodeImageFiles(cubeFiles, colorSpaces));
         }
 
         if (mipFiles.Count != 0)
         {
-            return CreateMipChainTexture(format, DecodeImageFiles(mipFiles, colorSpaces));
+            return assembler.CreateMipChain(format, DecodeImageFiles(mipFiles, colorSpaces));
         }
 
         throw new ArgumentException("Specify exactly one of --layers, --cube, or --mips.");
-    }
-
-    private static TexturePayload CreateArrayLayerTexture(TextureFormat format, IReadOnlyList<ArrayBitmap<Rgba8UNorm>> images)
-    {
-        EnsureImageCount(images, minimumCount: 1, "--layers");
-        EnsureSameDimensions(images, "--layers");
-
-        var subresources = new TextureSubresource[images.Count];
-        for (var layer = 0; layer < images.Count; layer++)
-        {
-            var image = images[layer];
-            subresources[layer] = EncodeSubresource(format, image, mipLevel: 0, arrayLayer: layer, faceIndex: 0);
-        }
-
-        return new TexturePayload(format, subresources, MipLevelCount: 1, ArrayLayerCount: images.Count, FaceCount: 1);
-    }
-
-    private static TexturePayload CreateCubeTexture(TextureFormat format, IReadOnlyList<ArrayBitmap<Rgba8UNorm>> images)
-    {
-        if (images.Count != 6)
-        {
-            throw new ArgumentException("--cube requires exactly six input images.");
-        }
-
-        EnsureSameDimensions(images, "--cube");
-        if (images[0].Width != images[0].Height)
-        {
-            throw new ArgumentException("--cube input images must be square.");
-        }
-
-        var subresources = new TextureSubresource[images.Count];
-        for (var face = 0; face < images.Count; face++)
-        {
-            var image = images[face];
-            subresources[face] = EncodeSubresource(format, image, mipLevel: 0, arrayLayer: 0, face);
-        }
-
-        return new TexturePayload(format, subresources, MipLevelCount: 1, ArrayLayerCount: 1, FaceCount: 6);
-    }
-
-    private static TexturePayload CreateMipChainTexture(TextureFormat format, IReadOnlyList<ArrayBitmap<Rgba8UNorm>> images)
-    {
-        EnsureImageCount(images, minimumCount: 1, "--mips");
-        var fullMipLevelCount = TextureImage.GetFullMipLevelCount(images[0].Width, images[0].Height);
-        if (images.Count > fullMipLevelCount)
-        {
-            throw new ArgumentException("--mips contains more images than the full mip chain for the base dimensions.");
-        }
-
-        var subresources = new TextureSubresource[images.Count];
-        for (var mipLevel = 0; mipLevel < images.Count; mipLevel++)
-        {
-            var image = images[mipLevel];
-            var expectedWidth = TextureImage.GetMipDimension(images[0].Width, mipLevel);
-            var expectedHeight = TextureImage.GetMipDimension(images[0].Height, mipLevel);
-            if (image.Width != expectedWidth || image.Height != expectedHeight)
-            {
-                throw new ArgumentException(
-                    $"--mips image {mipLevel} is {image.Width}x{image.Height}, but {expectedWidth}x{expectedHeight} was expected.");
-            }
-
-            subresources[mipLevel] = EncodeSubresource(format, image, mipLevel, arrayLayer: 0, faceIndex: 0);
-        }
-
-        return new TexturePayload(format, subresources, images.Count, ArrayLayerCount: 1, FaceCount: 1);
     }
 
     private static ArrayBitmap<Rgba8UNorm>[] DecodeImageFiles(IReadOnlyList<FileInfo> files, ImageColorSpaces colorSpaces)
@@ -1837,87 +1715,33 @@ internal static class Cli
         return new TextureSubresource(mipLevel, arrayLayer, faceIndex, image.Width, image.Height, payload);
     }
 
-    private static void EnsureImageCount(IReadOnlyList<ArrayBitmap<Rgba8UNorm>> images, int minimumCount, string optionName)
-    {
-        if (images.Count < minimumCount)
-        {
-            throw new ArgumentException($"{optionName} requires at least {minimumCount} input image(s).");
-        }
-    }
-
-    private static void EnsureSameDimensions(IReadOnlyList<ArrayBitmap<Rgba8UNorm>> images, string optionName)
-    {
-        var width = images[0].Width;
-        var height = images[0].Height;
-        for (var i = 1; i < images.Count; i++)
-        {
-            if (images[i].Width != width || images[i].Height != height)
-            {
-                throw new ArgumentException(
-                    $"{optionName} image {i} is {images[i].Width}x{images[i].Height}, but {width}x{height} was expected.");
-            }
-        }
-    }
-
     private static void WriteStructuredTexture(
-        TexturePayload texture,
+        TextureImage texture,
         string path,
         TextureContainer container,
         TextureFormat format,
         int ktxVersion,
         TextureCompressionLevel? quality)
     {
-        using var compressionRegistration = CreateTextureCompressionRegistration(format, quality);
-        var output = texture.Format == format && quality is null
-            ? texture
-            : ReencodeStructuredTexture(texture, format);
+        var output = new TextureConverter().TranscodeTexture(texture, format, quality);
 
         switch (container)
         {
             case TextureContainer.Dds:
-                DdsCodec.Write(
-                    new DdsTexture(output.Format, output.Subresources, output.ArrayLayerCount, output.FaceCount),
-                    path);
+                DdsCodec.Write(new DdsTexture(output), path);
                 break;
             case TextureContainer.Ktx:
                 KtxCodec.Write(
-                    new KtxTexture(output.Format, output.Subresources, output.ArrayLayerCount, output.FaceCount),
+                    new KtxTexture(output),
                     path,
                     new KtxEncodingOptions { Version = ktxVersion == 2 ? KtxVersion.Version2 : KtxVersion.Version1 });
                 break;
             case TextureContainer.Pvr:
-                PvrCodec.Write(
-                    new PvrTexture(output.Format, output.Subresources, output.ArrayLayerCount, output.FaceCount),
-                    path);
+                PvrCodec.Write(new PvrTexture(output), path);
                 break;
             default:
                 throw new NotSupportedException($"Unsupported structured texture output container '{container}'.");
         }
-    }
-
-    private static TexturePayload ReencodeStructuredTexture(TexturePayload texture, TextureFormat format)
-    {
-        var sourceCoder = TextureCoderManager.Global.GetCoder(texture.Format);
-        var targetCoder = TextureCoderManager.Global.GetCoder(format);
-        var subresources = new TextureSubresource[texture.Subresources.Count];
-        for (var i = 0; i < texture.Subresources.Count; i++)
-        {
-            var source = texture.Subresources[i];
-            var bitmap = new ArrayBitmap<Rgba8UNorm>(source.Width, source.Height);
-            sourceCoder.Decode(source.Payload, bitmap.AsView());
-
-            var payload = new byte[targetCoder.GetEncodedByteCount(source.Width, source.Height)];
-            targetCoder.Encode(bitmap.AsView(), payload);
-            subresources[i] = new TextureSubresource(
-                source.MipLevel,
-                source.ArrayLayer,
-                source.FaceIndex,
-                source.Width,
-                source.Height,
-                payload);
-        }
-
-        return new TexturePayload(format, subresources, texture.MipLevelCount, texture.ArrayLayerCount, texture.FaceCount);
     }
 
     private static ArrayBitmap<Rgba8UNorm> Decode(
@@ -1957,81 +1781,13 @@ internal static class Cli
     }
 
     private static ArrayBitmap<Rgba8UNorm> DecodeTexture(DdsTexture texture, TextureSubresourceSelection selection)
-    {
-        var subresource = GetSubresource(texture, selection);
-        return DecodeSubresource(texture.Texture.Format, subresource);
-    }
+        => new TextureExtractor().Decode(texture.Texture, selection);
 
     private static ArrayBitmap<Rgba8UNorm> DecodeTexture(KtxTexture texture, TextureSubresourceSelection selection)
-    {
-        var subresource = GetSubresource(texture, selection);
-        return DecodeSubresource(texture.Texture.Format, subresource);
-    }
+        => new TextureExtractor().Decode(texture.Texture, selection);
 
     private static ArrayBitmap<Rgba8UNorm> DecodeTexture(PvrTexture texture, TextureSubresourceSelection selection)
-    {
-        var subresource = GetSubresource(texture, selection);
-        return DecodeSubresource(texture.Texture.Format, subresource);
-    }
-
-    private static TextureSubresource GetSubresource(DdsTexture texture, TextureSubresourceSelection selection)
-    {
-        ValidateSelection(texture.Texture.MipLevelCount, texture.Texture.ArrayLayerCount, texture.Texture.FaceCount, selection);
-        return texture.Texture.GetSubresource(selection.MipLevel, selection.ArrayLayer, selection.FaceIndex);
-    }
-
-    private static TextureSubresource GetSubresource(KtxTexture texture, TextureSubresourceSelection selection)
-    {
-        ValidateSelection(texture.Texture.MipLevelCount, texture.Texture.ArrayLayerCount, texture.Texture.FaceCount, selection);
-        return texture.Texture.GetSubresource(selection.MipLevel, selection.ArrayLayer, selection.FaceIndex);
-    }
-
-    private static TextureSubresource GetSubresource(PvrTexture texture, TextureSubresourceSelection selection)
-    {
-        ValidateSelection(texture.Texture.MipLevelCount, texture.Texture.ArrayLayerCount, texture.Texture.FaceCount, selection);
-        return texture.Texture.GetSubresource(selection.MipLevel, selection.ArrayLayer, selection.FaceIndex);
-    }
-
-    private static ArrayBitmap<Rgba8UNorm> DecodeSubresource(TextureFormat format, TextureSubresource subresource)
-    {
-        var bitmap = new ArrayBitmap<Rgba8UNorm>(subresource.Width, subresource.Height);
-        var coder = TextureCoderManager.Global.GetCoder(format);
-        coder.Decode(subresource.Payload, bitmap.AsView());
-        return bitmap;
-    }
-
-    private static void ValidateSelection(
-        int mipLevelCount,
-        int arrayLayerCount,
-        int faceCount,
-        TextureSubresourceSelection selection)
-    {
-        if (selection.MipLevel >= mipLevelCount)
-        {
-            throw new ArgumentOutOfRangeException(
-                nameof(selection),
-                $"Mip level {selection.MipLevel} is outside the texture mip level count {mipLevelCount}.");
-        }
-
-        if (selection.ArrayLayer >= arrayLayerCount)
-        {
-            throw new ArgumentOutOfRangeException(
-                nameof(selection),
-                $"Array layer {selection.ArrayLayer} is outside the texture array layer count {arrayLayerCount}.");
-        }
-
-        if (selection.HasFace && faceCount != 6)
-        {
-            throw new ArgumentOutOfRangeException(nameof(selection), "Face selection requires a cube-map texture.");
-        }
-
-        if (selection.FaceIndex >= faceCount)
-        {
-            throw new ArgumentOutOfRangeException(
-                nameof(selection),
-                $"Face index {selection.FaceIndex} is outside the texture face count {faceCount}.");
-        }
-    }
+        => new TextureExtractor().Decode(texture.Texture, selection);
 
     private static void EnsureDefaultSelection(TextureSubresourceSelection selection, string containerDescription)
     {
@@ -2579,54 +2335,6 @@ internal enum MipmapMode
 {
     None,
     Generate
-}
-
-internal readonly record struct TextureSubresourceSelection(int MipLevel, int ArrayLayer, TextureCubeFace? Face)
-{
-    public int FaceIndex => Face is { } face ? (int)face : 0;
-
-    public bool HasFace => Face is not null;
-
-    public bool IsDefault => MipLevel == 0 && ArrayLayer == 0 && Face is null;
-}
-
-internal sealed record TexturePayload(
-    TextureFormat Format,
-    IReadOnlyList<TextureSubresource> Subresources,
-    int MipLevelCount,
-    int ArrayLayerCount,
-    int FaceCount)
-{
-    public TextureSubresource GetSubresource(TextureSubresourceSelection selection)
-    {
-        if (selection.MipLevel >= MipLevelCount)
-        {
-            throw new ArgumentOutOfRangeException(
-                nameof(selection),
-                $"Mip level {selection.MipLevel} is outside the texture mip level count {MipLevelCount}.");
-        }
-
-        if (selection.ArrayLayer >= ArrayLayerCount)
-        {
-            throw new ArgumentOutOfRangeException(
-                nameof(selection),
-                $"Array layer {selection.ArrayLayer} is outside the texture array layer count {ArrayLayerCount}.");
-        }
-
-        if (selection.HasFace && FaceCount != 6)
-        {
-            throw new ArgumentOutOfRangeException(nameof(selection), "Face selection requires a cube-map texture.");
-        }
-
-        if (selection.FaceIndex >= FaceCount)
-        {
-            throw new ArgumentOutOfRangeException(
-                nameof(selection),
-                $"Face index {selection.FaceIndex} is outside the texture face count {FaceCount}.");
-        }
-
-        return Subresources[checked((((selection.ArrayLayer * FaceCount) + selection.FaceIndex) * MipLevelCount) + selection.MipLevel)];
-    }
 }
 
 internal sealed record ImageColorSpaces(ImageColorSpace Png, ImageColorSpace Jpeg, ImageColorSpace Gif)
