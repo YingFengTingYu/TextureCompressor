@@ -60,13 +60,14 @@ public static class KtxCodec
         var format = GetTextureFormat(header);
         var coder = TextureCoderManager.Global.GetCoder(format);
         var mipLevelCount = GetMipLevelCount(header.NumberOfMipmapLevels, header.Width, header.Height, "KTX");
+        var arrayLayerCount = GetArrayLayerCount(header.NumberOfArrayElements, "KTX");
         var faceCount = GetFaceCount(header.NumberOfFaces, "KTX");
-        var subresources = ReadSubresources(stream, header, format, coder, mipLevelCount, faceCount);
+        var subresources = ReadSubresources(stream, header, format, coder, mipLevelCount, arrayLayerCount, faceCount);
 
         return new KtxTexture(
             format,
             subresources,
-            1,
+            arrayLayerCount,
             faceCount,
             header.GlType == 0 ? null : (KtxGlFormat)header.GlType,
             header.GlFormat == 0 ? null : (KtxGlFormat)header.GlFormat,
@@ -293,10 +294,6 @@ public static class KtxCodec
 
         var coder = TextureCoderManager.Global.GetCoder(texture.Format);
         ValidateTexturePayloads(texture, coder);
-        if (texture.ArrayLayerCount != 1)
-        {
-            throw new NotSupportedException("KTX texture arrays are not supported.");
-        }
 
         var version = options?.Version ?? KtxVersion.Version1;
         ValidateEncodingVersion(version);
@@ -324,7 +321,7 @@ public static class KtxCodec
             texture.Width,
             texture.Height,
             PixelDepth: 0,
-            NumberOfArrayElements: 0,
+            NumberOfArrayElements: texture.ArrayLayerCount == 1 ? 0 : checked((uint)texture.ArrayLayerCount),
             NumberOfFaces: checked((uint)texture.FaceCount),
             NumberOfMipmapLevels: checked((uint)texture.MipLevelCount),
             BytesOfKeyValueData: 0));
@@ -339,15 +336,18 @@ public static class KtxCodec
                 coder.GetEncodedByteCount(level.Width, level.Height));
 
             WriteUInt32(stream, checked((uint)imageByteCount));
-            for (var face = 0; face < texture.FaceCount; face++)
+            for (var arrayLayer = 0; arrayLayer < texture.ArrayLayerCount; arrayLayer++)
             {
-                var subresource = texture.GetSubresource(mipLevel, faceIndex: face);
-                var image = RequiresRowPadding(texture.Format, subresource.Width)
-                    ? AddRowPadding(subresource.Payload, texture.Format.GetRowByteCount(subresource.Width), subresource.Height)
-                    : subresource.Payload;
+                for (var face = 0; face < texture.FaceCount; face++)
+                {
+                    var subresource = texture.GetSubresource(mipLevel, arrayLayer, face);
+                    var image = RequiresRowPadding(texture.Format, subresource.Width)
+                        ? AddRowPadding(subresource.Payload, texture.Format.GetRowByteCount(subresource.Width), subresource.Height)
+                        : subresource.Payload;
 
-                stream.Write(image);
-                WritePadding(stream, GetPaddingByteCount(image.Length));
+                    stream.Write(image);
+                    WritePadding(stream, GetPaddingByteCount(image.Length));
+                }
             }
         }
     }
@@ -444,8 +444,9 @@ public static class KtxCodec
 
         var format = GetTextureFormat(ktxHeader.VkFormat, isSrgb: IsSrgb(ktxHeader.VkFormat));
         var coder = TextureCoderManager.Global.GetCoder(format);
+        var arrayLayerCount = GetArrayLayerCount(ktxHeader.LayerCount, "KTX2");
         var faceCount = GetFaceCount(ktxHeader.FaceCount, "KTX2");
-        var subresources = new TextureSubresource[checked(mipLevelCount * faceCount)];
+        var subresources = new TextureSubresource[checked(mipLevelCount * arrayLayerCount * faceCount)];
         var currentOffset = checked((ulong)(HeaderV2ByteCount + (LevelIndexEntryByteCount * mipLevelCount)));
         var subresourceIndex = 0;
         for (var i = 0; i < mipLevelCount; i++)
@@ -454,11 +455,11 @@ public static class KtxCodec
             var width = TextureMipLevel.GetDimension(ktxHeader.Width, i);
             var height = TextureMipLevel.GetDimension(ktxHeader.Height, i);
             var expectedFacePayloadByteCount = coder.GetEncodedByteCount(width, height);
-            var expectedLevelPayloadByteCount = checked(expectedFacePayloadByteCount * faceCount);
+            var expectedLevelPayloadByteCount = checked(expectedFacePayloadByteCount * arrayLayerCount * faceCount);
             if (level.UncompressedByteLength != (ulong)expectedLevelPayloadByteCount)
             {
                 throw new InvalidDataException(
-                    $"KTX2 level {i} payload decompresses to {level.UncompressedByteLength} bytes, but '{format.Name}' expects {expectedLevelPayloadByteCount} bytes for {width}x{height} with {faceCount} face(s).");
+                    $"KTX2 level {i} payload decompresses to {level.UncompressedByteLength} bytes, but '{format.Name}' expects {expectedLevelPayloadByteCount} bytes for {width}x{height} with {arrayLayerCount} array layer(s) and {faceCount} face(s).");
             }
 
             if (level.ByteLength > int.MaxValue)
@@ -473,18 +474,21 @@ public static class KtxCodec
             ReadExactly(stream, levelPayload);
             currentOffset = checked(currentOffset + level.ByteLength);
             var payload = Decompress(levelPayload, expectedLevelPayloadByteCount, ktxHeader.SupercompressionScheme);
-            for (var face = 0; face < faceCount; face++)
+            for (var arrayLayer = 0; arrayLayer < arrayLayerCount; arrayLayer++)
             {
-                var offset = checked(face * expectedFacePayloadByteCount);
-                var facePayload = payload.AsSpan(offset, expectedFacePayloadByteCount).ToArray();
-                subresources[subresourceIndex++] = new TextureSubresource(i, arrayLayer: 0, face, width, height, facePayload);
+                for (var face = 0; face < faceCount; face++)
+                {
+                    var offset = checked(((arrayLayer * faceCount) + face) * expectedFacePayloadByteCount);
+                    var facePayload = payload.AsSpan(offset, expectedFacePayloadByteCount).ToArray();
+                    subresources[subresourceIndex++] = new TextureSubresource(i, arrayLayer, face, width, height, facePayload);
+                }
             }
         }
 
         return new KtxTexture(
             format,
             subresources,
-            1,
+            arrayLayerCount,
             faceCount,
             glType: null,
             glFormat: null,
@@ -514,6 +518,7 @@ public static class KtxCodec
         BinaryPrimitives.WriteUInt32LittleEndian(header.Slice(16, 4), GetKtx2TypeSize(texture.Format));
         BinaryPrimitives.WriteUInt32LittleEndian(header.Slice(20, 4), checked((uint)texture.Width));
         BinaryPrimitives.WriteUInt32LittleEndian(header.Slice(24, 4), checked((uint)texture.Height));
+        BinaryPrimitives.WriteUInt32LittleEndian(header.Slice(32, 4), texture.ArrayLayerCount == 1 ? 0 : checked((uint)texture.ArrayLayerCount));
         BinaryPrimitives.WriteUInt32LittleEndian(header.Slice(36, 4), checked((uint)texture.FaceCount));
         BinaryPrimitives.WriteUInt32LittleEndian(header.Slice(40, 4), checked((uint)texture.MipLevelCount));
         BinaryPrimitives.WriteUInt32LittleEndian(header.Slice(44, 4), (uint)supercompressionScheme);
@@ -646,11 +651,6 @@ public static class KtxCodec
             throw new NotSupportedException("KTX 3D textures are not supported.");
         }
 
-        if (header.NumberOfArrayElements != 0)
-        {
-            throw new NotSupportedException("KTX texture arrays are not supported.");
-        }
-
         if (header.NumberOfFaces is not (1 or 6))
         {
             throw new NotSupportedException("KTX partial cube maps are not supported.");
@@ -682,11 +682,6 @@ public static class KtxCodec
         if (header.PixelDepth != 0)
         {
             throw new NotSupportedException("KTX2 3D textures are not supported.");
-        }
-
-        if (header.LayerCount != 0)
-        {
-            throw new NotSupportedException("KTX2 texture arrays are not supported.");
         }
 
         if (header.FaceCount is not (1 or 6))
@@ -745,9 +740,10 @@ public static class KtxCodec
         TextureFormat format,
         ITextureCoder coder,
         int mipLevelCount,
+        int arrayLayerCount,
         int faceCount)
     {
-        var subresources = new TextureSubresource[checked(mipLevelCount * faceCount)];
+        var subresources = new TextureSubresource[checked(mipLevelCount * arrayLayerCount * faceCount)];
         var subresourceIndex = 0;
         for (var i = 0; i < mipLevelCount; i++)
         {
@@ -762,16 +758,19 @@ public static class KtxCodec
                     $"KTX mip level {i} image payload is {imageByteCount} bytes, but '{format.Name}' expects {expectedImageByteCount} bytes for one {width}x{height} face.");
             }
 
-            for (var face = 0; face < faceCount; face++)
+            for (var arrayLayer = 0; arrayLayer < arrayLayerCount; arrayLayer++)
             {
-                var image = new byte[checked((int)imageByteCount)];
-                ReadExactly(stream, image);
-                SkipExactly(stream, GetPaddingByteCount(image.Length));
+                for (var face = 0; face < faceCount; face++)
+                {
+                    var image = new byte[checked((int)imageByteCount)];
+                    ReadExactly(stream, image);
+                    SkipExactly(stream, GetPaddingByteCount(image.Length));
 
-                var payload = RequiresRowPadding(format, width)
-                    ? RemoveRowPadding(image, format.GetRowByteCount(width), height)
-                    : image;
-                subresources[subresourceIndex++] = new TextureSubresource(i, arrayLayer: 0, face, width, height, payload);
+                    var payload = RequiresRowPadding(format, width)
+                        ? RemoveRowPadding(image, format.GetRowByteCount(width), height)
+                        : image;
+                    subresources[subresourceIndex++] = new TextureSubresource(i, arrayLayer, face, width, height, payload);
+                }
             }
         }
 
@@ -845,12 +844,25 @@ public static class KtxCodec
         throw new NotSupportedException($"{containerName} partial cube maps are not supported.");
     }
 
+    private static int GetArrayLayerCount(uint arrayLayerCount, string containerName)
+    {
+        if (arrayLayerCount > int.MaxValue)
+        {
+            throw new InvalidDataException($"{containerName} array layer count is outside the supported range.");
+        }
+
+        return arrayLayerCount == 0 ? 1 : (int)arrayLayerCount;
+    }
+
     private static int GetLevelPayloadByteCount(KtxTexture texture, int mipLevel)
     {
         var byteCount = 0;
-        for (var face = 0; face < texture.FaceCount; face++)
+        for (var arrayLayer = 0; arrayLayer < texture.ArrayLayerCount; arrayLayer++)
         {
-            byteCount = checked(byteCount + texture.GetSubresource(mipLevel, faceIndex: face).Payload.Length);
+            for (var face = 0; face < texture.FaceCount; face++)
+            {
+                byteCount = checked(byteCount + texture.GetSubresource(mipLevel, arrayLayer, face).Payload.Length);
+            }
         }
 
         return byteCount;
@@ -860,11 +872,14 @@ public static class KtxCodec
     {
         var result = new byte[GetLevelPayloadByteCount(texture, mipLevel)];
         var offset = 0;
-        for (var face = 0; face < texture.FaceCount; face++)
+        for (var arrayLayer = 0; arrayLayer < texture.ArrayLayerCount; arrayLayer++)
         {
-            var payload = texture.GetSubresource(mipLevel, faceIndex: face).Payload;
-            payload.AsSpan().CopyTo(result.AsSpan(offset));
-            offset = checked(offset + payload.Length);
+            for (var face = 0; face < texture.FaceCount; face++)
+            {
+                var payload = texture.GetSubresource(mipLevel, arrayLayer, face).Payload;
+                payload.AsSpan().CopyTo(result.AsSpan(offset));
+                offset = checked(offset + payload.Length);
+            }
         }
 
         return result;

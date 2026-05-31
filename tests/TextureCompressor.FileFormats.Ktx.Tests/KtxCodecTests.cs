@@ -301,6 +301,42 @@ public sealed class KtxCodecTests
     }
 
     [Fact]
+    public void WriteTextureArrayWritesReadableKtx()
+    {
+        var texture = new KtxTexture(TextureFormats.Rgba8UNorm, CreateArraySubresources(width: 2, height: 2, mipLevelCount: 2, arrayLayerCount: 2), arrayLayerCount: 2, faceCount: 1);
+
+        var ktx = KtxCodec.Write(texture);
+        var read = KtxCodec.Read(ktx);
+
+        Assert.Equal(2u, BinaryPrimitives.ReadUInt32LittleEndian(ktx.AsSpan(48, 4)));
+        Assert.Equal(16u, BinaryPrimitives.ReadUInt32LittleEndian(ktx.AsSpan(64, 4)));
+        Assert.Equal(4u, BinaryPrimitives.ReadUInt32LittleEndian(ktx.AsSpan(100, 4)));
+        Assert.Equal(112, ktx.Length);
+        Assert.Equal(2, read.ArrayLayerCount);
+        Assert.Equal(1, read.GetSubresource(mipLevel: 0, arrayLayer: 0).Payload[0]);
+        Assert.Equal(2, read.GetSubresource(mipLevel: 0, arrayLayer: 1).Payload[0]);
+        Assert.Equal(12, read.GetSubresource(mipLevel: 1, arrayLayer: 1).Payload[0]);
+    }
+
+    [Fact]
+    public void WriteTextureArrayVersion2WritesReadableKtx2()
+    {
+        var texture = new KtxTexture(TextureFormats.Rgba8UNorm, CreateArraySubresources(width: 2, height: 2, mipLevelCount: 2, arrayLayerCount: 2), arrayLayerCount: 2, faceCount: 1);
+
+        var ktx = KtxCodec.Write(texture, new KtxEncodingOptions { Version = KtxVersion.Version2 });
+        var read = KtxCodec.Read(ktx);
+
+        Assert.Equal(2u, BinaryPrimitives.ReadUInt32LittleEndian(ktx.AsSpan(32, 4)));
+        Assert.Equal(32ul, BinaryPrimitives.ReadUInt64LittleEndian(ktx.AsSpan(88, 8)));
+        Assert.Equal(8ul, BinaryPrimitives.ReadUInt64LittleEndian(ktx.AsSpan(112, 8)));
+        Assert.Equal(192, ktx.Length);
+        Assert.Equal(2, read.ArrayLayerCount);
+        Assert.Equal(1, read.GetSubresource(mipLevel: 0, arrayLayer: 0).Payload[0]);
+        Assert.Equal(2, read.GetSubresource(mipLevel: 0, arrayLayer: 1).Payload[0]);
+        Assert.Equal(12, read.GetSubresource(mipLevel: 1, arrayLayer: 1).Payload[0]);
+    }
+
+    [Fact]
     public void ReadVersion2SupercompressionThrows()
     {
         var ktx = CreateHeaderV2(KtxVkFormat.R8G8B8A8UNorm, width: 1, height: 1, supercompressionScheme: 1);
@@ -482,6 +518,30 @@ public sealed class KtxCodecTests
                     mipWidth,
                     mipHeight,
                     Enumerable.Repeat((byte)(face + 1 + (mipLevel * 10)), byteCount).ToArray());
+            }
+        }
+
+        return subresources;
+    }
+
+    private static TextureSubresource[] CreateArraySubresources(int width, int height, int mipLevelCount, int arrayLayerCount)
+    {
+        var subresources = new TextureSubresource[checked(arrayLayerCount * mipLevelCount)];
+        var index = 0;
+        for (var layer = 0; layer < arrayLayerCount; layer++)
+        {
+            for (var mipLevel = 0; mipLevel < mipLevelCount; mipLevel++)
+            {
+                var mipWidth = TextureMipLevel.GetDimension(width, mipLevel);
+                var mipHeight = TextureMipLevel.GetDimension(height, mipLevel);
+                var byteCount = checked(mipWidth * mipHeight * 4);
+                subresources[index++] = new TextureSubresource(
+                    mipLevel,
+                    layer,
+                    faceIndex: 0,
+                    mipWidth,
+                    mipHeight,
+                    Enumerable.Repeat((byte)(layer + 1 + (mipLevel * 10)), byteCount).ToArray());
             }
         }
 

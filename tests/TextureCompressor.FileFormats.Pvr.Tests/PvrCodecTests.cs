@@ -445,6 +445,67 @@ public sealed class PvrCodecTests
     }
 
     [Fact]
+    public void ReadTextureArrayReadsLayersAndMipChains()
+    {
+        var pvr = CreateHeader(
+            pixelFormat: 0x0808080861626772,
+            colourSpace: 0,
+            channelType: 0,
+            width: 2,
+            height: 2,
+            mipMapCount: 2,
+            surfaceCount: 2);
+        Array.Resize(ref pvr, 52 + (2 * (16 + 4)));
+        var offset = 52;
+        for (var layer = 0; layer < 2; layer++)
+        {
+            pvr[offset] = (byte)(layer + 1);
+            offset += 16;
+        }
+
+        for (var layer = 0; layer < 2; layer++)
+        {
+            pvr[offset] = (byte)(layer + 11);
+            offset += 4;
+        }
+
+        var texture = PvrCodec.Read(pvr);
+
+        Assert.Equal(2, texture.ArrayLayerCount);
+        Assert.Equal(1, texture.FaceCount);
+        Assert.Equal(4, texture.Subresources.Count);
+        Assert.Equal(1, texture.GetSubresource(mipLevel: 0, arrayLayer: 0).Payload[0]);
+        Assert.Equal(2, texture.GetSubresource(mipLevel: 0, arrayLayer: 1).Payload[0]);
+        Assert.Equal(12, texture.GetSubresource(mipLevel: 1, arrayLayer: 1).Payload[0]);
+    }
+
+    [Fact]
+    public void WriteTextureArrayWritesReadablePvr()
+    {
+        var texture = new PvrTexture(TextureFormats.Rgba8UNorm, CreateArraySubresources(width: 2, height: 2, mipLevelCount: 2, arrayLayerCount: 2), arrayLayerCount: 2, faceCount: 1);
+
+        var pvr = PvrCodec.Write(texture);
+        var read = PvrCodec.Read(pvr);
+
+        AssertHeader(pvr, expectedPixelFormat: 0x0808080861626772, colourSpace: 0, channelType: 0, width: 2, height: 2, mipMapCount: 2, surfaceCount: 2);
+        Assert.Equal(52 + (2 * (16 + 4)), pvr.Length);
+        Assert.Equal(1, pvr[52]);
+        Assert.Equal(2, pvr[52 + 16]);
+        Assert.Equal(12, pvr[52 + (2 * 16) + 4]);
+        Assert.Equal(2, read.ArrayLayerCount);
+        Assert.Equal(2, read.GetSubresource(mipLevel: 0, arrayLayer: 1).Payload[0]);
+        Assert.Equal(12, read.GetSubresource(mipLevel: 1, arrayLayer: 1).Payload[0]);
+    }
+
+    [Fact]
+    public void WriteTextureArrayVersion2Throws()
+    {
+        var texture = new PvrTexture(TextureFormats.Rgba8UNorm, CreateArraySubresources(width: 1, height: 1, mipLevelCount: 1, arrayLayerCount: 2), arrayLayerCount: 2, faceCount: 1);
+
+        Assert.Throws<NotSupportedException>(() => PvrCodec.Write(texture, new PvrEncodingOptions { Version = 2 }));
+    }
+
+    [Fact]
     public void EncodeWithGenerateMipmapsWritesReadableCompressedMipChain()
     {
         var source = new ArrayBitmap<Rgba8UNorm>(
@@ -647,7 +708,8 @@ public sealed class PvrCodecTests
         int width,
         int height,
         uint mipMapCount = 1,
-        uint faceCount = 1)
+        uint faceCount = 1,
+        uint surfaceCount = 1)
     {
         Assert.Equal(0x03525650u, BinaryPrimitives.ReadUInt32LittleEndian(pvr.AsSpan(0, 4)));
         Assert.Equal(expectedPixelFormat, BinaryPrimitives.ReadUInt64LittleEndian(pvr.AsSpan(8, 8)));
@@ -656,7 +718,7 @@ public sealed class PvrCodecTests
         Assert.Equal((uint)height, BinaryPrimitives.ReadUInt32LittleEndian(pvr.AsSpan(24, 4)));
         Assert.Equal((uint)width, BinaryPrimitives.ReadUInt32LittleEndian(pvr.AsSpan(28, 4)));
         Assert.Equal(1u, BinaryPrimitives.ReadUInt32LittleEndian(pvr.AsSpan(32, 4)));
-        Assert.Equal(1u, BinaryPrimitives.ReadUInt32LittleEndian(pvr.AsSpan(36, 4)));
+        Assert.Equal(surfaceCount, BinaryPrimitives.ReadUInt32LittleEndian(pvr.AsSpan(36, 4)));
         Assert.Equal(faceCount, BinaryPrimitives.ReadUInt32LittleEndian(pvr.AsSpan(40, 4)));
         Assert.Equal(mipMapCount, BinaryPrimitives.ReadUInt32LittleEndian(pvr.AsSpan(44, 4)));
     }
@@ -689,7 +751,8 @@ public sealed class PvrCodecTests
         int width,
         int height,
         uint mipMapCount = 1,
-        uint faceCount = 1)
+        uint faceCount = 1,
+        uint surfaceCount = 1)
     {
         var pvr = new byte[52];
         BinaryPrimitives.WriteUInt32LittleEndian(pvr.AsSpan(0, 4), 0x03525650);
@@ -699,7 +762,7 @@ public sealed class PvrCodecTests
         BinaryPrimitives.WriteUInt32LittleEndian(pvr.AsSpan(24, 4), checked((uint)height));
         BinaryPrimitives.WriteUInt32LittleEndian(pvr.AsSpan(28, 4), checked((uint)width));
         BinaryPrimitives.WriteUInt32LittleEndian(pvr.AsSpan(32, 4), 1);
-        BinaryPrimitives.WriteUInt32LittleEndian(pvr.AsSpan(36, 4), 1);
+        BinaryPrimitives.WriteUInt32LittleEndian(pvr.AsSpan(36, 4), surfaceCount);
         BinaryPrimitives.WriteUInt32LittleEndian(pvr.AsSpan(40, 4), faceCount);
         BinaryPrimitives.WriteUInt32LittleEndian(pvr.AsSpan(44, 4), mipMapCount);
         return pvr;
@@ -774,6 +837,30 @@ public sealed class PvrCodecTests
                     mipWidth,
                     mipHeight,
                     Enumerable.Repeat((byte)(face + 1 + (mipLevel * 10)), byteCount).ToArray());
+            }
+        }
+
+        return subresources;
+    }
+
+    private static TextureSubresource[] CreateArraySubresources(int width, int height, int mipLevelCount, int arrayLayerCount)
+    {
+        var subresources = new TextureSubresource[checked(arrayLayerCount * mipLevelCount)];
+        var index = 0;
+        for (var layer = 0; layer < arrayLayerCount; layer++)
+        {
+            for (var mipLevel = 0; mipLevel < mipLevelCount; mipLevel++)
+            {
+                var mipWidth = TextureMipLevel.GetDimension(width, mipLevel);
+                var mipHeight = TextureMipLevel.GetDimension(height, mipLevel);
+                var byteCount = checked(mipWidth * mipHeight * 4);
+                subresources[index++] = new TextureSubresource(
+                    mipLevel,
+                    layer,
+                    faceIndex: 0,
+                    mipWidth,
+                    mipHeight,
+                    Enumerable.Repeat((byte)(layer + 1 + (mipLevel * 10)), byteCount).ToArray());
             }
         }
 
