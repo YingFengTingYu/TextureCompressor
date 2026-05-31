@@ -4,6 +4,14 @@ namespace TextureCompressor.Tests;
 
 public sealed class TextureFormatTests
 {
+    [Fact]
+    public void TextureFormatsDoesNotExposeBigEndianPlatformVariants()
+    {
+        var fields = typeof(TextureFormats).GetFields(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static);
+
+        Assert.DoesNotContain(fields, field => field.Name.EndsWith("BigEndian", StringComparison.Ordinal));
+    }
+
     [Theory]
     [MemberData(nameof(MvpFormats))]
     public void MvpFormatPropertiesAreStable(

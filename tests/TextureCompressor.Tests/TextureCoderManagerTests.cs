@@ -2190,29 +2190,6 @@ public sealed class TextureCoderManagerTests
         Assert.Equal(expected, encoded);
     }
 
-    [Theory]
-    [MemberData(nameof(ConsolePackedBigEndianRoundTripCases))]
-    public void EncodeAndDecodeConsolePackedBigEndianFormats(TextureFormat format, Rgba32Float sourcePixel, byte[] littleEndianExpected, Rgba32Float expectedPixel)
-    {
-        var source = new ArrayBitmap<Rgba32Float>(1, 1, [sourcePixel]);
-        var expected = (byte[])littleEndianExpected.Clone();
-        Array.Reverse(expected);
-
-        var coder = Assert.IsAssignableFrom<IPitchTextureCoder>(TextureCoderManager.Global.GetCoder(format));
-        var rowPitch = coder.GetDefaultPitch(source.Width);
-        var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
-        coder.Encode(source.AsView(), encoded, rowPitch);
-
-        var decoded = new ArrayBitmap<Rgba32Float>(1, 1);
-        coder.Decode(encoded, decoded.AsView(), rowPitch);
-
-        Assert.Equal(expected, encoded);
-        AssertClose(expectedPixel.Red, decoded.Pixels[0].Red, 0.0001f);
-        AssertClose(expectedPixel.Green, decoded.Pixels[0].Green, 0.0001f);
-        AssertClose(expectedPixel.Blue, decoded.Pixels[0].Blue, 0.0001f);
-        AssertClose(expectedPixel.Alpha, decoded.Pixels[0].Alpha, 0.0001f);
-    }
-
     [Fact]
     public void EncodeAndDecodeRgb10A2RevSIntUsesPackedIntegerCoder()
     {
@@ -2459,21 +2436,6 @@ public sealed class TextureCoderManagerTests
     {
         { TextureFormats.R10Gb11UNorm, new Rgba32Float(1f, 0f, 0f), [0x00, 0x00, 0xc0, 0xff] },
         { TextureFormats.Rg11B10UNorm, new Rgba32Float(1f, 0f, 0f), [0x00, 0x00, 0xe0, 0xff] }
-    };
-
-    public static TheoryData<TextureFormat, Rgba32Float, byte[], Rgba32Float> ConsolePackedBigEndianRoundTripCases() => new()
-    {
-        { TextureFormats.Rgb655UNormBigEndian, new Rgba32Float(1f, 0f, 1f), [0x1f, 0xfc], new Rgba32Float(1f, 0f, 1f) },
-        { TextureFormats.Rg5SNormB6UNormRevBigEndian, new Rgba32Float(1f, -1f, 1f), [0x2f, 0xfe], new Rgba32Float(1f, -1f, 1f) },
-        { TextureFormats.Rgba4RevSNormBigEndian, new Rgba32Float(1f, 0f, -1f, 1f), [0x07, 0x79], new Rgba32Float(1f, 0f, -1f, 1f) },
-        { TextureFormats.Rg8SNormB8UNormX8RevBigEndian, new Rgba32Float(1f, -1f, 1f), [0x7f, 0x81, 0xff, 0x00], new Rgba32Float(1f, -1f, 1f) },
-        { TextureFormats.Rgb10SNormA2UNormRevBigEndian, new Rgba32Float(1f, -1f, 0f, 1f), [0xff, 0x05, 0x08, 0xc0], new Rgba32Float(1f, -1f, 0f, 1f) },
-        { TextureFormats.R10Gb11UNormBigEndian, new Rgba32Float(1f, 0f, 1f), [0xff, 0x07, 0xc0, 0xff], new Rgba32Float(1f, 0f, 1f) },
-        { TextureFormats.Rg11B10UNormBigEndian, new Rgba32Float(1f, 0f, 1f), [0xff, 0x03, 0xe0, 0xff], new Rgba32Float(1f, 0f, 1f) },
-        { TextureFormats.R10Gb11RevUNormBigEndian, new Rgba32Float(1f, 0f, 1f), [0xff, 0x03, 0xe0, 0xff], new Rgba32Float(1f, 0f, 1f) },
-        { TextureFormats.Rg11B10RevUNormBigEndian, new Rgba32Float(1f, 0f, 1f), [0xff, 0x07, 0xc0, 0xff], new Rgba32Float(1f, 0f, 1f) },
-        { TextureFormats.Rg11B10RevSNormBigEndian, new Rgba32Float(1f, -1f, 1f), [0xff, 0x0b, 0xe0, 0x7f], new Rgba32Float(1f, -1f, 1f) },
-        { TextureFormats.R10Gb11RevSNormBigEndian, new Rgba32Float(1f, -1f, 1f), [0xff, 0x05, 0xf0, 0x7f], new Rgba32Float(1f, -1f, 1f) }
     };
 
     public static TheoryData<TextureFormat> RepresentativePackedYuv422Formats() => new()

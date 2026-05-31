@@ -2,7 +2,6 @@
 using TextureCompressor.Colors;
 using TextureCompressor.Formats;
 using TextureCompressor.Bitmaps;
-using TextureCompressor.Utilities;
 
 namespace TextureCompressor.Codecs;
 
@@ -71,9 +70,6 @@ public sealed class PackedYuv422TextureCoder : IPitchTextureCoder
             case PackedYuv422Transfer.Uyvy8:
                 Decode<TPixel, Uyvy8Transfer>(source, destination, rowPitch);
                 return;
-            case PackedYuv422Transfer.Uyvy8BigEndian:
-                Decode<TPixel, Uyvy8TransferBigEndian>(source, destination, rowPitch);
-                return;
             case PackedYuv422Transfer.Yuyv8:
                 Decode<TPixel, Yuyv8Transfer>(source, destination, rowPitch);
                 return;
@@ -88,9 +84,6 @@ public sealed class PackedYuv422TextureCoder : IPitchTextureCoder
                 return;
             case PackedYuv422Transfer.Y1Vy0U_8:
                 Decode<TPixel, Y1Vy0U_8Transfer>(source, destination, rowPitch);
-                return;
-            case PackedYuv422Transfer.Yuyv8BigEndian:
-                Decode<TPixel, Yuyv8TransferBigEndian>(source, destination, rowPitch);
                 return;
             case PackedYuv422Transfer.Yuyv16:
                 Decode<TPixel, Yuyv16Transfer>(source, destination, rowPitch);
@@ -135,9 +128,6 @@ public sealed class PackedYuv422TextureCoder : IPitchTextureCoder
             case PackedYuv422Transfer.Uyvy8:
                 Encode<TPixel, Uyvy8Transfer>(source, destination, rowPitch);
                 return;
-            case PackedYuv422Transfer.Uyvy8BigEndian:
-                Encode<TPixel, Uyvy8TransferBigEndian>(source, destination, rowPitch);
-                return;
             case PackedYuv422Transfer.Yuyv8:
                 Encode<TPixel, Yuyv8Transfer>(source, destination, rowPitch);
                 return;
@@ -152,9 +142,6 @@ public sealed class PackedYuv422TextureCoder : IPitchTextureCoder
                 return;
             case PackedYuv422Transfer.Y1Vy0U_8:
                 Encode<TPixel, Y1Vy0U_8Transfer>(source, destination, rowPitch);
-                return;
-            case PackedYuv422Transfer.Yuyv8BigEndian:
-                Encode<TPixel, Yuyv8TransferBigEndian>(source, destination, rowPitch);
                 return;
             case PackedYuv422Transfer.Yuyv16:
                 Encode<TPixel, Yuyv16Transfer>(source, destination, rowPitch);
@@ -314,28 +301,6 @@ public sealed class PackedYuv422TextureCoder : IPitchTextureCoder
             EncodeUyvyBlock<Sample8Transfer>(block, y0, y1, u, v);
     }
 
-    private readonly struct Uyvy8TransferBigEndian : IPackedYuv422Transfer
-    {
-        public static int GetBlockCountX(int width) => Uyvy8Transfer.GetBlockCountX(width);
-
-        public static ReadOnlySpan<byte> SliceSourceBlock(ReadOnlySpan<byte> source, int blockOffset) => SliceBlock4(source, blockOffset);
-
-        public static Span<byte> SliceDestinationBlock(Span<byte> destination, int blockOffset) => SliceBlock4(destination, blockOffset);
-
-        public static int AdvanceBlockOffset(int blockOffset) => AdvanceBlock4(blockOffset);
-
-        public static Rgba32Float YuvToRgba32Float(uint ySample, uint uSample, uint vSample) =>
-            Sample8Transfer.YuvToRgba32Float(ySample, uSample, vSample);
-
-        public static uint ChromaToYuvSample(float value) => Sample8Transfer.ChromaToYuvSample(value);
-
-        public static void DecodeBlock(ReadOnlySpan<byte> block, out uint y0, out uint y1, out uint u, out uint v) =>
-            DecodeBigEndianUyvyBlock<Sample8Transfer>(block, out y0, out y1, out u, out v, BigEndianByteSwapMode.Swap8In32);
-
-        public static void EncodeBlock(Span<byte> block, float y0, float y1, uint u, uint v) =>
-            EncodeBigEndianUyvyBlock<Sample8Transfer>(block, y0, y1, u, v, BigEndianByteSwapMode.Swap8In32);
-    }
-
     private readonly struct Yuyv8Transfer : IPackedYuv422Transfer
     {
         public static int GetBlockCountX(int width) => GetEvenBlockCountX(width);
@@ -356,28 +321,6 @@ public sealed class PackedYuv422TextureCoder : IPitchTextureCoder
 
         public static void EncodeBlock(Span<byte> block, float y0, float y1, uint u, uint v) =>
             EncodeYuyvBlock<Sample8Transfer>(block, y0, y1, u, v);
-    }
-
-    private readonly struct Yuyv8TransferBigEndian : IPackedYuv422Transfer
-    {
-        public static int GetBlockCountX(int width) => Yuyv8Transfer.GetBlockCountX(width);
-
-        public static ReadOnlySpan<byte> SliceSourceBlock(ReadOnlySpan<byte> source, int blockOffset) => SliceBlock4(source, blockOffset);
-
-        public static Span<byte> SliceDestinationBlock(Span<byte> destination, int blockOffset) => SliceBlock4(destination, blockOffset);
-
-        public static int AdvanceBlockOffset(int blockOffset) => AdvanceBlock4(blockOffset);
-
-        public static Rgba32Float YuvToRgba32Float(uint ySample, uint uSample, uint vSample) =>
-            Sample8Transfer.YuvToRgba32Float(ySample, uSample, vSample);
-
-        public static uint ChromaToYuvSample(float value) => Sample8Transfer.ChromaToYuvSample(value);
-
-        public static void DecodeBlock(ReadOnlySpan<byte> block, out uint y0, out uint y1, out uint u, out uint v) =>
-            DecodeBigEndianYuyvBlock<Sample8Transfer>(block, out y0, out y1, out u, out v, BigEndianByteSwapMode.Swap8In32);
-
-        public static void EncodeBlock(Span<byte> block, float y0, float y1, uint u, uint v) =>
-            EncodeBigEndianYuyvBlock<Sample8Transfer>(block, y0, y1, u, v, BigEndianByteSwapMode.Swap8In32);
     }
 
     private readonly struct Yvyu8Transfer : IPackedYuv422Transfer
@@ -713,13 +656,6 @@ public sealed class PackedYuv422TextureCoder : IPitchTextureCoder
             transfer = PackedYuv422Transfer.Uyvy8;
             return true;
         }
-
-        if (format == TextureFormats.Uyvy422UNormBigEndian)
-        {
-            transfer = PackedYuv422Transfer.Uyvy8BigEndian;
-            return true;
-        }
-
         if (format == TextureFormats.Yuy2UNorm)
         {
             transfer = PackedYuv422Transfer.Yuyv8;
@@ -749,13 +685,6 @@ public sealed class PackedYuv422TextureCoder : IPitchTextureCoder
             transfer = PackedYuv422Transfer.Y1Vy0U_8;
             return true;
         }
-
-        if (format == TextureFormats.Yuy2UNormBigEndian)
-        {
-            transfer = PackedYuv422Transfer.Yuyv8BigEndian;
-            return true;
-        }
-
         if (format == TextureFormats.Yuyv16_422UNorm) { transfer = PackedYuv422Transfer.Yuyv16; return true; }
         if (format == TextureFormats.Uyvy16_422UNorm) { transfer = PackedYuv422Transfer.Uyvy16; return true; }
         if (format == TextureFormats.Yuyv10Msb422UNorm) { transfer = PackedYuv422Transfer.Yuyv10Msb; return true; }
@@ -773,13 +702,11 @@ public sealed class PackedYuv422TextureCoder : IPitchTextureCoder
 
     private static bool Is8BitPacked(PackedYuv422Transfer transfer) =>
         transfer is PackedYuv422Transfer.Uyvy8
-            or PackedYuv422Transfer.Uyvy8BigEndian
             or PackedYuv422Transfer.Yuyv8
             or PackedYuv422Transfer.Yvyu8
             or PackedYuv422Transfer.Vyuy8
             or PackedYuv422Transfer.Vy1Uy0_8
-            or PackedYuv422Transfer.Y1Vy0U_8
-            or PackedYuv422Transfer.Yuyv8BigEndian;
+            or PackedYuv422Transfer.Y1Vy0U_8;
 
     private static int GetEvenBlockCountX(int width) => width / 2;
 
@@ -885,34 +812,6 @@ public sealed class PackedYuv422TextureCoder : IPitchTextureCoder
         u = TSample.ReadFourth(block);
     }
 
-    private static void DecodeBigEndianUyvyBlock<TSample>(
-        ReadOnlySpan<byte> block,
-        out uint y0,
-        out uint y1,
-        out uint u,
-        out uint v,
-        BigEndianByteSwapMode endianMode)
-        where TSample : struct, IPackedYuv422SampleTransfer
-    {
-        Span<byte> littleEndianBlock = stackalloc byte[block.Length];
-        BigEndianByteSwap.CopyToLittleEndian(block, littleEndianBlock, endianMode);
-        DecodeUyvyBlock<TSample>(littleEndianBlock, out y0, out y1, out u, out v);
-    }
-
-    private static void DecodeBigEndianYuyvBlock<TSample>(
-        ReadOnlySpan<byte> block,
-        out uint y0,
-        out uint y1,
-        out uint u,
-        out uint v,
-        BigEndianByteSwapMode endianMode)
-        where TSample : struct, IPackedYuv422SampleTransfer
-    {
-        Span<byte> littleEndianBlock = stackalloc byte[block.Length];
-        BigEndianByteSwap.CopyToLittleEndian(block, littleEndianBlock, endianMode);
-        DecodeYuyvBlock<TSample>(littleEndianBlock, out y0, out y1, out u, out v);
-    }
-
     private static void EncodeUyvyBlock<TSample>(Span<byte> block, float y0, float y1, uint u, uint v)
         where TSample : struct, IPackedYuv422SampleTransfer
     {
@@ -965,34 +864,6 @@ public sealed class PackedYuv422TextureCoder : IPitchTextureCoder
         TSample.WriteSecond(block, v);
         TSample.WriteThird(block, TSample.UnitToYuvSample(y0));
         TSample.WriteFourth(block, u);
-    }
-
-    private static void EncodeBigEndianUyvyBlock<TSample>(
-        Span<byte> block,
-        float y0,
-        float y1,
-        uint u,
-        uint v,
-        BigEndianByteSwapMode endianMode)
-        where TSample : struct, IPackedYuv422SampleTransfer
-    {
-        Span<byte> littleEndianBlock = stackalloc byte[block.Length];
-        EncodeUyvyBlock<TSample>(littleEndianBlock, y0, y1, u, v);
-        BigEndianByteSwap.CopyFromLittleEndian(littleEndianBlock, block, endianMode);
-    }
-
-    private static void EncodeBigEndianYuyvBlock<TSample>(
-        Span<byte> block,
-        float y0,
-        float y1,
-        uint u,
-        uint v,
-        BigEndianByteSwapMode endianMode)
-        where TSample : struct, IPackedYuv422SampleTransfer
-    {
-        Span<byte> littleEndianBlock = stackalloc byte[block.Length];
-        EncodeYuyvBlock<TSample>(littleEndianBlock, y0, y1, u, v);
-        BigEndianByteSwap.CopyFromLittleEndian(littleEndianBlock, block, endianMode);
     }
 
     private readonly struct Sample8Transfer : IPackedYuv422SampleTransfer
@@ -1273,13 +1144,11 @@ public sealed class PackedYuv422TextureCoder : IPitchTextureCoder
     private enum PackedYuv422Transfer
     {
         Uyvy8,
-        Uyvy8BigEndian,
         Yuyv8,
         Yvyu8,
         Vyuy8,
         Vy1Uy0_8,
         Y1Vy0U_8,
-        Yuyv8BigEndian,
         Yuyv16,
         Uyvy16,
         Yuyv10Msb,

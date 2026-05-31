@@ -71,23 +71,14 @@ public sealed class S3tcTextureCoder : IPitchTextureCoder
             case S3tcTransfer.Dxt1RgbSrgb:
                 Decode<TPixel, Dxt1RgbSrgbTransfer>(source, destination, rowPitch);
                 return;
-            case S3tcTransfer.Dxt1RgbBigEndian:
-                Decode<TPixel, Dxt1RgbTransferBigEndian>(source, destination, rowPitch);
-                return;
             case S3tcTransfer.Dxt1Rgba:
                 Decode<TPixel, Dxt1RgbaTransfer>(source, destination, rowPitch);
                 return;
             case S3tcTransfer.Dxt1RgbaSrgb:
                 Decode<TPixel, Dxt1RgbaSrgbTransfer>(source, destination, rowPitch);
                 return;
-            case S3tcTransfer.Dxt1RgbaBigEndian:
-                Decode<TPixel, Dxt1RgbaTransferBigEndian>(source, destination, rowPitch);
-                return;
             case S3tcTransfer.Dxt2Rgba:
                 Decode<TPixel, Dxt2RgbaTransfer>(source, destination, rowPitch);
-                return;
-            case S3tcTransfer.Dxt2RgbaBigEndian:
-                Decode<TPixel, Dxt2RgbaTransferBigEndian>(source, destination, rowPitch);
                 return;
             case S3tcTransfer.Dxt3Rgba:
                 Decode<TPixel, Dxt3RgbaTransfer>(source, destination, rowPitch);
@@ -95,26 +86,14 @@ public sealed class S3tcTextureCoder : IPitchTextureCoder
             case S3tcTransfer.Dxt3RgbaSrgb:
                 Decode<TPixel, Dxt3RgbaSrgbTransfer>(source, destination, rowPitch);
                 return;
-            case S3tcTransfer.Dxt3RgbaBigEndian:
-                Decode<TPixel, Dxt3RgbaTransferBigEndian>(source, destination, rowPitch);
-                return;
             case S3tcTransfer.Dxt3A:
                 Decode<TPixel, Dxt3ATransfer>(source, destination, rowPitch);
-                return;
-            case S3tcTransfer.Dxt3ABigEndian:
-                Decode<TPixel, Dxt3ATransferBigEndian>(source, destination, rowPitch);
                 return;
             case S3tcTransfer.Dxt3A1111:
                 Decode<TPixel, Dxt3A1111Transfer>(source, destination, rowPitch);
                 return;
-            case S3tcTransfer.Dxt3A1111BigEndian:
-                Decode<TPixel, Dxt3A1111TransferBigEndian>(source, destination, rowPitch);
-                return;
             case S3tcTransfer.Dxt4Rgba:
                 Decode<TPixel, Dxt4RgbaTransfer>(source, destination, rowPitch);
-                return;
-            case S3tcTransfer.Dxt4RgbaBigEndian:
-                Decode<TPixel, Dxt4RgbaTransferBigEndian>(source, destination, rowPitch);
                 return;
             case S3tcTransfer.Dxt5Rgba:
                 Decode<TPixel, Dxt5RgbaTransfer>(source, destination, rowPitch);
@@ -122,26 +101,14 @@ public sealed class S3tcTextureCoder : IPitchTextureCoder
             case S3tcTransfer.Dxt5RgbaSrgb:
                 Decode<TPixel, Dxt5RgbaSrgbTransfer>(source, destination, rowPitch);
                 return;
-            case S3tcTransfer.Dxt5RgbaBigEndian:
-                Decode<TPixel, Dxt5RgbaTransferBigEndian>(source, destination, rowPitch);
-                return;
             case S3tcTransfer.Dxt5A:
                 Decode<TPixel, Dxt5ATransfer>(source, destination, rowPitch);
-                return;
-            case S3tcTransfer.Dxt5ABigEndian:
-                Decode<TPixel, Dxt5ATransferBigEndian>(source, destination, rowPitch);
                 return;
             case S3tcTransfer.Dxn:
                 Decode<TPixel, DxnTransfer>(source, destination, rowPitch);
                 return;
-            case S3tcTransfer.DxnBigEndian:
-                Decode<TPixel, DxnTransferBigEndian>(source, destination, rowPitch);
-                return;
             case S3tcTransfer.Ctx1:
                 Decode<TPixel, Ctx1Transfer>(source, destination, rowPitch);
-                return;
-            case S3tcTransfer.Ctx1BigEndian:
-                Decode<TPixel, Ctx1TransferBigEndian>(source, destination, rowPitch);
                 return;
             default:
                 throw CreateUnsupportedFormatException(Format);
@@ -159,23 +126,14 @@ public sealed class S3tcTextureCoder : IPitchTextureCoder
             case S3tcTransfer.Dxt1RgbSrgb:
                 Encode<TPixel, Dxt1RgbSrgbTransfer>(source, destination, rowPitch);
                 return;
-            case S3tcTransfer.Dxt1RgbBigEndian:
-                Encode<TPixel, Dxt1RgbTransferBigEndian>(source, destination, rowPitch);
-                return;
             case S3tcTransfer.Dxt1Rgba:
                 Encode<TPixel, Dxt1RgbaTransfer>(source, destination, rowPitch);
                 return;
             case S3tcTransfer.Dxt1RgbaSrgb:
                 Encode<TPixel, Dxt1RgbaSrgbTransfer>(source, destination, rowPitch);
                 return;
-            case S3tcTransfer.Dxt1RgbaBigEndian:
-                Encode<TPixel, Dxt1RgbaTransferBigEndian>(source, destination, rowPitch);
-                return;
             case S3tcTransfer.Dxt2Rgba:
                 Encode<TPixel, Dxt2RgbaTransfer>(source, destination, rowPitch);
-                return;
-            case S3tcTransfer.Dxt2RgbaBigEndian:
-                Encode<TPixel, Dxt2RgbaTransferBigEndian>(source, destination, rowPitch);
                 return;
             case S3tcTransfer.Dxt3Rgba:
                 Encode<TPixel, Dxt3RgbaTransfer>(source, destination, rowPitch);
@@ -183,26 +141,14 @@ public sealed class S3tcTextureCoder : IPitchTextureCoder
             case S3tcTransfer.Dxt3RgbaSrgb:
                 Encode<TPixel, Dxt3RgbaSrgbTransfer>(source, destination, rowPitch);
                 return;
-            case S3tcTransfer.Dxt3RgbaBigEndian:
-                Encode<TPixel, Dxt3RgbaTransferBigEndian>(source, destination, rowPitch);
-                return;
             case S3tcTransfer.Dxt3A:
                 Encode<TPixel, Dxt3ATransfer>(source, destination, rowPitch);
-                return;
-            case S3tcTransfer.Dxt3ABigEndian:
-                Encode<TPixel, Dxt3ATransferBigEndian>(source, destination, rowPitch);
                 return;
             case S3tcTransfer.Dxt3A1111:
                 Encode<TPixel, Dxt3A1111Transfer>(source, destination, rowPitch);
                 return;
-            case S3tcTransfer.Dxt3A1111BigEndian:
-                Encode<TPixel, Dxt3A1111TransferBigEndian>(source, destination, rowPitch);
-                return;
             case S3tcTransfer.Dxt4Rgba:
                 Encode<TPixel, Dxt4RgbaTransfer>(source, destination, rowPitch);
-                return;
-            case S3tcTransfer.Dxt4RgbaBigEndian:
-                Encode<TPixel, Dxt4RgbaTransferBigEndian>(source, destination, rowPitch);
                 return;
             case S3tcTransfer.Dxt5Rgba:
                 Encode<TPixel, Dxt5RgbaTransfer>(source, destination, rowPitch);
@@ -210,26 +156,14 @@ public sealed class S3tcTextureCoder : IPitchTextureCoder
             case S3tcTransfer.Dxt5RgbaSrgb:
                 Encode<TPixel, Dxt5RgbaSrgbTransfer>(source, destination, rowPitch);
                 return;
-            case S3tcTransfer.Dxt5RgbaBigEndian:
-                Encode<TPixel, Dxt5RgbaTransferBigEndian>(source, destination, rowPitch);
-                return;
             case S3tcTransfer.Dxt5A:
                 Encode<TPixel, Dxt5ATransfer>(source, destination, rowPitch);
-                return;
-            case S3tcTransfer.Dxt5ABigEndian:
-                Encode<TPixel, Dxt5ATransferBigEndian>(source, destination, rowPitch);
                 return;
             case S3tcTransfer.Dxn:
                 Encode<TPixel, DxnTransfer>(source, destination, rowPitch);
                 return;
-            case S3tcTransfer.DxnBigEndian:
-                Encode<TPixel, DxnTransferBigEndian>(source, destination, rowPitch);
-                return;
             case S3tcTransfer.Ctx1:
                 Encode<TPixel, Ctx1Transfer>(source, destination, rowPitch);
-                return;
-            case S3tcTransfer.Ctx1BigEndian:
-                Encode<TPixel, Ctx1TransferBigEndian>(source, destination, rowPitch);
                 return;
             default:
                 throw CreateUnsupportedFormatException(Format);
@@ -369,20 +303,6 @@ public sealed class S3tcTextureCoder : IPitchTextureCoder
             EncodeSrgbColorBlock(source, Dxt1ColorMode.Rgb, destination, compressionMode);
     }
 
-    private readonly struct Dxt1RgbTransferBigEndian : IS3tcTransfer
-    {
-        public static int BytesPerBlock => Dxt1RgbTransfer.BytesPerBlock;
-
-        public static void DecodeBlock(ReadOnlySpan<byte> source, Span<Rgba8UNorm> destination) =>
-            DecodeBigEndianBlock<Dxt1RgbTransfer>(source, destination, BigEndianByteSwapMode.Swap8In16);
-
-        public static void EncodeBlock(
-            ReadOnlySpan<Rgba8UNorm> source,
-            Span<byte> destination,
-            TextureCompressionLevel compressionMode) =>
-            EncodeBigEndianBlock<Dxt1RgbTransfer>(source, destination, BigEndianByteSwapMode.Swap8In16, compressionMode);
-    }
-
     private readonly struct Dxt1RgbaTransfer : IS3tcTransfer
     {
         public static int BytesPerBlock => 8;
@@ -414,20 +334,6 @@ public sealed class S3tcTextureCoder : IPitchTextureCoder
             EncodeSrgbColorBlock(source, Dxt1ColorMode.Rgba, destination, compressionMode);
     }
 
-    private readonly struct Dxt1RgbaTransferBigEndian : IS3tcTransfer
-    {
-        public static int BytesPerBlock => Dxt1RgbaTransfer.BytesPerBlock;
-
-        public static void DecodeBlock(ReadOnlySpan<byte> source, Span<Rgba8UNorm> destination) =>
-            DecodeBigEndianBlock<Dxt1RgbaTransfer>(source, destination, BigEndianByteSwapMode.Swap8In16);
-
-        public static void EncodeBlock(
-            ReadOnlySpan<Rgba8UNorm> source,
-            Span<byte> destination,
-            TextureCompressionLevel compressionMode) =>
-            EncodeBigEndianBlock<Dxt1RgbaTransfer>(source, destination, BigEndianByteSwapMode.Swap8In16, compressionMode);
-    }
-
     private readonly struct Dxt2RgbaTransfer : IS3tcTransfer
     {
         public static int BytesPerBlock => 16;
@@ -449,20 +355,6 @@ public sealed class S3tcTextureCoder : IPitchTextureCoder
             EncodeExplicitAlphaBlock(source, destination[..8], compressionMode);
             EncodeColorBlock(premultipliedBlock, Dxt1ColorMode.FourColor, destination[8..], compressionMode);
         }
-    }
-
-    private readonly struct Dxt2RgbaTransferBigEndian : IS3tcTransfer
-    {
-        public static int BytesPerBlock => Dxt2RgbaTransfer.BytesPerBlock;
-
-        public static void DecodeBlock(ReadOnlySpan<byte> source, Span<Rgba8UNorm> destination) =>
-            DecodeBigEndianBlock<Dxt2RgbaTransfer>(source, destination, BigEndianByteSwapMode.Swap8In16);
-
-        public static void EncodeBlock(
-            ReadOnlySpan<Rgba8UNorm> source,
-            Span<byte> destination,
-            TextureCompressionLevel compressionMode) =>
-            EncodeBigEndianBlock<Dxt2RgbaTransfer>(source, destination, BigEndianByteSwapMode.Swap8In16, compressionMode);
     }
 
     private readonly struct Dxt3RgbaTransfer : IS3tcTransfer
@@ -507,20 +399,6 @@ public sealed class S3tcTextureCoder : IPitchTextureCoder
         }
     }
 
-    private readonly struct Dxt3RgbaTransferBigEndian : IS3tcTransfer
-    {
-        public static int BytesPerBlock => Dxt3RgbaTransfer.BytesPerBlock;
-
-        public static void DecodeBlock(ReadOnlySpan<byte> source, Span<Rgba8UNorm> destination) =>
-            DecodeBigEndianBlock<Dxt3RgbaTransfer>(source, destination, BigEndianByteSwapMode.Swap8In16);
-
-        public static void EncodeBlock(
-            ReadOnlySpan<Rgba8UNorm> source,
-            Span<byte> destination,
-            TextureCompressionLevel compressionMode) =>
-            EncodeBigEndianBlock<Dxt3RgbaTransfer>(source, destination, BigEndianByteSwapMode.Swap8In16, compressionMode);
-    }
-
     private readonly struct Dxt3ATransfer : IS3tcTransfer
     {
         public static int BytesPerBlock => 8;
@@ -535,20 +413,6 @@ public sealed class S3tcTextureCoder : IPitchTextureCoder
             EncodeExplicitAlphaOnlyBlock(source, destination, compressionMode);
     }
 
-    private readonly struct Dxt3ATransferBigEndian : IS3tcTransfer
-    {
-        public static int BytesPerBlock => Dxt3ATransfer.BytesPerBlock;
-
-        public static void DecodeBlock(ReadOnlySpan<byte> source, Span<Rgba8UNorm> destination) =>
-            DecodeBigEndianBlock<Dxt3ATransfer>(source, destination, BigEndianByteSwapMode.Swap8In16);
-
-        public static void EncodeBlock(
-            ReadOnlySpan<Rgba8UNorm> source,
-            Span<byte> destination,
-            TextureCompressionLevel compressionMode) =>
-            EncodeBigEndianBlock<Dxt3ATransfer>(source, destination, BigEndianByteSwapMode.Swap8In16, compressionMode);
-    }
-
     private readonly struct Dxt3A1111Transfer : IS3tcTransfer
     {
         public static int BytesPerBlock => 8;
@@ -561,20 +425,6 @@ public sealed class S3tcTextureCoder : IPitchTextureCoder
             Span<byte> destination,
             TextureCompressionLevel _) =>
             EncodeDxt3A1111Block(source, destination);
-    }
-
-    private readonly struct Dxt3A1111TransferBigEndian : IS3tcTransfer
-    {
-        public static int BytesPerBlock => Dxt3A1111Transfer.BytesPerBlock;
-
-        public static void DecodeBlock(ReadOnlySpan<byte> source, Span<Rgba8UNorm> destination) =>
-            DecodeBigEndianBlock<Dxt3A1111Transfer>(source, destination, BigEndianByteSwapMode.Swap8In16);
-
-        public static void EncodeBlock(
-            ReadOnlySpan<Rgba8UNorm> source,
-            Span<byte> destination,
-            TextureCompressionLevel compressionMode) =>
-            EncodeBigEndianBlock<Dxt3A1111Transfer>(source, destination, BigEndianByteSwapMode.Swap8In16, compressionMode);
     }
 
     private readonly struct Dxt4RgbaTransfer : IS3tcTransfer
@@ -598,20 +448,6 @@ public sealed class S3tcTextureCoder : IPitchTextureCoder
             EncodeInterpolatedAlphaBlock(source, destination[..8], compressionMode);
             EncodeColorBlock(premultipliedBlock, Dxt1ColorMode.FourColor, destination[8..], compressionMode);
         }
-    }
-
-    private readonly struct Dxt4RgbaTransferBigEndian : IS3tcTransfer
-    {
-        public static int BytesPerBlock => Dxt4RgbaTransfer.BytesPerBlock;
-
-        public static void DecodeBlock(ReadOnlySpan<byte> source, Span<Rgba8UNorm> destination) =>
-            DecodeBigEndianBlock<Dxt4RgbaTransfer>(source, destination, BigEndianByteSwapMode.Swap8In16);
-
-        public static void EncodeBlock(
-            ReadOnlySpan<Rgba8UNorm> source,
-            Span<byte> destination,
-            TextureCompressionLevel compressionMode) =>
-            EncodeBigEndianBlock<Dxt4RgbaTransfer>(source, destination, BigEndianByteSwapMode.Swap8In16, compressionMode);
     }
 
     private readonly struct Dxt5RgbaTransfer : IS3tcTransfer
@@ -656,20 +492,6 @@ public sealed class S3tcTextureCoder : IPitchTextureCoder
         }
     }
 
-    private readonly struct Dxt5RgbaTransferBigEndian : IS3tcTransfer
-    {
-        public static int BytesPerBlock => Dxt5RgbaTransfer.BytesPerBlock;
-
-        public static void DecodeBlock(ReadOnlySpan<byte> source, Span<Rgba8UNorm> destination) =>
-            DecodeBigEndianBlock<Dxt5RgbaTransfer>(source, destination, BigEndianByteSwapMode.Swap8In16);
-
-        public static void EncodeBlock(
-            ReadOnlySpan<Rgba8UNorm> source,
-            Span<byte> destination,
-            TextureCompressionLevel compressionMode) =>
-            EncodeBigEndianBlock<Dxt5RgbaTransfer>(source, destination, BigEndianByteSwapMode.Swap8In16, compressionMode);
-    }
-
     private readonly struct Dxt5ATransfer : IS3tcTransfer
     {
         public static int BytesPerBlock => 8;
@@ -682,20 +504,6 @@ public sealed class S3tcTextureCoder : IPitchTextureCoder
             Span<byte> destination,
             TextureCompressionLevel compressionMode) =>
             EncodeInterpolatedAlphaOnlyBlock(source, destination, compressionMode);
-    }
-
-    private readonly struct Dxt5ATransferBigEndian : IS3tcTransfer
-    {
-        public static int BytesPerBlock => Dxt5ATransfer.BytesPerBlock;
-
-        public static void DecodeBlock(ReadOnlySpan<byte> source, Span<Rgba8UNorm> destination) =>
-            DecodeBigEndianBlock<Dxt5ATransfer>(source, destination, BigEndianByteSwapMode.Swap8In16);
-
-        public static void EncodeBlock(
-            ReadOnlySpan<Rgba8UNorm> source,
-            Span<byte> destination,
-            TextureCompressionLevel compressionMode) =>
-            EncodeBigEndianBlock<Dxt5ATransfer>(source, destination, BigEndianByteSwapMode.Swap8In16, compressionMode);
     }
 
     private readonly struct DxnTransfer : IS3tcTransfer
@@ -719,20 +527,6 @@ public sealed class S3tcTextureCoder : IPitchTextureCoder
         }
     }
 
-    private readonly struct DxnTransferBigEndian : IS3tcTransfer
-    {
-        public static int BytesPerBlock => DxnTransfer.BytesPerBlock;
-
-        public static void DecodeBlock(ReadOnlySpan<byte> source, Span<Rgba8UNorm> destination) =>
-            DecodeBigEndianBlock<DxnTransfer>(source, destination, BigEndianByteSwapMode.Swap8In16);
-
-        public static void EncodeBlock(
-            ReadOnlySpan<Rgba8UNorm> source,
-            Span<byte> destination,
-            TextureCompressionLevel compressionMode) =>
-            EncodeBigEndianBlock<DxnTransfer>(source, destination, BigEndianByteSwapMode.Swap8In16, compressionMode);
-    }
-
     private readonly struct Ctx1Transfer : IS3tcTransfer
     {
         public static int BytesPerBlock => 8;
@@ -745,43 +539,6 @@ public sealed class S3tcTextureCoder : IPitchTextureCoder
             Span<byte> destination,
             TextureCompressionLevel _) =>
             EncodeCtx1Block(source, destination);
-    }
-
-    private readonly struct Ctx1TransferBigEndian : IS3tcTransfer
-    {
-        public static int BytesPerBlock => Ctx1Transfer.BytesPerBlock;
-
-        public static void DecodeBlock(ReadOnlySpan<byte> source, Span<Rgba8UNorm> destination) =>
-            DecodeBigEndianBlock<Ctx1Transfer>(source, destination, BigEndianByteSwapMode.Swap8In16);
-
-        public static void EncodeBlock(
-            ReadOnlySpan<Rgba8UNorm> source,
-            Span<byte> destination,
-            TextureCompressionLevel compressionMode) =>
-            EncodeBigEndianBlock<Ctx1Transfer>(source, destination, BigEndianByteSwapMode.Swap8In16, compressionMode);
-    }
-
-    private static void DecodeBigEndianBlock<TTransfer>(
-        ReadOnlySpan<byte> source,
-        Span<Rgba8UNorm> destination,
-        BigEndianByteSwapMode endianMode)
-        where TTransfer : IS3tcTransfer
-    {
-        Span<byte> littleEndianBlock = stackalloc byte[TTransfer.BytesPerBlock];
-        BigEndianByteSwap.CopyToLittleEndian(source, littleEndianBlock, endianMode);
-        TTransfer.DecodeBlock(littleEndianBlock, destination);
-    }
-
-    private static void EncodeBigEndianBlock<TTransfer>(
-        ReadOnlySpan<Rgba8UNorm> source,
-        Span<byte> destination,
-        BigEndianByteSwapMode endianMode,
-        TextureCompressionLevel compressionMode)
-        where TTransfer : IS3tcTransfer
-    {
-        Span<byte> littleEndianBlock = stackalloc byte[TTransfer.BytesPerBlock];
-        TTransfer.EncodeBlock(source, littleEndianBlock, compressionMode);
-        BigEndianByteSwap.CopyFromLittleEndian(littleEndianBlock, destination, endianMode);
     }
 
     private static void EncodeSrgbColorBlock(
@@ -2667,13 +2424,6 @@ public sealed class S3tcTextureCoder : IPitchTextureCoder
             transfer = format.ValueKind == TextureValueKind.Srgb ? S3tcTransfer.Dxt1RgbSrgb : S3tcTransfer.Dxt1Rgb;
             return true;
         }
-
-        if (format == TextureFormats.Dxt1RgbBigEndian)
-        {
-            transfer = S3tcTransfer.Dxt1RgbBigEndian;
-            return true;
-        }
-
         if (format == TextureFormats.Bc1Rgba
             || format == TextureFormats.Dxt1Rgba
             || format == TextureFormats.Bc1RgbaSrgb
@@ -2682,25 +2432,11 @@ public sealed class S3tcTextureCoder : IPitchTextureCoder
             transfer = format.ValueKind == TextureValueKind.Srgb ? S3tcTransfer.Dxt1RgbaSrgb : S3tcTransfer.Dxt1Rgba;
             return true;
         }
-
-        if (format == TextureFormats.Dxt1RgbaBigEndian)
-        {
-            transfer = S3tcTransfer.Dxt1RgbaBigEndian;
-            return true;
-        }
-
         if (format == TextureFormats.Dxt2Rgba)
         {
             transfer = S3tcTransfer.Dxt2Rgba;
             return true;
         }
-
-        if (format == TextureFormats.Dxt2RgbaBigEndian)
-        {
-            transfer = S3tcTransfer.Dxt2RgbaBigEndian;
-            return true;
-        }
-
         if (format == TextureFormats.Bc2Rgba
             || format == TextureFormats.Dxt3Rgba
             || format == TextureFormats.Bc2RgbaSrgb
@@ -2709,49 +2445,21 @@ public sealed class S3tcTextureCoder : IPitchTextureCoder
             transfer = format.ValueKind == TextureValueKind.Srgb ? S3tcTransfer.Dxt3RgbaSrgb : S3tcTransfer.Dxt3Rgba;
             return true;
         }
-
-        if (format == TextureFormats.Dxt3RgbaBigEndian)
-        {
-            transfer = S3tcTransfer.Dxt3RgbaBigEndian;
-            return true;
-        }
-
         if (format == TextureFormats.Dxt3A)
         {
             transfer = S3tcTransfer.Dxt3A;
             return true;
         }
-
-        if (format == TextureFormats.Dxt3ABigEndian)
-        {
-            transfer = S3tcTransfer.Dxt3ABigEndian;
-            return true;
-        }
-
         if (format == TextureFormats.Dxt3A1111)
         {
             transfer = S3tcTransfer.Dxt3A1111;
             return true;
         }
-
-        if (format == TextureFormats.Dxt3A1111BigEndian)
-        {
-            transfer = S3tcTransfer.Dxt3A1111BigEndian;
-            return true;
-        }
-
         if (format == TextureFormats.Dxt4Rgba)
         {
             transfer = S3tcTransfer.Dxt4Rgba;
             return true;
         }
-
-        if (format == TextureFormats.Dxt4RgbaBigEndian)
-        {
-            transfer = S3tcTransfer.Dxt4RgbaBigEndian;
-            return true;
-        }
-
         if (format == TextureFormats.Bc3Rgba
             || format == TextureFormats.Dxt5Rgba
             || format == TextureFormats.Bc3RgbaSrgb
@@ -2760,49 +2468,21 @@ public sealed class S3tcTextureCoder : IPitchTextureCoder
             transfer = format.ValueKind == TextureValueKind.Srgb ? S3tcTransfer.Dxt5RgbaSrgb : S3tcTransfer.Dxt5Rgba;
             return true;
         }
-
-        if (format == TextureFormats.Dxt5RgbaBigEndian)
-        {
-            transfer = S3tcTransfer.Dxt5RgbaBigEndian;
-            return true;
-        }
-
         if (format == TextureFormats.Dxt5A)
         {
             transfer = S3tcTransfer.Dxt5A;
             return true;
         }
-
-        if (format == TextureFormats.Dxt5ABigEndian)
-        {
-            transfer = S3tcTransfer.Dxt5ABigEndian;
-            return true;
-        }
-
         if (format == TextureFormats.Dxn)
         {
             transfer = S3tcTransfer.Dxn;
             return true;
         }
-
-        if (format == TextureFormats.DxnBigEndian)
-        {
-            transfer = S3tcTransfer.DxnBigEndian;
-            return true;
-        }
-
         if (format == TextureFormats.Ctx1)
         {
             transfer = S3tcTransfer.Ctx1;
             return true;
         }
-
-        if (format == TextureFormats.Ctx1BigEndian)
-        {
-            transfer = S3tcTransfer.Ctx1BigEndian;
-            return true;
-        }
-
         transfer = default;
         return false;
     }
@@ -2849,30 +2529,19 @@ public sealed class S3tcTextureCoder : IPitchTextureCoder
     {
         Dxt1Rgb,
         Dxt1RgbSrgb,
-        Dxt1RgbBigEndian,
         Dxt1Rgba,
         Dxt1RgbaSrgb,
-        Dxt1RgbaBigEndian,
         Dxt2Rgba,
-        Dxt2RgbaBigEndian,
         Dxt3Rgba,
         Dxt3RgbaSrgb,
-        Dxt3RgbaBigEndian,
         Dxt3A,
-        Dxt3ABigEndian,
         Dxt3A1111,
-        Dxt3A1111BigEndian,
         Dxt4Rgba,
-        Dxt4RgbaBigEndian,
         Dxt5Rgba,
         Dxt5RgbaSrgb,
-        Dxt5RgbaBigEndian,
         Dxt5A,
-        Dxt5ABigEndian,
         Dxn,
-        DxnBigEndian,
         Ctx1,
-        Ctx1BigEndian
     }
 
     private enum Dxt1ColorMode

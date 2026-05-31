@@ -1,6 +1,6 @@
 ﻿namespace TextureCompressor.Utilities;
 
-internal enum BigEndianByteSwapMode
+public enum BigEndianByteSwapMode
 {
     None,
     Swap8In16,
@@ -8,7 +8,7 @@ internal enum BigEndianByteSwapMode
     Swap16In32
 }
 
-internal static class BigEndianByteSwap
+public static class BigEndianByteSwap
 {
     public static void CopyToLittleEndian(ReadOnlySpan<byte> source, Span<byte> destination, BigEndianByteSwapMode mode)
     {

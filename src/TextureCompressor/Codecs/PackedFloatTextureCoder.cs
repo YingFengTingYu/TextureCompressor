@@ -2,7 +2,6 @@
 using TextureCompressor.Colors;
 using TextureCompressor.Formats;
 using TextureCompressor.Bitmaps;
-using TextureCompressor.Utilities;
 
 namespace TextureCompressor.Codecs;
 
@@ -22,8 +21,7 @@ public sealed class PackedFloatTextureCoder(TextureFormat format) : IPitchTextur
         || format == TextureFormats.Bgr10FloatA2UNormRev
         || format == TextureFormats.Rgb10FloatX2UNormRev
         || format == TextureFormats.Bgr10FloatX2UNormRev
-        || format == TextureFormats.R32FloatAbs
-        || format == TextureFormats.R11G11B10FloatBigEndian;
+        || format == TextureFormats.R32FloatAbs;
 
     public int GetDefaultPitch(int width) => Format.GetRowByteCount(width);
 
@@ -48,9 +46,6 @@ public sealed class PackedFloatTextureCoder(TextureFormat format) : IPitchTextur
         {
             case PackedFloatKind.R11G11B10Float:
                 Decode<TPixel, R11G11B10FloatTransfer>(source, destination, rowPitch);
-                return;
-            case PackedFloatKind.R11G11B10FloatBigEndian:
-                Decode<TPixel, R11G11B10FloatTransferBigEndian>(source, destination, rowPitch);
                 return;
             case PackedFloatKind.Rgb9E5:
                 Decode<TPixel, Rgb9E5Transfer>(source, destination, rowPitch);
@@ -86,9 +81,6 @@ public sealed class PackedFloatTextureCoder(TextureFormat format) : IPitchTextur
         {
             case PackedFloatKind.R11G11B10Float:
                 Encode<TPixel, R11G11B10FloatTransfer>(source, destination, rowPitch);
-                return;
-            case PackedFloatKind.R11G11B10FloatBigEndian:
-                Encode<TPixel, R11G11B10FloatTransferBigEndian>(source, destination, rowPitch);
                 return;
             case PackedFloatKind.Rgb9E5:
                 Encode<TPixel, Rgb9E5Transfer>(source, destination, rowPitch);
@@ -141,15 +133,6 @@ public sealed class PackedFloatTextureCoder(TextureFormat format) : IPitchTextur
             EncodeUnsignedFloat(value.Red, 6)
             | (EncodeUnsignedFloat(value.Green, 6) << 11)
             | (EncodeUnsignedFloat(value.Blue, 5) << 22);
-    }
-
-    private readonly struct R11G11B10FloatTransferBigEndian : IPackedFloatTransfer
-    {
-        public static Rgba32Float Decode(ReadOnlySpan<byte> texel) =>
-            DecodeBigEndianTexel<R11G11B10FloatTransfer>(texel, BigEndianByteSwapMode.Swap8In32);
-
-        public static void Encode(Rgba32Float value, Span<byte> texel) =>
-            EncodeBigEndianTexel<R11G11B10FloatTransfer>(value, texel, BigEndianByteSwapMode.Swap8In32);
     }
 
     private readonly struct Rgb9E5Transfer : IPackedFloatTransfer
@@ -282,27 +265,6 @@ public sealed class PackedFloatTextureCoder(TextureFormat format) : IPitchTextur
             var bits = BitConverter.SingleToUInt32Bits(value.Red) & 0x7fffffffu;
             BinaryPrimitives.WriteUInt32LittleEndian(texel, bits);
         }
-    }
-
-    private static Rgba32Float DecodeBigEndianTexel<TTransfer>(
-        ReadOnlySpan<byte> source,
-        BigEndianByteSwapMode endianMode)
-        where TTransfer : IPackedFloatTransfer
-    {
-        Span<byte> littleEndianTexel = stackalloc byte[BytesPerTexel];
-        BigEndianByteSwap.CopyToLittleEndian(source, littleEndianTexel, endianMode);
-        return TTransfer.Decode(littleEndianTexel);
-    }
-
-    private static void EncodeBigEndianTexel<TTransfer>(
-        Rgba32Float value,
-        Span<byte> destination,
-        BigEndianByteSwapMode endianMode)
-        where TTransfer : IPackedFloatTransfer
-    {
-        Span<byte> littleEndianTexel = stackalloc byte[BytesPerTexel];
-        TTransfer.Encode(value, littleEndianTexel);
-        BigEndianByteSwap.CopyFromLittleEndian(littleEndianTexel, destination, endianMode);
     }
 
     private void Decode<TPixel, TTransfer>(ReadOnlySpan<byte> source, BitmapView<TPixel> destination, int rowPitch)
@@ -519,11 +481,6 @@ public sealed class PackedFloatTextureCoder(TextureFormat format) : IPitchTextur
             return PackedFloatKind.R11G11B10Float;
         }
 
-        if (format == TextureFormats.R11G11B10FloatBigEndian)
-        {
-            return PackedFloatKind.R11G11B10FloatBigEndian;
-        }
-
         if (format == TextureFormats.Rgb9E5)
         {
             return PackedFloatKind.Rgb9E5;
@@ -568,7 +525,6 @@ public sealed class PackedFloatTextureCoder(TextureFormat format) : IPitchTextur
     private enum PackedFloatKind
     {
         R11G11B10Float,
-        R11G11B10FloatBigEndian,
         Rgb9E5,
         Rgb10FloatA2UNorm,
         Rgb10FloatA2UNormRev,

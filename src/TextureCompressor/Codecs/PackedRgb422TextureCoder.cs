@@ -2,7 +2,6 @@
 using TextureCompressor.Colors;
 using TextureCompressor.Formats;
 using TextureCompressor.Bitmaps;
-using TextureCompressor.Utilities;
 
 namespace TextureCompressor.Codecs;
 
@@ -61,14 +60,8 @@ public sealed class PackedRgb422TextureCoder : IPitchTextureCoder
             case PackedRgb422Transfer.RgBg8:
                 Decode8<TPixel, RgBg8Transfer>(source, destination, rowPitch);
                 return;
-            case PackedRgb422Transfer.RgBg8BigEndian:
-                Decode8<TPixel, RgBg8TransferBigEndian>(source, destination, rowPitch);
-                return;
             case PackedRgb422Transfer.GrGb8:
                 Decode8<TPixel, GrGb8Transfer>(source, destination, rowPitch);
-                return;
-            case PackedRgb422Transfer.GrGb8BigEndian:
-                Decode8<TPixel, GrGb8TransferBigEndian>(source, destination, rowPitch);
                 return;
             case PackedRgb422Transfer.GbGr8:
                 Decode8<TPixel, GbGr8Transfer>(source, destination, rowPitch);
@@ -107,14 +100,8 @@ public sealed class PackedRgb422TextureCoder : IPitchTextureCoder
             case PackedRgb422Transfer.RgBg8:
                 Encode8<TPixel, RgBg8Transfer>(source, destination, rowPitch);
                 return;
-            case PackedRgb422Transfer.RgBg8BigEndian:
-                Encode8<TPixel, RgBg8TransferBigEndian>(source, destination, rowPitch);
-                return;
             case PackedRgb422Transfer.GrGb8:
                 Encode8<TPixel, GrGb8Transfer>(source, destination, rowPitch);
-                return;
-            case PackedRgb422Transfer.GrGb8BigEndian:
-                Encode8<TPixel, GrGb8TransferBigEndian>(source, destination, rowPitch);
                 return;
             case PackedRgb422Transfer.GbGr8:
                 Encode8<TPixel, GbGr8Transfer>(source, destination, rowPitch);
@@ -260,30 +247,6 @@ public sealed class PackedRgb422TextureCoder : IPitchTextureCoder
         static abstract void EncodeBlock(TCarrier first, TCarrier second, Span<byte> block);
     }
 
-    private static void DecodeBigEndianBlock<TTransfer, TCarrier>(
-        ReadOnlySpan<byte> source,
-        out TCarrier first,
-        out TCarrier second,
-        BigEndianByteSwapMode endianMode)
-        where TTransfer : IPackedRgb422Transfer<TCarrier>
-    {
-        Span<byte> littleEndianBlock = stackalloc byte[TTransfer.BytesPerBlock];
-        BigEndianByteSwap.CopyToLittleEndian(source, littleEndianBlock, endianMode);
-        TTransfer.DecodeBlock(littleEndianBlock, out first, out second);
-    }
-
-    private static void EncodeBigEndianBlock<TTransfer, TCarrier>(
-        TCarrier first,
-        TCarrier second,
-        Span<byte> destination,
-        BigEndianByteSwapMode endianMode)
-        where TTransfer : IPackedRgb422Transfer<TCarrier>
-    {
-        Span<byte> littleEndianBlock = stackalloc byte[TTransfer.BytesPerBlock];
-        TTransfer.EncodeBlock(first, second, littleEndianBlock);
-        BigEndianByteSwap.CopyFromLittleEndian(littleEndianBlock, destination, endianMode);
-    }
-
     private readonly struct RgBg8Transfer : IPackedRgb422Transfer<Rgba8UNorm>
     {
         public static int BytesPerBlock => 4;
@@ -307,17 +270,6 @@ public sealed class PackedRgb422TextureCoder : IPitchTextureCoder
         }
     }
 
-    private readonly struct RgBg8TransferBigEndian : IPackedRgb422Transfer<Rgba8UNorm>
-    {
-        public static int BytesPerBlock => RgBg8Transfer.BytesPerBlock;
-
-        public static void DecodeBlock(ReadOnlySpan<byte> block, out Rgba8UNorm first, out Rgba8UNorm second) =>
-            DecodeBigEndianBlock<RgBg8Transfer, Rgba8UNorm>(block, out first, out second, BigEndianByteSwapMode.Swap8In32);
-
-        public static void EncodeBlock(Rgba8UNorm first, Rgba8UNorm second, Span<byte> block) =>
-            EncodeBigEndianBlock<RgBg8Transfer, Rgba8UNorm>(first, second, block, BigEndianByteSwapMode.Swap8In32);
-    }
-
     private readonly struct GrGb8Transfer : IPackedRgb422Transfer<Rgba8UNorm>
     {
         public static int BytesPerBlock => 4;
@@ -339,17 +291,6 @@ public sealed class PackedRgb422TextureCoder : IPitchTextureCoder
             block[2] = second.Green;
             block[3] = AverageUNorm8(first.Blue, second.Blue);
         }
-    }
-
-    private readonly struct GrGb8TransferBigEndian : IPackedRgb422Transfer<Rgba8UNorm>
-    {
-        public static int BytesPerBlock => GrGb8Transfer.BytesPerBlock;
-
-        public static void DecodeBlock(ReadOnlySpan<byte> block, out Rgba8UNorm first, out Rgba8UNorm second) =>
-            DecodeBigEndianBlock<GrGb8Transfer, Rgba8UNorm>(block, out first, out second, BigEndianByteSwapMode.Swap8In32);
-
-        public static void EncodeBlock(Rgba8UNorm first, Rgba8UNorm second, Span<byte> block) =>
-            EncodeBigEndianBlock<GrGb8Transfer, Rgba8UNorm>(first, second, block, BigEndianByteSwapMode.Swap8In32);
     }
 
     private readonly struct GbGr8Transfer : IPackedRgb422Transfer<Rgba8UNorm>
@@ -587,25 +528,11 @@ public sealed class PackedRgb422TextureCoder : IPitchTextureCoder
             transfer = PackedRgb422Transfer.RgBg8;
             return true;
         }
-
-        if (format == TextureFormats.R8G8B8G8_422UNormBigEndian)
-        {
-            transfer = PackedRgb422Transfer.RgBg8BigEndian;
-            return true;
-        }
-
         if (format == TextureFormats.G8R8G8B8_422UNorm)
         {
             transfer = PackedRgb422Transfer.GrGb8;
             return true;
         }
-
-        if (format == TextureFormats.G8R8G8B8_422UNormBigEndian)
-        {
-            transfer = PackedRgb422Transfer.GrGb8BigEndian;
-            return true;
-        }
-
         if (format == TextureFormats.G8B8G8R8_422UNorm)
         {
             transfer = PackedRgb422Transfer.GbGr8;
@@ -664,9 +591,7 @@ public sealed class PackedRgb422TextureCoder : IPitchTextureCoder
     private enum PackedRgb422Transfer
     {
         RgBg8,
-        RgBg8BigEndian,
         GrGb8,
-        GrGb8BigEndian,
         GbGr8,
         BgRg8,
         GbGr10,

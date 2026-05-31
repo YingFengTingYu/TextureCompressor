@@ -2,7 +2,6 @@
 using TextureCompressor.Colors;
 using TextureCompressor.Formats;
 using TextureCompressor.Bitmaps;
-using TextureCompressor.Utilities;
 
 namespace TextureCompressor.Codecs;
 
@@ -100,14 +99,8 @@ public sealed class PackedUNormTextureCoder : IPitchTextureCoder
             case PackedUNormTransfer.Rgb565:
                 Decode<TPixel, Rgba8UNorm, Rgba8UNormTransfer, Rgb565UNormTransfer>(source, destination, rowPitch);
                 return;
-            case PackedUNormTransfer.Rgb565BigEndian:
-                Decode<TPixel, Rgba8UNorm, Rgba8UNormTransfer, Rgb565UNormTransferBigEndian>(source, destination, rowPitch);
-                return;
             case PackedUNormTransfer.Rgb655:
                 Decode<TPixel, Rgba8UNorm, Rgba8UNormTransfer, Rgb655UNormTransfer>(source, destination, rowPitch);
-                return;
-            case PackedUNormTransfer.Rgb655BigEndian:
-                Decode<TPixel, Rgba8UNorm, Rgba8UNormTransfer, Rgb655UNormTransferBigEndian>(source, destination, rowPitch);
                 return;
             case PackedUNormTransfer.Rgb565Rev:
                 Decode<TPixel, Rgba8UNorm, Rgba8UNormTransfer, Rgb565RevUNormTransfer>(source, destination, rowPitch);
@@ -124,26 +117,14 @@ public sealed class PackedUNormTextureCoder : IPitchTextureCoder
             case PackedUNormTransfer.R10Gb11:
                 Decode<TPixel, Rgba16UNorm, Rgba16UNormTransfer, R10Gb11UNormTransfer>(source, destination, rowPitch);
                 return;
-            case PackedUNormTransfer.R10Gb11BigEndian:
-                Decode<TPixel, Rgba16UNorm, Rgba16UNormTransfer, R10Gb11UNormTransferBigEndian>(source, destination, rowPitch);
-                return;
             case PackedUNormTransfer.Rg11B10:
                 Decode<TPixel, Rgba16UNorm, Rgba16UNormTransfer, Rg11B10UNormTransfer>(source, destination, rowPitch);
-                return;
-            case PackedUNormTransfer.Rg11B10BigEndian:
-                Decode<TPixel, Rgba16UNorm, Rgba16UNormTransfer, Rg11B10UNormTransferBigEndian>(source, destination, rowPitch);
                 return;
             case PackedUNormTransfer.R10Gb11Rev:
                 Decode<TPixel, Rgba16UNorm, Rgba16UNormTransfer, R10Gb11RevUNormTransfer>(source, destination, rowPitch);
                 return;
-            case PackedUNormTransfer.R10Gb11RevBigEndian:
-                Decode<TPixel, Rgba16UNorm, Rgba16UNormTransfer, R10Gb11RevUNormTransferBigEndian>(source, destination, rowPitch);
-                return;
             case PackedUNormTransfer.Rg11B10Rev:
                 Decode<TPixel, Rgba16UNorm, Rgba16UNormTransfer, Rg11B10RevUNormTransfer>(source, destination, rowPitch);
-                return;
-            case PackedUNormTransfer.Rg11B10RevBigEndian:
-                Decode<TPixel, Rgba16UNorm, Rgba16UNormTransfer, Rg11B10RevUNormTransferBigEndian>(source, destination, rowPitch);
                 return;
             case PackedUNormTransfer.Rgb12:
                 Decode<TPixel, Rgba16UNorm, Rgba16UNormTransfer, Rgb12UNormTransfer>(source, destination, rowPitch);
@@ -190,12 +171,6 @@ public sealed class PackedUNormTextureCoder : IPitchTextureCoder
             case PackedUNormTransfer.Xrgb4:
                 Decode<TPixel, Rgba8UNorm, Rgba8UNormTransfer, Xrgb4UNormTransfer>(source, destination, rowPitch);
                 return;
-            case PackedUNormTransfer.Argb4BigEndian:
-                Decode<TPixel, Rgba8UNorm, Rgba8UNormTransfer, Argb4UNormTransferBigEndian>(source, destination, rowPitch);
-                return;
-            case PackedUNormTransfer.Xrgb4BigEndian:
-                Decode<TPixel, Rgba8UNorm, Rgba8UNormTransfer, Xrgb4UNormTransferBigEndian>(source, destination, rowPitch);
-                return;
             case PackedUNormTransfer.Argb4Rev:
                 Decode<TPixel, Rgba8UNorm, Rgba8UNormTransfer, Argb4RevUNormTransfer>(source, destination, rowPitch);
                 return;
@@ -217,12 +192,6 @@ public sealed class PackedUNormTextureCoder : IPitchTextureCoder
             case PackedUNormTransfer.X1Rgb5:
                 Decode<TPixel, Rgba8UNorm, Rgba8UNormTransfer, X1Rgb5UNormTransfer>(source, destination, rowPitch);
                 return;
-            case PackedUNormTransfer.A1Rgb5BigEndian:
-                Decode<TPixel, Rgba8UNorm, Rgba8UNormTransfer, A1Rgb5UNormTransferBigEndian>(source, destination, rowPitch);
-                return;
-            case PackedUNormTransfer.X1Rgb5BigEndian:
-                Decode<TPixel, Rgba8UNorm, Rgba8UNormTransfer, X1Rgb5UNormTransferBigEndian>(source, destination, rowPitch);
-                return;
             case PackedUNormTransfer.A1Rgb5Rev:
                 Decode<TPixel, Rgba8UNorm, Rgba8UNormTransfer, A1Rgb5RevUNormTransfer>(source, destination, rowPitch);
                 return;
@@ -243,15 +212,6 @@ public sealed class PackedUNormTextureCoder : IPitchTextureCoder
                 return;
             case PackedUNormTransfer.Bgr10X2Rev:
                 Decode<TPixel, Rgba16UNorm, Rgba16UNormTransfer, Bgr10X2RevUNormTransfer>(source, destination, rowPitch);
-                return;
-            case PackedUNormTransfer.Rgb10A2RevBigEndian:
-                Decode<TPixel, Rgba16UNorm, Rgba16UNormTransfer, Rgb10A2RevUNormTransferBigEndian>(source, destination, rowPitch);
-                return;
-            case PackedUNormTransfer.Bgr10A2RevBigEndian:
-                Decode<TPixel, Rgba16UNorm, Rgba16UNormTransfer, Bgr10A2RevUNormTransferBigEndian>(source, destination, rowPitch);
-                return;
-            case PackedUNormTransfer.Bgr10X2RevBigEndian:
-                Decode<TPixel, Rgba16UNorm, Rgba16UNormTransfer, Bgr10X2RevUNormTransferBigEndian>(source, destination, rowPitch);
                 return;
             case PackedUNormTransfer.Rgba12:
                 Decode<TPixel, Rgba16UNorm, Rgba16UNormTransfer, Rgba12UNormTransfer>(source, destination, rowPitch);
@@ -320,14 +280,8 @@ public sealed class PackedUNormTextureCoder : IPitchTextureCoder
             case PackedUNormTransfer.Rgb565:
                 Encode<TPixel, Rgba8UNorm, Rgba8UNormTransfer, Rgb565UNormTransfer>(source, destination, rowPitch);
                 return;
-            case PackedUNormTransfer.Rgb565BigEndian:
-                Encode<TPixel, Rgba8UNorm, Rgba8UNormTransfer, Rgb565UNormTransferBigEndian>(source, destination, rowPitch);
-                return;
             case PackedUNormTransfer.Rgb655:
                 Encode<TPixel, Rgba8UNorm, Rgba8UNormTransfer, Rgb655UNormTransfer>(source, destination, rowPitch);
-                return;
-            case PackedUNormTransfer.Rgb655BigEndian:
-                Encode<TPixel, Rgba8UNorm, Rgba8UNormTransfer, Rgb655UNormTransferBigEndian>(source, destination, rowPitch);
                 return;
             case PackedUNormTransfer.Rgb565Rev:
                 Encode<TPixel, Rgba8UNorm, Rgba8UNormTransfer, Rgb565RevUNormTransfer>(source, destination, rowPitch);
@@ -344,26 +298,14 @@ public sealed class PackedUNormTextureCoder : IPitchTextureCoder
             case PackedUNormTransfer.R10Gb11:
                 Encode<TPixel, Rgba16UNorm, Rgba16UNormTransfer, R10Gb11UNormTransfer>(source, destination, rowPitch);
                 return;
-            case PackedUNormTransfer.R10Gb11BigEndian:
-                Encode<TPixel, Rgba16UNorm, Rgba16UNormTransfer, R10Gb11UNormTransferBigEndian>(source, destination, rowPitch);
-                return;
             case PackedUNormTransfer.Rg11B10:
                 Encode<TPixel, Rgba16UNorm, Rgba16UNormTransfer, Rg11B10UNormTransfer>(source, destination, rowPitch);
-                return;
-            case PackedUNormTransfer.Rg11B10BigEndian:
-                Encode<TPixel, Rgba16UNorm, Rgba16UNormTransfer, Rg11B10UNormTransferBigEndian>(source, destination, rowPitch);
                 return;
             case PackedUNormTransfer.R10Gb11Rev:
                 Encode<TPixel, Rgba16UNorm, Rgba16UNormTransfer, R10Gb11RevUNormTransfer>(source, destination, rowPitch);
                 return;
-            case PackedUNormTransfer.R10Gb11RevBigEndian:
-                Encode<TPixel, Rgba16UNorm, Rgba16UNormTransfer, R10Gb11RevUNormTransferBigEndian>(source, destination, rowPitch);
-                return;
             case PackedUNormTransfer.Rg11B10Rev:
                 Encode<TPixel, Rgba16UNorm, Rgba16UNormTransfer, Rg11B10RevUNormTransfer>(source, destination, rowPitch);
-                return;
-            case PackedUNormTransfer.Rg11B10RevBigEndian:
-                Encode<TPixel, Rgba16UNorm, Rgba16UNormTransfer, Rg11B10RevUNormTransferBigEndian>(source, destination, rowPitch);
                 return;
             case PackedUNormTransfer.Rgb12:
                 Encode<TPixel, Rgba16UNorm, Rgba16UNormTransfer, Rgb12UNormTransfer>(source, destination, rowPitch);
@@ -410,12 +352,6 @@ public sealed class PackedUNormTextureCoder : IPitchTextureCoder
             case PackedUNormTransfer.Xrgb4:
                 Encode<TPixel, Rgba8UNorm, Rgba8UNormTransfer, Xrgb4UNormTransfer>(source, destination, rowPitch);
                 return;
-            case PackedUNormTransfer.Argb4BigEndian:
-                Encode<TPixel, Rgba8UNorm, Rgba8UNormTransfer, Argb4UNormTransferBigEndian>(source, destination, rowPitch);
-                return;
-            case PackedUNormTransfer.Xrgb4BigEndian:
-                Encode<TPixel, Rgba8UNorm, Rgba8UNormTransfer, Xrgb4UNormTransferBigEndian>(source, destination, rowPitch);
-                return;
             case PackedUNormTransfer.Argb4Rev:
                 Encode<TPixel, Rgba8UNorm, Rgba8UNormTransfer, Argb4RevUNormTransfer>(source, destination, rowPitch);
                 return;
@@ -437,12 +373,6 @@ public sealed class PackedUNormTextureCoder : IPitchTextureCoder
             case PackedUNormTransfer.X1Rgb5:
                 Encode<TPixel, Rgba8UNorm, Rgba8UNormTransfer, X1Rgb5UNormTransfer>(source, destination, rowPitch);
                 return;
-            case PackedUNormTransfer.A1Rgb5BigEndian:
-                Encode<TPixel, Rgba8UNorm, Rgba8UNormTransfer, A1Rgb5UNormTransferBigEndian>(source, destination, rowPitch);
-                return;
-            case PackedUNormTransfer.X1Rgb5BigEndian:
-                Encode<TPixel, Rgba8UNorm, Rgba8UNormTransfer, X1Rgb5UNormTransferBigEndian>(source, destination, rowPitch);
-                return;
             case PackedUNormTransfer.A1Rgb5Rev:
                 Encode<TPixel, Rgba8UNorm, Rgba8UNormTransfer, A1Rgb5RevUNormTransfer>(source, destination, rowPitch);
                 return;
@@ -463,15 +393,6 @@ public sealed class PackedUNormTextureCoder : IPitchTextureCoder
                 return;
             case PackedUNormTransfer.Bgr10X2Rev:
                 Encode<TPixel, Rgba16UNorm, Rgba16UNormTransfer, Bgr10X2RevUNormTransfer>(source, destination, rowPitch);
-                return;
-            case PackedUNormTransfer.Rgb10A2RevBigEndian:
-                Encode<TPixel, Rgba16UNorm, Rgba16UNormTransfer, Rgb10A2RevUNormTransferBigEndian>(source, destination, rowPitch);
-                return;
-            case PackedUNormTransfer.Bgr10A2RevBigEndian:
-                Encode<TPixel, Rgba16UNorm, Rgba16UNormTransfer, Bgr10A2RevUNormTransferBigEndian>(source, destination, rowPitch);
-                return;
-            case PackedUNormTransfer.Bgr10X2RevBigEndian:
-                Encode<TPixel, Rgba16UNorm, Rgba16UNormTransfer, Bgr10X2RevUNormTransferBigEndian>(source, destination, rowPitch);
                 return;
             case PackedUNormTransfer.Rgba12:
                 Encode<TPixel, Rgba16UNorm, Rgba16UNormTransfer, Rgba12UNormTransfer>(source, destination, rowPitch);
@@ -580,170 +501,6 @@ public sealed class PackedUNormTextureCoder : IPitchTextureCoder
 
             rowOffset += rowPitch;
         }
-    }
-
-    private static TCarrier DecodeBigEndianTexel<TTransfer, TCarrier>(
-        ReadOnlySpan<byte> source,
-        BigEndianByteSwapMode endianMode)
-        where TTransfer : IPackedUNormTransfer<TCarrier>
-    {
-        Span<byte> littleEndianTexel = stackalloc byte[TTransfer.BytesPerTexel];
-        BigEndianByteSwap.CopyToLittleEndian(source, littleEndianTexel, endianMode);
-        return TTransfer.Decode(littleEndianTexel);
-    }
-
-    private static void EncodeBigEndianTexel<TTransfer, TCarrier>(
-        TCarrier value,
-        Span<byte> destination,
-        BigEndianByteSwapMode endianMode)
-        where TTransfer : IPackedUNormTransfer<TCarrier>
-    {
-        Span<byte> littleEndianTexel = stackalloc byte[TTransfer.BytesPerTexel];
-        TTransfer.Encode(value, littleEndianTexel);
-        BigEndianByteSwap.CopyFromLittleEndian(littleEndianTexel, destination, endianMode);
-    }
-
-    private readonly struct Rgb565UNormTransferBigEndian : IPackedUNormTransfer<Rgba8UNorm>
-    {
-        public static int BytesPerTexel => Rgb565UNormTransfer.BytesPerTexel;
-
-        public static Rgba8UNorm Decode(ReadOnlySpan<byte> texel) =>
-            DecodeBigEndianTexel<Rgb565UNormTransfer, Rgba8UNorm>(texel, BigEndianByteSwapMode.Swap8In16);
-
-        public static void Encode(Rgba8UNorm value, Span<byte> texel) =>
-            EncodeBigEndianTexel<Rgb565UNormTransfer, Rgba8UNorm>(value, texel, BigEndianByteSwapMode.Swap8In16);
-    }
-
-    private readonly struct Rgb655UNormTransferBigEndian : IPackedUNormTransfer<Rgba8UNorm>
-    {
-        public static int BytesPerTexel => Rgb655UNormTransfer.BytesPerTexel;
-
-        public static Rgba8UNorm Decode(ReadOnlySpan<byte> texel) =>
-            DecodeBigEndianTexel<Rgb655UNormTransfer, Rgba8UNorm>(texel, BigEndianByteSwapMode.Swap8In16);
-
-        public static void Encode(Rgba8UNorm value, Span<byte> texel) =>
-            EncodeBigEndianTexel<Rgb655UNormTransfer, Rgba8UNorm>(value, texel, BigEndianByteSwapMode.Swap8In16);
-    }
-
-    private readonly struct Argb4UNormTransferBigEndian : IPackedUNormTransfer<Rgba8UNorm>
-    {
-        public static int BytesPerTexel => Argb4UNormTransfer.BytesPerTexel;
-
-        public static Rgba8UNorm Decode(ReadOnlySpan<byte> texel) =>
-            DecodeBigEndianTexel<Argb4UNormTransfer, Rgba8UNorm>(texel, BigEndianByteSwapMode.Swap8In16);
-
-        public static void Encode(Rgba8UNorm value, Span<byte> texel) =>
-            EncodeBigEndianTexel<Argb4UNormTransfer, Rgba8UNorm>(value, texel, BigEndianByteSwapMode.Swap8In16);
-    }
-
-    private readonly struct Xrgb4UNormTransferBigEndian : IPackedUNormTransfer<Rgba8UNorm>
-    {
-        public static int BytesPerTexel => Xrgb4UNormTransfer.BytesPerTexel;
-
-        public static Rgba8UNorm Decode(ReadOnlySpan<byte> texel) =>
-            DecodeBigEndianTexel<Xrgb4UNormTransfer, Rgba8UNorm>(texel, BigEndianByteSwapMode.Swap8In16);
-
-        public static void Encode(Rgba8UNorm value, Span<byte> texel) =>
-            EncodeBigEndianTexel<Xrgb4UNormTransfer, Rgba8UNorm>(value, texel, BigEndianByteSwapMode.Swap8In16);
-    }
-
-    private readonly struct A1Rgb5UNormTransferBigEndian : IPackedUNormTransfer<Rgba8UNorm>
-    {
-        public static int BytesPerTexel => A1Rgb5UNormTransfer.BytesPerTexel;
-
-        public static Rgba8UNorm Decode(ReadOnlySpan<byte> texel) =>
-            DecodeBigEndianTexel<A1Rgb5UNormTransfer, Rgba8UNorm>(texel, BigEndianByteSwapMode.Swap8In16);
-
-        public static void Encode(Rgba8UNorm value, Span<byte> texel) =>
-            EncodeBigEndianTexel<A1Rgb5UNormTransfer, Rgba8UNorm>(value, texel, BigEndianByteSwapMode.Swap8In16);
-    }
-
-    private readonly struct X1Rgb5UNormTransferBigEndian : IPackedUNormTransfer<Rgba8UNorm>
-    {
-        public static int BytesPerTexel => X1Rgb5UNormTransfer.BytesPerTexel;
-
-        public static Rgba8UNorm Decode(ReadOnlySpan<byte> texel) =>
-            DecodeBigEndianTexel<X1Rgb5UNormTransfer, Rgba8UNorm>(texel, BigEndianByteSwapMode.Swap8In16);
-
-        public static void Encode(Rgba8UNorm value, Span<byte> texel) =>
-            EncodeBigEndianTexel<X1Rgb5UNormTransfer, Rgba8UNorm>(value, texel, BigEndianByteSwapMode.Swap8In16);
-    }
-
-    private readonly struct Rgb10A2RevUNormTransferBigEndian : IPackedUNormTransfer<Rgba16UNorm>
-    {
-        public static int BytesPerTexel => Rgb10A2RevUNormTransfer.BytesPerTexel;
-
-        public static Rgba16UNorm Decode(ReadOnlySpan<byte> texel) =>
-            DecodeBigEndianTexel<Rgb10A2RevUNormTransfer, Rgba16UNorm>(texel, BigEndianByteSwapMode.Swap8In32);
-
-        public static void Encode(Rgba16UNorm value, Span<byte> texel) =>
-            EncodeBigEndianTexel<Rgb10A2RevUNormTransfer, Rgba16UNorm>(value, texel, BigEndianByteSwapMode.Swap8In32);
-    }
-
-    private readonly struct Bgr10A2RevUNormTransferBigEndian : IPackedUNormTransfer<Rgba16UNorm>
-    {
-        public static int BytesPerTexel => Bgr10A2RevUNormTransfer.BytesPerTexel;
-
-        public static Rgba16UNorm Decode(ReadOnlySpan<byte> texel) =>
-            DecodeBigEndianTexel<Bgr10A2RevUNormTransfer, Rgba16UNorm>(texel, BigEndianByteSwapMode.Swap8In32);
-
-        public static void Encode(Rgba16UNorm value, Span<byte> texel) =>
-            EncodeBigEndianTexel<Bgr10A2RevUNormTransfer, Rgba16UNorm>(value, texel, BigEndianByteSwapMode.Swap8In32);
-    }
-
-    private readonly struct Bgr10X2RevUNormTransferBigEndian : IPackedUNormTransfer<Rgba16UNorm>
-    {
-        public static int BytesPerTexel => Bgr10X2RevUNormTransfer.BytesPerTexel;
-
-        public static Rgba16UNorm Decode(ReadOnlySpan<byte> texel) =>
-            DecodeBigEndianTexel<Bgr10X2RevUNormTransfer, Rgba16UNorm>(texel, BigEndianByteSwapMode.Swap8In32);
-
-        public static void Encode(Rgba16UNorm value, Span<byte> texel) =>
-            EncodeBigEndianTexel<Bgr10X2RevUNormTransfer, Rgba16UNorm>(value, texel, BigEndianByteSwapMode.Swap8In32);
-    }
-
-    private readonly struct R10Gb11UNormTransferBigEndian : IPackedUNormTransfer<Rgba16UNorm>
-    {
-        public static int BytesPerTexel => R10Gb11UNormTransfer.BytesPerTexel;
-
-        public static Rgba16UNorm Decode(ReadOnlySpan<byte> texel) =>
-            DecodeBigEndianTexel<R10Gb11UNormTransfer, Rgba16UNorm>(texel, BigEndianByteSwapMode.Swap8In32);
-
-        public static void Encode(Rgba16UNorm value, Span<byte> texel) =>
-            EncodeBigEndianTexel<R10Gb11UNormTransfer, Rgba16UNorm>(value, texel, BigEndianByteSwapMode.Swap8In32);
-    }
-
-    private readonly struct Rg11B10UNormTransferBigEndian : IPackedUNormTransfer<Rgba16UNorm>
-    {
-        public static int BytesPerTexel => Rg11B10UNormTransfer.BytesPerTexel;
-
-        public static Rgba16UNorm Decode(ReadOnlySpan<byte> texel) =>
-            DecodeBigEndianTexel<Rg11B10UNormTransfer, Rgba16UNorm>(texel, BigEndianByteSwapMode.Swap8In32);
-
-        public static void Encode(Rgba16UNorm value, Span<byte> texel) =>
-            EncodeBigEndianTexel<Rg11B10UNormTransfer, Rgba16UNorm>(value, texel, BigEndianByteSwapMode.Swap8In32);
-    }
-
-    private readonly struct R10Gb11RevUNormTransferBigEndian : IPackedUNormTransfer<Rgba16UNorm>
-    {
-        public static int BytesPerTexel => R10Gb11RevUNormTransfer.BytesPerTexel;
-
-        public static Rgba16UNorm Decode(ReadOnlySpan<byte> texel) =>
-            DecodeBigEndianTexel<R10Gb11RevUNormTransfer, Rgba16UNorm>(texel, BigEndianByteSwapMode.Swap8In32);
-
-        public static void Encode(Rgba16UNorm value, Span<byte> texel) =>
-            EncodeBigEndianTexel<R10Gb11RevUNormTransfer, Rgba16UNorm>(value, texel, BigEndianByteSwapMode.Swap8In32);
-    }
-
-    private readonly struct Rg11B10RevUNormTransferBigEndian : IPackedUNormTransfer<Rgba16UNorm>
-    {
-        public static int BytesPerTexel => Rg11B10RevUNormTransfer.BytesPerTexel;
-
-        public static Rgba16UNorm Decode(ReadOnlySpan<byte> texel) =>
-            DecodeBigEndianTexel<Rg11B10RevUNormTransfer, Rgba16UNorm>(texel, BigEndianByteSwapMode.Swap8In32);
-
-        public static void Encode(Rgba16UNorm value, Span<byte> texel) =>
-            EncodeBigEndianTexel<Rg11B10RevUNormTransfer, Rgba16UNorm>(value, texel, BigEndianByteSwapMode.Swap8In32);
     }
 
     private readonly struct Alpha12UNormTransfer : IPackedUNormTransfer<Rgba16UNorm>
@@ -2277,25 +2034,11 @@ public sealed class PackedUNormTextureCoder : IPitchTextureCoder
             transfer = PackedUNormTransfer.Rgb565;
             return true;
         }
-
-        if (format == TextureFormats.Rgb565UNormBigEndian)
-        {
-            transfer = PackedUNormTransfer.Rgb565BigEndian;
-            return true;
-        }
-
         if (format == TextureFormats.Rgb655UNorm)
         {
             transfer = PackedUNormTransfer.Rgb655;
             return true;
         }
-
-        if (format == TextureFormats.Rgb655UNormBigEndian)
-        {
-            transfer = PackedUNormTransfer.Rgb655BigEndian;
-            return true;
-        }
-
         if (format == TextureFormats.Rgb565RevUNorm)
         {
             transfer = PackedUNormTransfer.Rgb565Rev;
@@ -2325,49 +2068,21 @@ public sealed class PackedUNormTextureCoder : IPitchTextureCoder
             transfer = PackedUNormTransfer.R10Gb11;
             return true;
         }
-
-        if (format == TextureFormats.R10Gb11UNormBigEndian)
-        {
-            transfer = PackedUNormTransfer.R10Gb11BigEndian;
-            return true;
-        }
-
         if (format == TextureFormats.Rg11B10UNorm)
         {
             transfer = PackedUNormTransfer.Rg11B10;
             return true;
         }
-
-        if (format == TextureFormats.Rg11B10UNormBigEndian)
-        {
-            transfer = PackedUNormTransfer.Rg11B10BigEndian;
-            return true;
-        }
-
         if (format == TextureFormats.R10Gb11RevUNorm)
         {
             transfer = PackedUNormTransfer.R10Gb11Rev;
             return true;
         }
-
-        if (format == TextureFormats.R10Gb11RevUNormBigEndian)
-        {
-            transfer = PackedUNormTransfer.R10Gb11RevBigEndian;
-            return true;
-        }
-
         if (format == TextureFormats.Rg11B10RevUNorm)
         {
             transfer = PackedUNormTransfer.Rg11B10Rev;
             return true;
         }
-
-        if (format == TextureFormats.Rg11B10RevUNormBigEndian)
-        {
-            transfer = PackedUNormTransfer.Rg11B10RevBigEndian;
-            return true;
-        }
-
         if (format == TextureFormats.Rgb12UNorm)
         {
             transfer = PackedUNormTransfer.Rgb12;
@@ -2451,19 +2166,6 @@ public sealed class PackedUNormTextureCoder : IPitchTextureCoder
             transfer = PackedUNormTransfer.Argb4;
             return true;
         }
-
-        if (format == TextureFormats.Argb4UNormBigEndian)
-        {
-            transfer = PackedUNormTransfer.Argb4BigEndian;
-            return true;
-        }
-
-        if (format == TextureFormats.Xrgb4UNormBigEndian)
-        {
-            transfer = PackedUNormTransfer.Xrgb4BigEndian;
-            return true;
-        }
-
         if (format == TextureFormats.Argb4RevUNorm)
         {
             transfer = PackedUNormTransfer.Argb4Rev;
@@ -2499,19 +2201,6 @@ public sealed class PackedUNormTextureCoder : IPitchTextureCoder
             transfer = PackedUNormTransfer.A1Rgb5;
             return true;
         }
-
-        if (format == TextureFormats.A1Rgb5UNormBigEndian)
-        {
-            transfer = PackedUNormTransfer.A1Rgb5BigEndian;
-            return true;
-        }
-
-        if (format == TextureFormats.X1Rgb5UNormBigEndian)
-        {
-            transfer = PackedUNormTransfer.X1Rgb5BigEndian;
-            return true;
-        }
-
         if (format == TextureFormats.A1Rgb5RevUNorm)
         {
             transfer = PackedUNormTransfer.A1Rgb5Rev;
@@ -2541,31 +2230,11 @@ public sealed class PackedUNormTextureCoder : IPitchTextureCoder
             transfer = PackedUNormTransfer.Rgb10A2Rev;
             return true;
         }
-
-        if (format == TextureFormats.Rgb10A2RevUNormBigEndian)
-        {
-            transfer = PackedUNormTransfer.Rgb10A2RevBigEndian;
-            return true;
-        }
-
         if (format == TextureFormats.Bgr10A2RevUNorm)
         {
             transfer = PackedUNormTransfer.Bgr10A2Rev;
             return true;
         }
-
-        if (format == TextureFormats.Bgr10A2RevUNormBigEndian)
-        {
-            transfer = PackedUNormTransfer.Bgr10A2RevBigEndian;
-            return true;
-        }
-
-        if (format == TextureFormats.Bgr10X2RevUNormBigEndian)
-        {
-            transfer = PackedUNormTransfer.Bgr10X2RevBigEndian;
-            return true;
-        }
-
         if (format == TextureFormats.Rgba12UNorm)
         {
             transfer = PackedUNormTransfer.Rgba12;
@@ -2619,21 +2288,15 @@ public sealed class PackedUNormTextureCoder : IPitchTextureCoder
         Rgb4,
         Rgb5,
         Rgb565,
-        Rgb565BigEndian,
         Rgb655,
-        Rgb655BigEndian,
         Rgb565Rev,
         Bgr565,
         Bgr565Rev,
         Rgb10,
         R10Gb11,
-        R10Gb11BigEndian,
         Rg11B10,
-        Rg11B10BigEndian,
         R10Gb11Rev,
-        R10Gb11RevBigEndian,
         Rg11B10Rev,
-        Rg11B10RevBigEndian,
         Rgb12,
         R10X6,
         Rg10X6,
@@ -2649,8 +2312,6 @@ public sealed class PackedUNormTextureCoder : IPitchTextureCoder
         Rgba4Rev,
         Argb4,
         Xrgb4,
-        Argb4BigEndian,
-        Xrgb4BigEndian,
         Argb4Rev,
         Abgr4,
         Abgr4Rev,
@@ -2658,8 +2319,6 @@ public sealed class PackedUNormTextureCoder : IPitchTextureCoder
         Rgb5A1Rev,
         A1Rgb5,
         X1Rgb5,
-        A1Rgb5BigEndian,
-        X1Rgb5BigEndian,
         A1Rgb5Rev,
         A1Bgr5,
         A1Bgr5Rev,
@@ -2667,9 +2326,6 @@ public sealed class PackedUNormTextureCoder : IPitchTextureCoder
         Rgb10A2Rev,
         Bgr10A2Rev,
         Bgr10X2Rev,
-        Rgb10A2RevBigEndian,
-        Bgr10A2RevBigEndian,
-        Bgr10X2RevBigEndian,
         Rgba12,
         Bgra4,
         Bgra4Rev,
