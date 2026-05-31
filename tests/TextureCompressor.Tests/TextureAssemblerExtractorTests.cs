@@ -93,6 +93,62 @@ public sealed class TextureAssemblerExtractorTests
     }
 
     [Fact]
+    public void CreateArrayMipChainGeneratesMipLevelsForEachLayer()
+    {
+        var assembler = new TextureAssembler();
+        var extractor = new TextureExtractor();
+        IBitmap<Rgba8UNorm>[] layers =
+        [
+            CreateSolidImage(4, 4, new Rgba8UNorm(16, 0, 0, 255)),
+            CreateSolidImage(4, 4, new Rgba8UNorm(64, 0, 0, 255))
+        ];
+
+        var texture = assembler.CreateArrayMipChain(
+            TextureFormats.Rgba8UNorm,
+            layers,
+            mipmapOptions: new MipmapGenerationOptions { MaxLevelCount = 2 });
+        var extracted = extractor.ExtractSubresource(texture, new TextureSubresourceSelection(1, 1, null));
+
+        Assert.Equal(2, texture.ArrayLayerCount);
+        Assert.Equal(2, texture.MipLevelCount);
+        Assert.Equal(4, texture.Subresources.Count);
+        Assert.Equal(2, extracted.Image.Width);
+        Assert.Equal(2, extracted.Image.Height);
+        Assert.Equal(64, extracted.Image.PixelSpan[0].Red);
+    }
+
+    [Fact]
+    public void CreateCubeMipChainGeneratesMipLevelsForEachFace()
+    {
+        var assembler = new TextureAssembler();
+        var extractor = new TextureExtractor();
+        IBitmap<Rgba8UNorm>[] faces =
+        [
+            CreateSolidImage(4, 4, new Rgba8UNorm(255, 0, 0, 255)),
+            CreateSolidImage(4, 4, new Rgba8UNorm(0, 255, 0, 255)),
+            CreateSolidImage(4, 4, new Rgba8UNorm(0, 0, 255, 255)),
+            CreateSolidImage(4, 4, new Rgba8UNorm(255, 255, 0, 255)),
+            CreateSolidImage(4, 4, new Rgba8UNorm(255, 0, 255, 255)),
+            CreateSolidImage(4, 4, new Rgba8UNorm(0, 255, 255, 255))
+        ];
+
+        var texture = assembler.CreateCubeMipChain(
+            TextureFormats.Rgba8UNorm,
+            faces,
+            mipmapOptions: new MipmapGenerationOptions { MaxLevelCount = 2 });
+        var extracted = extractor.ExtractSubresource(texture, new TextureSubresourceSelection(1, 0, TextureCubeFace.PositiveZ));
+
+        Assert.True(texture.IsCubeMap);
+        Assert.Equal(2, texture.MipLevelCount);
+        Assert.Equal(12, texture.Subresources.Count);
+        Assert.Equal(TextureCubeFace.PositiveZ, extracted.Face);
+        Assert.Equal(2, extracted.Image.Width);
+        Assert.Equal(2, extracted.Image.Height);
+        Assert.Equal(255, extracted.Image.PixelSpan[0].Red);
+        Assert.Equal(255, extracted.Image.PixelSpan[0].Blue);
+    }
+
+    [Fact]
     public void CreateArrayRejectsMismatchedDimensions()
     {
         var assembler = new TextureAssembler();

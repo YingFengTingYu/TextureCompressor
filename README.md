@@ -137,6 +137,7 @@ converter.Convert(
         {
             ColorSpace = MipmapColorSpace.Srgb,
             AlphaMode = MipmapAlphaMode.Premultiplied,
+            Filter = MipmapFilter.Triangle,
             MaxLevelCount = 8
         },
         WriteOptions = new KtxEncodingOptions
@@ -146,7 +147,7 @@ converter.Convert(
     });
 ```
 
-When `MipmapOptions` is omitted in texture-aware APIs, the mip color space is inferred from the target format: `Srgb` and `XRSrgb` formats use sRGB-aware filtering, while other formats use linear filtering. Direct `BitmapMipChain.Generate(...)` calls keep the linear default unless options are supplied. The same options can be passed to `TextureAssembler.CreateMipChain(...)` and DDS/KTX/PVR encoding options when `GenerateMipmaps` is enabled.
+When `MipmapOptions` is omitted in texture-aware APIs, the mip color space is inferred from the target format: `Srgb` and `XRSrgb` formats use sRGB-aware filtering, while other formats use linear filtering. Direct `BitmapMipChain.Generate(...)` calls keep the linear default unless options are supplied. The same options can be passed to `TextureAssembler.CreateMipChain(...)`, `TextureAssembler.CreateArrayMipChain(...)`, `TextureAssembler.CreateCubeMipChain(...)`, and DDS/KTX/PVR encoding options when `GenerateMipmaps` is enabled.
 
 The same API supports texture-to-image previews and texture-to-texture container conversion. Texture-to-texture conversion preserves the full mip level, array layer, and cube face topology when no source subresource is selected. Set `SourceSubresource` to decode one subresource and write it as a single image or single 2D texture.
 
@@ -198,7 +199,10 @@ IBitmap<Rgba8UNorm>[] faces =
 ];
 
 var assembler = new TextureAssembler();
-var cube = assembler.CreateCube(TextureFormats.Bc7Srgb, faces);
+var cube = assembler.CreateCubeMipChain(
+    TextureFormats.Bc7Srgb,
+    faces,
+    mipmapOptions: new MipmapGenerationOptions { Filter = MipmapFilter.Triangle });
 DdsCodec.Write(new DdsTexture(cube), "skybox.dds");
 
 var extractor = new TextureExtractor();
@@ -539,7 +543,7 @@ dotnet run --project src/TextureCompressor.Cli -- convert input.png output.ktx2 
 dotnet run --project src/TextureCompressor.Cli -- convert input.png output.dds --format Bc7UNorm --metrics --json
 dotnet run --project src/TextureCompressor.Cli -- convert input.png output.ktx2 --format Bc7Srgb --ktx-version 2 --quality High
 dotnet run --project src/TextureCompressor.Cli -- assemble array.ktx2 --layers layer0.png layer1.png
-dotnet run --project src/TextureCompressor.Cli -- assemble skybox.dds --cube px.png nx.png py.png ny.png pz.png nz.png
+dotnet run --project src/TextureCompressor.Cli -- assemble skybox.dds --cube px.png nx.png py.png ny.png pz.png nz.png --mipmaps Generate --mipmap-levels 8
 dotnet run --project src/TextureCompressor.Cli -- extract array.ktx2 extracted --manifest
 dotnet run --project src/TextureCompressor.Cli -- assemble rebuilt.ktx2 --manifest extracted/manifest.json
 dotnet run --project src/TextureCompressor.Cli -- quality source.png output.dds
@@ -551,11 +555,11 @@ Common commands:
 - `formats [query]`: list or search texture formats accepted by `--format`; add `--compressed` or `--uncompressed` to filter, or `--json` for structured output.
 - `info <input>` / `inspect <input>`: print container metadata such as size, texture format, mip levels, payload size, and container-specific header fields; add `--subresources` to list mip/layer/face payloads, or `--json` for structured metadata output.
 - `convert <input> <output>`: convert between image and texture containers. The output container is inferred from the extension unless `--container` is passed explicitly. DDS/KTX/PVR to DDS/KTX/PVR conversions preserve mip levels, array layers, and cube faces by default; omit `--format` to keep the source texture format, or pass `--format` to re-encode every subresource. Texture inputs can select a single subresource with `--mip`, `--layer`, and `--face`; add `--metrics --json` for structured quality metrics after writing.
-- `assemble <output>`: build a DDS/KTX/PVR texture from PNG/JPEG/GIF/HDR images. Use exactly one of `--layers`, `--cube`, `--mips`, or `--manifest`; `--cube` expects PositiveX, NegativeX, PositiveY, NegativeY, PositiveZ, NegativeZ order, and `--manifest` rebuilds a complete extracted topology from `manifest.json`.
+- `assemble <output>`: build a DDS/KTX/PVR texture from PNG/JPEG/GIF/HDR images. Use exactly one of `--layers`, `--cube`, `--mips`, or `--manifest`; `--cube` expects PositiveX, NegativeX, PositiveY, NegativeY, PositiveZ, NegativeZ order. Add `--mipmaps Generate` with `--layers` or `--cube` to generate mip levels from each base image; `--manifest` rebuilds a complete extracted topology from `manifest.json`.
 - `extract <input> <output-directory>`: extract DDS/KTX/PVR subresources to PNG/JPEG/GIF/HDR images. Add `--mip`, `--layer`, or `--face` to filter, `--container` to choose the image type, `--pattern` to control file names, and `--manifest` to write JSON metadata.
 - `quality <expected> <actual>`: decode two image/texture files and print MSE, RMSE, and PSNR; add `--ignore-alpha` to ignore alpha or `--json` for structured output. Use `--mip`/`--layer`/`--face` for both inputs, or `--expected-*` and `--actual-*` options to select each input independently.
 
-Image containers support PNG, JPEG, GIF, and HDR. `convert`, `assemble`, and `extract` provide `--png-color-space`, `--jpg-color-space`, and `--gif-color-space` conversions between Linear and Srgb for LDR image formats. JPEG output quality is controlled with `--jpeg-quality`; S3TC, FXT1, ETC/EAC, ASTC, ATC, RGTC/LATC, BPTC, and PVRTC built-in texture encoding quality can be selected with `--quality`. DDS, KTX, and PVR outputs can generate full mip-map chains with `--mipmaps Generate` during single-image conversion; use `--mipmap-color-space Auto|Linear|Srgb`, `--mipmap-alpha Premultiplied|Straight`, `--mipmap-filter Box|Triangle`, and `--mipmap-levels <count>` to tune generated mipmaps.
+Image containers support PNG, JPEG, GIF, and HDR. `convert`, `assemble`, and `extract` provide `--png-color-space`, `--jpg-color-space`, and `--gif-color-space` conversions between Linear and Srgb for LDR image formats. JPEG output quality is controlled with `--jpeg-quality`; S3TC, FXT1, ETC/EAC, ASTC, ATC, RGTC/LATC, BPTC, and PVRTC built-in texture encoding quality can be selected with `--quality`. DDS, KTX, and PVR outputs can generate full mip-map chains with `--mipmaps Generate` during single-image conversion and `assemble --layers` / `assemble --cube`; use `--mipmap-color-space Auto|Linear|Srgb`, `--mipmap-alpha Premultiplied|Straight`, `--mipmap-filter Box|Triangle`, and `--mipmap-levels <count>` to tune generated mipmaps.
 
 ## Common Workflows
 

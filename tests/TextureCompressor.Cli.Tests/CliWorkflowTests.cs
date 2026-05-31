@@ -150,6 +150,61 @@ public sealed class CliWorkflowTests
     }
 
     [Fact]
+    public async Task AssembleCanGenerateMipmapsFromLayerAndCubeBaseImages()
+    {
+        using var workspace = new CliWorkspace();
+        var layer0 = WriteSolidPng(workspace, "layer0.png", new Rgba8UNorm(32, 0, 0, 255));
+        var layer1 = WriteSolidPng(workspace, "layer1.png", new Rgba8UNorm(64, 0, 0, 255));
+        var array = workspace.GetPath("array-mips.ktx2");
+
+        await RunCliAsync(
+            workspace,
+            "assemble",
+            array,
+            "--layers",
+            layer0,
+            layer1,
+            "--format",
+            "Rgba8UNorm",
+            "--ktx-version",
+            "2",
+            "--mipmaps",
+            "Generate",
+            "--mipmap-filter",
+            "Triangle",
+            "--mipmap-levels",
+            "2");
+        var arrayInfo = await RunCliAsync(workspace, "info", array, "--subresources");
+
+        Assert.Contains("Container: KTX", arrayInfo.StandardOutput, StringComparison.Ordinal);
+        Assert.Contains("Array layers: 2", arrayInfo.StandardOutput, StringComparison.Ordinal);
+        Assert.Contains("mip=1 layer=1 face=0 size=4x4", arrayInfo.StandardOutput, StringComparison.Ordinal);
+        Assert.DoesNotContain("mip=2", arrayInfo.StandardOutput, StringComparison.Ordinal);
+
+        var faceFiles = new[]
+        {
+            WriteSolidPng(workspace, "positive-x.png", new Rgba8UNorm(255, 0, 0, 255)),
+            WriteSolidPng(workspace, "negative-x.png", new Rgba8UNorm(0, 255, 0, 255)),
+            WriteSolidPng(workspace, "positive-y.png", new Rgba8UNorm(0, 0, 255, 255)),
+            WriteSolidPng(workspace, "negative-y.png", new Rgba8UNorm(255, 255, 0, 255)),
+            WriteSolidPng(workspace, "positive-z.png", new Rgba8UNorm(255, 0, 255, 255)),
+            WriteSolidPng(workspace, "negative-z.png", new Rgba8UNorm(0, 255, 255, 255))
+        };
+        var cube = workspace.GetPath("cube-mips.dds");
+        await RunCliAsync(
+            workspace,
+            new[] { "assemble", cube, "--cube" }
+                .Concat(faceFiles)
+                .Concat(new[] { "--format", "Rgba8UNorm", "--mipmaps", "Generate", "--mipmap-levels", "2" })
+                .ToArray());
+        var cubeInfo = await RunCliAsync(workspace, "info", cube, "--subresources");
+
+        Assert.Contains("Container: DDS", cubeInfo.StandardOutput, StringComparison.Ordinal);
+        Assert.Contains("Faces: 6", cubeInfo.StandardOutput, StringComparison.Ordinal);
+        Assert.Contains("mip=1 layer=0 face=PositiveZ size=4x4", cubeInfo.StandardOutput, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task AssembleAndExtractPreserveKtxArrayLayerOrder()
     {
         using var workspace = new CliWorkspace();

@@ -121,6 +121,11 @@ internal static class Cli
             Description = "Alpha handling used for generated mip-map filtering.",
             DefaultValueFactory = _ => MipmapAlphaMode.Premultiplied
         };
+        var mipmapFilterOption = new Option<MipmapFilter>("--mipmap-filter")
+        {
+            Description = "Filter used for generated mip-map downsampling.",
+            DefaultValueFactory = _ => MipmapFilter.Box
+        };
         var mipmapLevelsOption = new Option<int?>("--mipmap-levels")
         {
             Description = "Maximum generated mip level count, including the base level."
@@ -153,6 +158,7 @@ internal static class Cli
         command.Options.Add(mipmapsOption);
         command.Options.Add(mipmapColorSpaceOption);
         command.Options.Add(mipmapAlphaOption);
+        command.Options.Add(mipmapFilterOption);
         command.Options.Add(mipmapLevelsOption);
         command.Options.Add(mipOption);
         command.Options.Add(layerOption);
@@ -175,6 +181,7 @@ internal static class Cli
                 mipmaps,
                 mipmapColorSpaceOption,
                 mipmapAlphaOption,
+                mipmapFilterOption,
                 mipmapLevelsOption);
             var selection = GetSubresourceSelection(parseResult, mipOption, layerOption, faceOption);
             var hasSubresourceSelection = IsOptionExplicit(parseResult, mipOption)
@@ -196,6 +203,7 @@ internal static class Cli
                     format,
                     parseResult.GetValue(mipmapColorSpaceOption),
                     parseResult.GetValue(mipmapAlphaOption),
+                    parseResult.GetValue(mipmapFilterOption),
                     parseResult.GetValue(mipmapLevelsOption));
                 var extractor = new TextureExtractor();
                 if (!hasSubresourceSelection && mipmaps == MipmapMode.None)
@@ -239,6 +247,7 @@ internal static class Cli
                     requestedFormat,
                     parseResult.GetValue(mipmapColorSpaceOption),
                     parseResult.GetValue(mipmapAlphaOption),
+                    parseResult.GetValue(mipmapFilterOption),
                     parseResult.GetValue(mipmapLevelsOption)),
                 colorSpaces);
             BitmapQualityResult? imageMetrics = null;
@@ -491,6 +500,38 @@ internal static class Cli
         {
             Description = "Built-in texture compression quality."
         };
+        var mipmapsOption = new Option<MipmapMode>("--mipmaps")
+        {
+            Description = "Mip-map handling for array and cube texture outputs.",
+            DefaultValueFactory = _ => MipmapMode.None
+        };
+        var mipmapColorSpaceOption = new Option<MipmapColorSpaceMode>("--mipmap-color-space")
+        {
+            Description = "Color space used for generated mip-map filtering.",
+            DefaultValueFactory = _ => MipmapColorSpaceMode.Auto
+        };
+        var mipmapAlphaOption = new Option<MipmapAlphaMode>("--mipmap-alpha")
+        {
+            Description = "Alpha handling used for generated mip-map filtering.",
+            DefaultValueFactory = _ => MipmapAlphaMode.Premultiplied
+        };
+        var mipmapFilterOption = new Option<MipmapFilter>("--mipmap-filter")
+        {
+            Description = "Filter used for generated mip-map downsampling.",
+            DefaultValueFactory = _ => MipmapFilter.Box
+        };
+        var mipmapLevelsOption = new Option<int?>("--mipmap-levels")
+        {
+            Description = "Maximum generated mip level count, including the base level."
+        };
+        mipmapLevelsOption.Validators.Add(result =>
+        {
+            var value = result.GetValueOrDefault<int?>();
+            if (value is <= 0)
+            {
+                result.AddError("--mipmap-levels must be greater than zero.");
+            }
+        });
 
         var command = new Command("assemble", "Assemble multiple image files into a DDS, KTX, or PVR texture.");
         command.Arguments.Add(outputArgument);
@@ -505,6 +546,11 @@ internal static class Cli
         command.Options.Add(gifColorSpaceOption);
         command.Options.Add(ktxVersionOption);
         command.Options.Add(qualityOption);
+        command.Options.Add(mipmapsOption);
+        command.Options.Add(mipmapColorSpaceOption);
+        command.Options.Add(mipmapAlphaOption);
+        command.Options.Add(mipmapFilterOption);
+        command.Options.Add(mipmapLevelsOption);
         command.Validators.Add(result =>
         {
             var modeCount = 0;
@@ -550,20 +596,39 @@ internal static class Cli
                 parseResult.GetValue(jpgColorSpaceOption),
                 parseResult.GetValue(gifColorSpaceOption));
             var quality = parseResult.GetValue(qualityOption);
+            var mipmaps = parseResult.GetValue(mipmapsOption);
+            EnsureMipmapOptionsAreSupported(
+                parseResult,
+                mipmaps,
+                mipmapColorSpaceOption,
+                mipmapAlphaOption,
+                mipmapFilterOption,
+                mipmapLevelsOption);
             var manifestFile = parseResult.GetValue(manifestOption);
             var manifest = manifestFile is null
                 ? null
                 : ReadExtractManifest(RequireFile(manifestFile, "--manifest").FullName);
             var format = ResolveAssembleFormat(parseResult, formatOption, manifest);
+            var layerFiles = parseResult.GetValue(layersOption) ?? [];
+            var cubeFiles = parseResult.GetValue(cubeOption) ?? [];
+            var mipFiles = parseResult.GetValue(mipsOption) ?? [];
+            EnsureAssembleMipmapsAreSupported(mipmaps, layerFiles, cubeFiles, mipFiles, manifest);
 
             using var compressionRegistration = CreateTextureCompressionRegistration(format, quality);
             var texture = manifest is null
                 ? CreateAssembledTexture(
                     format,
                     colorSpaces,
-                    parseResult.GetValue(layersOption) ?? [],
-                    parseResult.GetValue(cubeOption) ?? [],
-                    parseResult.GetValue(mipsOption) ?? [])
+                    layerFiles,
+                    cubeFiles,
+                    mipFiles,
+                    mipmaps,
+                    CreateMipmapOptions(
+                        format,
+                        parseResult.GetValue(mipmapColorSpaceOption),
+                        parseResult.GetValue(mipmapAlphaOption),
+                        parseResult.GetValue(mipmapFilterOption),
+                        parseResult.GetValue(mipmapLevelsOption)))
                 : CreateManifestTexture(format, colorSpaces, manifestFile!.FullName, manifest);
             WriteStructuredTexture(texture, outputPath, outputKind, format, ktxVersion, quality: null);
             Console.WriteLine($"wrote {outputPath}");
@@ -783,6 +848,7 @@ internal static class Cli
         MipmapMode mipmaps,
         Option<MipmapColorSpaceMode> mipmapColorSpaceOption,
         Option<MipmapAlphaMode> mipmapAlphaOption,
+        Option<MipmapFilter> mipmapFilterOption,
         Option<int?> mipmapLevelsOption)
     {
         if (mipmaps == MipmapMode.Generate)
@@ -792,6 +858,7 @@ internal static class Cli
 
         if (IsOptionExplicit(parseResult, mipmapColorSpaceOption)
             || IsOptionExplicit(parseResult, mipmapAlphaOption)
+            || IsOptionExplicit(parseResult, mipmapFilterOption)
             || IsOptionExplicit(parseResult, mipmapLevelsOption))
         {
             throw new NotSupportedException("Mip-map generation options require --mipmaps Generate.");
@@ -802,6 +869,7 @@ internal static class Cli
         TextureFormat format,
         MipmapColorSpaceMode colorSpace,
         MipmapAlphaMode alphaMode,
+        MipmapFilter filter,
         int? maxLevelCount)
     {
         var defaults = TextureMipmapGenerationOptions.GetDefault(format);
@@ -815,8 +883,32 @@ internal static class Cli
                 _ => throw new ArgumentOutOfRangeException(nameof(colorSpace), colorSpace, "Unsupported mip-map color space mode.")
             },
             AlphaMode = alphaMode,
+            Filter = filter,
             MaxLevelCount = maxLevelCount
         };
+    }
+
+    private static void EnsureAssembleMipmapsAreSupported(
+        MipmapMode mipmaps,
+        IReadOnlyList<FileInfo> layerFiles,
+        IReadOnlyList<FileInfo> cubeFiles,
+        IReadOnlyList<FileInfo> mipFiles,
+        ExtractManifest? manifest)
+    {
+        if (mipmaps == MipmapMode.None)
+        {
+            return;
+        }
+
+        if (mipmaps != MipmapMode.Generate)
+        {
+            throw new ArgumentOutOfRangeException(nameof(mipmaps), mipmaps, "Unsupported mip-map handling mode.");
+        }
+
+        if (manifest is not null || mipFiles.Count != 0 || (layerFiles.Count == 0 && cubeFiles.Count == 0))
+        {
+            throw new NotSupportedException("Assemble mip-map generation applies only to --layers and --cube.");
+        }
     }
 
     private static TextureSubresourceSelection GetSubresourceSelection(
@@ -1759,17 +1851,25 @@ internal static class Cli
         ImageColorSpaces colorSpaces,
         IReadOnlyList<FileInfo> layerFiles,
         IReadOnlyList<FileInfo> cubeFiles,
-        IReadOnlyList<FileInfo> mipFiles)
+        IReadOnlyList<FileInfo> mipFiles,
+        MipmapMode mipmaps,
+        MipmapGenerationOptions mipmapOptions)
     {
         var assembler = new TextureAssembler();
         if (layerFiles.Count != 0)
         {
-            return assembler.CreateArray(format, DecodeImageFiles(layerFiles, colorSpaces));
+            var layers = DecodeImageFiles(layerFiles, colorSpaces);
+            return mipmaps == MipmapMode.Generate
+                ? assembler.CreateArrayMipChain(format, layers, mipmapOptions: mipmapOptions)
+                : assembler.CreateArray(format, layers);
         }
 
         if (cubeFiles.Count != 0)
         {
-            return assembler.CreateCube(format, DecodeImageFiles(cubeFiles, colorSpaces));
+            var faces = DecodeImageFiles(cubeFiles, colorSpaces);
+            return mipmaps == MipmapMode.Generate
+                ? assembler.CreateCubeMipChain(format, faces, mipmapOptions: mipmapOptions)
+                : assembler.CreateCube(format, faces);
         }
 
         if (mipFiles.Count != 0)
