@@ -113,6 +113,9 @@ internal static class Cli
             Description = "Mip-map handling for texture outputs.",
             DefaultValueFactory = _ => MipmapMode.None
         };
+        var mipOption = CreateMipOption();
+        var layerOption = CreateLayerOption();
+        var faceOption = CreateFaceOption();
 
         var command = new Command("convert", "Convert between supported texture and image containers.");
         command.Arguments.Add(inputArgument);
@@ -127,6 +130,9 @@ internal static class Cli
         command.Options.Add(jpegQualityOption);
         command.Options.Add(qualityOption);
         command.Options.Add(mipmapsOption);
+        command.Options.Add(mipOption);
+        command.Options.Add(layerOption);
+        command.Options.Add(faceOption);
         command.SetAction(parseResult => RunCommand(() =>
         {
             var inputPath = RequireFile(parseResult.GetValue(inputArgument), "input").FullName;
@@ -137,13 +143,14 @@ internal static class Cli
             var jpegQuality = parseResult.GetValue(jpegQualityOption);
             var quality = parseResult.GetValue(qualityOption);
             var mipmaps = parseResult.GetValue(mipmapsOption);
+            var selection = GetSubresourceSelection(parseResult, mipOption, layerOption, faceOption);
             var colorSpaces = new ImageColorSpaces(
                 parseResult.GetValue(pngColorSpaceOption),
                 parseResult.GetValue(jpgColorSpaceOption),
                 parseResult.GetValue(gifColorSpaceOption));
             var printMetrics = parseResult.GetValue(metricsOption);
 
-            var source = Decode(inputPath, colorSpaces);
+            var source = Decode(inputPath, colorSpaces, selection);
             Encode(source, outputPath, outputKind, format, ktxVersion, jpegQuality, quality, mipmaps, colorSpaces);
             Console.WriteLine($"wrote {outputPath}");
 
@@ -237,6 +244,15 @@ internal static class Cli
             Description = "How to interpret GIF RGB values.",
             DefaultValueFactory = _ => ImageColorSpace.Linear
         };
+        var mipOption = CreateMipOption();
+        var layerOption = CreateLayerOption();
+        var faceOption = CreateFaceOption();
+        var expectedMipOption = CreateMipOption("--expected-mip", "Mip level to decode from the expected texture.");
+        var expectedLayerOption = CreateLayerOption("--expected-layer", "Array layer to decode from the expected texture.");
+        var expectedFaceOption = CreateFaceOption("--expected-face", "Cube-map face to decode from the expected texture.");
+        var actualMipOption = CreateMipOption("--actual-mip", "Mip level to decode from the actual texture.");
+        var actualLayerOption = CreateLayerOption("--actual-layer", "Array layer to decode from the actual texture.");
+        var actualFaceOption = CreateFaceOption("--actual-face", "Cube-map face to decode from the actual texture.");
 
         var command = new Command("quality", "Compare two decoded images and print quality metrics.");
         command.Arguments.Add(expectedArgument);
@@ -245,18 +261,30 @@ internal static class Cli
         command.Options.Add(pngColorSpaceOption);
         command.Options.Add(jpgColorSpaceOption);
         command.Options.Add(gifColorSpaceOption);
+        command.Options.Add(mipOption);
+        command.Options.Add(layerOption);
+        command.Options.Add(faceOption);
+        command.Options.Add(expectedMipOption);
+        command.Options.Add(expectedLayerOption);
+        command.Options.Add(expectedFaceOption);
+        command.Options.Add(actualMipOption);
+        command.Options.Add(actualLayerOption);
+        command.Options.Add(actualFaceOption);
         command.SetAction(parseResult => RunCommand(() =>
         {
             var expectedPath = RequireFile(parseResult.GetValue(expectedArgument), "expected").FullName;
             var actualPath = RequireFile(parseResult.GetValue(actualArgument), "actual").FullName;
             var includeAlpha = !parseResult.GetValue(ignoreAlphaOption);
+            var commonSelection = GetSubresourceSelection(parseResult, mipOption, layerOption, faceOption);
+            var expectedSelection = GetSubresourceSelection(parseResult, expectedMipOption, expectedLayerOption, expectedFaceOption, commonSelection);
+            var actualSelection = GetSubresourceSelection(parseResult, actualMipOption, actualLayerOption, actualFaceOption, commonSelection);
             var colorSpaces = new ImageColorSpaces(
                 parseResult.GetValue(pngColorSpaceOption),
                 parseResult.GetValue(jpgColorSpaceOption),
                 parseResult.GetValue(gifColorSpaceOption));
 
-            var expected = Decode(expectedPath, colorSpaces);
-            var actual = Decode(actualPath, colorSpaces);
+            var expected = Decode(expectedPath, colorSpaces, expectedSelection);
+            var actual = Decode(actualPath, colorSpaces, actualSelection);
             PrintQuality(BitmapQuality.Compare(expected, actual, includeAlpha));
 
             return 0;
@@ -271,23 +299,88 @@ internal static class Cli
         {
             Description = "Input texture or image file."
         };
+        var subresourcesOption = new Option<bool>("--subresources")
+        {
+            Description = "Print per-subresource metadata for texture containers."
+        };
 
         var command = new Command(name, description);
         command.Arguments.Add(inputArgument);
+        command.Options.Add(subresourcesOption);
         command.SetAction(parseResult => RunCommand(() =>
         {
             var inputPath = RequireFile(parseResult.GetValue(inputArgument), "input").FullName;
-            PrintInfo(inputPath);
+            PrintInfo(inputPath, parseResult.GetValue(subresourcesOption));
             return 0;
         }));
 
         return command;
     }
 
+    private static Option<int> CreateMipOption(string name = "--mip", string? description = null)
+    {
+        var option = new Option<int>(name)
+        {
+            Description = description ?? "Mip level to decode from texture inputs.",
+            DefaultValueFactory = _ => 0
+        };
+        option.Validators.Add(result =>
+        {
+            if (result.GetValueOrDefault<int>() < 0)
+            {
+                result.AddError($"{name} must be zero or greater.");
+            }
+        });
+
+        return option;
+    }
+
+    private static Option<int> CreateLayerOption(string name = "--layer", string? description = null)
+    {
+        var option = new Option<int>(name)
+        {
+            Description = description ?? "Array layer to decode from texture inputs.",
+            DefaultValueFactory = _ => 0
+        };
+        option.Validators.Add(result =>
+        {
+            if (result.GetValueOrDefault<int>() < 0)
+            {
+                result.AddError($"{name} must be zero or greater.");
+            }
+        });
+
+        return option;
+    }
+
+    private static Option<TextureCubeFace?> CreateFaceOption(string name = "--face", string? description = null) =>
+        new(name)
+        {
+            Description = description ?? "Cube-map face to decode from texture inputs."
+        };
+
+    private static TextureSubresourceSelection GetSubresourceSelection(
+        ParseResult parseResult,
+        Option<int> mipOption,
+        Option<int> layerOption,
+        Option<TextureCubeFace?> faceOption,
+        TextureSubresourceSelection? fallback = null)
+    {
+        var mipLevel = parseResult.GetValue(mipOption);
+        var arrayLayer = parseResult.GetValue(layerOption);
+        var face = parseResult.GetValue(faceOption);
+        if (mipLevel == 0 && arrayLayer == 0 && face is null && fallback is { } fallbackSelection)
+        {
+            return fallbackSelection;
+        }
+
+        return new TextureSubresourceSelection(mipLevel, arrayLayer, face);
+    }
+
     private static FileInfo RequireFile(FileInfo? file, string argumentName) =>
         file ?? throw new ArgumentException($"Missing required argument '{argumentName}'.");
 
-    private static void PrintInfo(string path)
+    private static void PrintInfo(string path, bool printSubresources)
     {
         var fileBytes = new FileInfo(path).Length;
         var container = GetContainer(path);
@@ -304,13 +397,13 @@ internal static class Cli
                 PrintImageInfo(container, GifCodec.Decode(path), fileBytes);
                 break;
             case TextureContainer.Dds:
-                PrintDdsInfo(DdsCodec.Read(path), fileBytes);
+                PrintDdsInfo(DdsCodec.Read(path), fileBytes, printSubresources);
                 break;
             case TextureContainer.Ktx:
-                PrintKtxInfo(KtxCodec.Read(path), ReadKtxInfo(path), fileBytes);
+                PrintKtxInfo(KtxCodec.Read(path), ReadKtxInfo(path), fileBytes, printSubresources);
                 break;
             case TextureContainer.Pvr:
-                PrintPvrInfo(PvrCodec.Read(path), ReadPvrInfo(path), fileBytes);
+                PrintPvrInfo(PvrCodec.Read(path), ReadPvrInfo(path), fileBytes, printSubresources);
                 break;
             case TextureContainer.Astc:
                 PrintAstcInfo(AstcCodec.Read(path), fileBytes);
@@ -328,7 +421,7 @@ internal static class Cli
         PrintInfoLine("File bytes", FormatInvariant(fileBytes));
     }
 
-    private static void PrintDdsInfo(DdsTexture texture, long fileBytes)
+    private static void PrintDdsInfo(DdsTexture texture, long fileBytes, bool printSubresources)
     {
         PrintTextureInfo(TextureContainer.Dds, texture.Format, texture.Width, texture.Height, texture.MipLevelCount, texture.ArrayLayerCount, texture.FaceCount, GetPayloadByteCount(texture.Subresources), fileBytes);
         PrintInfoLine("Header", texture.HeaderKind);
@@ -342,9 +435,14 @@ internal static class Cli
         {
             PrintInfoLine("Legacy pixel format", texture.LegacyPixelFormat);
         }
+
+        if (printSubresources)
+        {
+            PrintSubresources(texture.Subresources, texture.FaceCount);
+        }
     }
 
-    private static void PrintKtxInfo(KtxTexture texture, KtxInfo info, long fileBytes)
+    private static void PrintKtxInfo(KtxTexture texture, KtxInfo info, long fileBytes, bool printSubresources)
     {
         PrintTextureInfo(TextureContainer.Ktx, texture.Format, texture.Width, texture.Height, texture.MipLevelCount, texture.ArrayLayerCount, texture.FaceCount, GetPayloadByteCount(texture.Subresources), fileBytes);
         PrintInfoLine("Version", info.Version);
@@ -382,9 +480,14 @@ internal static class Cli
         {
             PrintInfoLine("Supercompression global data bytes", FormatInvariant(info.SupercompressionGlobalDataBytes));
         }
+
+        if (printSubresources)
+        {
+            PrintSubresources(texture.Subresources, texture.FaceCount);
+        }
     }
 
-    private static void PrintPvrInfo(PvrTexture texture, PvrInfo info, long fileBytes)
+    private static void PrintPvrInfo(PvrTexture texture, PvrInfo info, long fileBytes, bool printSubresources)
     {
         PrintTextureInfo(TextureContainer.Pvr, texture.Format, texture.Width, texture.Height, texture.MipLevelCount, texture.ArrayLayerCount, texture.FaceCount, GetPayloadByteCount(texture.Subresources), fileBytes);
         PrintInfoLine("Version", info.Version);
@@ -421,6 +524,11 @@ internal static class Cli
         if (info.MetadataBytes != 0)
         {
             PrintInfoLine("Metadata bytes", FormatInvariant(info.MetadataBytes));
+        }
+
+        if (printSubresources)
+        {
+            PrintSubresources(texture.Subresources, texture.FaceCount);
         }
     }
 
@@ -485,6 +593,21 @@ internal static class Cli
         else
         {
             PrintInfoLine("Bits per texel", FormatInvariant(format.BitsPerTexel));
+        }
+    }
+
+    private static void PrintSubresources(IReadOnlyList<TextureSubresource> subresources, int faceCount)
+    {
+        Console.WriteLine("Subresources:");
+        foreach (var subresource in subresources)
+        {
+            var face = faceCount == 6
+                ? ((TextureCubeFace)subresource.FaceIndex).ToString()
+                : FormatInvariant(subresource.FaceIndex);
+            Console.WriteLine(
+                string.Create(
+                    CultureInfo.InvariantCulture,
+                    $"  mip={subresource.MipLevel} layer={subresource.ArrayLayer} face={face} size={subresource.Width}x{subresource.Height} payload={subresource.Payload.Length}"));
         }
     }
 
@@ -637,22 +760,124 @@ internal static class Cli
     private static void PrintInfoLine(string label, object? value) =>
         Console.WriteLine($"{label}: {value}");
 
-    private static ArrayBitmap<Rgba8UNorm> Decode(string path, ImageColorSpaces? imageColorSpaces = null)
+    private static ArrayBitmap<Rgba8UNorm> Decode(
+        string path,
+        ImageColorSpaces? imageColorSpaces = null,
+        TextureSubresourceSelection selection = default)
     {
         var container = GetContainer(path);
         var bitmap = container switch
         {
-            TextureContainer.Png => PngCodec.Decode(path),
-            TextureContainer.Jpeg => JpegCodec.Decode(path),
-            TextureContainer.Gif => GifCodec.Decode(path),
-            TextureContainer.Dds => DdsCodec.Decode(path),
-            TextureContainer.Ktx => KtxCodec.Decode(path),
-            TextureContainer.Pvr => PvrCodec.Decode(path),
-            TextureContainer.Astc => AstcCodec.Decode(path),
+            TextureContainer.Png => DecodeImage(PngCodec.Decode(path), selection),
+            TextureContainer.Jpeg => DecodeImage(JpegCodec.Decode(path), selection),
+            TextureContainer.Gif => DecodeImage(GifCodec.Decode(path), selection),
+            TextureContainer.Dds => DecodeTexture(DdsCodec.Read(path), selection),
+            TextureContainer.Ktx => DecodeTexture(KtxCodec.Read(path), selection),
+            TextureContainer.Pvr => DecodeTexture(PvrCodec.Read(path), selection),
+            TextureContainer.Astc => DecodeAstc(AstcCodec.Read(path), selection),
             _ => throw new NotSupportedException($"Unsupported input extension '{Path.GetExtension(path)}'.")
         };
 
         return ApplyInputImageColorSpace(bitmap, container, GetImageColorSpace(container, imageColorSpaces));
+    }
+
+    private static ArrayBitmap<Rgba8UNorm> DecodeImage(
+        ArrayBitmap<Rgba8UNorm> bitmap,
+        TextureSubresourceSelection selection)
+    {
+        EnsureDefaultSelection(selection, "Image containers");
+        return bitmap;
+    }
+
+    private static ArrayBitmap<Rgba8UNorm> DecodeAstc(AstcTexture texture, TextureSubresourceSelection selection)
+    {
+        EnsureDefaultSelection(selection, "ASTC files");
+        return AstcCodec.Decode<Rgba8UNorm>(texture);
+    }
+
+    private static ArrayBitmap<Rgba8UNorm> DecodeTexture(DdsTexture texture, TextureSubresourceSelection selection)
+    {
+        var subresource = GetSubresource(texture, selection);
+        return DecodeSubresource(texture.Format, subresource);
+    }
+
+    private static ArrayBitmap<Rgba8UNorm> DecodeTexture(KtxTexture texture, TextureSubresourceSelection selection)
+    {
+        var subresource = GetSubresource(texture, selection);
+        return DecodeSubresource(texture.Format, subresource);
+    }
+
+    private static ArrayBitmap<Rgba8UNorm> DecodeTexture(PvrTexture texture, TextureSubresourceSelection selection)
+    {
+        var subresource = GetSubresource(texture, selection);
+        return DecodeSubresource(texture.Format, subresource);
+    }
+
+    private static TextureSubresource GetSubresource(DdsTexture texture, TextureSubresourceSelection selection)
+    {
+        ValidateSelection(texture.MipLevelCount, texture.ArrayLayerCount, texture.FaceCount, selection);
+        return texture.GetSubresource(selection.MipLevel, selection.ArrayLayer, selection.FaceIndex);
+    }
+
+    private static TextureSubresource GetSubresource(KtxTexture texture, TextureSubresourceSelection selection)
+    {
+        ValidateSelection(texture.MipLevelCount, texture.ArrayLayerCount, texture.FaceCount, selection);
+        return texture.GetSubresource(selection.MipLevel, selection.ArrayLayer, selection.FaceIndex);
+    }
+
+    private static TextureSubresource GetSubresource(PvrTexture texture, TextureSubresourceSelection selection)
+    {
+        ValidateSelection(texture.MipLevelCount, texture.ArrayLayerCount, texture.FaceCount, selection);
+        return texture.GetSubresource(selection.MipLevel, selection.ArrayLayer, selection.FaceIndex);
+    }
+
+    private static ArrayBitmap<Rgba8UNorm> DecodeSubresource(TextureFormat format, TextureSubresource subresource)
+    {
+        var bitmap = new ArrayBitmap<Rgba8UNorm>(subresource.Width, subresource.Height);
+        var coder = TextureCoderManager.Global.GetCoder(format);
+        coder.Decode(subresource.Payload, bitmap.AsView());
+        return bitmap;
+    }
+
+    private static void ValidateSelection(
+        int mipLevelCount,
+        int arrayLayerCount,
+        int faceCount,
+        TextureSubresourceSelection selection)
+    {
+        if (selection.MipLevel >= mipLevelCount)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(selection),
+                $"Mip level {selection.MipLevel} is outside the texture mip level count {mipLevelCount}.");
+        }
+
+        if (selection.ArrayLayer >= arrayLayerCount)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(selection),
+                $"Array layer {selection.ArrayLayer} is outside the texture array layer count {arrayLayerCount}.");
+        }
+
+        if (selection.HasFace && faceCount != 6)
+        {
+            throw new ArgumentOutOfRangeException(nameof(selection), "Face selection requires a cube-map texture.");
+        }
+
+        if (selection.FaceIndex >= faceCount)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(selection),
+                $"Face index {selection.FaceIndex} is outside the texture face count {faceCount}.");
+        }
+    }
+
+    private static void EnsureDefaultSelection(TextureSubresourceSelection selection, string containerDescription)
+    {
+        if (!selection.IsDefault)
+        {
+            throw new NotSupportedException($"{containerDescription} do not support subresource selection.");
+        }
     }
 
     private static void Encode(
@@ -1075,6 +1300,15 @@ internal enum MipmapMode
 {
     None,
     Generate
+}
+
+internal readonly record struct TextureSubresourceSelection(int MipLevel, int ArrayLayer, TextureCubeFace? Face)
+{
+    public int FaceIndex => Face is { } face ? (int)face : 0;
+
+    public bool HasFace => Face is not null;
+
+    public bool IsDefault => MipLevel == 0 && ArrayLayer == 0 && Face is null;
 }
 
 internal sealed record ImageColorSpaces(ImageColorSpace Png, ImageColorSpace Jpeg, ImageColorSpace Gif)

@@ -426,9 +426,9 @@ dotnet run --project src/TextureCompressor.Cli -- quality source.png output.dds
 Common commands:
 
 - `formats [query]`: list or search texture formats accepted by `--format`; add `--compressed` or `--uncompressed` to filter.
-- `info <input>` / `inspect <input>`: print container metadata such as size, texture format, mip levels, payload size, and container-specific header fields.
-- `convert <input> <output>`: convert between image and texture containers. The output container is inferred from the extension unless `--container` is passed explicitly.
-- `quality <expected> <actual>`: decode two image/texture files and print MSE, RMSE, and PSNR; add `--ignore-alpha` to ignore alpha.
+- `info <input>` / `inspect <input>`: print container metadata such as size, texture format, mip levels, payload size, and container-specific header fields; add `--subresources` to list mip/layer/face payloads.
+- `convert <input> <output>`: convert between image and texture containers. The output container is inferred from the extension unless `--container` is passed explicitly. Texture inputs can select a subresource with `--mip`, `--layer`, and `--face`.
+- `quality <expected> <actual>`: decode two image/texture files and print MSE, RMSE, and PSNR; add `--ignore-alpha` to ignore alpha. Use `--mip`/`--layer`/`--face` for both inputs, or `--expected-*` and `--actual-*` options to select each input independently.
 
 Image containers support PNG, JPEG, and GIF. `convert` provides `--png-color-space`, `--jpg-color-space`, and `--gif-color-space` conversions between Linear and Srgb. JPEG output quality is controlled with `--jpeg-quality`; S3TC, FXT1, ETC/EAC, ASTC, ATC, RGTC/LATC, BPTC, and PVRTC built-in texture encoding quality can be selected with `--quality`. DDS, KTX, and PVR outputs can generate full mip-map chains with `--mipmaps Generate`.
 
