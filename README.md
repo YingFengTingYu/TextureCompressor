@@ -13,7 +13,7 @@ TextureCompressor is a .NET texture codec library for converting bitmap data to 
 - Built-in texture coders: representative coverage for S3TC/DXT, RGTC/LATC, BPTC, ETC/EAC, ASTC, ATC, PVRTC, FXT1, RGBM/RGBD, YUV, depth/stencil, and XR-style formats.
 - The core `TextureCompressor` package and built-in coders are fully managed and do not require external native libraries or texture-compression tools.
 - File-format packages: PNG, JPEG, GIF, HDR, DDS, KTX, PVR, and ASTC read/write helpers.
-- Unified file-format registration and non-CLI conversion APIs for converting between image and texture containers from library code.
+- Unified file-format registration and non-CLI APIs for conversion, texture assembly, and subresource extraction.
 - Quality analysis: whole-image and per-channel MSE, RMSE, and PSNR.
 - Development CLI: format search, container metadata inspection, conversion, and quality metric output.
 - Source generator: automatically generates `TextureFormatCatalog` for format enumeration and name lookup.
@@ -169,6 +169,37 @@ converter.Convert(
 ```
 
 Pass format-specific options through `ReadOptions` and `WriteOptions`. Option types implement `IFileFormatOptions`, including `PngEncodingOptions`, `JpegEncodingOptions`, `HdrEncodingOptions`, `DdsEncodingOptions`, `KtxEncodingOptions`, `PvrEncodingOptions`, `AstcReadOptions`, and `AstcEncodingOptions`. For non-file workflows, `TextureConverter` also exposes `EncodeTexture(...)`, `DecodeTexture(...)`, and `TranscodeTexture(...)`.
+
+`TextureAssembler` and `TextureExtractor` expose the CLI `assemble` and `extract` workflows as library APIs. They operate on `TextureImage`, so callers can pair them with any registered file format package or use them entirely in memory.
+
+```csharp
+using TextureCompressor.Bitmaps;
+using TextureCompressor.Colors;
+using TextureCompressor.Conversion;
+using TextureCompressor.FileFormats.Dds;
+using TextureCompressor.FileFormats.Png;
+using TextureCompressor.Formats;
+
+IBitmap<Rgba8UNorm>[] faces =
+[
+    PngCodec.DecodeRgba8("positive-x.png"),
+    PngCodec.DecodeRgba8("negative-x.png"),
+    PngCodec.DecodeRgba8("positive-y.png"),
+    PngCodec.DecodeRgba8("negative-y.png"),
+    PngCodec.DecodeRgba8("positive-z.png"),
+    PngCodec.DecodeRgba8("negative-z.png")
+];
+
+var assembler = new TextureAssembler();
+var cube = assembler.CreateCube(TextureFormats.Bc7Srgb, faces);
+DdsCodec.Write(new DdsTexture(cube), "skybox.dds");
+
+var extractor = new TextureExtractor();
+var positiveZ = extractor.ExtractSubresource(
+    cube,
+    new TextureSubresourceSelection(0, 0, TextureCubeFace.PositiveZ));
+PngCodec.Encode(positiveZ.Image, "positive-z-preview.png");
+```
 
 ## Use Built-In High-Quality Encoding Modes
 

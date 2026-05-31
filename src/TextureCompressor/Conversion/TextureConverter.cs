@@ -1,5 +1,4 @@
 using TextureCompressor.Bitmaps;
-using TextureCompressor.Codecs;
 using TextureCompressor.Colors;
 using TextureCompressor.FileFormats;
 using TextureCompressor.Formats;
@@ -76,7 +75,7 @@ public sealed class TextureConverter
     {
         ArgumentNullException.ThrowIfNull(image);
 
-        using var compressionRegistration = CreateTextureCompressionRegistration(format, compressionLevel);
+        using var compressionRegistration = TextureCompressionRegistrationFactory.Create(_coders, format, compressionLevel);
         return EncodeTextureCore(image, format, mipmaps);
     }
 
@@ -92,7 +91,7 @@ public sealed class TextureConverter
     {
         ArgumentNullException.ThrowIfNull(texture);
 
-        using var compressionRegistration = CreateTextureCompressionRegistration(format, compressionLevel);
+        using var compressionRegistration = TextureCompressionRegistrationFactory.Create(_coders, format, compressionLevel);
         return texture.Format == format && compressionLevel is null
             ? texture
             : ReencodeTexture(texture, format);
@@ -114,7 +113,7 @@ public sealed class TextureConverter
         }
 
         var format = options.TargetFormat ?? TextureFormats.Rgba8UNorm;
-        using var compressionRegistration = CreateTextureCompressionRegistration(format, options.CompressionLevel);
+        using var compressionRegistration = TextureCompressionRegistrationFactory.Create(_coders, format, options.CompressionLevel);
         var texture = EncodeTextureCore(image, format, options.Mipmaps);
         _fileFormats.WriteTexture(texture, output, outputPathOrExtension, options.WriteOptions);
         return CreateTextureResult(TextureConversionFileKind.Image, texture, sourceFormat: null);
@@ -147,7 +146,7 @@ public sealed class TextureConverter
         }
 
         var targetFormat = options.TargetFormat ?? source.Format;
-        using var compressionRegistration = CreateTextureCompressionRegistration(targetFormat, options.CompressionLevel);
+        using var compressionRegistration = TextureCompressionRegistrationFactory.Create(_coders, targetFormat, options.CompressionLevel);
         var texture = options.SourceSubresource is null && options.Mipmaps == TextureConversionMipmaps.None
             ? TranscodeTextureCore(source, targetFormat, options.CompressionLevel)
             : EncodeTextureCore(DecodeTexture(source, options.SourceSubresource ?? default), targetFormat, options.Mipmaps);
@@ -290,54 +289,6 @@ public sealed class TextureConverter
                 nameof(selection),
                 $"Face index {selection.FaceIndex} is outside the texture face count {texture.FaceCount}.");
         }
-    }
-
-    private IDisposable? CreateTextureCompressionRegistration(TextureFormat format, TextureCompressionLevel? compressionLevel)
-    {
-        if (compressionLevel is null)
-        {
-            return null;
-        }
-
-        var options = new TextureCompressionOptions { CompressionMode = compressionLevel.Value };
-        if (S3tcTextureCoder.IsSupported(format))
-        {
-            return _coders.Register(format, new S3tcTextureCoder(format, options));
-        }
-
-        if (FxtcTextureCoder.IsSupported(format))
-        {
-            return _coders.Register(format, new FxtcTextureCoder(format, options));
-        }
-
-        if (EtcTextureCoder.IsSupported(format))
-        {
-            return _coders.Register(format, new EtcTextureCoder(format, options));
-        }
-
-        if (AtcTextureCoder.IsSupported(format))
-        {
-            return _coders.Register(format, new AtcTextureCoder(format, options));
-        }
-
-        if (RgtcLatcTextureCoder.IsSupported(format))
-        {
-            return _coders.Register(format, new RgtcLatcTextureCoder(format, options));
-        }
-
-        if (BptcTextureCoder.IsSupported(format))
-        {
-            return _coders.Register(format, new BptcTextureCoder(format, options));
-        }
-
-        if (PvrtcTextureCoder.IsSupported(format))
-        {
-            return _coders.Register(format, new PvrtcTextureCoder(format, options));
-        }
-
-        return AstcTextureCoder.IsSupported(format)
-            ? _coders.Register(format, new AstcTextureCoder(format, options))
-            : null;
     }
 
     private static TextureConversionResult CreateImageResult(

@@ -11,7 +11,7 @@ TextureCompressor 是一个面向 .NET 的纹理编解码库，用于把普通�
 - 内置纹理 coder：支持 S3TC/DXT、RGTC/LATC、BPTC、ETC/EAC、ASTC、ATC、PVRTC、FXT1、RGBM/RGBD、YUV、深度/模板和 XR 风格格式中的代表性格式。
 - 核心 `TextureCompressor` 包和内置 coder 为纯托管实现，不依赖外部原生库或压缩工具。
 - 文件格式包：PNG、JPEG、GIF、HDR、DDS、KTX、PVR、ASTC 的读取、写入和位图转换。
-- 统一文件格式注册和非 CLI 转换 API：可在库代码中按扩展名在图片/纹理容器之间转换。
+- 统一文件格式注册和非 CLI API：可在库代码中转换文件、组装纹理、提取 subresource。
 - 质量分析：对两张位图计算整体和逐通道 MSE、RMSE、PSNR。
 - 开发 CLI：可进行格式查询、容器元数据查看、容器转换和质量指标输出。
 - Source generator：自动生成 `TextureFormatCatalog`，用于按字段名或格式名查询纹理格式。
@@ -167,6 +167,37 @@ converter.Convert(
 ```
 
 格式特有选项通过 `ReadOptions` / `WriteOptions` 传入，选项类型都实现 `IFileFormatOptions`，例如 `PngEncodingOptions`、`JpegEncodingOptions`、`HdrEncodingOptions`、`DdsEncodingOptions`、`KtxEncodingOptions`、`PvrEncodingOptions`、`AstcReadOptions`、`AstcEncodingOptions`。如果需要绕过文件，`TextureConverter` 还提供 `EncodeTexture(...)`、`DecodeTexture(...)` 和 `TranscodeTexture(...)`。
+
+`TextureAssembler` 和 `TextureExtractor` 把 CLI 的 `assemble` / `extract` 工作流开放成库级 API。它们直接处理 `TextureImage`，调用者可以配合任意已注册的文件格式包使用，也可以完全在内存里组装和拆解纹理。
+
+```csharp
+using TextureCompressor.Bitmaps;
+using TextureCompressor.Colors;
+using TextureCompressor.Conversion;
+using TextureCompressor.FileFormats.Dds;
+using TextureCompressor.FileFormats.Png;
+using TextureCompressor.Formats;
+
+IBitmap<Rgba8UNorm>[] faces =
+[
+    PngCodec.DecodeRgba8("positive-x.png"),
+    PngCodec.DecodeRgba8("negative-x.png"),
+    PngCodec.DecodeRgba8("positive-y.png"),
+    PngCodec.DecodeRgba8("negative-y.png"),
+    PngCodec.DecodeRgba8("positive-z.png"),
+    PngCodec.DecodeRgba8("negative-z.png")
+];
+
+var assembler = new TextureAssembler();
+var cube = assembler.CreateCube(TextureFormats.Bc7Srgb, faces);
+DdsCodec.Write(new DdsTexture(cube), "skybox.dds");
+
+var extractor = new TextureExtractor();
+var positiveZ = extractor.ExtractSubresource(
+    cube,
+    new TextureSubresourceSelection(0, 0, TextureCubeFace.PositiveZ));
+PngCodec.Encode(positiveZ.Image, "positive-z-preview.png");
+```
 
 ## 使用内置高质量编码模式
 
