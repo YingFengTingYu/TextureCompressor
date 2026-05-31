@@ -1,4 +1,4 @@
-using System.Buffers.Binary;
+﻿using System.Buffers.Binary;
 using System.IO.Compression;
 using System.Runtime.CompilerServices;
 using TextureCompressor.Bitmaps;
@@ -6,6 +6,7 @@ using TextureCompressor.Codecs;
 using TextureCompressor.Colors;
 using TextureCompressor.Formats;
 using ZstdSharp;
+using TextureCompressor.Registry;
 
 namespace TextureCompressor.FileFormats.Ktx;
 

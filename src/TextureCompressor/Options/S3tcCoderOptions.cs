@@ -1,4 +1,4 @@
-namespace TextureCompressor.Codecs;
+﻿namespace TextureCompressor.Options;
 
 public sealed class S3tcCoderOptions
 {

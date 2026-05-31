@@ -1,9 +1,10 @@
-using System.Buffers.Binary;
+﻿using System.Buffers.Binary;
 using TextureCompressor.Bitmaps;
 using TextureCompressor.Codecs;
 using TextureCompressor.Colors;
 using TextureCompressor.FileFormats.Pvr;
 using TextureCompressor.Formats;
+using TextureCompressor.Registry;
 
 namespace TextureCompressor.FileFormats.Pvr.Tests;
 

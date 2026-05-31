@@ -1,9 +1,10 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using TextureCompressor.Bitmaps;
 using TextureCompressor.Codecs;
 using TextureCompressor.Colors;
 using TextureCompressor.FileFormats.Png;
 using TextureCompressor.Formats;
+using TextureCompressor.Registry;
 
 namespace TextureCompressor.Tests;
 

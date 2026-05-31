@@ -90,6 +90,7 @@ using TextureCompressor.Codecs;
 using TextureCompressor.Colors;
 using TextureCompressor.FileFormats.Png;
 using TextureCompressor.Formats;
+using TextureCompressor.Registry;
 
 var source = PngCodec.DecodeRgba8("input.png");
 var format = TextureFormats.Bc7UNorm;
@@ -113,6 +114,8 @@ The default built-in coders favor fast, predictable baseline conversion. The bui
 ```csharp
 using TextureCompressor.Codecs;
 using TextureCompressor.Formats;
+using TextureCompressor.Options;
+using TextureCompressor.Registry;
 
 var s3tcFormat = TextureFormats.Bc3Rgba;
 using var highQualityS3tc = TextureCoderManager.Global.Register(
@@ -379,6 +382,7 @@ using TextureCompressor.Codecs.BasisUniversal;
 using TextureCompressor.Codecs.BCnEncoder;
 using TextureCompressor.Codecs.DirectXTex;
 using TextureCompressor.Codecs.PVRTexLib;
+using TextureCompressor.Registry;
 
 using var bcn = TextureCoderManager.Global.RegisterBCnEncoderCoders();
 using var astc = TextureCoderManager.Global.RegisterAstcEncCoders();
@@ -395,6 +399,7 @@ You can also register one format:
 ```csharp
 using TextureCompressor.Codecs.BCnEncoder;
 using TextureCompressor.Formats;
+using TextureCompressor.Registry;
 
 using var registration = TextureCoderManager.Global.RegisterBCnEncoderCoder(TextureFormats.Bc7UNorm);
 ```

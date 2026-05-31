@@ -1,4 +1,5 @@
-using TextureCompressor.Codecs;
+﻿using TextureCompressor.Codecs;
+using TextureCompressor.Utilities;
 
 namespace TextureCompressor.Tests;
 

@@ -1,7 +1,9 @@
-using TextureCompressor.Bitmaps;
+﻿using TextureCompressor.Bitmaps;
 using TextureCompressor.Codecs;
 using TextureCompressor.Colors;
 using TextureCompressor.Formats;
+using TextureCompressor.Registry;
+using TextureCompressor.Options;
 
 namespace TextureCompressor.Tests;
 

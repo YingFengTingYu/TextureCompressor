@@ -1,8 +1,9 @@
-using AstcEncoder;
+﻿using AstcEncoder;
 using TextureCompressor.Bitmaps;
 using TextureCompressor.Codecs.AstcEnc;
 using TextureCompressor.Colors;
 using TextureCompressor.Formats;
+using TextureCompressor.Registry;
 
 namespace TextureCompressor.Codecs.AstcEnc.Tests;
 

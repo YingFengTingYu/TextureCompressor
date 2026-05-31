@@ -1,7 +1,9 @@
-using System.Diagnostics.CodeAnalysis;
+﻿using System.Diagnostics.CodeAnalysis;
 using TextureCompressor.Formats;
+using TextureCompressor.Codecs;
+using TextureCompressor.Options;
 
-namespace TextureCompressor.Codecs;
+namespace TextureCompressor.Registry;
 
 public sealed class TextureCoderManager
 {

@@ -1,9 +1,10 @@
-using PVRTexLib;
+﻿using PVRTexLib;
 using TextureCompressor.Bitmaps;
 using TextureCompressor.Codecs;
 using TextureCompressor.Colors;
 using TextureCompressor.Codecs.PVRTexLib;
 using TextureCompressor.Formats;
+using TextureCompressor.Registry;
 
 namespace TextureCompressor.Codecs.PVRTexLib.Tests;
 

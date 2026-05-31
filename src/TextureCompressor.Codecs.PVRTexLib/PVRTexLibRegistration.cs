@@ -1,4 +1,5 @@
-using TextureCompressor.Formats;
+﻿using TextureCompressor.Formats;
+using TextureCompressor.Registry;
 
 namespace TextureCompressor.Codecs.PVRTexLib;
 

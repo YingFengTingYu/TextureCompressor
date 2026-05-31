@@ -1,6 +1,6 @@
 ﻿# Texture Format Support
 
-The core library includes the texture coders below. They can be accessed through `TextureCoderManager.Global.GetCoder(format)`. Whether a specific file container can write a format also depends on the DDS/KTX/PVR/ASTC mapping for that container.
+The core library includes the texture coders below. They can be accessed through `TextureCompressor.Registry.TextureCoderManager.Global.GetCoder(format)`. Whether a specific file container can write a format also depends on the DDS/KTX/PVR/ASTC mapping for that container.
 
 ## Compressed Textures
 

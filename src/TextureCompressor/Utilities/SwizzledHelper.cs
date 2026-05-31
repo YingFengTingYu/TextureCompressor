@@ -1,4 +1,4 @@
-namespace TextureCompressor.Codecs;
+﻿namespace TextureCompressor.Utilities;
 
 public static class SwizzledHelper
 {

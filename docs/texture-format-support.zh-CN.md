@@ -1,6 +1,6 @@
 ﻿# 纹理格式支持情况
 
-核心库内置以下 texture coder，均可通过 `TextureCoderManager.Global.GetCoder(format)` 获取。容器格式是否能写出某个格式，还取决于 DDS/KTX/PVR/ASTC 容器本身是否有对应映射。
+核心库内置以下 texture coder，均可通过 `TextureCompressor.Registry.TextureCoderManager.Global.GetCoder(format)` 获取。容器格式是否能写出某个格式，还取决于 DDS/KTX/PVR/ASTC 容器本身是否有对应映射。
 
 ## 压缩纹理
 

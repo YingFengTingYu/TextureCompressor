@@ -1,8 +1,9 @@
-using BCnEncoder.Encoder;
+﻿using BCnEncoder.Encoder;
 using TextureCompressor.Bitmaps;
 using TextureCompressor.Codecs.BCnEncoder;
 using TextureCompressor.Colors;
 using TextureCompressor.Formats;
+using TextureCompressor.Registry;
 
 namespace TextureCompressor.Codecs.BCnEncoder.Tests;
 

@@ -1,6 +1,6 @@
-namespace TextureCompressor.Codecs;
+﻿namespace TextureCompressor.Options;
 
-public sealed class AstcCoderOptions
+public sealed class RgtcLatcCoderOptions
 {
     public TextureCompressionLevel CompressionMode { get; init; } = TextureCompressionLevel.Fast;
 }

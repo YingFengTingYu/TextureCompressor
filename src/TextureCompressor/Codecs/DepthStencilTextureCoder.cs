@@ -1,8 +1,9 @@
-using System.Buffers.Binary;
+﻿using System.Buffers.Binary;
 using System.Numerics;
 using TextureCompressor.Colors;
 using TextureCompressor.Formats;
 using TextureCompressor.Bitmaps;
+using TextureCompressor.Utilities;
 
 namespace TextureCompressor.Codecs;
 

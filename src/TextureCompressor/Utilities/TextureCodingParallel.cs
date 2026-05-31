@@ -1,6 +1,6 @@
-using System.Runtime.CompilerServices;
+﻿using System.Runtime.CompilerServices;
 
-namespace TextureCompressor.Codecs;
+namespace TextureCompressor.Utilities;
 
 internal static class TextureCodingParallel
 {

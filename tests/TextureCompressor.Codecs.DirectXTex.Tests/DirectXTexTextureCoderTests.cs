@@ -1,7 +1,8 @@
-using TextureCompressor.Bitmaps;
+﻿using TextureCompressor.Bitmaps;
 using TextureCompressor.Codecs.DirectXTex;
 using TextureCompressor.Colors;
 using TextureCompressor.Formats;
+using TextureCompressor.Registry;
 
 namespace TextureCompressor.Codecs.DirectXTex.Tests;
 

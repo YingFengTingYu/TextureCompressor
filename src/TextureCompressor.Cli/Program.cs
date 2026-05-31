@@ -1,4 +1,4 @@
-using System.CommandLine;
+﻿using System.CommandLine;
 using System.Globalization;
 using TextureCompressor.Analysis;
 using TextureCompressor.Bitmaps;
@@ -12,6 +12,8 @@ using TextureCompressor.FileFormats.Ktx;
 using TextureCompressor.FileFormats.Png;
 using TextureCompressor.FileFormats.Pvr;
 using TextureCompressor.Formats;
+using TextureCompressor.Registry;
+using TextureCompressor.Options;
 
 var root = Cli.CreateRootCommand();
 return root.Parse(args).Invoke();

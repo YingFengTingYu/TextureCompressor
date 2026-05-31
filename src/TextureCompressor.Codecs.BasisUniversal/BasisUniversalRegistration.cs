@@ -1,5 +1,6 @@
-using TextureCompressor.Codecs;
+﻿using TextureCompressor.Codecs;
 using TextureCompressor.Formats;
+using TextureCompressor.Registry;
 
 namespace TextureCompressor.Codecs.BasisUniversal;
 
