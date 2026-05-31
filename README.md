@@ -13,6 +13,7 @@ TextureCompressor is a .NET texture codec library for converting bitmap data to 
 - Built-in texture coders: representative coverage for S3TC/DXT, RGTC/LATC, BPTC, ETC/EAC, ASTC, ATC, PVRTC, FXT1, RGBM/RGBD, YUV, depth/stencil, and XR-style formats.
 - The core `TextureCompressor` package and built-in coders are fully managed and do not require external native libraries or texture-compression tools.
 - File-format packages: PNG, JPEG, GIF, DDS, KTX, PVR, and ASTC read/write helpers.
+- Unified file-format registration and non-CLI conversion APIs for converting between image and texture containers from library code.
 - Quality analysis: whole-image and per-channel MSE, RMSE, and PSNR.
 - Development CLI: format search, container metadata inspection, conversion, and quality metric output.
 - Source generator: automatically generates `TextureFormatCatalog` for format enumeration and name lookup.
@@ -28,7 +29,7 @@ README only lists the major supported families. See [docs/texture-format-support
 ## Project Layout
 
 - `src/TextureCompressor.Bitmap`: pixel structs plus bitmap and view abstractions.
-- `src/TextureCompressor`: texture format definitions, core coders, and `TextureCoderManager`.
+- `src/TextureCompressor`: texture format definitions, core coders, `TextureCoderManager`, file-format registration interfaces, and `TextureConverter`.
 - `src/TextureCompressor.SourceGenerators`: generates `TextureFormatCatalog` for format enumeration and name lookup.
 - `src/TextureCompressor.Analysis`: bitmap quality metrics.
 - `src/TextureCompressor.Cli`: development command-line tool.
@@ -106,6 +107,66 @@ PngCodec.Encode(decoded, "roundtrip.png");
 ```
 
 `TextureCoderManager.Global` creates built-in coders by format. Built-in S3TC, FXT1, ETC/EAC, ASTC, ATC, RGTC/LATC, BPTC, and PVRTC coders also expose compression-mode options when you construct and register them yourself; see the next section. Register an external coder when you need a different implementation or higher production compression quality.
+
+## Non-CLI File Conversion API
+
+`TextureConverter` provides a library-level conversion entry point similar to the CLI `convert` command. The core library does not directly depend on concrete PNG, DDS, or KTX packages; register the file formats you need with `TextureFileFormatManager`, then the converter selects an `IImageFileFormat` or `ITextureFileFormat` by input and output extension.
+
+```csharp
+using TextureCompressor.Conversion;
+using TextureCompressor.FileFormats;
+using TextureCompressor.FileFormats.Ktx;
+using TextureCompressor.FileFormats.Png;
+using TextureCompressor.Formats;
+
+var fileFormats = new TextureFileFormatManager();
+using var png = fileFormats.RegisterPngFileFormat();
+using var ktx = fileFormats.RegisterKtxFileFormat();
+
+var converter = new TextureConverter(fileFormats);
+
+converter.Convert(
+    "input.png",
+    "output.ktx2",
+    new TextureConversionOptions
+    {
+        TargetFormat = TextureFormats.Bc7Srgb,
+        Mipmaps = TextureConversionMipmaps.Generate,
+        WriteOptions = new KtxEncodingOptions
+        {
+            Version = KtxVersion.Version2
+        }
+    });
+```
+
+The same API supports texture-to-image previews and texture-to-texture container conversion. Texture-to-texture conversion preserves the full mip level, array layer, and cube face topology when no source subresource is selected. Set `SourceSubresource` to decode one subresource and write it as a single image or single 2D texture.
+
+```csharp
+using TextureCompressor.Conversion;
+using TextureCompressor.FileFormats;
+using TextureCompressor.FileFormats.Dds;
+using TextureCompressor.FileFormats.Png;
+using TextureCompressor.Formats;
+
+var fileFormats = new TextureFileFormatManager();
+using var png = fileFormats.RegisterPngFileFormat();
+using var dds = fileFormats.RegisterDdsFileFormat();
+
+var converter = new TextureConverter(fileFormats);
+
+converter.Convert(
+    "skybox.dds",
+    "positive-x.png",
+    new TextureConversionOptions
+    {
+        SourceSubresource = new TextureSubresourceSelection(
+            MipLevel: 0,
+            ArrayLayer: 0,
+            Face: TextureCubeFace.PositiveX)
+    });
+```
+
+Pass format-specific options through `ReadOptions` and `WriteOptions`. Option types implement `IFileFormatOptions`, including `PngEncodingOptions`, `JpegEncodingOptions`, `DdsEncodingOptions`, `KtxEncodingOptions`, `PvrEncodingOptions`, `AstcReadOptions`, and `AstcEncodingOptions`. For non-file workflows, `TextureConverter` also exposes `EncodeTexture(...)`, `DecodeTexture(...)`, and `TranscodeTexture(...)`.
 
 ## Use Built-In High-Quality Encoding Modes
 

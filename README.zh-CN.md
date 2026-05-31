@@ -11,6 +11,7 @@ TextureCompressor 是一个面向 .NET 的纹理编解码库，用于把普通�
 - 内置纹理 coder：支持 S3TC/DXT、RGTC/LATC、BPTC、ETC/EAC、ASTC、ATC、PVRTC、FXT1、RGBM/RGBD、YUV、深度/模板和 XR 风格格式中的代表性格式。
 - 核心 `TextureCompressor` 包和内置 coder 为纯托管实现，不依赖外部原生库或压缩工具。
 - 文件格式包：PNG、JPEG、GIF、DDS、KTX、PVR、ASTC 的读取、写入和位图转换。
+- 统一文件格式注册和非 CLI 转换 API：可在库代码中按扩展名在图片/纹理容器之间转换。
 - 质量分析：对两张位图计算整体和逐通道 MSE、RMSE、PSNR。
 - 开发 CLI：可进行格式查询、容器元数据查看、容器转换和质量指标输出。
 - Source generator：自动生成 `TextureFormatCatalog`，用于按字段名或格式名查询纹理格式。
@@ -26,7 +27,7 @@ README 只列主要支持的大类。完整支持列表见 [docs/texture-format-
 ## 项目结构
 
 - `src/TextureCompressor.Bitmap`：像素结构、位图和 view 抽象。
-- `src/TextureCompressor`：纹理格式定义、核心 coder 和 `TextureCoderManager`。
+- `src/TextureCompressor`：纹理格式定义、核心 coder、`TextureCoderManager`、文件格式注册接口和 `TextureConverter`。
 - `src/TextureCompressor.SourceGenerators`：生成 `TextureFormatCatalog`，便于枚举和按名称查找格式。
 - `src/TextureCompressor.Analysis`：位图质量指标计算。
 - `src/TextureCompressor.Cli`：开发用命令行工具。
@@ -104,6 +105,66 @@ PngCodec.Encode(decoded, "roundtrip.png");
 ```
 
 `TextureCoderManager.Global` 会按格式自动创建内置 coder。内置 S3TC、FXT1、ETC/EAC、ASTC、ATC、RGTC/LATC、BPTC、PVRTC coder 也支持自行构造并注册时传入压缩质量选项，见下一节。如果没有内置支持或你想替换为高质量第三方编码器，可以注册自定义 coder，见后文。
+
+## 非 CLI 文件转换 API
+
+`TextureConverter` 提供和 CLI `convert` 类似的库级转换入口。核心库不直接依赖 PNG、DDS、KTX 等具体格式包；调用者先把需要的文件格式注册到 `TextureFileFormatManager`，转换器再根据输入/输出扩展名选择 `IImageFileFormat` 或 `ITextureFileFormat`。
+
+```csharp
+using TextureCompressor.Conversion;
+using TextureCompressor.FileFormats;
+using TextureCompressor.FileFormats.Ktx;
+using TextureCompressor.FileFormats.Png;
+using TextureCompressor.Formats;
+
+var fileFormats = new TextureFileFormatManager();
+using var png = fileFormats.RegisterPngFileFormat();
+using var ktx = fileFormats.RegisterKtxFileFormat();
+
+var converter = new TextureConverter(fileFormats);
+
+converter.Convert(
+    "input.png",
+    "output.ktx2",
+    new TextureConversionOptions
+    {
+        TargetFormat = TextureFormats.Bc7Srgb,
+        Mipmaps = TextureConversionMipmaps.Generate,
+        WriteOptions = new KtxEncodingOptions
+        {
+            Version = KtxVersion.Version2
+        }
+    });
+```
+
+同一个 API 也支持纹理到图片预览、纹理到纹理容器转换。没有选择子资源时，纹理到纹理会保留完整 mip level、array layer 和 cube face；如果设置 `SourceSubresource`，则只解码选中的子资源并写成单图或单 2D 纹理。
+
+```csharp
+using TextureCompressor.Conversion;
+using TextureCompressor.FileFormats;
+using TextureCompressor.FileFormats.Dds;
+using TextureCompressor.FileFormats.Png;
+using TextureCompressor.Formats;
+
+var fileFormats = new TextureFileFormatManager();
+using var png = fileFormats.RegisterPngFileFormat();
+using var dds = fileFormats.RegisterDdsFileFormat();
+
+var converter = new TextureConverter(fileFormats);
+
+converter.Convert(
+    "skybox.dds",
+    "positive-x.png",
+    new TextureConversionOptions
+    {
+        SourceSubresource = new TextureSubresourceSelection(
+            MipLevel: 0,
+            ArrayLayer: 0,
+            Face: TextureCubeFace.PositiveX)
+    });
+```
+
+格式特有选项通过 `ReadOptions` / `WriteOptions` 传入，选项类型都实现 `IFileFormatOptions`，例如 `PngEncodingOptions`、`JpegEncodingOptions`、`DdsEncodingOptions`、`KtxEncodingOptions`、`PvrEncodingOptions`、`AstcReadOptions`、`AstcEncodingOptions`。如果需要绕过文件，`TextureConverter` 还提供 `EncodeTexture(...)`、`DecodeTexture(...)` 和 `TranscodeTexture(...)`。
 
 ## 使用内置高质量编码模式
 
