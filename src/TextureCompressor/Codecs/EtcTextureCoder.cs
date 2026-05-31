@@ -241,6 +241,46 @@ public sealed class EtcTextureCoder : IPitchTextureCoder
     {
         var blockCountX = GetBlockCount(source.Width);
         var blockCountY = GetBlockCount(source.Height);
+
+        if (TextureCodingParallel.ShouldParallelize(blockCountX, blockCountY))
+        {
+            var width = source.Width;
+            var height = source.Height;
+            var pixelCount = checked(width * height);
+            var destinationLength = destination.Length;
+            unsafe
+            {
+                fixed (TPixel* sourceBase = source.Pixels)
+                fixed (byte* destinationBase = destination)
+                {
+                    var sourceAddress = (nint)sourceBase;
+                    var destinationAddress = (nint)destinationBase;
+                    Parallel.For(0, blockCountY, blockY =>
+                    {
+                        var localSource = new BitmapView<TPixel>(
+                            new Span<TPixel>((void*)sourceAddress, pixelCount),
+                            width,
+                            height);
+                        var localDestination = new Span<byte>((void*)destinationAddress, destinationLength);
+                        Span<Rgba8UNorm> block = stackalloc Rgba8UNorm[TexelsPerBlock];
+
+                        var blockOffset = checked(blockY * rowPitch);
+                        for (var blockX = 0; blockX < blockCountX; blockX++)
+                        {
+                            LoadBlock(localSource, blockX, blockY, block);
+                            TTransfer.EncodeBlock(
+                                block,
+                                localDestination.Slice(blockOffset, TTransfer.BytesPerBlock),
+                                compressionMode);
+                            blockOffset = checked(blockOffset + TTransfer.BytesPerBlock);
+                        }
+                    });
+                }
+            }
+
+            return;
+        }
+
         Span<Rgba8UNorm> block = stackalloc Rgba8UNorm[TexelsPerBlock];
 
         var rowOffset = 0;
@@ -291,6 +331,46 @@ public sealed class EtcTextureCoder : IPitchTextureCoder
     {
         var blockCountX = GetBlockCount(source.Width);
         var blockCountY = GetBlockCount(source.Height);
+
+        if (TextureCodingParallel.ShouldParallelize(blockCountX, blockCountY))
+        {
+            var width = source.Width;
+            var height = source.Height;
+            var pixelCount = checked(width * height);
+            var destinationLength = destination.Length;
+            unsafe
+            {
+                fixed (TPixel* sourceBase = source.Pixels)
+                fixed (byte* destinationBase = destination)
+                {
+                    var sourceAddress = (nint)sourceBase;
+                    var destinationAddress = (nint)destinationBase;
+                    Parallel.For(0, blockCountY, blockY =>
+                    {
+                        var localSource = new BitmapView<TPixel>(
+                            new Span<TPixel>((void*)sourceAddress, pixelCount),
+                            width,
+                            height);
+                        var localDestination = new Span<byte>((void*)destinationAddress, destinationLength);
+                        Span<Rgba16UNorm> block = stackalloc Rgba16UNorm[TexelsPerBlock];
+
+                        var blockOffset = checked(blockY * rowPitch);
+                        for (var blockX = 0; blockX < blockCountX; blockX++)
+                        {
+                            LoadBlock(localSource, blockX, blockY, block);
+                            TTransfer.EncodeBlock(
+                                block,
+                                localDestination.Slice(blockOffset, TTransfer.BytesPerBlock),
+                                compressionMode);
+                            blockOffset = checked(blockOffset + TTransfer.BytesPerBlock);
+                        }
+                    });
+                }
+            }
+
+            return;
+        }
+
         Span<Rgba16UNorm> block = stackalloc Rgba16UNorm[TexelsPerBlock];
 
         var rowOffset = 0;
@@ -341,6 +421,46 @@ public sealed class EtcTextureCoder : IPitchTextureCoder
     {
         var blockCountX = GetBlockCount(source.Width);
         var blockCountY = GetBlockCount(source.Height);
+
+        if (TextureCodingParallel.ShouldParallelize(blockCountX, blockCountY))
+        {
+            var width = source.Width;
+            var height = source.Height;
+            var pixelCount = checked(width * height);
+            var destinationLength = destination.Length;
+            unsafe
+            {
+                fixed (TPixel* sourceBase = source.Pixels)
+                fixed (byte* destinationBase = destination)
+                {
+                    var sourceAddress = (nint)sourceBase;
+                    var destinationAddress = (nint)destinationBase;
+                    Parallel.For(0, blockCountY, blockY =>
+                    {
+                        var localSource = new BitmapView<TPixel>(
+                            new Span<TPixel>((void*)sourceAddress, pixelCount),
+                            width,
+                            height);
+                        var localDestination = new Span<byte>((void*)destinationAddress, destinationLength);
+                        Span<Rgba16SNorm> block = stackalloc Rgba16SNorm[TexelsPerBlock];
+
+                        var blockOffset = checked(blockY * rowPitch);
+                        for (var blockX = 0; blockX < blockCountX; blockX++)
+                        {
+                            LoadBlock(localSource, blockX, blockY, block);
+                            TTransfer.EncodeBlock(
+                                block,
+                                localDestination.Slice(blockOffset, TTransfer.BytesPerBlock),
+                                compressionMode);
+                            blockOffset = checked(blockOffset + TTransfer.BytesPerBlock);
+                        }
+                    });
+                }
+            }
+
+            return;
+        }
+
         Span<Rgba16SNorm> block = stackalloc Rgba16SNorm[TexelsPerBlock];
 
         var rowOffset = 0;

@@ -153,6 +153,46 @@ public sealed class BptcTextureCoder : IPitchTextureCoder
     {
         var blockCountX = GetBlockCount(source.Width);
         var blockCountY = GetBlockCount(source.Height);
+
+        if (TextureCodingParallel.ShouldParallelize(blockCountX, blockCountY))
+        {
+            var width = source.Width;
+            var height = source.Height;
+            var pixelCount = checked(width * height);
+            var destinationLength = destination.Length;
+            unsafe
+            {
+                fixed (TPixel* sourceBase = source.Pixels)
+                fixed (byte* destinationBase = destination)
+                {
+                    var sourceAddress = (nint)sourceBase;
+                    var destinationAddress = (nint)destinationBase;
+                    Parallel.For(0, blockCountY, blockY =>
+                    {
+                        var localSource = new BitmapView<TPixel>(
+                            new Span<TPixel>((void*)sourceAddress, pixelCount),
+                            width,
+                            height);
+                        var localDestination = new Span<byte>((void*)destinationAddress, destinationLength);
+                        var block = new InlineArray16<Rgba32Float>();
+
+                        var blockOffset = checked(blockY * rowPitch);
+                        for (var blockX = 0; blockX < blockCountX; blockX++)
+                        {
+                            LoadFloatBlock(localSource, blockX, blockY, block);
+                            TTransfer.EncodeBlock(
+                                block,
+                                localDestination.Slice(blockOffset, TTransfer.BytesPerBlock),
+                                compressionMode);
+                            blockOffset = checked(blockOffset + TTransfer.BytesPerBlock);
+                        }
+                    });
+                }
+            }
+
+            return;
+        }
+
         var block = new InlineArray16<Rgba32Float>();
 
         var rowOffset = 0;
@@ -203,6 +243,46 @@ public sealed class BptcTextureCoder : IPitchTextureCoder
     {
         var blockCountX = GetBlockCount(source.Width);
         var blockCountY = GetBlockCount(source.Height);
+
+        if (TextureCodingParallel.ShouldParallelize(blockCountX, blockCountY))
+        {
+            var width = source.Width;
+            var height = source.Height;
+            var pixelCount = checked(width * height);
+            var destinationLength = destination.Length;
+            unsafe
+            {
+                fixed (TPixel* sourceBase = source.Pixels)
+                fixed (byte* destinationBase = destination)
+                {
+                    var sourceAddress = (nint)sourceBase;
+                    var destinationAddress = (nint)destinationBase;
+                    Parallel.For(0, blockCountY, blockY =>
+                    {
+                        var localSource = new BitmapView<TPixel>(
+                            new Span<TPixel>((void*)sourceAddress, pixelCount),
+                            width,
+                            height);
+                        var localDestination = new Span<byte>((void*)destinationAddress, destinationLength);
+                        var block = new InlineArray16<Rgba8UNorm>();
+
+                        var blockOffset = checked(blockY * rowPitch);
+                        for (var blockX = 0; blockX < blockCountX; blockX++)
+                        {
+                            LoadUNormBlock(localSource, blockX, blockY, block);
+                            TTransfer.EncodeBlock(
+                                block,
+                                localDestination.Slice(blockOffset, TTransfer.BytesPerBlock),
+                                compressionMode);
+                            blockOffset = checked(blockOffset + TTransfer.BytesPerBlock);
+                        }
+                    });
+                }
+            }
+
+            return;
+        }
+
         var block = new InlineArray16<Rgba8UNorm>();
 
         var rowOffset = 0;

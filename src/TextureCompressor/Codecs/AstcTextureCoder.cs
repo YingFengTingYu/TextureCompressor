@@ -187,6 +187,49 @@ public sealed class AstcTextureCoder : IPitchTextureCoder
     {
         var blockCountX = GetBlockCount(source.Width, _blockWidth);
         var blockCountY = GetBlockCount(source.Height, _blockHeight);
+        var compressionMode = _options.CompressionMode;
+
+        if (TextureCodingParallel.ShouldParallelize(blockCountX, blockCountY))
+        {
+            var width = source.Width;
+            var height = source.Height;
+            var pixelCount = checked(width * height);
+            var destinationLength = destination.Length;
+            unsafe
+            {
+                fixed (TPixel* sourceBase = source.Pixels)
+                fixed (byte* destinationBase = destination)
+                {
+                    var sourceAddress = (nint)sourceBase;
+                    var destinationAddress = (nint)destinationBase;
+                    Parallel.For(0, blockCountY, blockY =>
+                    {
+                        var localSource = new BitmapView<TPixel>(
+                            new Span<TPixel>((void*)sourceAddress, pixelCount),
+                            width,
+                            height);
+                        var localDestination = new Span<byte>((void*)destinationAddress, destinationLength);
+                        var block = new Rgba16FloatTexelBlock();
+
+                        var blockOffset = checked(blockY * rowPitch);
+                        for (var blockX = 0; blockX < blockCountX; blockX++)
+                        {
+                            LoadFloatBlock(localSource, blockX, blockY, block);
+                            TTransfer.EncodeBlock(
+                                block,
+                                _blockWidth,
+                                _blockHeight,
+                                compressionMode,
+                                localDestination.Slice(blockOffset, BytesPerBlock));
+                            blockOffset = checked(blockOffset + BytesPerBlock);
+                        }
+                    });
+                }
+            }
+
+            return;
+        }
+
         var block = new Rgba16FloatTexelBlock();
 
         var rowOffset = 0;
@@ -196,7 +239,7 @@ public sealed class AstcTextureCoder : IPitchTextureCoder
             for (var blockX = 0; blockX < blockCountX; blockX++)
             {
                 LoadFloatBlock(source, blockX, blockY, block);
-                TTransfer.EncodeBlock(block, _blockWidth, _blockHeight, _options.CompressionMode, destination.Slice(blockOffset, BytesPerBlock));
+                TTransfer.EncodeBlock(block, _blockWidth, _blockHeight, compressionMode, destination.Slice(blockOffset, BytesPerBlock));
                 blockOffset = checked(blockOffset + BytesPerBlock);
             }
 
@@ -233,6 +276,49 @@ public sealed class AstcTextureCoder : IPitchTextureCoder
     {
         var blockCountX = GetBlockCount(source.Width, _blockWidth);
         var blockCountY = GetBlockCount(source.Height, _blockHeight);
+        var compressionMode = _options.CompressionMode;
+
+        if (TextureCodingParallel.ShouldParallelize(blockCountX, blockCountY))
+        {
+            var width = source.Width;
+            var height = source.Height;
+            var pixelCount = checked(width * height);
+            var destinationLength = destination.Length;
+            unsafe
+            {
+                fixed (TPixel* sourceBase = source.Pixels)
+                fixed (byte* destinationBase = destination)
+                {
+                    var sourceAddress = (nint)sourceBase;
+                    var destinationAddress = (nint)destinationBase;
+                    Parallel.For(0, blockCountY, blockY =>
+                    {
+                        var localSource = new BitmapView<TPixel>(
+                            new Span<TPixel>((void*)sourceAddress, pixelCount),
+                            width,
+                            height);
+                        var localDestination = new Span<byte>((void*)destinationAddress, destinationLength);
+                        var block = new Rgba8UNormTexelBlock();
+
+                        var blockOffset = checked(blockY * rowPitch);
+                        for (var blockX = 0; blockX < blockCountX; blockX++)
+                        {
+                            LoadUNormBlock(localSource, blockX, blockY, block);
+                            TTransfer.EncodeBlock(
+                                block,
+                                _blockWidth,
+                                _blockHeight,
+                                compressionMode,
+                                localDestination.Slice(blockOffset, BytesPerBlock));
+                            blockOffset = checked(blockOffset + BytesPerBlock);
+                        }
+                    });
+                }
+            }
+
+            return;
+        }
+
         var block = new Rgba8UNormTexelBlock();
 
         var rowOffset = 0;
@@ -242,7 +328,7 @@ public sealed class AstcTextureCoder : IPitchTextureCoder
             for (var blockX = 0; blockX < blockCountX; blockX++)
             {
                 LoadUNormBlock(source, blockX, blockY, block);
-                TTransfer.EncodeBlock(block, _blockWidth, _blockHeight, _options.CompressionMode, destination.Slice(blockOffset, BytesPerBlock));
+                TTransfer.EncodeBlock(block, _blockWidth, _blockHeight, compressionMode, destination.Slice(blockOffset, BytesPerBlock));
                 blockOffset = checked(blockOffset + BytesPerBlock);
             }
 
@@ -2534,7 +2620,7 @@ public sealed class AstcTextureCoder : IPitchTextureCoder
             error += Squared(storage[i].Red - red);
             error += Squared(storage[i].Green - green);
             error += Squared(storage[i].Blue - blue);
-            error += Squared(storage[i].Alpha - 255);
+            error += Squared(storage[i].Alpha - byte.MaxValue);
         }
 
         return error;

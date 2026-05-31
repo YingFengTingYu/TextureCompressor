@@ -198,6 +198,45 @@ public sealed class RgtcLatcTextureCoder : IPitchTextureCoder
         var blockCountX = GetBlockCount(source.Width);
         var blockCountY = GetBlockCount(source.Height);
         var bytesPerBlock = Format.BytesPerBlock;
+        var compressionMode = _options.CompressionMode;
+
+        if (TextureCodingParallel.ShouldParallelize(blockCountX, blockCountY))
+        {
+            var width = source.Width;
+            var height = source.Height;
+            var pixelCount = checked(width * height);
+            var destinationLength = destination.Length;
+            unsafe
+            {
+                fixed (TPixel* sourceBase = source.Pixels)
+                fixed (byte* destinationBase = destination)
+                {
+                    var sourceAddress = (nint)sourceBase;
+                    var destinationAddress = (nint)destinationBase;
+                    Parallel.For(0, blockCountY, blockY =>
+                    {
+                        var localSource = new BitmapView<TPixel>(
+                            new Span<TPixel>((void*)sourceAddress, pixelCount),
+                            width,
+                            height);
+                        var localDestination = new Span<byte>((void*)destinationAddress, destinationLength);
+                        Span<Rgba8UNorm> block = stackalloc Rgba8UNorm[TexelsPerBlock];
+
+                        var blockOffset = checked(blockY * rowPitch);
+                        for (var blockX = 0; blockX < blockCountX; blockX++)
+                        {
+                            LoadUnsignedBlock(localSource, blockX, blockY, block);
+                            var encodedBlock = localDestination.Slice(blockOffset, bytesPerBlock);
+                            EncodeUnsignedBlock<TLayout>(block, encodedBlock, compressionMode);
+                            blockOffset = checked(blockOffset + bytesPerBlock);
+                        }
+                    });
+                }
+            }
+
+            return;
+        }
+
         Span<Rgba8UNorm> block = stackalloc Rgba8UNorm[TexelsPerBlock];
 
         var rowOffset = 0;
@@ -208,7 +247,7 @@ public sealed class RgtcLatcTextureCoder : IPitchTextureCoder
             {
                 LoadUnsignedBlock(source, blockX, blockY, block);
                 var encodedBlock = destination.Slice(blockOffset, bytesPerBlock);
-                EncodeUnsignedBlock<TLayout>(block, encodedBlock, _options.CompressionMode);
+                EncodeUnsignedBlock<TLayout>(block, encodedBlock, compressionMode);
                 blockOffset = checked(blockOffset + bytesPerBlock);
             }
 
@@ -245,6 +284,45 @@ public sealed class RgtcLatcTextureCoder : IPitchTextureCoder
         var blockCountX = GetBlockCount(source.Width);
         var blockCountY = GetBlockCount(source.Height);
         var bytesPerBlock = Format.BytesPerBlock;
+        var compressionMode = _options.CompressionMode;
+
+        if (TextureCodingParallel.ShouldParallelize(blockCountX, blockCountY))
+        {
+            var width = source.Width;
+            var height = source.Height;
+            var pixelCount = checked(width * height);
+            var destinationLength = destination.Length;
+            unsafe
+            {
+                fixed (TPixel* sourceBase = source.Pixels)
+                fixed (byte* destinationBase = destination)
+                {
+                    var sourceAddress = (nint)sourceBase;
+                    var destinationAddress = (nint)destinationBase;
+                    Parallel.For(0, blockCountY, blockY =>
+                    {
+                        var localSource = new BitmapView<TPixel>(
+                            new Span<TPixel>((void*)sourceAddress, pixelCount),
+                            width,
+                            height);
+                        var localDestination = new Span<byte>((void*)destinationAddress, destinationLength);
+                        Span<Rgba8SNorm> block = stackalloc Rgba8SNorm[TexelsPerBlock];
+
+                        var blockOffset = checked(blockY * rowPitch);
+                        for (var blockX = 0; blockX < blockCountX; blockX++)
+                        {
+                            LoadSignedBlock(localSource, blockX, blockY, block);
+                            var encodedBlock = localDestination.Slice(blockOffset, bytesPerBlock);
+                            EncodeSignedBlock<TLayout>(block, encodedBlock, compressionMode);
+                            blockOffset = checked(blockOffset + bytesPerBlock);
+                        }
+                    });
+                }
+            }
+
+            return;
+        }
+
         Span<Rgba8SNorm> block = stackalloc Rgba8SNorm[TexelsPerBlock];
 
         var rowOffset = 0;
@@ -255,7 +333,7 @@ public sealed class RgtcLatcTextureCoder : IPitchTextureCoder
             {
                 LoadSignedBlock(source, blockX, blockY, block);
                 var encodedBlock = destination.Slice(blockOffset, bytesPerBlock);
-                EncodeSignedBlock<TLayout>(block, encodedBlock, _options.CompressionMode);
+                EncodeSignedBlock<TLayout>(block, encodedBlock, compressionMode);
                 blockOffset = checked(blockOffset + bytesPerBlock);
             }
 

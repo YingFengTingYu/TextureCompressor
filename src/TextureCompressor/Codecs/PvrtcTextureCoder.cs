@@ -1469,6 +1469,54 @@ public sealed class PvrtcTextureCoder : ITextureCoder
         bool hasAlpha,
         bool scoreEndpointCandidates)
     {
+        var blockCountX = storageWidth / wordWidth;
+        var blockCountY = storageHeight / WordHeight;
+        if (TextureCodingParallel.ShouldParallelize(blockCountX, blockCountY))
+        {
+            var imageLength = image.Length;
+            var outALength = outA.Length;
+            var outBLength = outB.Length;
+            unsafe
+            {
+                fixed (Rgba8UNorm* imageBase = image)
+                fixed (Rgba8UNorm* outABase = outA)
+                fixed (Rgba8UNorm* outBBase = outB)
+                {
+                    var imageAddress = (nint)imageBase;
+                    var outAAddress = (nint)outABase;
+                    var outBAddress = (nint)outBBase;
+                    Parallel.For(0, blockCountY, wordY =>
+                    {
+                        var localImage = new ReadOnlySpan<Rgba8UNorm>((void*)imageAddress, imageLength);
+                        var localOutA = new Span<Rgba8UNorm>((void*)outAAddress, outALength);
+                        var localOutB = new Span<Rgba8UNorm>((void*)outBAddress, outBLength);
+                        var y = wordY * WordHeight;
+
+                        for (var wordX = 0; wordX < blockCountX; wordX++)
+                        {
+                            var x = wordX * wordWidth;
+                            GetExtremesFast(
+                                localImage,
+                                imageWidth,
+                                imageHeight,
+                                x,
+                                y,
+                                wordWidth,
+                                hasAlpha,
+                                scoreEndpointCandidates,
+                                out var indexA,
+                                out var indexB);
+                            var outputIndex = (wordY * blockCountX) + wordX;
+                            localOutA[outputIndex] = ApplyColorChannelReduction(localImage[indexA], isB: false, hasAlpha);
+                            localOutB[outputIndex] = ApplyColorChannelReduction(localImage[indexB], isB: true, hasAlpha);
+                        }
+                    });
+                }
+            }
+
+            return;
+        }
+
         for (var y = 0; y < storageHeight; y += WordHeight)
         {
             for (var x = 0; x < storageWidth; x += wordWidth)
@@ -1502,6 +1550,47 @@ public sealed class PvrtcTextureCoder : ITextureCoder
         Span<byte> modulation,
         bool hasAlpha)
     {
+        if (TextureCodingParallel.ShouldParallelize(storageWidth, storageHeight))
+        {
+            var imageLength = image.Length;
+            var imageALength = imageA.Length;
+            var imageBLength = imageB.Length;
+            var modulationLength = modulation.Length;
+            unsafe
+            {
+                fixed (Rgba8UNorm* imageBase = image)
+                fixed (Rgba8UNorm* imageABase = imageA)
+                fixed (Rgba8UNorm* imageBBase = imageB)
+                fixed (byte* modulationBase = modulation)
+                {
+                    var imageAddress = (nint)imageBase;
+                    var imageAAddress = (nint)imageABase;
+                    var imageBAddress = (nint)imageBBase;
+                    var modulationAddress = (nint)modulationBase;
+                    Parallel.For(0, storageHeight, y =>
+                    {
+                        var localImage = new ReadOnlySpan<Rgba8UNorm>((void*)imageAddress, imageLength);
+                        var localImageA = new ReadOnlySpan<Rgba8UNorm>((void*)imageAAddress, imageALength);
+                        var localImageB = new ReadOnlySpan<Rgba8UNorm>((void*)imageBAddress, imageBLength);
+                        var localModulation = new Span<byte>((void*)modulationAddress, modulationLength);
+
+                        for (var x = 0; x < storageWidth; x++)
+                        {
+                            var colorA = GetInterpolatedColor(localImageA, storageWidth, storageHeight, 4, x, y);
+                            var colorB = GetInterpolatedColor(localImageB, storageWidth, storageHeight, 4, x, y);
+                            localModulation[(y * storageWidth) + x] = (byte)BestModulation4Bpp(
+                                SampleImage(localImage, imageWidth, imageHeight, x, y),
+                                colorA,
+                                colorB,
+                                hasAlpha);
+                        }
+                    });
+                }
+            }
+
+            return;
+        }
+
         for (var y = 0; y < storageHeight; y++)
         {
             for (var x = 0; x < storageWidth; x++)
@@ -1528,6 +1617,47 @@ public sealed class PvrtcTextureCoder : ITextureCoder
         Span<byte> modulation,
         bool hasAlpha)
     {
+        if (TextureCodingParallel.ShouldParallelize(storageWidth, storageHeight))
+        {
+            var imageLength = image.Length;
+            var imageALength = imageA.Length;
+            var imageBLength = imageB.Length;
+            var modulationLength = modulation.Length;
+            unsafe
+            {
+                fixed (Rgba8UNorm* imageBase = image)
+                fixed (Rgba8UNorm* imageABase = imageA)
+                fixed (Rgba8UNorm* imageBBase = imageB)
+                fixed (byte* modulationBase = modulation)
+                {
+                    var imageAddress = (nint)imageBase;
+                    var imageAAddress = (nint)imageABase;
+                    var imageBAddress = (nint)imageBBase;
+                    var modulationAddress = (nint)modulationBase;
+                    Parallel.For(0, storageHeight, y =>
+                    {
+                        var localImage = new ReadOnlySpan<Rgba8UNorm>((void*)imageAddress, imageLength);
+                        var localImageA = new ReadOnlySpan<Rgba8UNorm>((void*)imageAAddress, imageALength);
+                        var localImageB = new ReadOnlySpan<Rgba8UNorm>((void*)imageBAddress, imageBLength);
+                        var localModulation = new Span<byte>((void*)modulationAddress, modulationLength);
+
+                        for (var x = 0; x < storageWidth; x++)
+                        {
+                            var colorA = GetInterpolatedColor(localImageA, storageWidth, storageHeight, 8, x, y);
+                            var colorB = GetInterpolatedColor(localImageB, storageWidth, storageHeight, 8, x, y);
+                            localModulation[(y * storageWidth) + x] = (byte)BestModulation2Bpp(
+                                SampleImage(localImage, imageWidth, imageHeight, x, y),
+                                colorA,
+                                colorB,
+                                hasAlpha);
+                        }
+                    });
+                }
+            }
+
+            return;
+        }
+
         for (var y = 0; y < storageHeight; y++)
         {
             for (var x = 0; x < storageWidth; x++)
@@ -1562,16 +1692,55 @@ public sealed class PvrtcTextureCoder : ITextureCoder
         var blockCountX = width / 4;
         var blockCountY = height / 4;
         var wordCount = blockCountX * blockCountY;
-        for (var i = 0; i < wordCount; i++)
+        if (TextureCodingParallel.ShouldParallelize(blockCountX, blockCountY))
         {
-            FromZOrder(i, blockCountX, blockCountY, versionII, out var blockX, out var blockY);
-            var modData = CalculateBlockModulationData4Bpp(modulation, width, blockX, blockY);
-            var colorData = EncodeColors4Bpp(
-                imageA[(blockY * blockCountX) + blockX],
-                imageB[(blockY * blockCountX) + blockX],
-                versionII,
-                hasAlpha);
-            WriteWord(destination, i, modData, colorData);
+            var imageALength = imageA.Length;
+            var imageBLength = imageB.Length;
+            var modulationLength = modulation.Length;
+            var destinationLength = destination.Length;
+            unsafe
+            {
+                fixed (Rgba8UNorm* imageABase = imageA)
+                fixed (Rgba8UNorm* imageBBase = imageB)
+                fixed (byte* modulationBase = modulation)
+                fixed (byte* destinationBase = destination)
+                {
+                    var imageAAddress = (nint)imageABase;
+                    var imageBAddress = (nint)imageBBase;
+                    var modulationAddress = (nint)modulationBase;
+                    var destinationAddress = (nint)destinationBase;
+                    Parallel.For(0, wordCount, i =>
+                    {
+                        var localImageA = new ReadOnlySpan<Rgba8UNorm>((void*)imageAAddress, imageALength);
+                        var localImageB = new ReadOnlySpan<Rgba8UNorm>((void*)imageBAddress, imageBLength);
+                        var localModulation = new ReadOnlySpan<byte>((void*)modulationAddress, modulationLength);
+                        var localDestination = new Span<byte>((void*)destinationAddress, destinationLength);
+
+                        FromZOrder(i, blockCountX, blockCountY, versionII, out var blockX, out var blockY);
+                        var modData = CalculateBlockModulationData4Bpp(localModulation, width, blockX, blockY);
+                        var colorData = EncodeColors4Bpp(
+                            localImageA[(blockY * blockCountX) + blockX],
+                            localImageB[(blockY * blockCountX) + blockX],
+                            versionII,
+                            hasAlpha);
+                        WriteWord(localDestination, i, modData, colorData);
+                    });
+                }
+            }
+        }
+        else
+        {
+            for (var i = 0; i < wordCount; i++)
+            {
+                FromZOrder(i, blockCountX, blockCountY, versionII, out var blockX, out var blockY);
+                var modData = CalculateBlockModulationData4Bpp(modulation, width, blockX, blockY);
+                var colorData = EncodeColors4Bpp(
+                    imageA[(blockY * blockCountX) + blockX],
+                    imageB[(blockY * blockCountX) + blockX],
+                    versionII,
+                    hasAlpha);
+                WriteWord(destination, i, modData, colorData);
+            }
         }
 
         if (versionII && useHardTransitionSearch)
@@ -2197,6 +2366,47 @@ public sealed class PvrtcTextureCoder : ITextureCoder
         var blockCountX = width / 8;
         var blockCountY = height / 4;
         var wordCount = blockCountX * blockCountY;
+        if (TextureCodingParallel.ShouldParallelize(blockCountX, blockCountY))
+        {
+            var imageALength = imageA.Length;
+            var imageBLength = imageB.Length;
+            var modulationLength = modulation.Length;
+            var destinationLength = destination.Length;
+            unsafe
+            {
+                fixed (Rgba8UNorm* imageABase = imageA)
+                fixed (Rgba8UNorm* imageBBase = imageB)
+                fixed (byte* modulationBase = modulation)
+                fixed (byte* destinationBase = destination)
+                {
+                    var imageAAddress = (nint)imageABase;
+                    var imageBAddress = (nint)imageBBase;
+                    var modulationAddress = (nint)modulationBase;
+                    var destinationAddress = (nint)destinationBase;
+                    Parallel.For(0, wordCount, i =>
+                    {
+                        var localImageA = new ReadOnlySpan<Rgba8UNorm>((void*)imageAAddress, imageALength);
+                        var localImageB = new ReadOnlySpan<Rgba8UNorm>((void*)imageBAddress, imageBLength);
+                        var localModulation = new ReadOnlySpan<byte>((void*)modulationAddress, modulationLength);
+                        var localDestination = new Span<byte>((void*)destinationAddress, destinationLength);
+
+                        FromZOrder(i, blockCountX, blockCountY, versionII, out var blockX, out var blockY);
+                        var mode = CalculateBlockModulationMode2Bpp(localModulation, width, height, blockX, blockY);
+                        var modData = CalculateBlockModulationData2Bpp(localModulation, width, blockX, blockY, mode);
+                        var colorData = EncodeColors2Bpp(
+                            localImageA[(blockY * blockCountX) + blockX],
+                            localImageB[(blockY * blockCountX) + blockX],
+                            mode,
+                            versionII,
+                            hasAlpha);
+                        WriteWord(localDestination, i, modData, colorData);
+                    });
+                }
+            }
+
+            return;
+        }
+
         for (var i = 0; i < wordCount; i++)
         {
             FromZOrder(i, blockCountX, blockCountY, versionII, out var blockX, out var blockY);
