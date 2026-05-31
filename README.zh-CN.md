@@ -414,6 +414,7 @@ using var registration = TextureCoderManager.Global.RegisterBCnEncoderCoder(Text
 ```bash
 dotnet run --project src/TextureCompressor.Cli -- --help
 dotnet run --project src/TextureCompressor.Cli -- formats bc7 --compressed
+dotnet run --project src/TextureCompressor.Cli -- formats bc7 --compressed --json
 dotnet run --project src/TextureCompressor.Cli -- formats rgba --uncompressed
 dotnet run --project src/TextureCompressor.Cli -- info input.ktx2
 dotnet run --project src/TextureCompressor.Cli -- info input.ktx2 --json --subresources
@@ -428,7 +429,7 @@ dotnet run --project src/TextureCompressor.Cli -- quality source.png output.dds
 
 常用命令：
 
-- `formats [query]`：列出或搜索 `--format` 可用的纹理格式；可加 `--compressed` 或 `--uncompressed` 过滤。
+- `formats [query]`：列出或搜索 `--format` 可用的纹理格式；可加 `--compressed` 或 `--uncompressed` 过滤，或用 `--json` 输出结构化结果。
 - `info <input>` / `inspect <input>`：输出容器元数据，例如尺寸、纹理格式、mip 级数、payload 大小和容器特有 header 字段；可加 `--subresources` 列出每个 mip/layer/face 的 payload，或用 `--json` 输出结构化元数据。
 - `convert <input> <output>`：在图片和纹理容器之间转换。输出容器默认由扩展名推断，也可以用 `--container` 显式指定。DDS/KTX/PVR 转 DDS/KTX/PVR 默认保留 mip level、array layer 和 cube face；省略 `--format` 会保留源纹理格式，传入 `--format` 会重编码所有 subresource。纹理输入可用 `--mip`、`--layer`、`--face` 只选择单个 subresource。
 - `assemble <output>`：从 PNG/JPEG/GIF 图片组装 DDS/KTX/PVR 纹理。必须且只能使用 `--layers`、`--cube`、`--mips`、`--manifest` 其中一种；`--cube` 的顺序是 PositiveX、NegativeX、PositiveY、NegativeY、PositiveZ、NegativeZ，`--manifest` 会根据 `manifest.json` 重建完整拓扑。

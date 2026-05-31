@@ -416,6 +416,7 @@ using var registration = TextureCoderManager.Global.RegisterBCnEncoderCoder(Text
 ```bash
 dotnet run --project src/TextureCompressor.Cli -- --help
 dotnet run --project src/TextureCompressor.Cli -- formats bc7 --compressed
+dotnet run --project src/TextureCompressor.Cli -- formats bc7 --compressed --json
 dotnet run --project src/TextureCompressor.Cli -- formats rgba --uncompressed
 dotnet run --project src/TextureCompressor.Cli -- info input.ktx2
 dotnet run --project src/TextureCompressor.Cli -- info input.ktx2 --json --subresources
@@ -430,7 +431,7 @@ dotnet run --project src/TextureCompressor.Cli -- quality source.png output.dds
 
 Common commands:
 
-- `formats [query]`: list or search texture formats accepted by `--format`; add `--compressed` or `--uncompressed` to filter.
+- `formats [query]`: list or search texture formats accepted by `--format`; add `--compressed` or `--uncompressed` to filter, or `--json` for structured output.
 - `info <input>` / `inspect <input>`: print container metadata such as size, texture format, mip levels, payload size, and container-specific header fields; add `--subresources` to list mip/layer/face payloads, or `--json` for structured metadata output.
 - `convert <input> <output>`: convert between image and texture containers. The output container is inferred from the extension unless `--container` is passed explicitly. DDS/KTX/PVR to DDS/KTX/PVR conversions preserve mip levels, array layers, and cube faces by default; omit `--format` to keep the source texture format, or pass `--format` to re-encode every subresource. Texture inputs can select a single subresource with `--mip`, `--layer`, and `--face`.
 - `assemble <output>`: build a DDS/KTX/PVR texture from PNG/JPEG/GIF images. Use exactly one of `--layers`, `--cube`, `--mips`, or `--manifest`; `--cube` expects PositiveX, NegativeX, PositiveY, NegativeY, PositiveZ, NegativeZ order, and `--manifest` rebuilds a complete extracted topology from `manifest.json`.

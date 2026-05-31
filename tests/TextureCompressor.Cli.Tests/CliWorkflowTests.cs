@@ -10,6 +10,25 @@ namespace TextureCompressor.Cli.Tests;
 public sealed class CliWorkflowTests
 {
     [Fact]
+    public async Task FormatsJsonPrintsStructuredFormatEntries()
+    {
+        using var workspace = new CliWorkspace();
+
+        var output = await RunCliAsync(workspace, "formats", "bc7", "--compressed", "--json");
+
+        using var document = JsonDocument.Parse(output.StandardOutput);
+        Assert.Equal("bc7", document.RootElement.GetProperty("query").GetString());
+        Assert.True(document.RootElement.GetProperty("filters").GetProperty("compressed").GetBoolean());
+        Assert.False(document.RootElement.GetProperty("filters").GetProperty("uncompressed").GetBoolean());
+        Assert.True(document.RootElement.GetProperty("count").GetInt32() > 0);
+        var firstFormat = document.RootElement.GetProperty("formats").EnumerateArray().First();
+        Assert.True(firstFormat.TryGetProperty("fieldName", out _));
+        Assert.True(firstFormat.TryGetProperty("formatName", out _));
+        Assert.True(firstFormat.GetProperty("isCompressed").GetBoolean());
+        Assert.True(firstFormat.GetProperty("bitsPerBlock").GetInt32() > 0);
+    }
+
+    [Fact]
     public async Task ConvertAndExtractCanSelectGeneratedPvrMips()
     {
         using var workspace = new CliWorkspace();

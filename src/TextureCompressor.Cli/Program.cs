@@ -211,11 +211,16 @@ internal static class Cli
         {
             Description = "Show only uncompressed texture formats."
         };
+        var jsonOption = new Option<bool>("--json")
+        {
+            Description = "Print matching formats as JSON."
+        };
 
         var command = new Command("formats", "List and search texture formats accepted by --format.");
         command.Arguments.Add(queryArgument);
         command.Options.Add(compressedOption);
         command.Options.Add(uncompressedOption);
+        command.Options.Add(jsonOption);
         command.Validators.Add(result =>
         {
             var compressed = result.GetValue(compressedOption);
@@ -231,6 +236,11 @@ internal static class Cli
             var compressed = parseResult.GetValue(compressedOption);
             var uncompressed = parseResult.GetValue(uncompressedOption);
             var formats = GetFormatEntries(query, compressed, uncompressed).ToArray();
+            if (parseResult.GetValue(jsonOption))
+            {
+                PrintFormatsJson(query, compressed, uncompressed, formats);
+                return 0;
+            }
 
             if (formats.Length == 0)
             {
@@ -2254,6 +2264,49 @@ internal static class Cli
         }
     }
 
+    private static void PrintFormatsJson(
+        string? query,
+        bool compressedOnly,
+        bool uncompressedOnly,
+        IReadOnlyList<FormatEntry> formats)
+    {
+        var document = new FormatsDocument(
+            query,
+            new FormatFiltersDocument(compressedOnly, uncompressedOnly),
+            formats.Count,
+            formats
+                .OrderBy(static item => item.FieldName, StringComparer.OrdinalIgnoreCase)
+                .Select(static item => BuildFormatDocument(item))
+                .ToArray());
+        Console.WriteLine(JsonSerializer.Serialize(document, CreateJsonOptions(writeIndented: true)));
+    }
+
+    private static FormatDocument BuildFormatDocument(FormatEntry entry)
+    {
+        var format = entry.Format;
+        return new FormatDocument(
+            entry.FieldName,
+            format.Name,
+            format.Kind.ToString(),
+            format.Components.ToString(),
+            format.ValueKind.ToString(),
+            format.IsCompressed,
+            format.ChannelCount,
+            format.RedBits,
+            format.GreenBits,
+            format.BlueBits,
+            format.AlphaBits,
+            format.BlockWidth,
+            format.BlockHeight,
+            format.BlockDepth,
+            format.BitsPerBlock,
+            format.BytesPerBlock,
+            format.BitsPerTexel,
+            format.HeaderByteCount,
+            format.IsVariableSize,
+            format.SizeMode.ToString());
+    }
+
     private static string BuildUnknownFormatMessage(string value)
     {
         var suggestions = GetFormatSuggestions(value, maxCount: 6).ToArray();
@@ -2545,6 +2598,36 @@ internal sealed record PvrInfoDocument(
     int? MetadataEntries,
     string? LegacyPixelType,
     uint? LegacyBitCount);
+
+internal sealed record FormatsDocument(
+    string? Query,
+    FormatFiltersDocument Filters,
+    int Count,
+    IReadOnlyList<FormatDocument> Formats);
+
+internal sealed record FormatFiltersDocument(bool Compressed, bool Uncompressed);
+
+internal sealed record FormatDocument(
+    string FieldName,
+    string FormatName,
+    string Kind,
+    string Components,
+    string ValueKind,
+    bool IsCompressed,
+    int ChannelCount,
+    int RedBits,
+    int GreenBits,
+    int BlueBits,
+    int AlphaBits,
+    int BlockWidth,
+    int BlockHeight,
+    int BlockDepth,
+    int BitsPerBlock,
+    int BytesPerBlock,
+    int BitsPerTexel,
+    int HeaderByteCount,
+    bool IsVariableSize,
+    string SizeMode);
 
 internal sealed record ExtractManifest(
     string Source,
