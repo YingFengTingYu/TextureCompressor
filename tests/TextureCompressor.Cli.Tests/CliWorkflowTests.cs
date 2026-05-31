@@ -65,6 +65,15 @@ public sealed class CliWorkflowTests
         Assert.Contains("Container: KTX", info.StandardOutput, StringComparison.Ordinal);
         Assert.Contains("Array layers: 3", info.StandardOutput, StringComparison.Ordinal);
         Assert.Contains("mip=0 layer=1 face=0 size=512x512", info.StandardOutput, StringComparison.Ordinal);
+        var jsonInfo = await RunCliAsync(workspace, "info", ktx, "--json", "--subresources");
+        using var infoDocument = JsonDocument.Parse(jsonInfo.StandardOutput);
+        Assert.Equal("KTX", infoDocument.RootElement.GetProperty("container").GetString());
+        Assert.Equal("Rgba8UNorm", infoDocument.RootElement.GetProperty("format").GetString());
+        Assert.Equal("RGBA8_UNORM", infoDocument.RootElement.GetProperty("formatName").GetString());
+        Assert.Equal(3, infoDocument.RootElement.GetProperty("arrayLayers").GetInt32());
+        Assert.Equal(3, infoDocument.RootElement.GetProperty("subresources").GetArrayLength());
+        Assert.Equal(1, infoDocument.RootElement.GetProperty("subresources")[1].GetProperty("layer").GetInt32());
+        Assert.Equal(2, infoDocument.RootElement.GetProperty("ktx").GetProperty("version").GetInt32());
 
         await RunCliAsync(workspace, "extract", ktx, extractedDirectory, "--layer", "1", "--manifest");
 

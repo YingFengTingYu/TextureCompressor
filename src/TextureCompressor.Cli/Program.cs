@@ -2,6 +2,7 @@
 using System.Buffers.Binary;
 using System.Globalization;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using TextureCompressor.Analysis;
 using TextureCompressor.Bitmaps;
 using TextureCompressor.Colors;
@@ -332,14 +333,19 @@ internal static class Cli
         {
             Description = "Print per-subresource metadata for texture containers."
         };
+        var jsonOption = new Option<bool>("--json")
+        {
+            Description = "Print metadata as JSON."
+        };
 
         var command = new Command(name, description);
         command.Arguments.Add(inputArgument);
         command.Options.Add(subresourcesOption);
+        command.Options.Add(jsonOption);
         command.SetAction(parseResult => RunCommand(() =>
         {
             var inputPath = RequireFile(parseResult.GetValue(inputArgument), "input").FullName;
-            PrintInfo(inputPath, parseResult.GetValue(subresourcesOption));
+            PrintInfo(inputPath, parseResult.GetValue(subresourcesOption), parseResult.GetValue(jsonOption));
             return 0;
         }));
 
@@ -727,7 +733,19 @@ internal static class Cli
     private static int GetDefaultKtxVersion(string outputPath) =>
         string.Equals(Path.GetExtension(outputPath), ".ktx2", StringComparison.OrdinalIgnoreCase) ? 2 : 1;
 
-    private static void PrintInfo(string path, bool printSubresources)
+    private static void PrintInfo(string path, bool printSubresources, bool printJson)
+    {
+        if (printJson)
+        {
+            var json = JsonSerializer.Serialize(BuildInfoDocument(path, printSubresources), CreateJsonOptions(writeIndented: true));
+            Console.WriteLine(json);
+            return;
+        }
+
+        PrintTextInfo(path, printSubresources);
+    }
+
+    private static void PrintTextInfo(string path, bool printSubresources)
     {
         var fileBytes = new FileInfo(path).Length;
         var container = GetContainer(path);
@@ -758,6 +776,174 @@ internal static class Cli
             default:
                 throw new NotSupportedException($"Unsupported input extension '{Path.GetExtension(path)}'.");
         }
+    }
+
+    private static InfoDocument BuildInfoDocument(string path, bool includeSubresources)
+    {
+        var fileBytes = new FileInfo(path).Length;
+        var container = GetContainer(path);
+
+        return container switch
+        {
+            TextureContainer.Png => BuildImageInfoDocument(container, PngCodec.Decode(path), fileBytes),
+            TextureContainer.Jpeg => BuildImageInfoDocument(container, JpegCodec.Decode(path), fileBytes),
+            TextureContainer.Gif => BuildImageInfoDocument(container, GifCodec.Decode(path), fileBytes),
+            TextureContainer.Dds => BuildDdsInfoDocument(DdsCodec.Read(path), fileBytes, includeSubresources),
+            TextureContainer.Ktx => BuildKtxInfoDocument(KtxCodec.Read(path), ReadKtxInfo(path), fileBytes, includeSubresources),
+            TextureContainer.Pvr => BuildPvrInfoDocument(PvrCodec.Read(path), ReadPvrInfo(path), fileBytes, includeSubresources),
+            TextureContainer.Astc => BuildAstcInfoDocument(AstcCodec.Read(path), fileBytes),
+            _ => throw new NotSupportedException($"Unsupported input extension '{Path.GetExtension(path)}'.")
+        };
+    }
+
+    private static InfoDocument BuildImageInfoDocument(TextureContainer container, IBitmap<Rgba8UNorm> bitmap, long fileBytes) =>
+        new(FormatContainer(container), bitmap.Width, bitmap.Height, fileBytes)
+        {
+            DecodedFormat = nameof(TextureFormats.Rgba8UNorm)
+        };
+
+    private static InfoDocument BuildDdsInfoDocument(DdsTexture texture, long fileBytes, bool includeSubresources) =>
+        BuildTextureInfoDocument(
+            TextureContainer.Dds,
+            texture.Format,
+            texture.Width,
+            texture.Height,
+            texture.MipLevelCount,
+            texture.ArrayLayerCount,
+            texture.FaceCount,
+            GetPayloadByteCount(texture.Subresources),
+            fileBytes,
+            includeSubresources ? BuildSubresourceInfo(texture.Subresources, texture.FaceCount) : null)
+        with
+        {
+            Dds = new DdsInfoDocument(
+                texture.HeaderKind.ToString(),
+                texture.DxgiFormat?.ToString(),
+                texture.DxgiFormat is null ? null : texture.AlphaMode.ToString(),
+                texture.LegacyPixelFormat?.ToString())
+        };
+
+    private static InfoDocument BuildKtxInfoDocument(KtxTexture texture, KtxInfo info, long fileBytes, bool includeSubresources) =>
+        BuildTextureInfoDocument(
+            TextureContainer.Ktx,
+            texture.Format,
+            texture.Width,
+            texture.Height,
+            texture.MipLevelCount,
+            texture.ArrayLayerCount,
+            texture.FaceCount,
+            GetPayloadByteCount(texture.Subresources),
+            fileBytes,
+            includeSubresources ? BuildSubresourceInfo(texture.Subresources, texture.FaceCount) : null)
+        with
+        {
+            Ktx = new KtxInfoDocument(
+                info.Version,
+                texture.VkFormat?.ToString(),
+                texture.GlType?.ToString(),
+                texture.GlFormat?.ToString(),
+                texture.GlInternalFormat?.ToString(),
+                info.SupercompressionScheme?.ToString(),
+                info.KeyValueBytes,
+                info.SupercompressionGlobalDataBytes)
+        };
+
+    private static InfoDocument BuildPvrInfoDocument(PvrTexture texture, PvrInfo info, long fileBytes, bool includeSubresources) =>
+        BuildTextureInfoDocument(
+            TextureContainer.Pvr,
+            texture.Format,
+            texture.Width,
+            texture.Height,
+            texture.MipLevelCount,
+            texture.ArrayLayerCount,
+            texture.FaceCount,
+            GetPayloadByteCount(texture.Subresources),
+            fileBytes,
+            includeSubresources ? BuildSubresourceInfo(texture.Subresources, texture.FaceCount) : null)
+        with
+        {
+            Pvr = new PvrInfoDocument(
+                info.Version,
+                info.PixelFormat is { } pixelFormat ? $"0x{pixelFormat:x16}" : null,
+                info.ColourSpace,
+                info.ColourSpace is { } colourSpace ? FormatPvrColourSpace(colourSpace) : null,
+                info.ChannelType,
+                info.MetadataBytes,
+                texture.Metadata.Count == 0 ? null : texture.Metadata.Count,
+                info.LegacyPixelType is { } legacyPixelType ? $"0x{legacyPixelType:x2}" : null,
+                info.LegacyBitCount)
+        };
+
+    private static InfoDocument BuildAstcInfoDocument(AstcTexture texture, long fileBytes) =>
+        BuildTextureInfoDocument(
+            TextureContainer.Astc,
+            texture.Format,
+            texture.Width,
+            texture.Height,
+            mipLevelCount: 1,
+            arrayLayerCount: 1,
+            faceCount: 1,
+            payloadBytes: texture.Payload.Length,
+            fileBytes,
+            subresources: null);
+
+    private static InfoDocument BuildTextureInfoDocument(
+        TextureContainer container,
+        TextureFormat format,
+        int width,
+        int height,
+        int mipLevelCount,
+        int arrayLayerCount,
+        int faceCount,
+        long payloadBytes,
+        long fileBytes,
+        IReadOnlyList<InfoSubresourceDocument>? subresources)
+    {
+        var document = new InfoDocument(FormatContainer(container), width, height, fileBytes)
+        {
+            Format = TextureFormatCatalog.GetFieldName(format),
+            FormatName = format.Name,
+            Kind = format.Kind.ToString(),
+            ValueKind = format.ValueKind.ToString(),
+            MipLevels = mipLevelCount,
+            ArrayLayers = arrayLayerCount,
+            Faces = faceCount,
+            PayloadBytes = payloadBytes,
+            Subresources = subresources
+        };
+
+        return format.IsCompressed
+            ? document with
+            {
+                BlockWidth = format.BlockWidth,
+                BlockHeight = format.BlockHeight,
+                BitsPerBlock = format.BitsPerBlock
+            }
+            : document with
+            {
+                BitsPerTexel = format.BitsPerTexel
+            };
+    }
+
+    private static IReadOnlyList<InfoSubresourceDocument> BuildSubresourceInfo(
+        IReadOnlyList<TextureSubresource> subresources,
+        int faceCount)
+    {
+        var items = new InfoSubresourceDocument[subresources.Count];
+        for (var i = 0; i < subresources.Count; i++)
+        {
+            var subresource = subresources[i];
+            items[i] = new InfoSubresourceDocument(
+                subresource.MipLevel,
+                subresource.ArrayLayer,
+                FormatFace(subresource.FaceIndex, faceCount),
+                subresource.FaceIndex,
+                subresource.Width,
+                subresource.Height,
+                subresource.Payload.Length);
+        }
+
+        return items;
     }
 
     private static void PrintImageInfo(TextureContainer container, IBitmap<Rgba8UNorm> bitmap, long fileBytes)
@@ -1181,7 +1367,7 @@ internal static class Cli
     {
         var manifest = JsonSerializer.Deserialize<ExtractManifest>(
             File.ReadAllText(path),
-            CreateManifestJsonOptions(writeIndented: false));
+            CreateJsonOptions(writeIndented: false));
         return manifest ?? throw new InvalidDataException($"Manifest '{path}' is empty.");
     }
 
@@ -1467,13 +1653,14 @@ internal static class Cli
         };
         var json = JsonSerializer.Serialize(
             manifest,
-            CreateManifestJsonOptions(writeIndented: true));
+            CreateJsonOptions(writeIndented: true));
         File.WriteAllText(manifestPath, json + Environment.NewLine);
     }
 
-    private static JsonSerializerOptions CreateManifestJsonOptions(bool writeIndented) =>
+    private static JsonSerializerOptions CreateJsonOptions(bool writeIndented) =>
         new()
         {
+            DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
             PropertyNameCaseInsensitive = true,
             PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
             WriteIndented = writeIndented
@@ -2285,6 +2472,79 @@ internal sealed record ImageColorSpaces(ImageColorSpace Png, ImageColorSpace Jpe
         ImageColorSpace.Linear,
         ImageColorSpace.Linear);
 }
+
+internal sealed record InfoDocument(string Container, int Width, int Height, long FileBytes)
+{
+    public string? DecodedFormat { get; init; }
+
+    public string? Format { get; init; }
+
+    public string? FormatName { get; init; }
+
+    public string? Kind { get; init; }
+
+    public string? ValueKind { get; init; }
+
+    public int? MipLevels { get; init; }
+
+    public int? ArrayLayers { get; init; }
+
+    public int? Faces { get; init; }
+
+    public long? PayloadBytes { get; init; }
+
+    public int? BlockWidth { get; init; }
+
+    public int? BlockHeight { get; init; }
+
+    public int? BitsPerBlock { get; init; }
+
+    public int? BitsPerTexel { get; init; }
+
+    public DdsInfoDocument? Dds { get; init; }
+
+    public KtxInfoDocument? Ktx { get; init; }
+
+    public PvrInfoDocument? Pvr { get; init; }
+
+    public IReadOnlyList<InfoSubresourceDocument>? Subresources { get; init; }
+}
+
+internal sealed record InfoSubresourceDocument(
+    int Mip,
+    int Layer,
+    string Face,
+    int FaceIndex,
+    int Width,
+    int Height,
+    int PayloadBytes);
+
+internal sealed record DdsInfoDocument(
+    string Header,
+    string? DxgiFormat,
+    string? AlphaMode,
+    string? LegacyPixelFormat);
+
+internal sealed record KtxInfoDocument(
+    int Version,
+    string? VkFormat,
+    string? GlType,
+    string? GlFormat,
+    string? GlInternalFormat,
+    string? Supercompression,
+    uint KeyValueBytes,
+    ulong SupercompressionGlobalDataBytes);
+
+internal sealed record PvrInfoDocument(
+    int Version,
+    string? PixelFormat,
+    uint? ColourSpace,
+    string? ColourSpaceDescription,
+    uint? ChannelType,
+    uint MetadataBytes,
+    int? MetadataEntries,
+    string? LegacyPixelType,
+    uint? LegacyBitCount);
 
 internal sealed record ExtractManifest(
     string Source,
