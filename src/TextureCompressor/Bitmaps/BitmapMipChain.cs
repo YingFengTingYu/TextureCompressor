@@ -74,11 +74,52 @@ public static class BitmapMipChain
         MipmapGenerationOptions options)
         where TPixel : unmanaged, IPixel<TPixel>
     {
+        switch (options.Filter)
+        {
+            case MipmapFilter.Box:
+                DownsampleBox(source, destination, options);
+                break;
+            case MipmapFilter.Triangle:
+                DownsampleTriangle(source, destination, options);
+                break;
+            default:
+                throw new ArgumentOutOfRangeException(nameof(options), $"Unsupported mip-map filter '{options.Filter}'.");
+        }
+    }
+
+    private static void DownsampleBox<TPixel>(
+        BitmapView<TPixel> source,
+        BitmapView<TPixel> destination,
+        MipmapGenerationOptions options)
+        where TPixel : unmanaged, IPixel<TPixel>
+    {
         for (var y = 0; y < destination.Height; y++)
         {
             for (var x = 0; x < destination.Width; x++)
             {
                 destination[x, y] = SampleBox(source, x * 2, y * 2, options);
+            }
+        }
+    }
+
+    private static void DownsampleTriangle<TPixel>(
+        BitmapView<TPixel> source,
+        BitmapView<TPixel> destination,
+        MipmapGenerationOptions options)
+        where TPixel : unmanaged, IPixel<TPixel>
+    {
+        var scaleX = source.Width / (float)destination.Width;
+        var scaleY = source.Height / (float)destination.Height;
+        var radiusX = Math.Max(1f, scaleX);
+        var radiusY = Math.Max(1f, scaleY);
+
+        for (var y = 0; y < destination.Height; y++)
+        {
+            var centerY = ((y + 0.5f) * scaleY) - 0.5f;
+            for (var x = 0; x < destination.Width; x++)
+            {
+                var centerX = ((x + 0.5f) * scaleX) - 0.5f;
+                destination[x, y] = SampleTriangle(source, centerX, centerY, radiusX, radiusY, options);
             }
         }
     }
@@ -92,57 +133,55 @@ public static class BitmapMipChain
     {
         var maxX = Math.Min(sourceX + 2, source.Width);
         var maxY = Math.Min(sourceY + 2, source.Height);
-        var red = 0f;
-        var green = 0f;
-        var blue = 0f;
-        var alpha = 0f;
-        var sampleCount = 0;
+        var accumulator = new PixelAccumulator();
 
         for (var y = sourceY; y < maxY; y++)
         {
             for (var x = sourceX; x < maxX; x++)
             {
-                var pixel = TPixel.ToRgba32Float(source[x, y]);
-                var pixelRed = DecodeColor(pixel.Red, options.ColorSpace);
-                var pixelGreen = DecodeColor(pixel.Green, options.ColorSpace);
-                var pixelBlue = DecodeColor(pixel.Blue, options.ColorSpace);
-                if (options.AlphaMode == MipmapAlphaMode.Premultiplied)
+                accumulator.Add(source[x, y], 1f, options);
+            }
+        }
+
+        return accumulator.ToPixel<TPixel>(options);
+    }
+
+    private static TPixel SampleTriangle<TPixel>(
+        BitmapView<TPixel> source,
+        float centerX,
+        float centerY,
+        float radiusX,
+        float radiusY,
+        MipmapGenerationOptions options)
+        where TPixel : unmanaged, IPixel<TPixel>
+    {
+        var minX = Math.Max(0, (int)MathF.Floor(centerX - radiusX));
+        var minY = Math.Max(0, (int)MathF.Floor(centerY - radiusY));
+        var maxX = Math.Min(source.Width - 1, (int)MathF.Ceiling(centerX + radiusX));
+        var maxY = Math.Min(source.Height - 1, (int)MathF.Ceiling(centerY + radiusY));
+        var accumulator = new PixelAccumulator();
+
+        for (var y = minY; y <= maxY; y++)
+        {
+            var weightY = TriangleWeight(centerY, y, radiusY);
+            if (weightY <= 0f)
+            {
+                continue;
+            }
+
+            for (var x = minX; x <= maxX; x++)
+            {
+                var weightX = TriangleWeight(centerX, x, radiusX);
+                if (weightX <= 0f)
                 {
-                    pixelRed *= pixel.Alpha;
-                    pixelGreen *= pixel.Alpha;
-                    pixelBlue *= pixel.Alpha;
+                    continue;
                 }
 
-                red += pixelRed;
-                green += pixelGreen;
-                blue += pixelBlue;
-                alpha += pixel.Alpha;
-                sampleCount++;
+                accumulator.Add(source[x, y], weightX * weightY, options);
             }
         }
 
-        var averageAlpha = alpha / sampleCount;
-        if (options.AlphaMode == MipmapAlphaMode.Premultiplied)
-        {
-            if (alpha > 0f)
-            {
-                red /= alpha;
-                green /= alpha;
-                blue /= alpha;
-            }
-        }
-        else
-        {
-            red /= sampleCount;
-            green /= sampleCount;
-            blue /= sampleCount;
-        }
-
-        return TPixel.FromRgba32Float(new Rgba32Float(
-            EncodeColor(red, options.ColorSpace),
-            EncodeColor(green, options.ColorSpace),
-            EncodeColor(blue, options.ColorSpace),
-            averageAlpha));
+        return accumulator.ToPixel<TPixel>(options);
     }
 
     private static MipmapGenerationOptions ValidateOptions(MipmapGenerationOptions? options)
@@ -163,6 +202,12 @@ public static class BitmapMipChain
         {
             MipmapAlphaMode.Premultiplied or MipmapAlphaMode.Straight => true,
             _ => throw new ArgumentOutOfRangeException(nameof(options), $"Unsupported mip-map alpha mode '{options.AlphaMode}'.")
+        };
+
+        _ = options.Filter switch
+        {
+            MipmapFilter.Box or MipmapFilter.Triangle => true,
+            _ => throw new ArgumentOutOfRangeException(nameof(options), $"Unsupported mip-map filter '{options.Filter}'.")
         };
 
         return options;
@@ -218,6 +263,14 @@ public static class BitmapMipChain
         return Math.Clamp(value, 0f, 1f);
     }
 
+    private static float TriangleWeight(float center, int sample, float radius)
+    {
+        var normalizedDistance = MathF.Abs(sample - center) / radius;
+        return normalizedDistance >= 1f
+            ? 0f
+            : 1f - normalizedDistance;
+    }
+
     private static int GetFullMipLevelCount(int width, int height)
     {
         var count = 1;
@@ -229,5 +282,75 @@ public static class BitmapMipChain
         }
 
         return count;
+    }
+
+    private struct PixelAccumulator
+    {
+        private float red;
+        private float green;
+        private float blue;
+        private float alpha;
+        private float weight;
+
+        public void Add<TPixel>(TPixel source, float sampleWeight, MipmapGenerationOptions options)
+            where TPixel : unmanaged, IPixel<TPixel>
+        {
+            if (sampleWeight <= 0f)
+            {
+                return;
+            }
+
+            var pixel = TPixel.ToRgba32Float(source);
+            var pixelRed = DecodeColor(pixel.Red, options.ColorSpace);
+            var pixelGreen = DecodeColor(pixel.Green, options.ColorSpace);
+            var pixelBlue = DecodeColor(pixel.Blue, options.ColorSpace);
+            if (options.AlphaMode == MipmapAlphaMode.Premultiplied)
+            {
+                pixelRed *= pixel.Alpha;
+                pixelGreen *= pixel.Alpha;
+                pixelBlue *= pixel.Alpha;
+            }
+
+            red += pixelRed * sampleWeight;
+            green += pixelGreen * sampleWeight;
+            blue += pixelBlue * sampleWeight;
+            alpha += pixel.Alpha * sampleWeight;
+            weight += sampleWeight;
+        }
+
+        public readonly TPixel ToPixel<TPixel>(MipmapGenerationOptions options)
+            where TPixel : unmanaged, IPixel<TPixel>
+        {
+            if (weight <= 0f)
+            {
+                return TPixel.FromRgba32Float(new Rgba32Float(0f, 0f, 0f, 0f));
+            }
+
+            var outputRed = red;
+            var outputGreen = green;
+            var outputBlue = blue;
+            var outputAlpha = alpha / weight;
+            if (options.AlphaMode == MipmapAlphaMode.Premultiplied)
+            {
+                if (alpha > 0f)
+                {
+                    outputRed /= alpha;
+                    outputGreen /= alpha;
+                    outputBlue /= alpha;
+                }
+            }
+            else
+            {
+                outputRed /= weight;
+                outputGreen /= weight;
+                outputBlue /= weight;
+            }
+
+            return TPixel.FromRgba32Float(new Rgba32Float(
+                EncodeColor(outputRed, options.ColorSpace),
+                EncodeColor(outputGreen, options.ColorSpace),
+                EncodeColor(outputBlue, options.ColorSpace),
+                outputAlpha));
+        }
     }
 }

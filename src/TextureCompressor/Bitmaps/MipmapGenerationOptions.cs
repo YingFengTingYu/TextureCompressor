@@ -9,4 +9,6 @@ public sealed class MipmapGenerationOptions
     public MipmapColorSpace ColorSpace { get; init; }
 
     public MipmapAlphaMode AlphaMode { get; init; }
+
+    public MipmapFilter Filter { get; init; }
 }

@@ -141,6 +141,26 @@ public sealed class BitmapMipChainTests
     }
 
     [Fact]
+    public void DownsampleCanUseTriangleFilter()
+    {
+        var source = new ArrayBitmap<Rgba8UNorm>(
+            4,
+            1,
+            [
+                new Rgba8UNorm(0, 0, 0),
+                new Rgba8UNorm(0, 0, 0),
+                new Rgba8UNorm(255, 0, 0),
+                new Rgba8UNorm(255, 0, 0)
+            ]);
+
+        var mip = BitmapMipChain.Downsample(source, new MipmapGenerationOptions { Filter = MipmapFilter.Triangle });
+
+        Assert.Equal(2, mip.Width);
+        Assert.InRange((int)mip.AsView()[0, 0].Red, 1, 63);
+        Assert.InRange((int)mip.AsView()[1, 0].Red, 192, 254);
+    }
+
+    [Fact]
     public void DownsampleRejectsOneByOneSource()
     {
         var source = new ArrayBitmap<Rgba8UNorm>(1, 1);
@@ -157,5 +177,14 @@ public sealed class BitmapMipChainTests
 
         Assert.Throws<ArgumentOutOfRangeException>(() =>
             BitmapMipChain.Generate(source, new MipmapGenerationOptions { MaxLevelCount = 0 }));
+    }
+
+    [Fact]
+    public void GenerateRejectsInvalidFilter()
+    {
+        var source = new ArrayBitmap<Rgba8UNorm>(2, 2);
+
+        Assert.Throws<ArgumentOutOfRangeException>(() =>
+            BitmapMipChain.Generate(source, new MipmapGenerationOptions { Filter = (MipmapFilter)999 }));
     }
 }

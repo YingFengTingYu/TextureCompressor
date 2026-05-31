@@ -138,6 +138,8 @@ public sealed class CliWorkflowTests
             "Linear",
             "--mipmap-alpha",
             "Straight",
+            "--mipmap-filter",
+            "Triangle",
             "--mipmap-levels",
             "2");
         var info = await RunCliAsync(workspace, "info", dds, "--subresources");

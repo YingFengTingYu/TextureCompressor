@@ -535,7 +535,7 @@ dotnet run --project src/TextureCompressor.Cli -- formats rgba --uncompressed
 dotnet run --project src/TextureCompressor.Cli -- info input.ktx2
 dotnet run --project src/TextureCompressor.Cli -- info input.ktx2 --json --subresources
 dotnet run --project src/TextureCompressor.Cli -- convert input.png output.dds --format Bc7UNorm --mipmaps Generate --metrics
-dotnet run --project src/TextureCompressor.Cli -- convert input.png output.ktx2 --format Bc7Srgb --mipmaps Generate --mipmap-color-space Auto --mipmap-alpha Premultiplied --mipmap-levels 8
+dotnet run --project src/TextureCompressor.Cli -- convert input.png output.ktx2 --format Bc7Srgb --mipmaps Generate --mipmap-color-space Auto --mipmap-alpha Premultiplied --mipmap-filter Triangle --mipmap-levels 8
 dotnet run --project src/TextureCompressor.Cli -- convert input.png output.dds --format Bc7UNorm --metrics --json
 dotnet run --project src/TextureCompressor.Cli -- convert input.png output.ktx2 --format Bc7Srgb --ktx-version 2 --quality High
 dotnet run --project src/TextureCompressor.Cli -- assemble array.ktx2 --layers layer0.png layer1.png
@@ -555,7 +555,7 @@ Common commands:
 - `extract <input> <output-directory>`: extract DDS/KTX/PVR subresources to PNG/JPEG/GIF/HDR images. Add `--mip`, `--layer`, or `--face` to filter, `--container` to choose the image type, `--pattern` to control file names, and `--manifest` to write JSON metadata.
 - `quality <expected> <actual>`: decode two image/texture files and print MSE, RMSE, and PSNR; add `--ignore-alpha` to ignore alpha or `--json` for structured output. Use `--mip`/`--layer`/`--face` for both inputs, or `--expected-*` and `--actual-*` options to select each input independently.
 
-Image containers support PNG, JPEG, GIF, and HDR. `convert`, `assemble`, and `extract` provide `--png-color-space`, `--jpg-color-space`, and `--gif-color-space` conversions between Linear and Srgb for LDR image formats. JPEG output quality is controlled with `--jpeg-quality`; S3TC, FXT1, ETC/EAC, ASTC, ATC, RGTC/LATC, BPTC, and PVRTC built-in texture encoding quality can be selected with `--quality`. DDS, KTX, and PVR outputs can generate full mip-map chains with `--mipmaps Generate` during single-image conversion; use `--mipmap-color-space Auto|Linear|Srgb`, `--mipmap-alpha Premultiplied|Straight`, and `--mipmap-levels <count>` to tune generated mipmaps.
+Image containers support PNG, JPEG, GIF, and HDR. `convert`, `assemble`, and `extract` provide `--png-color-space`, `--jpg-color-space`, and `--gif-color-space` conversions between Linear and Srgb for LDR image formats. JPEG output quality is controlled with `--jpeg-quality`; S3TC, FXT1, ETC/EAC, ASTC, ATC, RGTC/LATC, BPTC, and PVRTC built-in texture encoding quality can be selected with `--quality`. DDS, KTX, and PVR outputs can generate full mip-map chains with `--mipmaps Generate` during single-image conversion; use `--mipmap-color-space Auto|Linear|Srgb`, `--mipmap-alpha Premultiplied|Straight`, `--mipmap-filter Box|Triangle`, and `--mipmap-levels <count>` to tune generated mipmaps.
 
 ## Common Workflows
 
