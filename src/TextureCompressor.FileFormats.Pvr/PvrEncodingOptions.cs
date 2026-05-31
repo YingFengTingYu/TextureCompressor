@@ -2,7 +2,7 @@ using TextureCompressor.Formats;
 
 namespace TextureCompressor.FileFormats.Pvr;
 
-public sealed class PvrEncodingOptions
+public sealed class PvrEncodingOptions : IFileFormatOptions
 {
     public TextureFormat? TextureFormat { get; init; }
 

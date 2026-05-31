@@ -1,8 +1,9 @@
+using TextureCompressor.FileFormats;
 using TextureCompressor.Formats;
 
 namespace TextureCompressor.FileFormats.Pvr;
 
-public sealed class PvrTexture
+public sealed class PvrTexture : ITextureFile
 {
     public PvrTexture(TextureFormat format, int width, int height, byte[] payload)
         : this(format, width, height, payload, [])

@@ -2,7 +2,7 @@ using System.IO.Compression;
 
 namespace TextureCompressor.FileFormats.Png;
 
-public sealed class PngEncodingOptions
+public sealed class PngEncodingOptions : IFileFormatOptions
 {
     public bool UseAppleCgbi { get; set; }
 

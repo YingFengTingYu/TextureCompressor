@@ -1,8 +1,9 @@
+using TextureCompressor.FileFormats;
 using TextureCompressor.Formats;
 
 namespace TextureCompressor.FileFormats.Ktx;
 
-public sealed class KtxTexture
+public sealed class KtxTexture : ITextureFile
 {
     public KtxTexture(TextureFormat format, int width, int height, byte[] payload)
         : this(format, width, height, payload, glType: null, glFormat: null, glInternalFormat: null, glBaseInternalFormat: null, vkFormat: null)

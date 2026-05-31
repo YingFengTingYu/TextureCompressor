@@ -1,8 +1,9 @@
+using TextureCompressor.FileFormats;
 using TextureCompressor.Formats;
 
 namespace TextureCompressor.FileFormats.Astc;
 
-public sealed class AstcTexture
+public sealed class AstcTexture : ITextureFile
 {
     public AstcTexture(TextureFormat format, int width, int height, byte[] payload)
     {
@@ -10,11 +11,14 @@ public sealed class AstcTexture
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(height);
         ArgumentNullException.ThrowIfNull(payload);
 
+        Texture = new TextureImage(format, width, height, payload);
         Format = format;
         Width = width;
         Height = height;
         Payload = payload;
     }
+
+    public TextureImage Texture { get; }
 
     public TextureFormat Format { get; }
 

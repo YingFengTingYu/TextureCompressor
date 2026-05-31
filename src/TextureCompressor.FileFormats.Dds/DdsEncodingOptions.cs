@@ -2,7 +2,7 @@ using TextureCompressor.Formats;
 
 namespace TextureCompressor.FileFormats.Dds;
 
-public sealed class DdsEncodingOptions
+public sealed class DdsEncodingOptions : IFileFormatOptions
 {
     public TextureFormat? TextureFormat { get; init; }
 

@@ -2,7 +2,7 @@ using TextureCompressor.Formats;
 
 namespace TextureCompressor.FileFormats.Astc;
 
-public sealed class AstcEncodingOptions
+public sealed class AstcEncodingOptions : IFileFormatOptions
 {
     public TextureFormat? TextureFormat { get; init; }
 

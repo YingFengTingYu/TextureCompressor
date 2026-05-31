@@ -1,8 +1,9 @@
+using TextureCompressor.FileFormats;
 using TextureCompressor.Formats;
 
 namespace TextureCompressor.FileFormats.Dds;
 
-public sealed class DdsTexture
+public sealed class DdsTexture : ITextureFile
 {
     public DdsTexture(TextureFormat format, int width, int height, byte[] payload)
         : this(format, width, height, payload, DdsHeaderKind.Dxt10, dxgiFormat: null, legacyPixelFormat: null, DdsAlphaMode.Unknown)

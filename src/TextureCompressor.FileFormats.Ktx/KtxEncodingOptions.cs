@@ -2,7 +2,7 @@ using TextureCompressor.Formats;
 
 namespace TextureCompressor.FileFormats.Ktx;
 
-public sealed class KtxEncodingOptions
+public sealed class KtxEncodingOptions : IFileFormatOptions
 {
     public KtxVersion Version { get; set; } = KtxVersion.Version1;
 
