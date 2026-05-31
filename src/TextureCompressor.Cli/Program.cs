@@ -105,6 +105,11 @@ internal static class Cli
         {
             Description = "Built-in texture compression quality."
         };
+        var mipmapsOption = new Option<MipmapMode>("--mipmaps")
+        {
+            Description = "Mip-map handling for texture outputs.",
+            DefaultValueFactory = _ => MipmapMode.None
+        };
 
         var command = new Command("convert", "Convert between supported texture and image containers.");
         command.Arguments.Add(inputArgument);
@@ -118,6 +123,7 @@ internal static class Cli
         command.Options.Add(ktxVersionOption);
         command.Options.Add(jpegQualityOption);
         command.Options.Add(qualityOption);
+        command.Options.Add(mipmapsOption);
         command.SetAction(parseResult => RunCommand(() =>
         {
             var inputPath = RequireFile(parseResult.GetValue(inputArgument), "input").FullName;
@@ -127,6 +133,7 @@ internal static class Cli
             var ktxVersion = parseResult.GetValue(ktxVersionOption);
             var jpegQuality = parseResult.GetValue(jpegQualityOption);
             var quality = parseResult.GetValue(qualityOption);
+            var mipmaps = parseResult.GetValue(mipmapsOption);
             var colorSpaces = new ImageColorSpaces(
                 parseResult.GetValue(pngColorSpaceOption),
                 parseResult.GetValue(jpgColorSpaceOption),
@@ -134,7 +141,7 @@ internal static class Cli
             var printMetrics = parseResult.GetValue(metricsOption);
 
             var source = Decode(inputPath, colorSpaces);
-            Encode(source, outputPath, outputKind, format, ktxVersion, jpegQuality, quality, colorSpaces);
+            Encode(source, outputPath, outputKind, format, ktxVersion, jpegQuality, quality, mipmaps, colorSpaces);
             Console.WriteLine($"wrote {outputPath}");
 
             if (printMetrics)
@@ -284,6 +291,7 @@ internal static class Cli
         int ktxVersion,
         int jpegQuality,
         TextureCompressionLevel? quality,
+        MipmapMode mipmaps,
         ImageColorSpaces? imageColorSpaces)
     {
         var imageColorSpace = GetImageColorSpace(container, imageColorSpaces);
@@ -297,32 +305,69 @@ internal static class Cli
         switch (container)
         {
             case TextureContainer.Png:
+                EnsureNoMipmaps(mipmaps, container);
                 PngCodec.Encode(ApplyOutputImageColorSpace(bitmap, container, imageColorSpace), path);
                 break;
             case TextureContainer.Jpeg:
+                EnsureNoMipmaps(mipmaps, container);
                 JpegCodec.Encode(ApplyOutputImageColorSpace(bitmap, container, imageColorSpace), path, new JpegEncodingOptions { Quality = jpegQuality });
                 break;
             case TextureContainer.Gif:
+                EnsureNoMipmaps(mipmaps, container);
                 GifCodec.Encode(ApplyOutputImageColorSpace(bitmap, container, imageColorSpace), path);
                 break;
             case TextureContainer.Dds:
-                DdsCodec.Encode(bitmap, path, new DdsEncodingOptions { TextureFormat = format });
+                if (mipmaps == MipmapMode.Generate)
+                {
+                    DdsCodec.EncodeMipChain(BitmapMipChain.Generate(bitmap), path, new DdsEncodingOptions { TextureFormat = format });
+                }
+                else
+                {
+                    DdsCodec.Encode(bitmap, path, new DdsEncodingOptions { TextureFormat = format });
+                }
+
                 break;
             case TextureContainer.Ktx:
-                KtxCodec.Encode(bitmap, path, new KtxEncodingOptions
+                var ktxOptions = new KtxEncodingOptions
                 {
                     TextureFormat = format,
                     Version = ktxVersion == 2 ? KtxVersion.Version2 : KtxVersion.Version1
-                });
+                };
+                if (mipmaps == MipmapMode.Generate)
+                {
+                    KtxCodec.EncodeMipChain(BitmapMipChain.Generate(bitmap), path, ktxOptions);
+                }
+                else
+                {
+                    KtxCodec.Encode(bitmap, path, ktxOptions);
+                }
+
                 break;
             case TextureContainer.Pvr:
-                PvrCodec.Encode(bitmap, path, new PvrEncodingOptions { TextureFormat = format });
+                if (mipmaps == MipmapMode.Generate)
+                {
+                    PvrCodec.EncodeMipChain(BitmapMipChain.Generate(bitmap), path, new PvrEncodingOptions { TextureFormat = format });
+                }
+                else
+                {
+                    PvrCodec.Encode(bitmap, path, new PvrEncodingOptions { TextureFormat = format });
+                }
+
                 break;
             case TextureContainer.Astc:
+                EnsureNoMipmaps(mipmaps, container);
                 AstcCodec.Encode(bitmap, path, new AstcEncodingOptions { TextureFormat = format });
                 break;
             default:
                 throw new NotSupportedException($"Unsupported output container '{container}'.");
+        }
+    }
+
+    private static void EnsureNoMipmaps(MipmapMode mipmaps, TextureContainer container)
+    {
+        if (mipmaps != MipmapMode.None)
+        {
+            throw new NotSupportedException($"Mip-map generation is not supported for '{container}' output.");
         }
     }
 
@@ -652,6 +697,12 @@ internal enum ImageColorSpace
 {
     Linear,
     Srgb
+}
+
+internal enum MipmapMode
+{
+    None,
+    Generate
 }
 
 internal sealed record ImageColorSpaces(ImageColorSpace Png, ImageColorSpace Jpeg, ImageColorSpace Gif)

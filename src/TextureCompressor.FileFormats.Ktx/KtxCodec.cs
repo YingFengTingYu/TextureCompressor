@@ -59,28 +59,12 @@ public static class KtxCodec
 
         var format = GetTextureFormat(header);
         var coder = TextureCoderManager.Global.GetCoder(format);
-        var expectedPayloadByteCount = coder.GetEncodedByteCount(header.Width, header.Height);
-        var expectedImageByteCount = GetImageByteCount(format, header.Width, header.Height, expectedPayloadByteCount);
-        var imageByteCount = ReadUInt32(stream, header.LittleEndian);
-        if (imageByteCount != expectedImageByteCount)
-        {
-            throw new InvalidDataException(
-                $"KTX image payload is {imageByteCount} bytes, but '{format.Name}' expects {expectedImageByteCount} bytes for {header.Width}x{header.Height}.");
-        }
-
-        var image = new byte[checked((int)imageByteCount)];
-        ReadExactly(stream, image);
-        SkipExactly(stream, GetPaddingByteCount(image.Length));
-
-        var payload = RequiresRowPadding(format, header.Width)
-            ? RemoveRowPadding(image, format.GetRowByteCount(header.Width), header.Height)
-            : image;
+        var mipLevelCount = GetMipLevelCount(header.NumberOfMipmapLevels, header.Width, header.Height, "KTX");
+        var mipLevels = ReadMipLevels(stream, header, format, coder, mipLevelCount);
 
         return new KtxTexture(
             format,
-            header.Width,
-            header.Height,
-            payload,
+            mipLevels,
             header.GlType == 0 ? null : (KtxGlFormat)header.GlType,
             header.GlFormat == 0 ? null : (KtxGlFormat)header.GlFormat,
             (KtxGlFormat)header.GlInternalFormat,
@@ -215,9 +199,57 @@ public static class KtxCodec
 
         var format = GetEncodingTextureFormat(options);
         var coder = TextureCoderManager.Global.GetCoder(format);
+        if (options?.GenerateMipmaps == true)
+        {
+            var encodedLevels = EncodeMipLevels(BitmapMipChain.Generate(bitmap), coder);
+            Write(new KtxTexture(format, encodedLevels), stream, options);
+            return;
+        }
+
         var payload = new byte[coder.GetEncodedByteCount(bitmap.Width, bitmap.Height)];
         coder.Encode(bitmap, payload);
         Write(new KtxTexture(format, bitmap.Width, bitmap.Height, payload), stream, options);
+    }
+
+    public static byte[] EncodeMipChain<TPixel>(IReadOnlyList<IBitmap<TPixel>> mipLevels)
+        where TPixel : unmanaged, IPixel<TPixel> =>
+        EncodeMipChain(mipLevels, options: null);
+
+    public static byte[] EncodeMipChain<TPixel>(IReadOnlyList<IBitmap<TPixel>> mipLevels, KtxEncodingOptions? options)
+        where TPixel : unmanaged, IPixel<TPixel>
+    {
+        using var stream = new MemoryStream();
+        EncodeMipChain(mipLevels, stream, options);
+        return stream.ToArray();
+    }
+
+    public static void EncodeMipChain<TPixel>(IReadOnlyList<IBitmap<TPixel>> mipLevels, string path)
+        where TPixel : unmanaged, IPixel<TPixel>
+    {
+        using var stream = File.Create(path);
+        EncodeMipChain(mipLevels, stream, options: null);
+    }
+
+    public static void EncodeMipChain<TPixel>(IReadOnlyList<IBitmap<TPixel>> mipLevels, string path, KtxEncodingOptions? options)
+        where TPixel : unmanaged, IPixel<TPixel>
+    {
+        using var stream = File.Create(path);
+        EncodeMipChain(mipLevels, stream, options);
+    }
+
+    public static void EncodeMipChain<TPixel>(IReadOnlyList<IBitmap<TPixel>> mipLevels, Stream stream)
+        where TPixel : unmanaged, IPixel<TPixel> =>
+        EncodeMipChain(mipLevels, stream, options: null);
+
+    public static void EncodeMipChain<TPixel>(IReadOnlyList<IBitmap<TPixel>> mipLevels, Stream stream, KtxEncodingOptions? options)
+        where TPixel : unmanaged, IPixel<TPixel>
+    {
+        ArgumentNullException.ThrowIfNull(stream);
+
+        var format = GetEncodingTextureFormat(options);
+        var coder = TextureCoderManager.Global.GetCoder(format);
+        var encodedLevels = EncodeMipLevels(mipLevels, coder);
+        Write(new KtxTexture(format, encodedLevels), stream, options);
     }
 
     public static byte[] Write(KtxTexture texture)
@@ -257,13 +289,7 @@ public static class KtxCodec
         ArgumentNullException.ThrowIfNull(stream);
 
         var coder = TextureCoderManager.Global.GetCoder(texture.Format);
-        var expectedByteCount = coder.GetEncodedByteCount(texture.Width, texture.Height);
-        if (texture.Payload.Length != expectedByteCount)
-        {
-            throw new ArgumentException(
-                $"KTX payload length is {texture.Payload.Length} bytes, but '{texture.Format.Name}' expects {expectedByteCount} bytes for {texture.Width}x{texture.Height}.",
-                nameof(texture));
-        }
+        ValidateTexturePayloads(texture, coder);
 
         var version = options?.Version ?? KtxVersion.Version1;
         ValidateEncodingVersion(version);
@@ -271,7 +297,7 @@ public static class KtxCodec
         if (version == KtxVersion.Version2)
         {
             ValidateV2EncodingSelection(texture.Format, options);
-            WriteV2(texture, stream, expectedByteCount, options);
+            WriteV2(texture, stream, options);
             return;
         }
 
@@ -293,16 +319,19 @@ public static class KtxCodec
             PixelDepth: 0,
             NumberOfArrayElements: 0,
             NumberOfFaces: 1,
-            NumberOfMipmapLevels: 1,
+            NumberOfMipmapLevels: checked((uint)texture.MipLevelCount),
             BytesOfKeyValueData: 0));
 
-        var image = RequiresRowPadding(texture.Format, texture.Width)
-            ? AddRowPadding(texture.Payload, texture.Format.GetRowByteCount(texture.Width), texture.Height)
-            : texture.Payload;
+        foreach (var level in texture.MipLevels)
+        {
+            var image = RequiresRowPadding(texture.Format, level.Width)
+                ? AddRowPadding(level.Payload, texture.Format.GetRowByteCount(level.Width), level.Height)
+                : level.Payload;
 
-        WriteUInt32(stream, checked((uint)image.Length));
-        stream.Write(image);
-        WritePadding(stream, GetPaddingByteCount(image.Length));
+            WriteUInt32(stream, checked((uint)image.Length));
+            stream.Write(image);
+            WritePadding(stream, GetPaddingByteCount(image.Length));
+        }
     }
 
     private static KtxHeader ReadHeader(Stream stream)
@@ -382,39 +411,53 @@ public static class KtxCodec
             BinaryPrimitives.ReadUInt64LittleEndian(header.Slice(60, 8)));
         ValidateHeader(ktxHeader);
 
+        var mipLevelCount = GetMipLevelCount(ktxHeader.LevelCount, ktxHeader.Width, ktxHeader.Height, "KTX2");
+        var levelIndexes = new KtxLevelIndex[mipLevelCount];
         Byte24Buffer levelStorage = default;
         Span<byte> levelBuffer = levelStorage;
-        ReadExactly(stream, levelBuffer);
-        var level = new KtxLevelIndex(
-            BinaryPrimitives.ReadUInt64LittleEndian(levelBuffer),
-            BinaryPrimitives.ReadUInt64LittleEndian(levelBuffer.Slice(8, 8)),
-            BinaryPrimitives.ReadUInt64LittleEndian(levelBuffer.Slice(16, 8)));
+        for (var i = 0; i < levelIndexes.Length; i++)
+        {
+            ReadExactly(stream, levelBuffer);
+            levelIndexes[i] = new KtxLevelIndex(
+                BinaryPrimitives.ReadUInt64LittleEndian(levelBuffer),
+                BinaryPrimitives.ReadUInt64LittleEndian(levelBuffer.Slice(8, 8)),
+                BinaryPrimitives.ReadUInt64LittleEndian(levelBuffer.Slice(16, 8)));
+        }
 
         var format = GetTextureFormat(ktxHeader.VkFormat, isSrgb: IsSrgb(ktxHeader.VkFormat));
         var coder = TextureCoderManager.Global.GetCoder(format);
-        var expectedPayloadByteCount = coder.GetEncodedByteCount(ktxHeader.Width, ktxHeader.Height);
-        if (level.UncompressedByteLength != (ulong)expectedPayloadByteCount)
+        var mipLevels = new TextureMipLevel[mipLevelCount];
+        var currentOffset = checked((ulong)(HeaderV2ByteCount + (LevelIndexEntryByteCount * mipLevelCount)));
+        for (var i = 0; i < mipLevelCount; i++)
         {
-            throw new InvalidDataException(
-                $"KTX2 level payload decompresses to {level.UncompressedByteLength} bytes, but '{format.Name}' expects {expectedPayloadByteCount} bytes for {ktxHeader.Width}x{ktxHeader.Height}.");
+            var level = levelIndexes[i];
+            var width = TextureMipLevel.GetDimension(ktxHeader.Width, i);
+            var height = TextureMipLevel.GetDimension(ktxHeader.Height, i);
+            var expectedPayloadByteCount = coder.GetEncodedByteCount(width, height);
+            if (level.UncompressedByteLength != (ulong)expectedPayloadByteCount)
+            {
+                throw new InvalidDataException(
+                    $"KTX2 level {i} payload decompresses to {level.UncompressedByteLength} bytes, but '{format.Name}' expects {expectedPayloadByteCount} bytes for {width}x{height}.");
+            }
+
+            if (level.ByteLength > int.MaxValue)
+            {
+                throw new InvalidDataException("KTX2 level payload is outside the supported range.");
+            }
+
+            SkipToOffset(stream, level.ByteOffset, currentOffset);
+            currentOffset = level.ByteOffset;
+
+            var levelPayload = new byte[checked((int)level.ByteLength)];
+            ReadExactly(stream, levelPayload);
+            currentOffset = checked(currentOffset + level.ByteLength);
+            var payload = Decompress(levelPayload, expectedPayloadByteCount, ktxHeader.SupercompressionScheme);
+            mipLevels[i] = new TextureMipLevel(width, height, payload);
         }
-
-        if (level.ByteLength > int.MaxValue)
-        {
-            throw new InvalidDataException("KTX2 level payload is outside the supported range.");
-        }
-
-        SkipToOffset(stream, level.ByteOffset, HeaderV2ByteCount + LevelIndexEntryByteCount);
-
-        var levelPayload = new byte[checked((int)level.ByteLength)];
-        ReadExactly(stream, levelPayload);
-        var payload = Decompress(levelPayload, expectedPayloadByteCount, ktxHeader.SupercompressionScheme);
 
         return new KtxTexture(
             format,
-            ktxHeader.Width,
-            ktxHeader.Height,
-            payload,
+            mipLevels,
             glType: null,
             glFormat: null,
             glInternalFormat: null,
@@ -422,13 +465,18 @@ public static class KtxCodec
             ktxHeader.VkFormat);
     }
 
-    private static void WriteV2(KtxTexture texture, Stream stream, int payloadByteCount, KtxEncodingOptions? options)
+    private static void WriteV2(KtxTexture texture, Stream stream, KtxEncodingOptions? options)
     {
         var vkFormat = GetVkFormat(texture.Format);
         var supercompressionScheme = GetEncodingSupercompressionScheme(options);
-        var levelPayload = Compress(texture.Payload, supercompressionScheme, options);
-        const int dfdOffset = HeaderV2ByteCount + LevelIndexEntryByteCount;
-        const int levelOffset = dfdOffset + BasicDfdByteCount;
+        var levelPayloads = new byte[texture.MipLevelCount][];
+        for (var i = 0; i < texture.MipLevelCount; i++)
+        {
+            levelPayloads[i] = Compress(texture.MipLevels[i].Payload, supercompressionScheme, options);
+        }
+
+        var dfdOffset = checked(HeaderV2ByteCount + (LevelIndexEntryByteCount * texture.MipLevelCount));
+        var levelOffset = checked(dfdOffset + BasicDfdByteCount);
 
         Byte80Buffer headerStorage = default;
         Span<byte> header = headerStorage;
@@ -439,22 +487,31 @@ public static class KtxCodec
         BinaryPrimitives.WriteUInt32LittleEndian(header.Slice(20, 4), checked((uint)texture.Width));
         BinaryPrimitives.WriteUInt32LittleEndian(header.Slice(24, 4), checked((uint)texture.Height));
         BinaryPrimitives.WriteUInt32LittleEndian(header.Slice(36, 4), 1);
-        BinaryPrimitives.WriteUInt32LittleEndian(header.Slice(40, 4), 1);
+        BinaryPrimitives.WriteUInt32LittleEndian(header.Slice(40, 4), checked((uint)texture.MipLevelCount));
         BinaryPrimitives.WriteUInt32LittleEndian(header.Slice(44, 4), (uint)supercompressionScheme);
-        BinaryPrimitives.WriteUInt32LittleEndian(header.Slice(48, 4), dfdOffset);
+        BinaryPrimitives.WriteUInt32LittleEndian(header.Slice(48, 4), checked((uint)dfdOffset));
         BinaryPrimitives.WriteUInt32LittleEndian(header.Slice(52, 4), BasicDfdByteCount);
         stream.Write(header);
 
         Byte24Buffer levelStorage = default;
         Span<byte> level = levelStorage;
-        level.Clear();
-        BinaryPrimitives.WriteUInt64LittleEndian(level, levelOffset);
-        BinaryPrimitives.WriteUInt64LittleEndian(level.Slice(8, 8), checked((ulong)levelPayload.Length));
-        BinaryPrimitives.WriteUInt64LittleEndian(level.Slice(16, 8), checked((ulong)payloadByteCount));
-        stream.Write(level);
+        var currentOffset = checked((ulong)levelOffset);
+        for (var i = 0; i < texture.MipLevelCount; i++)
+        {
+            var payload = levelPayloads[i];
+            level.Clear();
+            BinaryPrimitives.WriteUInt64LittleEndian(level, currentOffset);
+            BinaryPrimitives.WriteUInt64LittleEndian(level.Slice(8, 8), checked((ulong)payload.Length));
+            BinaryPrimitives.WriteUInt64LittleEndian(level.Slice(16, 8), checked((ulong)texture.MipLevels[i].Payload.Length));
+            stream.Write(level);
+            currentOffset = checked(currentOffset + (ulong)payload.Length);
+        }
 
         WriteBasicDfd(stream, texture.Format);
-        stream.Write(levelPayload);
+        foreach (var payload in levelPayloads)
+        {
+            stream.Write(payload);
+        }
     }
 
     private static void WriteBasicDfd(Stream stream, TextureFormat format)
@@ -571,11 +628,6 @@ public static class KtxCodec
             throw new NotSupportedException("KTX cube maps are not supported.");
         }
 
-        if (header.NumberOfMipmapLevels > 1)
-        {
-            throw new NotSupportedException("KTX mip-map chains are not supported.");
-        }
-
         if (header.GlType == 0 != (header.GlFormat == 0))
         {
             throw new InvalidDataException("KTX glType and glFormat must either both be zero or both be non-zero.");
@@ -614,11 +666,6 @@ public static class KtxCodec
             throw new NotSupportedException("KTX2 cube maps are not supported.");
         }
 
-        if (header.LevelCount != 1)
-        {
-            throw new NotSupportedException("KTX2 mip-map chains are not supported.");
-        }
-
         if (header.SupercompressionScheme is KtxSupercompressionScheme.BasisLz)
         {
             throw new NotSupportedException("KTX2 BasisLZ supercompression is not supported.");
@@ -645,6 +692,114 @@ public static class KtxCodec
         if (header.SgdByteLength != 0)
         {
             throw new NotSupportedException("KTX2 supercompression global data is not supported.");
+        }
+    }
+
+    private static int GetMipLevelCount(uint mipLevelCount, int width, int height, string containerName)
+    {
+        if (mipLevelCount > int.MaxValue)
+        {
+            throw new InvalidDataException($"{containerName} mip-map count is outside the supported range.");
+        }
+
+        var count = mipLevelCount == 0 ? 1 : (int)mipLevelCount;
+        if (count > TextureMipLevel.GetFullMipLevelCount(width, height))
+        {
+            throw new InvalidDataException($"{containerName} mip-map count exceeds the full mip chain for the base dimensions.");
+        }
+
+        return count;
+    }
+
+    private static TextureMipLevel[] ReadMipLevels(
+        Stream stream,
+        KtxHeader header,
+        TextureFormat format,
+        ITextureCoder coder,
+        int mipLevelCount)
+    {
+        var levels = new TextureMipLevel[mipLevelCount];
+        for (var i = 0; i < mipLevelCount; i++)
+        {
+            var width = TextureMipLevel.GetDimension(header.Width, i);
+            var height = TextureMipLevel.GetDimension(header.Height, i);
+            var expectedPayloadByteCount = coder.GetEncodedByteCount(width, height);
+            var expectedImageByteCount = GetImageByteCount(format, width, height, expectedPayloadByteCount);
+            var imageByteCount = ReadUInt32(stream, header.LittleEndian);
+            if (imageByteCount != (uint)expectedImageByteCount)
+            {
+                throw new InvalidDataException(
+                    $"KTX mip level {i} image payload is {imageByteCount} bytes, but '{format.Name}' expects {expectedImageByteCount} bytes for {width}x{height}.");
+            }
+
+            var image = new byte[checked((int)imageByteCount)];
+            ReadExactly(stream, image);
+            SkipExactly(stream, GetPaddingByteCount(image.Length));
+
+            var payload = RequiresRowPadding(format, width)
+                ? RemoveRowPadding(image, format.GetRowByteCount(width), height)
+                : image;
+            levels[i] = new TextureMipLevel(width, height, payload);
+        }
+
+        return levels;
+    }
+
+    private static TextureMipLevel[] EncodeMipLevels<TPixel>(IReadOnlyList<IBitmap<TPixel>> mipLevels, ITextureCoder coder)
+        where TPixel : unmanaged, IPixel<TPixel>
+    {
+        ArgumentNullException.ThrowIfNull(mipLevels);
+        if (mipLevels.Count == 0)
+        {
+            throw new ArgumentException("KTX texture must contain at least one mip level.", nameof(mipLevels));
+        }
+
+        var baseLevel = mipLevels[0] ?? throw new ArgumentException("KTX mip level cannot be null.", nameof(mipLevels));
+        var fullMipLevelCount = TextureMipLevel.GetFullMipLevelCount(baseLevel.Width, baseLevel.Height);
+        if (mipLevels.Count > fullMipLevelCount)
+        {
+            throw new ArgumentException("KTX mip level count exceeds the full mip chain for the base dimensions.", nameof(mipLevels));
+        }
+
+        var encodedLevels = new TextureMipLevel[mipLevels.Count];
+        for (var i = 0; i < mipLevels.Count; i++)
+        {
+            var bitmap = mipLevels[i] ?? throw new ArgumentException("KTX mip level cannot be null.", nameof(mipLevels));
+            var expectedWidth = TextureMipLevel.GetDimension(baseLevel.Width, i);
+            var expectedHeight = TextureMipLevel.GetDimension(baseLevel.Height, i);
+            if (bitmap.Width != expectedWidth || bitmap.Height != expectedHeight)
+            {
+                throw new ArgumentException(
+                    $"KTX mip level {i} is {bitmap.Width}x{bitmap.Height}, but {expectedWidth}x{expectedHeight} was expected.",
+                    nameof(mipLevels));
+            }
+
+            var payload = new byte[coder.GetEncodedByteCount(bitmap.Width, bitmap.Height)];
+            coder.Encode(bitmap.AsView(), payload);
+            encodedLevels[i] = new TextureMipLevel(bitmap.Width, bitmap.Height, payload);
+        }
+
+        return encodedLevels;
+    }
+
+    private static void ValidateTexturePayloads(KtxTexture texture, ITextureCoder coder)
+    {
+        var fullMipLevelCount = TextureMipLevel.GetFullMipLevelCount(texture.Width, texture.Height);
+        if (texture.MipLevelCount > fullMipLevelCount)
+        {
+            throw new ArgumentException("KTX mip level count exceeds the full mip chain for the base dimensions.", nameof(texture));
+        }
+
+        for (var i = 0; i < texture.MipLevels.Count; i++)
+        {
+            var level = texture.MipLevels[i];
+            var expectedByteCount = coder.GetEncodedByteCount(level.Width, level.Height);
+            if (level.Payload.Length != expectedByteCount)
+            {
+                throw new ArgumentException(
+                    $"KTX mip level {i} payload length is {level.Payload.Length} bytes, but '{texture.Format.Name}' expects {expectedByteCount} bytes for {level.Width}x{level.Height}.",
+                    nameof(texture));
+            }
         }
     }
 

@@ -241,11 +241,28 @@ public sealed class KtxCodecTests
     }
 
     [Fact]
-    public void ReadVersion2MipMapChainThrows()
+    public void WriteVersion2MipMapChainWritesReadableKtx2()
     {
-        var ktx = CreateHeaderV2(KtxVkFormat.R8G8B8A8UNorm, width: 1, height: 1, levelCount: 2);
+        var texture = new KtxTexture(
+            TextureFormats.Rgba8UNorm,
+            [
+                new TextureMipLevel(2, 2, Enumerable.Repeat((byte)1, 16).ToArray()),
+                new TextureMipLevel(1, 1, Enumerable.Repeat((byte)2, 4).ToArray())
+            ]);
 
-        Assert.Throws<NotSupportedException>(() => KtxCodec.Read(ktx));
+        var ktx = KtxCodec.Write(texture, new KtxEncodingOptions { Version = KtxVersion.Version2 });
+        var read = KtxCodec.Read(ktx);
+
+        Assert.Equal(2u, BinaryPrimitives.ReadUInt32LittleEndian(ktx.AsSpan(40, 4)));
+        Assert.Equal(128u, BinaryPrimitives.ReadUInt32LittleEndian(ktx.AsSpan(48, 4)));
+        Assert.Equal(152ul, BinaryPrimitives.ReadUInt64LittleEndian(ktx.AsSpan(80, 8)));
+        Assert.Equal(16ul, BinaryPrimitives.ReadUInt64LittleEndian(ktx.AsSpan(88, 8)));
+        Assert.Equal(168ul, BinaryPrimitives.ReadUInt64LittleEndian(ktx.AsSpan(104, 8)));
+        Assert.Equal(4ul, BinaryPrimitives.ReadUInt64LittleEndian(ktx.AsSpan(112, 8)));
+        Assert.Equal(172, ktx.Length);
+        Assert.Equal(2, read.MipLevelCount);
+        Assert.Equal(texture.MipLevels[0].Payload, read.MipLevels[0].Payload);
+        Assert.Equal(texture.MipLevels[1].Payload, read.MipLevels[1].Payload);
     }
 
     [Fact]
@@ -257,11 +274,52 @@ public sealed class KtxCodecTests
     }
 
     [Fact]
-    public void ReadMipMapChainThrows()
+    public void WriteMipMapChainWritesReadableKtx()
     {
-        var ktx = CreateHeader(KtxGlFormat.Rgba8, width: 1, height: 1, mipMapLevels: 2);
+        var texture = new KtxTexture(
+            TextureFormats.Rgba8UNorm,
+            [
+                new TextureMipLevel(2, 2, Enumerable.Repeat((byte)1, 16).ToArray()),
+                new TextureMipLevel(1, 1, Enumerable.Repeat((byte)2, 4).ToArray())
+            ]);
 
-        Assert.Throws<NotSupportedException>(() => KtxCodec.Read(ktx));
+        var ktx = KtxCodec.Write(texture);
+        var read = KtxCodec.Read(ktx);
+
+        Assert.Equal(2u, BinaryPrimitives.ReadUInt32LittleEndian(ktx.AsSpan(56, 4)));
+        Assert.Equal(16u, BinaryPrimitives.ReadUInt32LittleEndian(ktx.AsSpan(64, 4)));
+        Assert.Equal(4u, BinaryPrimitives.ReadUInt32LittleEndian(ktx.AsSpan(84, 4)));
+        Assert.Equal(92, ktx.Length);
+        Assert.Equal(2, read.MipLevelCount);
+        Assert.Equal(texture.MipLevels[0].Payload, read.MipLevels[0].Payload);
+        Assert.Equal(texture.MipLevels[1].Payload, read.MipLevels[1].Payload);
+    }
+
+    [Theory]
+    [InlineData(KtxVersion.Version1)]
+    [InlineData(KtxVersion.Version2)]
+    public void EncodeWithGenerateMipmapsWritesReadableCompressedMipChain(KtxVersion version)
+    {
+        var source = new ArrayBitmap<Rgba8UNorm>(
+            7,
+            5,
+            Enumerable.Range(0, 7 * 5)
+                .Select(value => new Rgba8UNorm((byte)value, (byte)(value * 2), (byte)(255 - value)))
+                .ToArray());
+
+        var ktx = KtxCodec.Encode(source, new KtxEncodingOptions
+        {
+            Version = version,
+            TextureFormat = TextureFormats.Bc1Rgba,
+            GenerateMipmaps = true
+        });
+        var read = KtxCodec.Read(ktx);
+
+        Assert.Equal(TextureFormats.Bc1Rgba, read.Format);
+        Assert.Equal(3, read.MipLevelCount);
+        Assert.Equal(new[] { 7, 3, 1 }, read.MipLevels.Select(level => level.Width));
+        Assert.Equal(new[] { 5, 2, 1 }, read.MipLevels.Select(level => level.Height));
+        Assert.Equal(new[] { 32, 8, 8 }, read.MipLevels.Select(level => level.Payload.Length));
     }
 
     [Fact]

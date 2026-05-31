@@ -126,11 +126,70 @@ public sealed class DdsCodecTests
     }
 
     [Fact]
-    public void ReadMipMapChainThrows()
+    public void ReadMipMapChainReadsAllLevels()
     {
-        var dds = CreateDx10Header(DdsDxgiFormat.R8G8B8A8UNorm, width: 1, height: 1, mipMapCount: 2);
+        var dds = CreateDx10Header(DdsDxgiFormat.R8G8B8A8UNorm, width: 2, height: 2, mipMapCount: 2);
+        Array.Resize(ref dds, 148 + 16 + 4);
+        dds[148] = 1;
+        dds[148 + 16] = 2;
 
-        Assert.Throws<NotSupportedException>(() => DdsCodec.Read(dds));
+        var texture = DdsCodec.Read(dds);
+
+        Assert.Equal(2, texture.MipLevelCount);
+        Assert.Equal(2, texture.MipLevels[0].Width);
+        Assert.Equal(2, texture.MipLevels[0].Height);
+        Assert.Equal(16, texture.MipLevels[0].Payload.Length);
+        Assert.Equal(1, texture.MipLevels[1].Width);
+        Assert.Equal(1, texture.MipLevels[1].Height);
+        Assert.Equal(4, texture.MipLevels[1].Payload.Length);
+        Assert.Equal(1, texture.MipLevels[0].Payload[0]);
+        Assert.Equal(2, texture.MipLevels[1].Payload[0]);
+    }
+
+    [Fact]
+    public void WriteMipMapChainWritesMipHeaderAndPayloads()
+    {
+        var texture = new DdsTexture(
+            TextureFormats.Rgba8UNorm,
+            [
+                new TextureMipLevel(2, 2, Enumerable.Repeat((byte)1, 16).ToArray()),
+                new TextureMipLevel(1, 1, Enumerable.Repeat((byte)2, 4).ToArray())
+            ]);
+
+        var dds = DdsCodec.Write(texture);
+        var read = DdsCodec.Read(dds);
+
+        Assert.Equal(2u, BinaryPrimitives.ReadUInt32LittleEndian(dds.AsSpan(28, 4)));
+        Assert.Equal(0x00401008u, BinaryPrimitives.ReadUInt32LittleEndian(dds.AsSpan(108, 4)));
+        Assert.Equal(148 + 16 + 4, dds.Length);
+        Assert.Equal(2, read.MipLevelCount);
+        Assert.Equal(texture.MipLevels[0].Payload, read.MipLevels[0].Payload);
+        Assert.Equal(texture.MipLevels[1].Payload, read.MipLevels[1].Payload);
+    }
+
+    [Fact]
+    public void EncodeWithGenerateMipmapsWritesReadableCompressedMipChain()
+    {
+        var source = new ArrayBitmap<Rgba8UNorm>(
+            7,
+            5,
+            Enumerable.Range(0, 7 * 5)
+                .Select(value => new Rgba8UNorm((byte)value, (byte)(value * 2), (byte)(255 - value)))
+                .ToArray());
+
+        var dds = DdsCodec.Encode(source, new DdsEncodingOptions
+        {
+            TextureFormat = TextureFormats.Bc1Rgba,
+            GenerateMipmaps = true
+        });
+        var read = DdsCodec.Read(dds);
+
+        Assert.Equal(3u, BinaryPrimitives.ReadUInt32LittleEndian(dds.AsSpan(28, 4)));
+        Assert.Equal(TextureFormats.Bc1Rgba, read.Format);
+        Assert.Equal(3, read.MipLevelCount);
+        Assert.Equal(new[] { 7, 3, 1 }, read.MipLevels.Select(level => level.Width));
+        Assert.Equal(new[] { 5, 2, 1 }, read.MipLevels.Select(level => level.Height));
+        Assert.Equal(new[] { 32, 8, 8 }, read.MipLevels.Select(level => level.Payload.Length));
     }
 
     [Fact]

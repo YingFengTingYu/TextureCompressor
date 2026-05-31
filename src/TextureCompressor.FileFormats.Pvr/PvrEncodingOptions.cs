@@ -6,6 +6,8 @@ public sealed class PvrEncodingOptions
 {
     public TextureFormat? TextureFormat { get; init; }
 
+    public bool GenerateMipmaps { get; init; }
+
     public PvrPixelFormat? PvrPixelFormat { get; init; }
 
     public PvrLegacyPixelType? PvrLegacyPixelType { get; init; }

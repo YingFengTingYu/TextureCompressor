@@ -361,11 +361,48 @@ public sealed class PvrCodecTests
     }
 
     [Fact]
-    public void ReadMipMapChainThrows()
+    public void WriteMipMapChainWritesReadablePvr()
     {
-        var pvr = CreateHeader(pixelFormat: 0x0808080861626772, colourSpace: 0, channelType: 0, width: 2, height: 2, mipMapCount: 2);
+        var texture = new PvrTexture(
+            TextureFormats.Rgba8UNorm,
+            [
+                new TextureMipLevel(2, 2, Enumerable.Repeat((byte)1, 16).ToArray()),
+                new TextureMipLevel(1, 1, Enumerable.Repeat((byte)2, 4).ToArray())
+            ]);
 
-        Assert.Throws<NotSupportedException>(() => PvrCodec.Read(pvr));
+        var pvr = PvrCodec.Write(texture);
+        var read = PvrCodec.Read(pvr);
+
+        Assert.Equal(2u, BinaryPrimitives.ReadUInt32LittleEndian(pvr.AsSpan(44, 4)));
+        Assert.Equal(52 + 16 + 4, pvr.Length);
+        Assert.Equal(2, read.MipLevelCount);
+        Assert.Equal(texture.MipLevels[0].Payload, read.MipLevels[0].Payload);
+        Assert.Equal(texture.MipLevels[1].Payload, read.MipLevels[1].Payload);
+    }
+
+    [Fact]
+    public void EncodeWithGenerateMipmapsWritesReadableCompressedMipChain()
+    {
+        var source = new ArrayBitmap<Rgba8UNorm>(
+            7,
+            5,
+            Enumerable.Range(0, 7 * 5)
+                .Select(value => new Rgba8UNorm((byte)value, (byte)(value * 2), (byte)(255 - value)))
+                .ToArray());
+
+        var pvr = PvrCodec.Encode(source, new PvrEncodingOptions
+        {
+            TextureFormat = TextureFormats.Bc1Rgba,
+            GenerateMipmaps = true
+        });
+        var read = PvrCodec.Read(pvr);
+
+        Assert.Equal(3u, BinaryPrimitives.ReadUInt32LittleEndian(pvr.AsSpan(44, 4)));
+        Assert.Equal(TextureFormats.Bc1Rgba, read.Format);
+        Assert.Equal(3, read.MipLevelCount);
+        Assert.Equal(new[] { 7, 3, 1 }, read.MipLevels.Select(level => level.Width));
+        Assert.Equal(new[] { 5, 2, 1 }, read.MipLevels.Select(level => level.Height));
+        Assert.Equal(new[] { 32, 8, 8 }, read.MipLevels.Select(level => level.Payload.Length));
     }
 
     [Fact]

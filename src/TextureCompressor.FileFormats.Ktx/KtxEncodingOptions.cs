@@ -8,6 +8,8 @@ public sealed class KtxEncodingOptions
 
     public TextureFormat? TextureFormat { get; set; }
 
+    public bool GenerateMipmaps { get; set; }
+
     public KtxGlFormat? GlInternalFormat { get; set; }
 
     public KtxVkFormat? VkFormat { get; set; }

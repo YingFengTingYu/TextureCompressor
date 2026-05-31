@@ -59,7 +59,9 @@ public static class PvrCodec
                 header.LegacyBlueMask,
                 header.LegacyAlphaMask);
         var coder = TextureCoderManager.Global.GetCoder(format);
-        var expectedPayloadByteCount = coder.GetEncodedByteCount(header.Width, header.Height);
+        var mipLevelCount = GetMipLevelCount(header);
+        ValidateMipLevelCount(header.Width, header.Height, mipLevelCount);
+        var expectedPayloadByteCount = GetMipLevelsByteCount(coder, header.Width, header.Height, mipLevelCount);
         var payloadByteCount = header.PayloadByteCount == 0 ? expectedPayloadByteCount : header.PayloadByteCount;
         if (payloadByteCount != expectedPayloadByteCount)
         {
@@ -67,10 +69,9 @@ public static class PvrCodec
                 $"PVR texture payload is {payloadByteCount} bytes, but '{format.Name}' expects {expectedPayloadByteCount} bytes for {header.Width}x{header.Height}.");
         }
 
-        var payload = new byte[payloadByteCount];
-        ReadExactly(stream, payload);
+        var mipLevels = ReadMipLevels(stream, coder, header.Width, header.Height, mipLevelCount);
 
-        return new PvrTexture(format, header.Width, header.Height, payload, metadata);
+        return new PvrTexture(format, mipLevels, metadata);
     }
 
     public static ArrayBitmap<Rgba8UNorm> Decode(string path)
@@ -207,9 +208,60 @@ public static class PvrCodec
         var selection = GetEncodingSelection(options, version);
         var format = selection.TextureFormat;
         var coder = TextureCoderManager.Global.GetCoder(format);
+        if (options?.GenerateMipmaps == true)
+        {
+            var encodedLevels = EncodeMipLevels(BitmapMipChain.Generate(bitmap), coder);
+            Write(new PvrTexture(format, encodedLevels), stream, options);
+            return;
+        }
+
         var payload = new byte[coder.GetEncodedByteCount(bitmap.Width, bitmap.Height)];
         coder.Encode(bitmap, payload);
         Write(new PvrTexture(format, bitmap.Width, bitmap.Height, payload), stream, options);
+    }
+
+    public static byte[] EncodeMipChain<TPixel>(IReadOnlyList<IBitmap<TPixel>> mipLevels)
+        where TPixel : unmanaged, IPixel<TPixel> =>
+        EncodeMipChain(mipLevels, options: null);
+
+    public static byte[] EncodeMipChain<TPixel>(IReadOnlyList<IBitmap<TPixel>> mipLevels, PvrEncodingOptions? options)
+        where TPixel : unmanaged, IPixel<TPixel>
+    {
+        using var stream = new MemoryStream();
+        EncodeMipChain(mipLevels, stream, options);
+        return stream.ToArray();
+    }
+
+    public static void EncodeMipChain<TPixel>(IReadOnlyList<IBitmap<TPixel>> mipLevels, string path)
+        where TPixel : unmanaged, IPixel<TPixel>
+    {
+        using var stream = File.Create(path);
+        EncodeMipChain(mipLevels, stream, options: null);
+    }
+
+    public static void EncodeMipChain<TPixel>(IReadOnlyList<IBitmap<TPixel>> mipLevels, string path, PvrEncodingOptions? options)
+        where TPixel : unmanaged, IPixel<TPixel>
+    {
+        using var stream = File.Create(path);
+        EncodeMipChain(mipLevels, stream, options);
+    }
+
+    public static void EncodeMipChain<TPixel>(IReadOnlyList<IBitmap<TPixel>> mipLevels, Stream stream)
+        where TPixel : unmanaged, IPixel<TPixel> =>
+        EncodeMipChain(mipLevels, stream, options: null);
+
+    public static void EncodeMipChain<TPixel>(IReadOnlyList<IBitmap<TPixel>> mipLevels, Stream stream, PvrEncodingOptions? options)
+        where TPixel : unmanaged, IPixel<TPixel>
+    {
+        ArgumentNullException.ThrowIfNull(stream);
+
+        var version = GetEncodingVersion(options);
+        ValidateEncodingVersion(version);
+        var selection = GetEncodingSelection(options, version);
+        var format = selection.TextureFormat;
+        var coder = TextureCoderManager.Global.GetCoder(format);
+        var encodedLevels = EncodeMipLevels(mipLevels, coder);
+        Write(new PvrTexture(format, encodedLevels), stream, options);
     }
 
     public static byte[] Write(PvrTexture texture)
@@ -252,13 +304,8 @@ public static class PvrCodec
         ValidateEncodingVersion(version);
 
         var coder = TextureCoderManager.Global.GetCoder(texture.Format);
-        var expectedByteCount = coder.GetEncodedByteCount(texture.Width, texture.Height);
-        if (texture.Payload.Length != expectedByteCount)
-        {
-            throw new ArgumentException(
-                $"PVR payload length is {texture.Payload.Length} bytes, but '{texture.Format.Name}' expects {expectedByteCount} bytes for {texture.Width}x{texture.Height}.",
-                nameof(texture));
-        }
+        ValidateTexturePayloads(texture, coder);
+        var expectedByteCount = GetMipLevelsByteCount(coder, texture.Width, texture.Height, texture.MipLevelCount);
 
         if (version == 3)
         {
@@ -275,7 +322,7 @@ public static class PvrCodec
                 Depth: 1,
                 SurfaceCount: 1,
                 FaceCount: 1,
-                MipMapCount: 1,
+                MipMapCount: texture.MipLevelCount,
                 metadataSize,
                 PayloadByteCount: 0,
                 LegacyPixelType: 0,
@@ -289,6 +336,11 @@ public static class PvrCodec
         }
         else
         {
+            if (texture.MipLevelCount != 1)
+            {
+                throw new NotSupportedException("PVR v1/v2 mip-map chains are not supported.");
+            }
+
             if (texture.Metadata.Count != 0)
             {
                 throw new NotSupportedException("PVR v1/v2 does not support metadata.");
@@ -297,7 +349,10 @@ public static class PvrCodec
             WriteLegacyHeader(stream, texture, version, checked((uint)expectedByteCount), options);
         }
 
-        stream.Write(texture.Payload);
+        foreach (var level in texture.MipLevels)
+        {
+            stream.Write(level.Payload);
+        }
     }
 
     private static PvrHeader ReadHeader(Stream stream)
@@ -477,9 +532,112 @@ public static class PvrCodec
             throw new NotSupportedException("PVR cube maps are not supported.");
         }
 
-        if (header.MipMapCount != 1)
+    }
+
+    private static int GetMipLevelCount(PvrHeader header)
+    {
+        if (header.MipMapCount <= 0)
         {
-            throw new NotSupportedException("PVR mip-map chains are not supported.");
+            throw new InvalidDataException("PVR mip-map count is outside the supported range.");
+        }
+
+        return header.MipMapCount;
+    }
+
+    private static void ValidateMipLevelCount(int width, int height, int mipLevelCount)
+    {
+        if (mipLevelCount > TextureMipLevel.GetFullMipLevelCount(width, height))
+        {
+            throw new InvalidDataException("PVR mip-map count exceeds the full mip chain for the base dimensions.");
+        }
+    }
+
+    private static int GetMipLevelsByteCount(ITextureCoder coder, int baseWidth, int baseHeight, int mipLevelCount)
+    {
+        var byteCount = 0;
+        for (var i = 0; i < mipLevelCount; i++)
+        {
+            var width = TextureMipLevel.GetDimension(baseWidth, i);
+            var height = TextureMipLevel.GetDimension(baseHeight, i);
+            byteCount = checked(byteCount + coder.GetEncodedByteCount(width, height));
+        }
+
+        return byteCount;
+    }
+
+    private static TextureMipLevel[] ReadMipLevels(
+        Stream stream,
+        ITextureCoder coder,
+        int baseWidth,
+        int baseHeight,
+        int mipLevelCount)
+    {
+        var levels = new TextureMipLevel[mipLevelCount];
+        for (var i = 0; i < mipLevelCount; i++)
+        {
+            var width = TextureMipLevel.GetDimension(baseWidth, i);
+            var height = TextureMipLevel.GetDimension(baseHeight, i);
+            var payload = new byte[coder.GetEncodedByteCount(width, height)];
+            ReadExactly(stream, payload);
+            levels[i] = new TextureMipLevel(width, height, payload);
+        }
+
+        return levels;
+    }
+
+    private static TextureMipLevel[] EncodeMipLevels<TPixel>(IReadOnlyList<IBitmap<TPixel>> mipLevels, ITextureCoder coder)
+        where TPixel : unmanaged, IPixel<TPixel>
+    {
+        ArgumentNullException.ThrowIfNull(mipLevels);
+        if (mipLevels.Count == 0)
+        {
+            throw new ArgumentException("PVR texture must contain at least one mip level.", nameof(mipLevels));
+        }
+
+        var baseLevel = mipLevels[0] ?? throw new ArgumentException("PVR mip level cannot be null.", nameof(mipLevels));
+        if (mipLevels.Count > TextureMipLevel.GetFullMipLevelCount(baseLevel.Width, baseLevel.Height))
+        {
+            throw new ArgumentException("PVR mip level count exceeds the full mip chain for the base dimensions.", nameof(mipLevels));
+        }
+
+        var encodedLevels = new TextureMipLevel[mipLevels.Count];
+        for (var i = 0; i < mipLevels.Count; i++)
+        {
+            var bitmap = mipLevels[i] ?? throw new ArgumentException("PVR mip level cannot be null.", nameof(mipLevels));
+            var expectedWidth = TextureMipLevel.GetDimension(baseLevel.Width, i);
+            var expectedHeight = TextureMipLevel.GetDimension(baseLevel.Height, i);
+            if (bitmap.Width != expectedWidth || bitmap.Height != expectedHeight)
+            {
+                throw new ArgumentException(
+                    $"PVR mip level {i} is {bitmap.Width}x{bitmap.Height}, but {expectedWidth}x{expectedHeight} was expected.",
+                    nameof(mipLevels));
+            }
+
+            var payload = new byte[coder.GetEncodedByteCount(bitmap.Width, bitmap.Height)];
+            coder.Encode(bitmap.AsView(), payload);
+            encodedLevels[i] = new TextureMipLevel(bitmap.Width, bitmap.Height, payload);
+        }
+
+        return encodedLevels;
+    }
+
+    private static void ValidateTexturePayloads(PvrTexture texture, ITextureCoder coder)
+    {
+        if (texture.MipLevelCount > TextureMipLevel.GetFullMipLevelCount(texture.Width, texture.Height))
+        {
+            throw new ArgumentException("PVR mip level count exceeds the full mip chain for the base dimensions.", nameof(texture));
+        }
+
+        for (var i = 0; i < texture.MipLevels.Count; i++)
+        {
+            var level = texture.MipLevels[i];
+            var expectedByteCount = coder.GetEncodedByteCount(level.Width, level.Height);
+            if (level.Payload.Length != expectedByteCount)
+            {
+                throw new ArgumentException(
+                    $"PVR mip level {i} payload length is {level.Payload.Length} bytes, but '{texture.Format.Name}' expects {expectedByteCount} bytes for {level.Width}x{level.Height}.",
+                    nameof(texture));
+            }
         }
     }
 

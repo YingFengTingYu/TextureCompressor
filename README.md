@@ -417,7 +417,7 @@ using var registration = TextureCoderManager.Global.RegisterBCnEncoderCoder(Text
 dotnet run --project src/TextureCompressor.Cli -- --help
 dotnet run --project src/TextureCompressor.Cli -- formats bc7 --compressed
 dotnet run --project src/TextureCompressor.Cli -- formats rgba --uncompressed
-dotnet run --project src/TextureCompressor.Cli -- convert input.png output.dds --format Bc7UNorm --metrics
+dotnet run --project src/TextureCompressor.Cli -- convert input.png output.dds --format Bc7UNorm --mipmaps Generate --metrics
 dotnet run --project src/TextureCompressor.Cli -- convert input.png output.ktx2 --format Bc7Srgb --ktx-version 2 --quality High
 dotnet run --project src/TextureCompressor.Cli -- quality source.png output.dds
 ```
@@ -428,7 +428,7 @@ Common commands:
 - `convert <input> <output>`: convert between image and texture containers. The output container is inferred from the extension unless `--container` is passed explicitly.
 - `quality <expected> <actual>`: decode two image/texture files and print MSE, RMSE, and PSNR; add `--ignore-alpha` to ignore alpha.
 
-Image containers support PNG, JPEG, and GIF. `convert` provides `--png-color-space`, `--jpg-color-space`, and `--gif-color-space` conversions between Linear and Srgb. JPEG output quality is controlled with `--jpeg-quality`; S3TC, FXT1, ETC/EAC, ASTC, ATC, RGTC/LATC, BPTC, and PVRTC built-in texture encoding quality can be selected with `--quality`.
+Image containers support PNG, JPEG, and GIF. `convert` provides `--png-color-space`, `--jpg-color-space`, and `--gif-color-space` conversions between Linear and Srgb. JPEG output quality is controlled with `--jpeg-quality`; S3TC, FXT1, ETC/EAC, ASTC, ATC, RGTC/LATC, BPTC, and PVRTC built-in texture encoding quality can be selected with `--quality`. DDS, KTX, and PVR outputs can generate full mip-map chains with `--mipmaps Generate`.
 
 ## Common Workflows
 
@@ -469,8 +469,8 @@ DdsCodec.Write(texture, "texture.dds");
 
 ## Current Limitations
 
-- File-format helpers currently focus on single 2D textures.
-- DDS/KTX/PVR/ASTC mip-map chains, texture arrays, cube maps, and 3D textures are mostly not supported yet.
+- File-format helpers currently focus on 2D textures.
+- DDS, KTX v1/v2, and PVR v3 support explicit mip-map chains. ASTC mip-map chains, legacy PVR v1/v2 mip-map chains, texture arrays, cube maps, and 3D textures are not supported yet.
 - PNG supports common static PNG files. Animated PNG is not supported.
 - JPEG supports baseline JPEG. Progressive JPEG is not supported.
 - GIF reads the first image frame. Animation frame sequences are not emitted as animation.

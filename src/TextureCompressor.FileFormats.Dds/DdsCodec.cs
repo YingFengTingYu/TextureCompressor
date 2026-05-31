@@ -91,11 +91,12 @@ public static class DdsCodec
         }
 
         var coder = TextureCoderManager.Global.GetCoder(format);
-        var payloadByteCount = GetPayloadByteCount(header, format, coder);
-        var payload = new byte[payloadByteCount];
-        ReadExactly(stream, payload);
+        var mipLevelCount = GetMipLevelCount(header);
+        ValidateBasePitch(header, format);
+        ValidateMipLevelCount(header.Width, header.Height, mipLevelCount);
+        var mipLevels = ReadMipLevels(stream, format, coder, header.Width, header.Height, mipLevelCount);
 
-        return new DdsTexture(format, header.Width, header.Height, payload, headerKind, dxgiFormat, legacyPixelFormat, alphaMode);
+        return new DdsTexture(format, mipLevels, headerKind, dxgiFormat, legacyPixelFormat, alphaMode);
     }
 
     public static ArrayBitmap<Rgba8UNorm> Decode(string path)
@@ -231,9 +232,59 @@ public static class DdsCodec
         ValidateEncodingHeaderKind(headerKind);
         var format = GetEncodingTextureFormat(options, headerKind);
         var coder = TextureCoderManager.Global.GetCoder(format);
+        if (options?.GenerateMipmaps == true)
+        {
+            var encodedLevels = EncodeMipLevels(BitmapMipChain.Generate(bitmap), coder);
+            Write(new DdsTexture(format, encodedLevels), stream, options);
+            return;
+        }
+
         var payload = new byte[coder.GetEncodedByteCount(bitmap.Width, bitmap.Height)];
         coder.Encode(bitmap, payload);
         Write(new DdsTexture(format, bitmap.Width, bitmap.Height, payload), stream, options);
+    }
+
+    public static byte[] EncodeMipChain<TPixel>(IReadOnlyList<IBitmap<TPixel>> mipLevels)
+        where TPixel : unmanaged, IPixel<TPixel> =>
+        EncodeMipChain(mipLevels, options: null);
+
+    public static byte[] EncodeMipChain<TPixel>(IReadOnlyList<IBitmap<TPixel>> mipLevels, DdsEncodingOptions? options)
+        where TPixel : unmanaged, IPixel<TPixel>
+    {
+        using var stream = new MemoryStream();
+        EncodeMipChain(mipLevels, stream, options);
+        return stream.ToArray();
+    }
+
+    public static void EncodeMipChain<TPixel>(IReadOnlyList<IBitmap<TPixel>> mipLevels, string path)
+        where TPixel : unmanaged, IPixel<TPixel>
+    {
+        using var stream = File.Create(path);
+        EncodeMipChain(mipLevels, stream, options: null);
+    }
+
+    public static void EncodeMipChain<TPixel>(IReadOnlyList<IBitmap<TPixel>> mipLevels, string path, DdsEncodingOptions? options)
+        where TPixel : unmanaged, IPixel<TPixel>
+    {
+        using var stream = File.Create(path);
+        EncodeMipChain(mipLevels, stream, options);
+    }
+
+    public static void EncodeMipChain<TPixel>(IReadOnlyList<IBitmap<TPixel>> mipLevels, Stream stream)
+        where TPixel : unmanaged, IPixel<TPixel> =>
+        EncodeMipChain(mipLevels, stream, options: null);
+
+    public static void EncodeMipChain<TPixel>(IReadOnlyList<IBitmap<TPixel>> mipLevels, Stream stream, DdsEncodingOptions? options)
+        where TPixel : unmanaged, IPixel<TPixel>
+    {
+        ArgumentNullException.ThrowIfNull(stream);
+
+        var headerKind = GetEncodingHeaderKind(options);
+        ValidateEncodingHeaderKind(headerKind);
+        var format = GetEncodingTextureFormat(options, headerKind);
+        var coder = TextureCoderManager.Global.GetCoder(format);
+        var encodedLevels = EncodeMipLevels(mipLevels, coder);
+        Write(new DdsTexture(format, encodedLevels), stream, options);
     }
 
     public static byte[] Write(DdsTexture texture)
@@ -276,27 +327,24 @@ public static class DdsCodec
         ValidateEncodingHeaderKind(headerKind);
 
         var coder = TextureCoderManager.Global.GetCoder(texture.Format);
-        var expectedByteCount = coder.GetEncodedByteCount(texture.Width, texture.Height);
-        if (texture.Payload.Length != expectedByteCount)
-        {
-            throw new ArgumentException(
-                $"DDS payload length is {texture.Payload.Length} bytes, but '{texture.Format.Name}' expects {expectedByteCount} bytes for {texture.Width}x{texture.Height}.",
-                nameof(texture));
-        }
+        ValidateTexturePayloads(texture, coder);
 
         if (headerKind == DdsHeaderKind.Dxt10)
         {
             var dxgiDescriptor = GetDxgiDescriptor(texture.Format, options);
-            WriteHeader(stream, CreateHeader(texture.Width, texture.Height, texture.Format, coder, CreateDxt10PixelFormat()));
+            WriteHeader(stream, CreateHeader(texture.Width, texture.Height, texture.Format, coder, CreateDxt10PixelFormat(), texture.MipLevelCount));
             WriteDxt10Header(stream, dxgiDescriptor.DxgiFormat, GetEncodingAlphaMode(options));
         }
         else
         {
             var legacyDescriptor = GetLegacyDescriptor(texture.Format, options);
-            WriteHeader(stream, CreateHeader(texture.Width, texture.Height, texture.Format, coder, legacyDescriptor.PixelFormat));
+            WriteHeader(stream, CreateHeader(texture.Width, texture.Height, texture.Format, coder, legacyDescriptor.PixelFormat, texture.MipLevelCount));
         }
 
-        stream.Write(texture.Payload);
+        foreach (var level in texture.MipLevels)
+        {
+            stream.Write(level.Payload);
+        }
     }
 
     private static DdsHeader ReadHeader(Stream stream)
@@ -400,14 +448,22 @@ public static class DdsCodec
         stream.Write(buffer);
     }
 
-    private static DdsHeader CreateHeader(int width, int height, TextureFormat format, ITextureCoder coder, DdsPixelFormat pixelFormat)
+    private static DdsHeader CreateHeader(
+        int width,
+        int height,
+        TextureFormat format,
+        ITextureCoder coder,
+        DdsPixelFormat pixelFormat,
+        int mipLevelCount)
     {
         var isCompressed = format.Kind == TextureFormatKind.BlockCompressed;
         var flags = HeaderFlagCaps | HeaderFlagHeight | HeaderFlagWidth | HeaderFlagPixelFormat
-            | (isCompressed ? HeaderFlagLinearSize : HeaderFlagPitch);
+            | (isCompressed ? HeaderFlagLinearSize : HeaderFlagPitch)
+            | (mipLevelCount > 1 ? HeaderFlagMipMapCount : 0);
         var pitchOrLinearSize = isCompressed
             ? checked((uint)coder.GetEncodedByteCount(width, height))
             : checked((uint)format.GetRowByteCount(width));
+        var caps = CapsTexture | (mipLevelCount > 1 ? CapsComplex | CapsMipMap : 0);
 
         return new DdsHeader(
             flags,
@@ -415,9 +471,9 @@ public static class DdsCodec
             height,
             pitchOrLinearSize,
             Depth: 0,
-            MipMapCount: 0,
+            MipMapCount: mipLevelCount > 1 ? checked((uint)mipLevelCount) : 0,
             pixelFormat,
-            CapsTexture,
+            caps,
             Caps2: 0,
             Caps3: 0,
             Caps4: 0);
@@ -434,12 +490,6 @@ public static class DdsCodec
         if ((header.Caps & CapsTexture) == 0)
         {
             throw new InvalidDataException("DDS header is missing the texture capability.");
-        }
-
-        if (((header.Flags & HeaderFlagMipMapCount) != 0 || (header.Caps & CapsMipMap) != 0)
-            && header.MipMapCount > 1)
-        {
-            throw new NotSupportedException("DDS mip-map chains are not supported.");
         }
 
         if ((header.Caps2 & (Caps2CubeMap | Caps2CubeMapFaces)) != 0)
@@ -482,7 +532,51 @@ public static class DdsCodec
         }
     }
 
-    private static int GetPayloadByteCount(DdsHeader header, TextureFormat format, ITextureCoder coder)
+    private static int GetMipLevelCount(DdsHeader header)
+    {
+        if (header.MipMapCount == 0)
+        {
+            return 1;
+        }
+
+        if (header.MipMapCount > int.MaxValue)
+        {
+            throw new InvalidDataException("DDS mip-map count is outside the supported range.");
+        }
+
+        return (int)header.MipMapCount;
+    }
+
+    private static void ValidateMipLevelCount(int width, int height, int mipLevelCount)
+    {
+        if (mipLevelCount > TextureMipLevel.GetFullMipLevelCount(width, height))
+        {
+            throw new InvalidDataException("DDS mip-map count exceeds the full mip chain for the base dimensions.");
+        }
+    }
+
+    private static TextureMipLevel[] ReadMipLevels(
+        Stream stream,
+        TextureFormat format,
+        ITextureCoder coder,
+        int baseWidth,
+        int baseHeight,
+        int mipLevelCount)
+    {
+        var levels = new TextureMipLevel[mipLevelCount];
+        for (var i = 0; i < mipLevelCount; i++)
+        {
+            var width = TextureMipLevel.GetDimension(baseWidth, i);
+            var height = TextureMipLevel.GetDimension(baseHeight, i);
+            var payload = new byte[coder.GetEncodedByteCount(width, height)];
+            ReadExactly(stream, payload);
+            levels[i] = new TextureMipLevel(width, height, payload);
+        }
+
+        return levels;
+    }
+
+    private static void ValidateBasePitch(DdsHeader header, TextureFormat format)
     {
         if (format.Kind == TextureFormatKind.Uncompressed
             && (header.Flags & HeaderFlagPitch) != 0
@@ -495,8 +589,63 @@ public static class DdsCodec
                     $"DDS row pitch {header.PitchOrLinearSize} is not supported for '{format.Name}'; expected {defaultPitch}.");
             }
         }
+    }
 
-        return coder.GetEncodedByteCount(header.Width, header.Height);
+    private static TextureMipLevel[] EncodeMipLevels<TPixel>(IReadOnlyList<IBitmap<TPixel>> mipLevels, ITextureCoder coder)
+        where TPixel : unmanaged, IPixel<TPixel>
+    {
+        ArgumentNullException.ThrowIfNull(mipLevels);
+        if (mipLevels.Count == 0)
+        {
+            throw new ArgumentException("DDS texture must contain at least one mip level.", nameof(mipLevels));
+        }
+
+        var baseLevel = mipLevels[0] ?? throw new ArgumentException("DDS mip level cannot be null.", nameof(mipLevels));
+        if (mipLevels.Count > TextureMipLevel.GetFullMipLevelCount(baseLevel.Width, baseLevel.Height))
+        {
+            throw new ArgumentException("DDS mip level count exceeds the full mip chain for the base dimensions.", nameof(mipLevels));
+        }
+
+        var encodedLevels = new TextureMipLevel[mipLevels.Count];
+        for (var i = 0; i < mipLevels.Count; i++)
+        {
+            var bitmap = mipLevels[i] ?? throw new ArgumentException("DDS mip level cannot be null.", nameof(mipLevels));
+            var expectedWidth = TextureMipLevel.GetDimension(baseLevel.Width, i);
+            var expectedHeight = TextureMipLevel.GetDimension(baseLevel.Height, i);
+            if (bitmap.Width != expectedWidth || bitmap.Height != expectedHeight)
+            {
+                throw new ArgumentException(
+                    $"DDS mip level {i} is {bitmap.Width}x{bitmap.Height}, but {expectedWidth}x{expectedHeight} was expected.",
+                    nameof(mipLevels));
+            }
+
+            var payload = new byte[coder.GetEncodedByteCount(bitmap.Width, bitmap.Height)];
+            coder.Encode(bitmap.AsView(), payload);
+            encodedLevels[i] = new TextureMipLevel(bitmap.Width, bitmap.Height, payload);
+        }
+
+        return encodedLevels;
+    }
+
+    private static void ValidateTexturePayloads(DdsTexture texture, ITextureCoder coder)
+    {
+        if (texture.MipLevelCount > TextureMipLevel.GetFullMipLevelCount(texture.Width, texture.Height))
+        {
+            throw new ArgumentException("DDS mip level count exceeds the full mip chain for the base dimensions.", nameof(texture));
+        }
+
+        for (var i = 0; i < texture.MipLevels.Count; i++)
+        {
+            var level = texture.MipLevels[i];
+            var expectedByteCount = coder.GetEncodedByteCount(level.Width, level.Height);
+            if (level.Payload.Length != expectedByteCount)
+            {
+                throw new ArgumentException(
+                    $"DDS mip level {i} payload length is {level.Payload.Length} bytes, but '{texture.Format.Name}' expects {expectedByteCount} bytes for {level.Width}x{level.Height}.",
+                    nameof(texture));
+            }
+        }
+
     }
 
     private static bool IsDxt10Header(DdsPixelFormat pixelFormat) =>

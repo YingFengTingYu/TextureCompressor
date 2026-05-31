@@ -415,7 +415,7 @@ using var registration = TextureCoderManager.Global.RegisterBCnEncoderCoder(Text
 dotnet run --project src/TextureCompressor.Cli -- --help
 dotnet run --project src/TextureCompressor.Cli -- formats bc7 --compressed
 dotnet run --project src/TextureCompressor.Cli -- formats rgba --uncompressed
-dotnet run --project src/TextureCompressor.Cli -- convert input.png output.dds --format Bc7UNorm --metrics
+dotnet run --project src/TextureCompressor.Cli -- convert input.png output.dds --format Bc7UNorm --mipmaps Generate --metrics
 dotnet run --project src/TextureCompressor.Cli -- convert input.png output.ktx2 --format Bc7Srgb --ktx-version 2 --quality High
 dotnet run --project src/TextureCompressor.Cli -- quality source.png output.dds
 ```
@@ -426,7 +426,7 @@ dotnet run --project src/TextureCompressor.Cli -- quality source.png output.dds
 - `convert <input> <output>`：在图片和纹理容器之间转换。输出容器默认由扩展名推断，也可以用 `--container` 显式指定。
 - `quality <expected> <actual>`：解码两张图片/纹理并输出 MSE、RMSE、PSNR；可加 `--ignore-alpha` 忽略 Alpha。
 
-图片容器支持 PNG、JPEG、GIF。`convert` 提供 `--png-color-space`、`--jpg-color-space`、`--gif-color-space` 在 Linear 与 Srgb 之间转换；JPEG 输出可用 `--jpeg-quality` 设置质量；内置 S3TC、FXT1、ETC/EAC、ASTC、ATC、RGTC/LATC、BPTC、PVRTC 纹理编码质量可用统一的 `--quality` 选择。
+图片容器支持 PNG、JPEG、GIF。`convert` 提供 `--png-color-space`、`--jpg-color-space`、`--gif-color-space` 在 Linear 与 Srgb 之间转换；JPEG 输出可用 `--jpeg-quality` 设置质量；内置 S3TC、FXT1、ETC/EAC、ASTC、ATC、RGTC/LATC、BPTC、PVRTC 纹理编码质量可用统一的 `--quality` 选择。DDS、KTX、PVR 输出可用 `--mipmaps Generate` 生成完整 mip-map chain。
 
 ## 常见工作流
 
@@ -467,8 +467,8 @@ DdsCodec.Write(texture, "texture.dds");
 
 ## 当前限制
 
-- 文件格式读写目前主要面向单张 2D texture。
-- DDS/KTX/PVR/ASTC 的 mip-map chain、texture array、cube map、3D texture 等高级形态多数尚未支持。
+- 文件格式读写目前主要面向 2D texture。
+- DDS、KTX v1/v2、PVR v3 支持显式 mip-map chain。ASTC mip-map chain、旧版 PVR v1/v2 mip-map chain、texture array、cube map、3D texture 暂未支持。
 - PNG 支持常见静态 PNG；Animated PNG 不支持。
 - JPEG 支持 baseline JPEG；progressive JPEG 不支持。
 - GIF 读取首个图像帧；动画帧序列不作为动画输出。
