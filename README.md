@@ -14,7 +14,7 @@ TextureCompressor is a .NET texture codec library for converting bitmap data to 
 - The core `TextureCompressor` package and built-in coders are fully managed and do not require external native libraries or texture-compression tools.
 - File-format packages: PNG, JPEG, GIF, DDS, KTX, PVR, and ASTC read/write helpers.
 - Quality analysis: whole-image and per-channel MSE, RMSE, and PSNR.
-- Development CLI: format search, container conversion, and quality metric output.
+- Development CLI: format search, container metadata inspection, conversion, and quality metric output.
 - Source generator: automatically generates `TextureFormatCatalog` for format enumeration and name lookup.
 - Optional external encoder adapters: BCnEncoder, AstcEncoderCSharp, Basis Universal, DirectXTex, and PVRTexLib.
 
@@ -411,12 +411,13 @@ using var registration = TextureCoderManager.Global.RegisterBCnEncoderCoder(Text
 
 ## CLI Tool
 
-`TextureCompressor.Cli` is a development command-line tool for format search, container conversion, and quality metric output:
+`TextureCompressor.Cli` is a development command-line tool for format search, container metadata inspection, conversion, and quality metric output:
 
 ```bash
 dotnet run --project src/TextureCompressor.Cli -- --help
 dotnet run --project src/TextureCompressor.Cli -- formats bc7 --compressed
 dotnet run --project src/TextureCompressor.Cli -- formats rgba --uncompressed
+dotnet run --project src/TextureCompressor.Cli -- info input.ktx2
 dotnet run --project src/TextureCompressor.Cli -- convert input.png output.dds --format Bc7UNorm --mipmaps Generate --metrics
 dotnet run --project src/TextureCompressor.Cli -- convert input.png output.ktx2 --format Bc7Srgb --ktx-version 2 --quality High
 dotnet run --project src/TextureCompressor.Cli -- quality source.png output.dds
@@ -425,6 +426,7 @@ dotnet run --project src/TextureCompressor.Cli -- quality source.png output.dds
 Common commands:
 
 - `formats [query]`: list or search texture formats accepted by `--format`; add `--compressed` or `--uncompressed` to filter.
+- `info <input>` / `inspect <input>`: print container metadata such as size, texture format, mip levels, payload size, and container-specific header fields.
 - `convert <input> <output>`: convert between image and texture containers. The output container is inferred from the extension unless `--container` is passed explicitly.
 - `quality <expected> <actual>`: decode two image/texture files and print MSE, RMSE, and PSNR; add `--ignore-alpha` to ignore alpha.
 

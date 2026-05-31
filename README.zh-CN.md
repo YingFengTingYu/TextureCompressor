@@ -12,7 +12,7 @@ TextureCompressor 是一个面向 .NET 的纹理编解码库，用于把普通�
 - 核心 `TextureCompressor` 包和内置 coder 为纯托管实现，不依赖外部原生库或压缩工具。
 - 文件格式包：PNG、JPEG、GIF、DDS、KTX、PVR、ASTC 的读取、写入和位图转换。
 - 质量分析：对两张位图计算整体和逐通道 MSE、RMSE、PSNR。
-- 开发 CLI：可进行格式查询、容器转换和质量指标输出。
+- 开发 CLI：可进行格式查询、容器元数据查看、容器转换和质量指标输出。
 - Source generator：自动生成 `TextureFormatCatalog`，用于按字段名或格式名查询纹理格式。
 - 可选外部编码器适配：BCnEncoder、AstcEncoderCSharp、Basis Universal、DirectXTex、PVRTexLib。
 
@@ -409,12 +409,13 @@ using var registration = TextureCoderManager.Global.RegisterBCnEncoderCoder(Text
 
 ## CLI 工具
 
-`TextureCompressor.Cli` 是开发用命令行工具，可以查询格式、转换容器并输出质量指标：
+`TextureCompressor.Cli` 是开发用命令行工具，可以查询格式、查看容器元数据、转换容器并输出质量指标：
 
 ```bash
 dotnet run --project src/TextureCompressor.Cli -- --help
 dotnet run --project src/TextureCompressor.Cli -- formats bc7 --compressed
 dotnet run --project src/TextureCompressor.Cli -- formats rgba --uncompressed
+dotnet run --project src/TextureCompressor.Cli -- info input.ktx2
 dotnet run --project src/TextureCompressor.Cli -- convert input.png output.dds --format Bc7UNorm --mipmaps Generate --metrics
 dotnet run --project src/TextureCompressor.Cli -- convert input.png output.ktx2 --format Bc7Srgb --ktx-version 2 --quality High
 dotnet run --project src/TextureCompressor.Cli -- quality source.png output.dds
@@ -423,6 +424,7 @@ dotnet run --project src/TextureCompressor.Cli -- quality source.png output.dds
 常用命令：
 
 - `formats [query]`：列出或搜索 `--format` 可用的纹理格式；可加 `--compressed` 或 `--uncompressed` 过滤。
+- `info <input>` / `inspect <input>`：输出容器元数据，例如尺寸、纹理格式、mip 级数、payload 大小和容器特有 header 字段。
 - `convert <input> <output>`：在图片和纹理容器之间转换。输出容器默认由扩展名推断，也可以用 `--container` 显式指定。
 - `quality <expected> <actual>`：解码两张图片/纹理并输出 MSE、RMSE、PSNR；可加 `--ignore-alpha` 忽略 Alpha。
 

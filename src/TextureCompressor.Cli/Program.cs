@@ -1,4 +1,5 @@
 ﻿using System.CommandLine;
+using System.Buffers.Binary;
 using System.Globalization;
 using TextureCompressor.Analysis;
 using TextureCompressor.Bitmaps;
@@ -26,6 +27,8 @@ internal static class Cli
         root.Subcommands.Add(CreateConvertCommand());
         root.Subcommands.Add(CreateQualityCommand());
         root.Subcommands.Add(CreateFormatsCommand());
+        root.Subcommands.Add(CreateInfoCommand("info", "Print metadata for a supported texture or image container."));
+        root.Subcommands.Add(CreateInfoCommand("inspect", "Alias for info; print metadata for a supported texture or image container."));
         return root;
     }
 
@@ -262,8 +265,352 @@ internal static class Cli
         return command;
     }
 
+    private static Command CreateInfoCommand(string name, string description)
+    {
+        var inputArgument = new Argument<FileInfo>("input")
+        {
+            Description = "Input texture or image file."
+        };
+
+        var command = new Command(name, description);
+        command.Arguments.Add(inputArgument);
+        command.SetAction(parseResult => RunCommand(() =>
+        {
+            var inputPath = RequireFile(parseResult.GetValue(inputArgument), "input").FullName;
+            PrintInfo(inputPath);
+            return 0;
+        }));
+
+        return command;
+    }
+
     private static FileInfo RequireFile(FileInfo? file, string argumentName) =>
         file ?? throw new ArgumentException($"Missing required argument '{argumentName}'.");
+
+    private static void PrintInfo(string path)
+    {
+        var fileBytes = new FileInfo(path).Length;
+        var container = GetContainer(path);
+
+        switch (container)
+        {
+            case TextureContainer.Png:
+                PrintImageInfo(container, PngCodec.Decode(path), fileBytes);
+                break;
+            case TextureContainer.Jpeg:
+                PrintImageInfo(container, JpegCodec.Decode(path), fileBytes);
+                break;
+            case TextureContainer.Gif:
+                PrintImageInfo(container, GifCodec.Decode(path), fileBytes);
+                break;
+            case TextureContainer.Dds:
+                PrintDdsInfo(DdsCodec.Read(path), fileBytes);
+                break;
+            case TextureContainer.Ktx:
+                PrintKtxInfo(KtxCodec.Read(path), ReadKtxInfo(path), fileBytes);
+                break;
+            case TextureContainer.Pvr:
+                PrintPvrInfo(PvrCodec.Read(path), ReadPvrInfo(path), fileBytes);
+                break;
+            case TextureContainer.Astc:
+                PrintAstcInfo(AstcCodec.Read(path), fileBytes);
+                break;
+            default:
+                throw new NotSupportedException($"Unsupported input extension '{Path.GetExtension(path)}'.");
+        }
+    }
+
+    private static void PrintImageInfo(TextureContainer container, IBitmap<Rgba8UNorm> bitmap, long fileBytes)
+    {
+        PrintInfoLine("Container", FormatContainer(container));
+        PrintInfoLine("Size", FormatSize(bitmap.Width, bitmap.Height));
+        PrintInfoLine("Decoded format", nameof(TextureFormats.Rgba8UNorm));
+        PrintInfoLine("File bytes", FormatInvariant(fileBytes));
+    }
+
+    private static void PrintDdsInfo(DdsTexture texture, long fileBytes)
+    {
+        PrintTextureInfo(TextureContainer.Dds, texture.Format, texture.Width, texture.Height, texture.MipLevels, fileBytes);
+        PrintInfoLine("Header", texture.HeaderKind);
+        if (texture.DxgiFormat is not null)
+        {
+            PrintInfoLine("DXGI format", texture.DxgiFormat);
+            PrintInfoLine("Alpha mode", texture.AlphaMode);
+        }
+
+        if (texture.LegacyPixelFormat is not null)
+        {
+            PrintInfoLine("Legacy pixel format", texture.LegacyPixelFormat);
+        }
+    }
+
+    private static void PrintKtxInfo(KtxTexture texture, KtxInfo info, long fileBytes)
+    {
+        PrintTextureInfo(TextureContainer.Ktx, texture.Format, texture.Width, texture.Height, texture.MipLevels, fileBytes);
+        PrintInfoLine("Version", info.Version);
+        if (texture.VkFormat is not null)
+        {
+            PrintInfoLine("VK format", texture.VkFormat);
+        }
+
+        if (texture.GlType is not null)
+        {
+            PrintInfoLine("GL type", texture.GlType);
+        }
+
+        if (texture.GlFormat is not null)
+        {
+            PrintInfoLine("GL format", texture.GlFormat);
+        }
+
+        if (texture.GlInternalFormat is not null)
+        {
+            PrintInfoLine("GL internal format", texture.GlInternalFormat);
+        }
+
+        if (info.SupercompressionScheme is not null)
+        {
+            PrintInfoLine("Supercompression", info.SupercompressionScheme);
+        }
+
+        if (info.KeyValueBytes != 0)
+        {
+            PrintInfoLine("Key/value bytes", FormatInvariant(info.KeyValueBytes));
+        }
+
+        if (info.SupercompressionGlobalDataBytes != 0)
+        {
+            PrintInfoLine("Supercompression global data bytes", FormatInvariant(info.SupercompressionGlobalDataBytes));
+        }
+    }
+
+    private static void PrintPvrInfo(PvrTexture texture, PvrInfo info, long fileBytes)
+    {
+        PrintTextureInfo(TextureContainer.Pvr, texture.Format, texture.Width, texture.Height, texture.MipLevels, fileBytes);
+        PrintInfoLine("Version", info.Version);
+        if (info.PixelFormat is not null)
+        {
+            PrintInfoLine("PVR pixel format", $"0x{info.PixelFormat.Value:x16}");
+        }
+
+        if (info.ColourSpace is not null)
+        {
+            PrintInfoLine("Colour space", FormatPvrColourSpace(info.ColourSpace.Value));
+        }
+
+        if (info.ChannelType is not null)
+        {
+            PrintInfoLine("Channel type", FormatInvariant(info.ChannelType.Value));
+        }
+
+        if (info.LegacyPixelType is not null)
+        {
+            PrintInfoLine("Legacy pixel type", $"0x{info.LegacyPixelType.Value:x2}");
+        }
+
+        if (info.LegacyBitCount is not null)
+        {
+            PrintInfoLine("Legacy bit count", FormatInvariant(info.LegacyBitCount.Value));
+        }
+
+        if (texture.Metadata.Count != 0)
+        {
+            PrintInfoLine("Metadata entries", FormatInvariant(texture.Metadata.Count));
+        }
+
+        if (info.MetadataBytes != 0)
+        {
+            PrintInfoLine("Metadata bytes", FormatInvariant(info.MetadataBytes));
+        }
+    }
+
+    private static void PrintAstcInfo(AstcTexture texture, long fileBytes)
+    {
+        PrintTextureInfo(
+            TextureContainer.Astc,
+            texture.Format,
+            texture.Width,
+            texture.Height,
+            mipLevelCount: 1,
+            payloadBytes: texture.Payload.Length,
+            fileBytes);
+    }
+
+    private static void PrintTextureInfo(
+        TextureContainer container,
+        TextureFormat format,
+        int width,
+        int height,
+        IReadOnlyList<TextureMipLevel> mipLevels,
+        long fileBytes) =>
+        PrintTextureInfo(container, format, width, height, mipLevels.Count, GetPayloadByteCount(mipLevels), fileBytes);
+
+    private static void PrintTextureInfo(
+        TextureContainer container,
+        TextureFormat format,
+        int width,
+        int height,
+        int mipLevelCount,
+        long payloadBytes,
+        long fileBytes)
+    {
+        PrintInfoLine("Container", FormatContainer(container));
+        PrintInfoLine("Format", FormatTextureFormat(format));
+        PrintInfoLine("Kind", format.Kind);
+        PrintInfoLine("Value kind", format.ValueKind);
+        PrintInfoLine("Size", FormatSize(width, height));
+        PrintInfoLine("Mip levels", FormatInvariant(mipLevelCount));
+        PrintInfoLine("Payload bytes", FormatInvariant(payloadBytes));
+        PrintInfoLine("File bytes", FormatInvariant(fileBytes));
+
+        if (format.IsCompressed)
+        {
+            PrintInfoLine("Block", FormatSize(format.BlockWidth, format.BlockHeight));
+            PrintInfoLine("Bits per block", FormatInvariant(format.BitsPerBlock));
+        }
+        else
+        {
+            PrintInfoLine("Bits per texel", FormatInvariant(format.BitsPerTexel));
+        }
+    }
+
+    private static KtxInfo ReadKtxInfo(string path)
+    {
+        using var stream = File.OpenRead(path);
+        Span<byte> identifier = stackalloc byte[12];
+        stream.ReadExactly(identifier);
+
+        if (IsKtxIdentifier(identifier, majorVersionByte: 0x31, minorVersionByte: 0x31))
+        {
+            Span<byte> header = stackalloc byte[52];
+            stream.ReadExactly(header);
+            return new KtxInfo(
+                Version: 1,
+                SupercompressionScheme: null,
+                KeyValueBytes: BinaryPrimitives.ReadUInt32LittleEndian(header.Slice(48, 4)),
+                SupercompressionGlobalDataBytes: 0);
+        }
+
+        if (IsKtxIdentifier(identifier, majorVersionByte: 0x32, minorVersionByte: 0x30))
+        {
+            Span<byte> header = stackalloc byte[68];
+            stream.ReadExactly(header);
+            return new KtxInfo(
+                Version: 2,
+                (KtxSupercompressionScheme)BinaryPrimitives.ReadUInt32LittleEndian(header.Slice(32, 4)),
+                BinaryPrimitives.ReadUInt32LittleEndian(header.Slice(48, 4)),
+                BinaryPrimitives.ReadUInt64LittleEndian(header.Slice(60, 8)));
+        }
+
+        throw new InvalidDataException("The stream is not a KTX file.");
+    }
+
+    private static PvrInfo ReadPvrInfo(string path)
+    {
+        using var stream = File.OpenRead(path);
+        Span<byte> firstWordBuffer = stackalloc byte[4];
+        stream.ReadExactly(firstWordBuffer);
+        var firstWord = BinaryPrimitives.ReadUInt32LittleEndian(firstWordBuffer);
+
+        if (firstWord == 0x03525650)
+        {
+            Span<byte> header = stackalloc byte[52];
+            firstWordBuffer.CopyTo(header);
+            stream.ReadExactly(header[4..]);
+            return new PvrInfo(
+                Version: 3,
+                PixelFormat: BinaryPrimitives.ReadUInt64LittleEndian(header.Slice(8, 8)),
+                ColourSpace: BinaryPrimitives.ReadUInt32LittleEndian(header.Slice(16, 4)),
+                ChannelType: BinaryPrimitives.ReadUInt32LittleEndian(header.Slice(20, 4)),
+                MetadataBytes: BinaryPrimitives.ReadUInt32LittleEndian(header.Slice(48, 4)),
+                LegacyPixelType: null,
+                LegacyBitCount: null);
+        }
+
+        if (firstWord is 44 or 52)
+        {
+            Span<byte> header = stackalloc byte[52];
+            firstWordBuffer.CopyTo(header);
+            stream.ReadExactly(header.Slice(4, checked((int)firstWord - 4)));
+            return new PvrInfo(
+                Version: firstWord == 44 ? 1 : 2,
+                PixelFormat: null,
+                ColourSpace: null,
+                ChannelType: null,
+                MetadataBytes: 0,
+                LegacyPixelType: BinaryPrimitives.ReadUInt32LittleEndian(header.Slice(16, 4)) & 0xff,
+                LegacyBitCount: BinaryPrimitives.ReadUInt32LittleEndian(header.Slice(24, 4)));
+        }
+
+        throw new InvalidDataException("The stream is not a supported PVR file.");
+    }
+
+    private static bool IsKtxIdentifier(ReadOnlySpan<byte> identifier, byte majorVersionByte, byte minorVersionByte) =>
+        identifier.Length == 12
+        && identifier[0] == 0xab
+        && identifier[1] == 0x4b
+        && identifier[2] == 0x54
+        && identifier[3] == 0x58
+        && identifier[4] == 0x20
+        && identifier[5] == majorVersionByte
+        && identifier[6] == minorVersionByte
+        && identifier[7] == 0xbb
+        && identifier[8] == 0x0d
+        && identifier[9] == 0x0a
+        && identifier[10] == 0x1a
+        && identifier[11] == 0x0a;
+
+    private static long GetPayloadByteCount(IReadOnlyList<TextureMipLevel> mipLevels)
+    {
+        long byteCount = 0;
+        foreach (var mipLevel in mipLevels)
+        {
+            byteCount = checked(byteCount + mipLevel.Payload.Length);
+        }
+
+        return byteCount;
+    }
+
+    private static string FormatContainer(TextureContainer container) =>
+        container switch
+        {
+            TextureContainer.Png => "PNG",
+            TextureContainer.Jpeg => "JPEG",
+            TextureContainer.Gif => "GIF",
+            TextureContainer.Dds => "DDS",
+            TextureContainer.Ktx => "KTX",
+            TextureContainer.Pvr => "PVR",
+            TextureContainer.Astc => "ASTC",
+            _ => container.ToString()
+        };
+
+    private static string FormatTextureFormat(TextureFormat format)
+    {
+        var fieldName = TextureFormatCatalog.GetFieldName(format);
+        return string.Equals(fieldName, format.Name, StringComparison.Ordinal)
+            ? fieldName
+            : $"{fieldName} ({format.Name})";
+    }
+
+    private static string FormatPvrColourSpace(uint colourSpace) =>
+        colourSpace switch
+        {
+            0 => "Linear (0)",
+            1 => "sRGB (1)",
+            _ => FormatInvariant(colourSpace)
+        };
+
+    private static string FormatSize(int width, int height) =>
+        string.Create(CultureInfo.InvariantCulture, $"{width}x{height}");
+
+    private static string FormatInvariant(long value) =>
+        value.ToString(CultureInfo.InvariantCulture);
+
+    private static string FormatInvariant(ulong value) =>
+        value.ToString(CultureInfo.InvariantCulture);
+
+    private static void PrintInfoLine(string label, object? value) =>
+        Console.WriteLine($"{label}: {value}");
 
     private static ArrayBitmap<Rgba8UNorm> Decode(string path, ImageColorSpaces? imageColorSpaces = null)
     {
@@ -712,5 +1059,20 @@ internal sealed record ImageColorSpaces(ImageColorSpace Png, ImageColorSpace Jpe
         ImageColorSpace.Linear,
         ImageColorSpace.Linear);
 }
+
+internal sealed record KtxInfo(
+    int Version,
+    KtxSupercompressionScheme? SupercompressionScheme,
+    uint KeyValueBytes,
+    ulong SupercompressionGlobalDataBytes);
+
+internal sealed record PvrInfo(
+    int Version,
+    ulong? PixelFormat,
+    uint? ColourSpace,
+    uint? ChannelType,
+    uint MetadataBytes,
+    uint? LegacyPixelType,
+    uint? LegacyBitCount);
 
 internal sealed record FormatEntry(string FieldName, TextureFormat Format);
