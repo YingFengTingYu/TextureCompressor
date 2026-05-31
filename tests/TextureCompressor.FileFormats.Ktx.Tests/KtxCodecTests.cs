@@ -1,4 +1,4 @@
-using System.Buffers.Binary;
+﻿using System.Buffers.Binary;
 using TextureCompressor.Bitmaps;
 using TextureCompressor.Colors;
 using TextureCompressor.FileFormats.Ktx;
@@ -35,7 +35,7 @@ public sealed class KtxCodecTests
             width: 2,
             height: 2,
             imageSize: 16);
-        Assert.Equal(TextureFormats.Rgba8UNorm, texture.Format);
+        Assert.Equal(TextureFormats.Rgba8UNorm, texture.Texture.Format);
         Assert.Equal(KtxGlFormat.Rgba8, texture.GlInternalFormat);
         Assert.Equal(source.PixelSpan.ToArray(), decoded.PixelSpan.ToArray());
     }
@@ -49,7 +49,7 @@ public sealed class KtxCodecTests
         var texture = KtxCodec.Read(ktx);
 
         Assert.Equal((uint)KtxGlFormat.Srgb8Alpha8, BinaryPrimitives.ReadUInt32LittleEndian(ktx.AsSpan(28, 4)));
-        Assert.Equal(TextureFormats.Rgba8Srgb, texture.Format);
+        Assert.Equal(TextureFormats.Rgba8Srgb, texture.Texture.Format);
     }
 
     [Fact]
@@ -69,7 +69,7 @@ public sealed class KtxCodecTests
 
         Assert.Equal((uint)KtxGlFormat.Bgra, BinaryPrimitives.ReadUInt32LittleEndian(ktx.AsSpan(24, 4)));
         Assert.Equal((uint)KtxGlFormat.Rgba8, BinaryPrimitives.ReadUInt32LittleEndian(ktx.AsSpan(28, 4)));
-        Assert.Equal(TextureFormats.Bgra8, texture.Format);
+        Assert.Equal(TextureFormats.Bgra8, texture.Texture.Format);
         Assert.Equal(source.PixelSpan.ToArray(), decoded.PixelSpan.ToArray());
     }
 
@@ -86,7 +86,7 @@ public sealed class KtxCodecTests
 
         Assert.Equal(0u, BinaryPrimitives.ReadUInt32LittleEndian(ktx.AsSpan(16, 4)));
         Assert.Equal((uint)KtxGlFormat.CompressedRgbaS3tcDxt1, BinaryPrimitives.ReadUInt32LittleEndian(ktx.AsSpan(28, 4)));
-        Assert.Equal(TextureFormats.Bc1Rgba, texture.Format);
+        Assert.Equal(TextureFormats.Bc1Rgba, texture.Texture.Format);
     }
 
     [Fact]
@@ -99,7 +99,7 @@ public sealed class KtxCodecTests
 
         Assert.Equal(8u, BinaryPrimitives.ReadUInt32LittleEndian(ktx.AsSpan(64, 4)));
         Assert.Equal(68 + 8, ktx.Length);
-        Assert.Equal(texture.Payload, read.Payload);
+        Assert.Equal(texture.Texture.Payload, read.Texture.Payload);
     }
 
     [Fact]
@@ -120,8 +120,8 @@ public sealed class KtxCodecTests
             width: 4,
             height: 4,
             imageSize: 8);
-        Assert.Equal(TextureFormats.Bc1Rgb, read.Format);
-        Assert.Equal(texture.Payload, read.Payload);
+        Assert.Equal(TextureFormats.Bc1Rgb, read.Texture.Format);
+        Assert.Equal(texture.Texture.Payload, read.Texture.Payload);
     }
 
     [Fact]
@@ -142,7 +142,7 @@ public sealed class KtxCodecTests
         var decoded = KtxCodec.Decode(ktx);
 
         AssertHeaderV2(ktx, KtxVkFormat.R8G8B8A8UNorm, width: 2, height: 2, levelSize: 16);
-        Assert.Equal(TextureFormats.Rgba8UNorm, texture.Format);
+        Assert.Equal(TextureFormats.Rgba8UNorm, texture.Texture.Format);
         Assert.Equal(KtxVkFormat.R8G8B8A8UNorm, texture.VkFormat);
         Assert.Equal(source.PixelSpan.ToArray(), decoded.PixelSpan.ToArray());
     }
@@ -163,7 +163,7 @@ public sealed class KtxCodecTests
         var texture = KtxCodec.Read(ktx);
 
         AssertHeaderV2(ktx, KtxVkFormat.Bc1RgbaUNormBlock, width: 4, height: 4, levelSize: 8);
-        Assert.Equal(TextureFormats.Bc1Rgba, texture.Format);
+        Assert.Equal(TextureFormats.Bc1Rgba, texture.Texture.Format);
     }
 
     [Fact]
@@ -175,8 +175,8 @@ public sealed class KtxCodecTests
         var read = KtxCodec.Read(ktx);
 
         AssertHeaderV2(ktx, KtxVkFormat.Bc1RgbUNormBlock, width: 4, height: 4, levelSize: 8);
-        Assert.Equal(TextureFormats.Bc1Rgb, read.Format);
-        Assert.Equal(texture.Payload, read.Payload);
+        Assert.Equal(TextureFormats.Bc1Rgb, read.Texture.Format);
+        Assert.Equal(texture.Texture.Payload, read.Texture.Payload);
     }
 
     [Fact]
@@ -206,7 +206,7 @@ public sealed class KtxCodecTests
             uncompressedLevelSize: 16 * 16 * 4,
             KtxSupercompressionScheme.Zstandard);
         Assert.True(compressedSize < 16 * 16 * 4);
-        Assert.Equal(TextureFormats.Rgba8UNorm, texture.Format);
+        Assert.Equal(TextureFormats.Rgba8UNorm, texture.Texture.Format);
         Assert.Equal(source.PixelSpan.ToArray(), decoded.PixelSpan.ToArray());
     }
 
@@ -236,7 +236,7 @@ public sealed class KtxCodecTests
             uncompressedLevelSize: 16 * 16 * 4,
             KtxSupercompressionScheme.Zlib);
         Assert.True(compressedSize < 16 * 16 * 4);
-        Assert.Equal(TextureFormats.Rgba8UNorm, texture.Format);
+        Assert.Equal(TextureFormats.Rgba8UNorm, texture.Texture.Format);
         Assert.Equal(source.PixelSpan.ToArray(), decoded.PixelSpan.ToArray());
     }
 
@@ -246,9 +246,10 @@ public sealed class KtxCodecTests
         var texture = new KtxTexture(
             TextureFormats.Rgba8UNorm,
             [
-                new TextureMipLevel(2, 2, Enumerable.Repeat((byte)1, 16).ToArray()),
-                new TextureMipLevel(1, 1, Enumerable.Repeat((byte)2, 4).ToArray())
-            ]);
+                new TextureSubresource(0, 0, 0, 2, 2, Enumerable.Repeat((byte)1, 16).ToArray()),
+                new TextureSubresource(1, 0, 0, 1, 1, Enumerable.Repeat((byte)2, 4).ToArray())
+            ],
+            faceCount: 1);
 
         var ktx = KtxCodec.Write(texture, new KtxEncodingOptions { Version = KtxVersion.Version2 });
         var read = KtxCodec.Read(ktx);
@@ -260,9 +261,9 @@ public sealed class KtxCodecTests
         Assert.Equal(168ul, BinaryPrimitives.ReadUInt64LittleEndian(ktx.AsSpan(104, 8)));
         Assert.Equal(4ul, BinaryPrimitives.ReadUInt64LittleEndian(ktx.AsSpan(112, 8)));
         Assert.Equal(172, ktx.Length);
-        Assert.Equal(2, read.MipLevelCount);
-        Assert.Equal(texture.MipLevels[0].Payload, read.MipLevels[0].Payload);
-        Assert.Equal(texture.MipLevels[1].Payload, read.MipLevels[1].Payload);
+        Assert.Equal(2, read.Texture.MipLevelCount);
+        Assert.Equal(texture.Texture.GetSubresource(0).Payload, read.Texture.GetSubresource(0).Payload);
+        Assert.Equal(texture.Texture.GetSubresource(1).Payload, read.Texture.GetSubresource(1).Payload);
     }
 
     [Fact]
@@ -276,10 +277,10 @@ public sealed class KtxCodecTests
         Assert.Equal(6u, BinaryPrimitives.ReadUInt32LittleEndian(ktx.AsSpan(52, 4)));
         Assert.Equal(4u, BinaryPrimitives.ReadUInt32LittleEndian(ktx.AsSpan(64, 4)));
         Assert.Equal(68 + (6 * 4), ktx.Length);
-        Assert.True(read.IsCubeMap);
-        Assert.Equal(6, read.FaceCount);
-        Assert.Equal(6, read.GetSubresource(mipLevel: 0, faceIndex: 5).Payload[0]);
-        Assert.Equal(1, read.Payload[0]);
+        Assert.True(read.Texture.IsCubeMap);
+        Assert.Equal(6, read.Texture.FaceCount);
+        Assert.Equal(6, read.Texture.GetSubresource(mipLevel: 0, faceIndex: 5).Payload[0]);
+        Assert.Equal(1, read.Texture.Payload[0]);
     }
 
     [Fact]
@@ -294,10 +295,10 @@ public sealed class KtxCodecTests
         Assert.Equal(24ul, BinaryPrimitives.ReadUInt64LittleEndian(ktx.AsSpan(88, 8)));
         Assert.Equal(24ul, BinaryPrimitives.ReadUInt64LittleEndian(ktx.AsSpan(96, 8)));
         Assert.Equal(128 + (6 * 4), ktx.Length);
-        Assert.True(read.IsCubeMap);
-        Assert.Equal(6, read.FaceCount);
-        Assert.Equal(6, read.GetSubresource(mipLevel: 0, faceIndex: 5).Payload[0]);
-        Assert.Equal(1, read.Payload[0]);
+        Assert.True(read.Texture.IsCubeMap);
+        Assert.Equal(6, read.Texture.FaceCount);
+        Assert.Equal(6, read.Texture.GetSubresource(mipLevel: 0, faceIndex: 5).Payload[0]);
+        Assert.Equal(1, read.Texture.Payload[0]);
     }
 
     [Fact]
@@ -312,10 +313,10 @@ public sealed class KtxCodecTests
         Assert.Equal(16u, BinaryPrimitives.ReadUInt32LittleEndian(ktx.AsSpan(64, 4)));
         Assert.Equal(4u, BinaryPrimitives.ReadUInt32LittleEndian(ktx.AsSpan(100, 4)));
         Assert.Equal(112, ktx.Length);
-        Assert.Equal(2, read.ArrayLayerCount);
-        Assert.Equal(1, read.GetSubresource(mipLevel: 0, arrayLayer: 0).Payload[0]);
-        Assert.Equal(2, read.GetSubresource(mipLevel: 0, arrayLayer: 1).Payload[0]);
-        Assert.Equal(12, read.GetSubresource(mipLevel: 1, arrayLayer: 1).Payload[0]);
+        Assert.Equal(2, read.Texture.ArrayLayerCount);
+        Assert.Equal(1, read.Texture.GetSubresource(mipLevel: 0, arrayLayer: 0).Payload[0]);
+        Assert.Equal(2, read.Texture.GetSubresource(mipLevel: 0, arrayLayer: 1).Payload[0]);
+        Assert.Equal(12, read.Texture.GetSubresource(mipLevel: 1, arrayLayer: 1).Payload[0]);
     }
 
     [Fact]
@@ -330,10 +331,10 @@ public sealed class KtxCodecTests
         Assert.Equal(32ul, BinaryPrimitives.ReadUInt64LittleEndian(ktx.AsSpan(88, 8)));
         Assert.Equal(8ul, BinaryPrimitives.ReadUInt64LittleEndian(ktx.AsSpan(112, 8)));
         Assert.Equal(192, ktx.Length);
-        Assert.Equal(2, read.ArrayLayerCount);
-        Assert.Equal(1, read.GetSubresource(mipLevel: 0, arrayLayer: 0).Payload[0]);
-        Assert.Equal(2, read.GetSubresource(mipLevel: 0, arrayLayer: 1).Payload[0]);
-        Assert.Equal(12, read.GetSubresource(mipLevel: 1, arrayLayer: 1).Payload[0]);
+        Assert.Equal(2, read.Texture.ArrayLayerCount);
+        Assert.Equal(1, read.Texture.GetSubresource(mipLevel: 0, arrayLayer: 0).Payload[0]);
+        Assert.Equal(2, read.Texture.GetSubresource(mipLevel: 0, arrayLayer: 1).Payload[0]);
+        Assert.Equal(12, read.Texture.GetSubresource(mipLevel: 1, arrayLayer: 1).Payload[0]);
     }
 
     [Fact]
@@ -350,9 +351,10 @@ public sealed class KtxCodecTests
         var texture = new KtxTexture(
             TextureFormats.Rgba8UNorm,
             [
-                new TextureMipLevel(2, 2, Enumerable.Repeat((byte)1, 16).ToArray()),
-                new TextureMipLevel(1, 1, Enumerable.Repeat((byte)2, 4).ToArray())
-            ]);
+                new TextureSubresource(0, 0, 0, 2, 2, Enumerable.Repeat((byte)1, 16).ToArray()),
+                new TextureSubresource(1, 0, 0, 1, 1, Enumerable.Repeat((byte)2, 4).ToArray())
+            ],
+            faceCount: 1);
 
         var ktx = KtxCodec.Write(texture);
         var read = KtxCodec.Read(ktx);
@@ -361,9 +363,9 @@ public sealed class KtxCodecTests
         Assert.Equal(16u, BinaryPrimitives.ReadUInt32LittleEndian(ktx.AsSpan(64, 4)));
         Assert.Equal(4u, BinaryPrimitives.ReadUInt32LittleEndian(ktx.AsSpan(84, 4)));
         Assert.Equal(92, ktx.Length);
-        Assert.Equal(2, read.MipLevelCount);
-        Assert.Equal(texture.MipLevels[0].Payload, read.MipLevels[0].Payload);
-        Assert.Equal(texture.MipLevels[1].Payload, read.MipLevels[1].Payload);
+        Assert.Equal(2, read.Texture.MipLevelCount);
+        Assert.Equal(texture.Texture.GetSubresource(0).Payload, read.Texture.GetSubresource(0).Payload);
+        Assert.Equal(texture.Texture.GetSubresource(1).Payload, read.Texture.GetSubresource(1).Payload);
     }
 
     [Theory]
@@ -386,11 +388,11 @@ public sealed class KtxCodecTests
         });
         var read = KtxCodec.Read(ktx);
 
-        Assert.Equal(TextureFormats.Bc1Rgba, read.Format);
-        Assert.Equal(3, read.MipLevelCount);
-        Assert.Equal(new[] { 7, 3, 1 }, read.MipLevels.Select(level => level.Width));
-        Assert.Equal(new[] { 5, 2, 1 }, read.MipLevels.Select(level => level.Height));
-        Assert.Equal(new[] { 32, 8, 8 }, read.MipLevels.Select(level => level.Payload.Length));
+        Assert.Equal(TextureFormats.Bc1Rgba, read.Texture.Format);
+        Assert.Equal(3, read.Texture.MipLevelCount);
+        Assert.Equal(new[] { 7, 3, 1 }, read.Texture.Subresources.Select(level => level.Width));
+        Assert.Equal(new[] { 5, 2, 1 }, read.Texture.Subresources.Select(level => level.Height));
+        Assert.Equal(new[] { 32, 8, 8 }, read.Texture.Subresources.Select(level => level.Payload.Length));
     }
 
     [Fact]
@@ -508,8 +510,8 @@ public sealed class KtxCodecTests
         {
             for (var mipLevel = 0; mipLevel < mipLevelCount; mipLevel++)
             {
-                var mipWidth = TextureMipLevel.GetDimension(width, mipLevel);
-                var mipHeight = TextureMipLevel.GetDimension(height, mipLevel);
+                var mipWidth = TextureImage.GetMipDimension(width, mipLevel);
+                var mipHeight = TextureImage.GetMipDimension(height, mipLevel);
                 var byteCount = checked(mipWidth * mipHeight * 4);
                 subresources[index++] = new TextureSubresource(
                     mipLevel,
@@ -532,8 +534,8 @@ public sealed class KtxCodecTests
         {
             for (var mipLevel = 0; mipLevel < mipLevelCount; mipLevel++)
             {
-                var mipWidth = TextureMipLevel.GetDimension(width, mipLevel);
-                var mipHeight = TextureMipLevel.GetDimension(height, mipLevel);
+                var mipWidth = TextureImage.GetMipDimension(width, mipLevel);
+                var mipHeight = TextureImage.GetMipDimension(height, mipLevel);
                 var byteCount = checked(mipWidth * mipHeight * 4);
                 subresources[index++] = new TextureSubresource(
                     mipLevel,

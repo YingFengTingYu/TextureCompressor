@@ -826,15 +826,15 @@ internal static class Cli
     private static InfoDocument BuildDdsInfoDocument(DdsTexture texture, long fileBytes, bool includeSubresources) =>
         BuildTextureInfoDocument(
             TextureContainer.Dds,
-            texture.Format,
-            texture.Width,
-            texture.Height,
-            texture.MipLevelCount,
-            texture.ArrayLayerCount,
-            texture.FaceCount,
-            GetPayloadByteCount(texture.Subresources),
+            texture.Texture.Format,
+            texture.Texture.Width,
+            texture.Texture.Height,
+            texture.Texture.MipLevelCount,
+            texture.Texture.ArrayLayerCount,
+            texture.Texture.FaceCount,
+            GetPayloadByteCount(texture.Texture.Subresources),
             fileBytes,
-            includeSubresources ? BuildSubresourceInfo(texture.Subresources, texture.FaceCount) : null)
+            includeSubresources ? BuildSubresourceInfo(texture.Texture.Subresources, texture.Texture.FaceCount) : null)
         with
         {
             Dds = new DdsInfoDocument(
@@ -847,15 +847,15 @@ internal static class Cli
     private static InfoDocument BuildKtxInfoDocument(KtxTexture texture, KtxInfo info, long fileBytes, bool includeSubresources) =>
         BuildTextureInfoDocument(
             TextureContainer.Ktx,
-            texture.Format,
-            texture.Width,
-            texture.Height,
-            texture.MipLevelCount,
-            texture.ArrayLayerCount,
-            texture.FaceCount,
-            GetPayloadByteCount(texture.Subresources),
+            texture.Texture.Format,
+            texture.Texture.Width,
+            texture.Texture.Height,
+            texture.Texture.MipLevelCount,
+            texture.Texture.ArrayLayerCount,
+            texture.Texture.FaceCount,
+            GetPayloadByteCount(texture.Texture.Subresources),
             fileBytes,
-            includeSubresources ? BuildSubresourceInfo(texture.Subresources, texture.FaceCount) : null)
+            includeSubresources ? BuildSubresourceInfo(texture.Texture.Subresources, texture.Texture.FaceCount) : null)
         with
         {
             Ktx = new KtxInfoDocument(
@@ -872,15 +872,15 @@ internal static class Cli
     private static InfoDocument BuildPvrInfoDocument(PvrTexture texture, PvrInfo info, long fileBytes, bool includeSubresources) =>
         BuildTextureInfoDocument(
             TextureContainer.Pvr,
-            texture.Format,
-            texture.Width,
-            texture.Height,
-            texture.MipLevelCount,
-            texture.ArrayLayerCount,
-            texture.FaceCount,
-            GetPayloadByteCount(texture.Subresources),
+            texture.Texture.Format,
+            texture.Texture.Width,
+            texture.Texture.Height,
+            texture.Texture.MipLevelCount,
+            texture.Texture.ArrayLayerCount,
+            texture.Texture.FaceCount,
+            GetPayloadByteCount(texture.Texture.Subresources),
             fileBytes,
-            includeSubresources ? BuildSubresourceInfo(texture.Subresources, texture.FaceCount) : null)
+            includeSubresources ? BuildSubresourceInfo(texture.Texture.Subresources, texture.Texture.FaceCount) : null)
         with
         {
             Pvr = new PvrInfoDocument(
@@ -977,7 +977,16 @@ internal static class Cli
 
     private static void PrintDdsInfo(DdsTexture texture, long fileBytes, bool printSubresources)
     {
-        PrintTextureInfo(TextureContainer.Dds, texture.Format, texture.Width, texture.Height, texture.MipLevelCount, texture.ArrayLayerCount, texture.FaceCount, GetPayloadByteCount(texture.Subresources), fileBytes);
+        PrintTextureInfo(
+            TextureContainer.Dds,
+            texture.Texture.Format,
+            texture.Texture.Width,
+            texture.Texture.Height,
+            texture.Texture.MipLevelCount,
+            texture.Texture.ArrayLayerCount,
+            texture.Texture.FaceCount,
+            GetPayloadByteCount(texture.Texture.Subresources),
+            fileBytes);
         PrintInfoLine("Header", texture.HeaderKind);
         if (texture.DxgiFormat is not null)
         {
@@ -992,13 +1001,22 @@ internal static class Cli
 
         if (printSubresources)
         {
-            PrintSubresources(texture.Subresources, texture.FaceCount);
+            PrintSubresources(texture.Texture.Subresources, texture.Texture.FaceCount);
         }
     }
 
     private static void PrintKtxInfo(KtxTexture texture, KtxInfo info, long fileBytes, bool printSubresources)
     {
-        PrintTextureInfo(TextureContainer.Ktx, texture.Format, texture.Width, texture.Height, texture.MipLevelCount, texture.ArrayLayerCount, texture.FaceCount, GetPayloadByteCount(texture.Subresources), fileBytes);
+        PrintTextureInfo(
+            TextureContainer.Ktx,
+            texture.Texture.Format,
+            texture.Texture.Width,
+            texture.Texture.Height,
+            texture.Texture.MipLevelCount,
+            texture.Texture.ArrayLayerCount,
+            texture.Texture.FaceCount,
+            GetPayloadByteCount(texture.Texture.Subresources),
+            fileBytes);
         PrintInfoLine("Version", info.Version);
         if (texture.VkFormat is not null)
         {
@@ -1037,13 +1055,22 @@ internal static class Cli
 
         if (printSubresources)
         {
-            PrintSubresources(texture.Subresources, texture.FaceCount);
+            PrintSubresources(texture.Texture.Subresources, texture.Texture.FaceCount);
         }
     }
 
     private static void PrintPvrInfo(PvrTexture texture, PvrInfo info, long fileBytes, bool printSubresources)
     {
-        PrintTextureInfo(TextureContainer.Pvr, texture.Format, texture.Width, texture.Height, texture.MipLevelCount, texture.ArrayLayerCount, texture.FaceCount, GetPayloadByteCount(texture.Subresources), fileBytes);
+        PrintTextureInfo(
+            TextureContainer.Pvr,
+            texture.Texture.Format,
+            texture.Texture.Width,
+            texture.Texture.Height,
+            texture.Texture.MipLevelCount,
+            texture.Texture.ArrayLayerCount,
+            texture.Texture.FaceCount,
+            GetPayloadByteCount(texture.Texture.Subresources),
+            fileBytes);
         PrintInfoLine("Version", info.Version);
         if (info.PixelFormat is not null)
         {
@@ -1082,7 +1109,7 @@ internal static class Cli
 
         if (printSubresources)
         {
-            PrintSubresources(texture.Subresources, texture.FaceCount);
+            PrintSubresources(texture.Texture.Subresources, texture.Texture.FaceCount);
         }
     }
 
@@ -1099,15 +1126,6 @@ internal static class Cli
             payloadBytes: texture.Payload.Length,
             fileBytes);
     }
-
-    private static void PrintTextureInfo(
-        TextureContainer container,
-        TextureFormat format,
-        int width,
-        int height,
-        IReadOnlyList<TextureMipLevel> mipLevels,
-        long fileBytes) =>
-        PrintTextureInfo(container, format, width, height, mipLevels.Count, arrayLayerCount: 1, faceCount: 1, GetPayloadByteCount(mipLevels), fileBytes);
 
     private static void PrintTextureInfo(
         TextureContainer container,
@@ -1248,17 +1266,6 @@ internal static class Cli
         && identifier[10] == 0x1a
         && identifier[11] == 0x0a;
 
-    private static long GetPayloadByteCount(IReadOnlyList<TextureMipLevel> mipLevels)
-    {
-        long byteCount = 0;
-        foreach (var mipLevel in mipLevels)
-        {
-            byteCount = checked(byteCount + mipLevel.Payload.Length);
-        }
-
-        return byteCount;
-    }
-
     private static long GetPayloadByteCount(IReadOnlyList<TextureSubresource> subresources)
     {
         long byteCount = 0;
@@ -1341,12 +1348,15 @@ internal static class Cli
         };
 
     private static TexturePayload FromTexture(DdsTexture texture) =>
-        new(texture.Format, texture.Subresources, texture.MipLevelCount, texture.ArrayLayerCount, texture.FaceCount);
+        FromTexture(texture.Texture);
 
     private static TexturePayload FromTexture(KtxTexture texture) =>
-        new(texture.Format, texture.Subresources, texture.MipLevelCount, texture.ArrayLayerCount, texture.FaceCount);
+        FromTexture(texture.Texture);
 
     private static TexturePayload FromTexture(PvrTexture texture) =>
+        FromTexture(texture.Texture);
+
+    private static TexturePayload FromTexture(TextureImage texture) =>
         new(texture.Format, texture.Subresources, texture.MipLevelCount, texture.ArrayLayerCount, texture.FaceCount);
 
     private static TextureFormat ResolveAssembleFormat(
@@ -1408,8 +1418,8 @@ internal static class Cli
             ValidateManifestImage(manifest, image);
             var imagePath = ResolveManifestImagePath(manifestDirectory, image.File);
             var bitmap = DecodeAssembleImage(new FileInfo(imagePath), colorSpaces);
-            var expectedWidth = TextureMipLevel.GetDimension(manifest.Width, image.Mip);
-            var expectedHeight = TextureMipLevel.GetDimension(manifest.Height, image.Mip);
+            var expectedWidth = TextureImage.GetMipDimension(manifest.Width, image.Mip);
+            var expectedHeight = TextureImage.GetMipDimension(manifest.Height, image.Mip);
             if (bitmap.Width != expectedWidth || bitmap.Height != expectedHeight)
             {
                 throw new InvalidDataException(
@@ -1417,7 +1427,7 @@ internal static class Cli
             }
 
             var subresource = EncodeSubresource(format, bitmap, image.Mip, image.Layer, image.FaceIndex);
-            var index = GetSubresourceIndex(image.Mip, image.Layer, image.FaceIndex, manifest.MipLevels, manifest.Faces);
+            var index = TextureImage.GetSubresourceIndex(image.Mip, image.Layer, image.FaceIndex, manifest.MipLevels, manifest.ArrayLayers, manifest.Faces);
             if (subresources[index] is not null)
             {
                 throw new InvalidDataException(
@@ -1433,7 +1443,7 @@ internal static class Cli
             {
                 for (var mip = 0; mip < manifest.MipLevels; mip++)
                 {
-                    var index = GetSubresourceIndex(mip, layer, face, manifest.MipLevels, manifest.Faces);
+                    var index = TextureImage.GetSubresourceIndex(mip, layer, face, manifest.MipLevels, manifest.ArrayLayers, manifest.Faces);
                     if (subresources[index] is null)
                     {
                         throw new InvalidDataException(
@@ -1501,8 +1511,8 @@ internal static class Cli
             throw new InvalidDataException("Manifest image file must not be empty.");
         }
 
-        var expectedWidth = TextureMipLevel.GetDimension(manifest.Width, image.Mip);
-        var expectedHeight = TextureMipLevel.GetDimension(manifest.Height, image.Mip);
+        var expectedWidth = TextureImage.GetMipDimension(manifest.Width, image.Mip);
+        var expectedHeight = TextureImage.GetMipDimension(manifest.Height, image.Mip);
         if (image.Width != expectedWidth || image.Height != expectedHeight)
         {
             throw new InvalidDataException(
@@ -1514,9 +1524,6 @@ internal static class Cli
         Path.IsPathRooted(imageFile)
             ? imageFile
             : Path.GetFullPath(Path.Combine(manifestDirectory, imageFile));
-
-    private static int GetSubresourceIndex(int mipLevel, int arrayLayer, int faceIndex, int mipLevelCount, int faceCount) =>
-        checked((((arrayLayer * faceCount) + faceIndex) * mipLevelCount) + mipLevel);
 
     private static IReadOnlyList<ExtractManifestImage> ExtractSubresources(
         TexturePayload texture,
@@ -1753,7 +1760,7 @@ internal static class Cli
     private static TexturePayload CreateMipChainTexture(TextureFormat format, IReadOnlyList<ArrayBitmap<Rgba8UNorm>> images)
     {
         EnsureImageCount(images, minimumCount: 1, "--mips");
-        var fullMipLevelCount = TextureMipLevel.GetFullMipLevelCount(images[0].Width, images[0].Height);
+        var fullMipLevelCount = TextureImage.GetFullMipLevelCount(images[0].Width, images[0].Height);
         if (images.Count > fullMipLevelCount)
         {
             throw new ArgumentException("--mips contains more images than the full mip chain for the base dimensions.");
@@ -1763,8 +1770,8 @@ internal static class Cli
         for (var mipLevel = 0; mipLevel < images.Count; mipLevel++)
         {
             var image = images[mipLevel];
-            var expectedWidth = TextureMipLevel.GetDimension(images[0].Width, mipLevel);
-            var expectedHeight = TextureMipLevel.GetDimension(images[0].Height, mipLevel);
+            var expectedWidth = TextureImage.GetMipDimension(images[0].Width, mipLevel);
+            var expectedHeight = TextureImage.GetMipDimension(images[0].Height, mipLevel);
             if (image.Width != expectedWidth || image.Height != expectedHeight)
             {
                 throw new ArgumentException(
@@ -1934,37 +1941,37 @@ internal static class Cli
     private static ArrayBitmap<Rgba8UNorm> DecodeTexture(DdsTexture texture, TextureSubresourceSelection selection)
     {
         var subresource = GetSubresource(texture, selection);
-        return DecodeSubresource(texture.Format, subresource);
+        return DecodeSubresource(texture.Texture.Format, subresource);
     }
 
     private static ArrayBitmap<Rgba8UNorm> DecodeTexture(KtxTexture texture, TextureSubresourceSelection selection)
     {
         var subresource = GetSubresource(texture, selection);
-        return DecodeSubresource(texture.Format, subresource);
+        return DecodeSubresource(texture.Texture.Format, subresource);
     }
 
     private static ArrayBitmap<Rgba8UNorm> DecodeTexture(PvrTexture texture, TextureSubresourceSelection selection)
     {
         var subresource = GetSubresource(texture, selection);
-        return DecodeSubresource(texture.Format, subresource);
+        return DecodeSubresource(texture.Texture.Format, subresource);
     }
 
     private static TextureSubresource GetSubresource(DdsTexture texture, TextureSubresourceSelection selection)
     {
-        ValidateSelection(texture.MipLevelCount, texture.ArrayLayerCount, texture.FaceCount, selection);
-        return texture.GetSubresource(selection.MipLevel, selection.ArrayLayer, selection.FaceIndex);
+        ValidateSelection(texture.Texture.MipLevelCount, texture.Texture.ArrayLayerCount, texture.Texture.FaceCount, selection);
+        return texture.Texture.GetSubresource(selection.MipLevel, selection.ArrayLayer, selection.FaceIndex);
     }
 
     private static TextureSubresource GetSubresource(KtxTexture texture, TextureSubresourceSelection selection)
     {
-        ValidateSelection(texture.MipLevelCount, texture.ArrayLayerCount, texture.FaceCount, selection);
-        return texture.GetSubresource(selection.MipLevel, selection.ArrayLayer, selection.FaceIndex);
+        ValidateSelection(texture.Texture.MipLevelCount, texture.Texture.ArrayLayerCount, texture.Texture.FaceCount, selection);
+        return texture.Texture.GetSubresource(selection.MipLevel, selection.ArrayLayer, selection.FaceIndex);
     }
 
     private static TextureSubresource GetSubresource(PvrTexture texture, TextureSubresourceSelection selection)
     {
-        ValidateSelection(texture.MipLevelCount, texture.ArrayLayerCount, texture.FaceCount, selection);
-        return texture.GetSubresource(selection.MipLevel, selection.ArrayLayer, selection.FaceIndex);
+        ValidateSelection(texture.Texture.MipLevelCount, texture.Texture.ArrayLayerCount, texture.Texture.FaceCount, selection);
+        return texture.Texture.GetSubresource(selection.MipLevel, selection.ArrayLayer, selection.FaceIndex);
     }
 
     private static ArrayBitmap<Rgba8UNorm> DecodeSubresource(TextureFormat format, TextureSubresource subresource)

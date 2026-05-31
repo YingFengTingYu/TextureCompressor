@@ -1,4 +1,4 @@
-using System.Buffers.Binary;
+﻿using System.Buffers.Binary;
 using TextureCompressor.Bitmaps;
 using TextureCompressor.Colors;
 using TextureCompressor.FileFormats.Dds;
@@ -26,7 +26,7 @@ public sealed class DdsCodecTests
         var decoded = DdsCodec.Decode(dds);
 
         AssertDx10Header(dds, DdsDxgiFormat.R8G8B8A8UNorm, width: 2, height: 2, payloadSize: 16);
-        Assert.Equal(TextureFormats.Rgba8UNorm, texture.Format);
+        Assert.Equal(TextureFormats.Rgba8UNorm, texture.Texture.Format);
         Assert.Equal(DdsHeaderKind.Dxt10, texture.HeaderKind);
         Assert.Equal(DdsDxgiFormat.R8G8B8A8UNorm, texture.DxgiFormat);
         Assert.Equal(source.PixelSpan.ToArray(), decoded.PixelSpan.ToArray());
@@ -48,7 +48,7 @@ public sealed class DdsCodecTests
         var decoded = DdsCodec.Decode(dds);
 
         AssertLegacyRgba8Header(dds, width: 2, height: 1, payloadSize: 8);
-        Assert.Equal(TextureFormats.Rgba8UNorm, texture.Format);
+        Assert.Equal(TextureFormats.Rgba8UNorm, texture.Texture.Format);
         Assert.Equal(DdsHeaderKind.Legacy, texture.HeaderKind);
         Assert.Equal(DdsLegacyPixelFormat.Rgba8UNorm, texture.LegacyPixelFormat);
         Assert.Equal(source.PixelSpan.ToArray(), decoded.PixelSpan.ToArray());
@@ -66,7 +66,7 @@ public sealed class DdsCodecTests
         var texture = DdsCodec.Read(dds);
 
         AssertDx10Header(dds, DdsDxgiFormat.BC1UNorm, width: 4, height: 4, payloadSize: 8);
-        Assert.Equal(TextureFormats.Bc1Rgba, texture.Format);
+        Assert.Equal(TextureFormats.Bc1Rgba, texture.Texture.Format);
     }
 
     [Fact]
@@ -86,7 +86,7 @@ public sealed class DdsCodecTests
 
         Assert.Equal(MakeFourCc("DXT5"), BinaryPrimitives.ReadUInt32LittleEndian(dds.AsSpan(84, 4)));
         Assert.Equal(128 + 16, dds.Length);
-        Assert.Equal(TextureFormats.Bc3Rgba, texture.Format);
+        Assert.Equal(TextureFormats.Bc3Rgba, texture.Texture.Format);
         Assert.Equal(DdsLegacyPixelFormat.Dxt5, texture.LegacyPixelFormat);
     }
 
@@ -113,7 +113,7 @@ public sealed class DdsCodecTests
         Assert.Equal(0x0000ff00u, BinaryPrimitives.ReadUInt32LittleEndian(dds.AsSpan(96, 4)));
         Assert.Equal(0x000000ffu, BinaryPrimitives.ReadUInt32LittleEndian(dds.AsSpan(100, 4)));
         Assert.Equal(0xff000000u, BinaryPrimitives.ReadUInt32LittleEndian(dds.AsSpan(104, 4)));
-        Assert.Equal(TextureFormats.Bgra8, texture.Format);
+        Assert.Equal(TextureFormats.Bgra8, texture.Texture.Format);
         Assert.Equal(source.PixelSpan.ToArray(), decoded.PixelSpan.ToArray());
     }
 
@@ -135,15 +135,15 @@ public sealed class DdsCodecTests
 
         var texture = DdsCodec.Read(dds);
 
-        Assert.Equal(2, texture.MipLevelCount);
-        Assert.Equal(2, texture.MipLevels[0].Width);
-        Assert.Equal(2, texture.MipLevels[0].Height);
-        Assert.Equal(16, texture.MipLevels[0].Payload.Length);
-        Assert.Equal(1, texture.MipLevels[1].Width);
-        Assert.Equal(1, texture.MipLevels[1].Height);
-        Assert.Equal(4, texture.MipLevels[1].Payload.Length);
-        Assert.Equal(1, texture.MipLevels[0].Payload[0]);
-        Assert.Equal(2, texture.MipLevels[1].Payload[0]);
+        Assert.Equal(2, texture.Texture.MipLevelCount);
+        Assert.Equal(2, texture.Texture.GetSubresource(0).Width);
+        Assert.Equal(2, texture.Texture.GetSubresource(0).Height);
+        Assert.Equal(16, texture.Texture.GetSubresource(0).Payload.Length);
+        Assert.Equal(1, texture.Texture.GetSubresource(1).Width);
+        Assert.Equal(1, texture.Texture.GetSubresource(1).Height);
+        Assert.Equal(4, texture.Texture.GetSubresource(1).Payload.Length);
+        Assert.Equal(1, texture.Texture.GetSubresource(0).Payload[0]);
+        Assert.Equal(2, texture.Texture.GetSubresource(1).Payload[0]);
     }
 
     [Fact]
@@ -152,9 +152,10 @@ public sealed class DdsCodecTests
         var texture = new DdsTexture(
             TextureFormats.Rgba8UNorm,
             [
-                new TextureMipLevel(2, 2, Enumerable.Repeat((byte)1, 16).ToArray()),
-                new TextureMipLevel(1, 1, Enumerable.Repeat((byte)2, 4).ToArray())
-            ]);
+                new TextureSubresource(0, 0, 0, 2, 2, Enumerable.Repeat((byte)1, 16).ToArray()),
+                new TextureSubresource(1, 0, 0, 1, 1, Enumerable.Repeat((byte)2, 4).ToArray())
+            ],
+            faceCount: 1);
 
         var dds = DdsCodec.Write(texture);
         var read = DdsCodec.Read(dds);
@@ -162,9 +163,9 @@ public sealed class DdsCodecTests
         Assert.Equal(2u, BinaryPrimitives.ReadUInt32LittleEndian(dds.AsSpan(28, 4)));
         Assert.Equal(0x00401008u, BinaryPrimitives.ReadUInt32LittleEndian(dds.AsSpan(108, 4)));
         Assert.Equal(148 + 16 + 4, dds.Length);
-        Assert.Equal(2, read.MipLevelCount);
-        Assert.Equal(texture.MipLevels[0].Payload, read.MipLevels[0].Payload);
-        Assert.Equal(texture.MipLevels[1].Payload, read.MipLevels[1].Payload);
+        Assert.Equal(2, read.Texture.MipLevelCount);
+        Assert.Equal(texture.Texture.GetSubresource(0).Payload, read.Texture.GetSubresource(0).Payload);
+        Assert.Equal(texture.Texture.GetSubresource(1).Payload, read.Texture.GetSubresource(1).Payload);
     }
 
     [Fact]
@@ -185,11 +186,11 @@ public sealed class DdsCodecTests
         var read = DdsCodec.Read(dds);
 
         Assert.Equal(3u, BinaryPrimitives.ReadUInt32LittleEndian(dds.AsSpan(28, 4)));
-        Assert.Equal(TextureFormats.Bc1Rgba, read.Format);
-        Assert.Equal(3, read.MipLevelCount);
-        Assert.Equal(new[] { 7, 3, 1 }, read.MipLevels.Select(level => level.Width));
-        Assert.Equal(new[] { 5, 2, 1 }, read.MipLevels.Select(level => level.Height));
-        Assert.Equal(new[] { 32, 8, 8 }, read.MipLevels.Select(level => level.Payload.Length));
+        Assert.Equal(TextureFormats.Bc1Rgba, read.Texture.Format);
+        Assert.Equal(3, read.Texture.MipLevelCount);
+        Assert.Equal(new[] { 7, 3, 1 }, read.Texture.Subresources.Select(level => level.Width));
+        Assert.Equal(new[] { 5, 2, 1 }, read.Texture.Subresources.Select(level => level.Height));
+        Assert.Equal(new[] { 32, 8, 8 }, read.Texture.Subresources.Select(level => level.Payload.Length));
     }
 
     [Fact]
@@ -214,15 +215,15 @@ public sealed class DdsCodecTests
 
         var texture = DdsCodec.Read(dds);
 
-        Assert.True(texture.IsCubeMap);
-        Assert.Equal(6, texture.FaceCount);
-        Assert.Equal(12, texture.Subresources.Count);
-        Assert.Equal(2, texture.MipLevelCount);
-        Assert.Equal(1, texture.GetSubresource(mipLevel: 0, faceIndex: 0).Payload[0]);
-        Assert.Equal(6, texture.GetSubresource(mipLevel: 0, faceIndex: 5).Payload[0]);
-        Assert.Equal(16, texture.GetSubresource(mipLevel: 1, faceIndex: 5).Payload[0]);
-        Assert.Equal(2, texture.MipLevels.Count);
-        Assert.Equal(1, texture.Payload[0]);
+        Assert.True(texture.Texture.IsCubeMap);
+        Assert.Equal(6, texture.Texture.FaceCount);
+        Assert.Equal(12, texture.Texture.Subresources.Count);
+        Assert.Equal(2, texture.Texture.MipLevelCount);
+        Assert.Equal(1, texture.Texture.GetSubresource(mipLevel: 0, faceIndex: 0).Payload[0]);
+        Assert.Equal(6, texture.Texture.GetSubresource(mipLevel: 0, faceIndex: 5).Payload[0]);
+        Assert.Equal(16, texture.Texture.GetSubresource(mipLevel: 1, faceIndex: 5).Payload[0]);
+        Assert.Equal(2, texture.Texture.MipLevelCount);
+        Assert.Equal(1, texture.Texture.Payload[0]);
     }
 
     [Fact]
@@ -237,10 +238,10 @@ public sealed class DdsCodecTests
         Assert.Equal(0x00000004u, BinaryPrimitives.ReadUInt32LittleEndian(dds.AsSpan(136, 4)));
         Assert.Equal(1u, BinaryPrimitives.ReadUInt32LittleEndian(dds.AsSpan(140, 4)));
         Assert.Equal(148 + (6 * (16 + 4)), dds.Length);
-        Assert.True(read.IsCubeMap);
-        Assert.Equal(6, read.FaceCount);
-        Assert.Equal(6, read.GetSubresource(mipLevel: 0, faceIndex: 5).Payload[0]);
-        Assert.Equal(16, read.GetSubresource(mipLevel: 1, faceIndex: 5).Payload[0]);
+        Assert.True(read.Texture.IsCubeMap);
+        Assert.Equal(6, read.Texture.FaceCount);
+        Assert.Equal(6, read.Texture.GetSubresource(mipLevel: 0, faceIndex: 5).Payload[0]);
+        Assert.Equal(16, read.Texture.GetSubresource(mipLevel: 1, faceIndex: 5).Payload[0]);
     }
 
     [Fact]
@@ -254,8 +255,8 @@ public sealed class DdsCodecTests
         Assert.Equal(0x0000fe00u, BinaryPrimitives.ReadUInt32LittleEndian(dds.AsSpan(112, 4)));
         Assert.Equal(128 + (6 * 4), dds.Length);
         Assert.Equal(DdsHeaderKind.Legacy, read.HeaderKind);
-        Assert.True(read.IsCubeMap);
-        Assert.Equal(6, read.GetSubresource(mipLevel: 0, faceIndex: 5).Payload[0]);
+        Assert.True(read.Texture.IsCubeMap);
+        Assert.Equal(6, read.Texture.GetSubresource(mipLevel: 0, faceIndex: 5).Payload[0]);
     }
 
     [Fact]
@@ -279,12 +280,12 @@ public sealed class DdsCodecTests
 
         var texture = DdsCodec.Read(dds);
 
-        Assert.Equal(2, texture.ArrayLayerCount);
-        Assert.Equal(1, texture.FaceCount);
-        Assert.Equal(4, texture.Subresources.Count);
-        Assert.Equal(1, texture.GetSubresource(mipLevel: 0, arrayLayer: 0).Payload[0]);
-        Assert.Equal(2, texture.GetSubresource(mipLevel: 0, arrayLayer: 1).Payload[0]);
-        Assert.Equal(12, texture.GetSubresource(mipLevel: 1, arrayLayer: 1).Payload[0]);
+        Assert.Equal(2, texture.Texture.ArrayLayerCount);
+        Assert.Equal(1, texture.Texture.FaceCount);
+        Assert.Equal(4, texture.Texture.Subresources.Count);
+        Assert.Equal(1, texture.Texture.GetSubresource(mipLevel: 0, arrayLayer: 0).Payload[0]);
+        Assert.Equal(2, texture.Texture.GetSubresource(mipLevel: 0, arrayLayer: 1).Payload[0]);
+        Assert.Equal(12, texture.Texture.GetSubresource(mipLevel: 1, arrayLayer: 1).Payload[0]);
     }
 
     [Fact]
@@ -297,10 +298,10 @@ public sealed class DdsCodecTests
 
         Assert.Equal(2u, BinaryPrimitives.ReadUInt32LittleEndian(dds.AsSpan(140, 4)));
         Assert.Equal(148 + (2 * (16 + 4)), dds.Length);
-        Assert.Equal(2, read.ArrayLayerCount);
-        Assert.Equal(1, read.GetSubresource(mipLevel: 0, arrayLayer: 0).Payload[0]);
-        Assert.Equal(2, read.GetSubresource(mipLevel: 0, arrayLayer: 1).Payload[0]);
-        Assert.Equal(12, read.GetSubresource(mipLevel: 1, arrayLayer: 1).Payload[0]);
+        Assert.Equal(2, read.Texture.ArrayLayerCount);
+        Assert.Equal(1, read.Texture.GetSubresource(mipLevel: 0, arrayLayer: 0).Payload[0]);
+        Assert.Equal(2, read.Texture.GetSubresource(mipLevel: 0, arrayLayer: 1).Payload[0]);
+        Assert.Equal(12, read.Texture.GetSubresource(mipLevel: 1, arrayLayer: 1).Payload[0]);
     }
 
     [Fact]
@@ -380,8 +381,8 @@ public sealed class DdsCodecTests
         {
             for (var mipLevel = 0; mipLevel < mipLevelCount; mipLevel++)
             {
-                var mipWidth = TextureMipLevel.GetDimension(width, mipLevel);
-                var mipHeight = TextureMipLevel.GetDimension(height, mipLevel);
+                var mipWidth = TextureImage.GetMipDimension(width, mipLevel);
+                var mipHeight = TextureImage.GetMipDimension(height, mipLevel);
                 var byteCount = checked(mipWidth * mipHeight * 4);
                 subresources[index++] = new TextureSubresource(
                     mipLevel,
@@ -404,8 +405,8 @@ public sealed class DdsCodecTests
         {
             for (var mipLevel = 0; mipLevel < mipLevelCount; mipLevel++)
             {
-                var mipWidth = TextureMipLevel.GetDimension(width, mipLevel);
-                var mipHeight = TextureMipLevel.GetDimension(height, mipLevel);
+                var mipWidth = TextureImage.GetMipDimension(width, mipLevel);
+                var mipHeight = TextureImage.GetMipDimension(height, mipLevel);
                 var byteCount = checked(mipWidth * mipHeight * 4);
                 subresources[index++] = new TextureSubresource(
                     mipLevel,
