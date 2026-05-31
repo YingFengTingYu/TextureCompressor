@@ -25,6 +25,7 @@ internal static class Cli
     {
         var root = new RootCommand("TextureCompressor development CLI.");
         root.Subcommands.Add(CreateConvertCommand());
+        root.Subcommands.Add(CreateAssembleCommand());
         root.Subcommands.Add(CreateQualityCommand());
         root.Subcommands.Add(CreateFormatsCommand());
         root.Subcommands.Add(CreateInfoCommand("info", "Print metadata for a supported texture or image container."));
@@ -42,19 +43,7 @@ internal static class Cli
         {
             Description = "Output texture or image file."
         };
-        var formatOption = new Option<string>("--format", "-f")
-        {
-            Description = "TextureFormats field name or texture format name. Use `formats <query>` to search.",
-            DefaultValueFactory = _ => nameof(TextureFormats.Rgba8UNorm)
-        };
-        formatOption.Validators.Add(result =>
-        {
-            var value = result.GetValueOrDefault<string>();
-            if (value is not null && !TextureFormatCatalog.TryGet(value, out _))
-            {
-                result.AddError(BuildUnknownFormatMessage(value));
-            }
-        });
+        var formatOption = CreateFormatOption();
         var containerOption = new Option<TextureContainer?>("--container", "-c")
         {
             Description = "Output container. Defaults to the output file extension."
@@ -353,6 +342,156 @@ internal static class Cli
         }));
 
         return command;
+    }
+
+    private static Command CreateAssembleCommand()
+    {
+        var outputArgument = new Argument<FileInfo>("output")
+        {
+            Description = "Output DDS, KTX, or PVR texture file."
+        };
+        var layersOption = new Option<FileInfo[]>("--layers")
+        {
+            Description = "Input images to assemble as 2D array layers.",
+            Arity = ArgumentArity.OneOrMore,
+            AllowMultipleArgumentsPerToken = true
+        };
+        var cubeOption = new Option<FileInfo[]>("--cube")
+        {
+            Description = "Six input images for cube faces in PositiveX NegativeX PositiveY NegativeY PositiveZ NegativeZ order.",
+            Arity = new ArgumentArity(6, 6),
+            AllowMultipleArgumentsPerToken = true
+        };
+        var mipsOption = new Option<FileInfo[]>("--mips")
+        {
+            Description = "Input images to assemble as an explicit mip-map chain.",
+            Arity = ArgumentArity.OneOrMore,
+            AllowMultipleArgumentsPerToken = true
+        };
+        var formatOption = CreateFormatOption();
+        var containerOption = new Option<TextureContainer?>("--container", "-c")
+        {
+            Description = "Output container. Defaults to the output file extension."
+        };
+        var pngColorSpaceOption = new Option<ImageColorSpace>("--png-color-space")
+        {
+            Description = "How to interpret PNG RGB values.",
+            DefaultValueFactory = _ => ImageColorSpace.Linear
+        };
+        var jpgColorSpaceOption = new Option<ImageColorSpace>("--jpg-color-space")
+        {
+            Description = "How to interpret JPEG RGB values.",
+            DefaultValueFactory = _ => ImageColorSpace.Linear
+        };
+        var gifColorSpaceOption = new Option<ImageColorSpace>("--gif-color-space")
+        {
+            Description = "How to interpret GIF RGB values.",
+            DefaultValueFactory = _ => ImageColorSpace.Linear
+        };
+        var ktxVersionOption = new Option<int>("--ktx-version")
+        {
+            Description = "KTX version to write. Defaults to 2 for .ktx2 outputs and 1 otherwise.",
+            DefaultValueFactory = _ => 1
+        };
+        ktxVersionOption.Validators.Add(result =>
+        {
+            var version = result.GetValueOrDefault<int>();
+            if (version is not (1 or 2))
+            {
+                result.AddError("--ktx-version must be 1 or 2.");
+            }
+        });
+        var qualityOption = new Option<TextureCompressionLevel?>("--quality")
+        {
+            Description = "Built-in texture compression quality."
+        };
+
+        var command = new Command("assemble", "Assemble multiple image files into a DDS, KTX, or PVR texture.");
+        command.Arguments.Add(outputArgument);
+        command.Options.Add(layersOption);
+        command.Options.Add(cubeOption);
+        command.Options.Add(mipsOption);
+        command.Options.Add(formatOption);
+        command.Options.Add(containerOption);
+        command.Options.Add(pngColorSpaceOption);
+        command.Options.Add(jpgColorSpaceOption);
+        command.Options.Add(gifColorSpaceOption);
+        command.Options.Add(ktxVersionOption);
+        command.Options.Add(qualityOption);
+        command.Validators.Add(result =>
+        {
+            var modeCount = 0;
+            if (result.GetResult(layersOption) is { Implicit: false })
+            {
+                modeCount++;
+            }
+
+            if (result.GetResult(cubeOption) is { Implicit: false })
+            {
+                modeCount++;
+            }
+
+            if (result.GetResult(mipsOption) is { Implicit: false })
+            {
+                modeCount++;
+            }
+
+            if (modeCount != 1)
+            {
+                result.AddError("Specify exactly one of --layers, --cube, or --mips.");
+            }
+        });
+        command.SetAction(parseResult => RunCommand(() =>
+        {
+            var outputPath = RequireFile(parseResult.GetValue(outputArgument), "output").FullName;
+            var outputKind = parseResult.GetValue(containerOption) ?? GetContainer(outputPath);
+            if (!IsStructuredTextureContainer(outputKind))
+            {
+                throw new NotSupportedException("Assemble output must be DDS, KTX, or PVR.");
+            }
+
+            var format = TextureFormatCatalog.Get(parseResult.GetValue(formatOption) ?? nameof(TextureFormats.Rgba8UNorm));
+            var ktxVersion = IsOptionExplicit(parseResult, ktxVersionOption)
+                ? parseResult.GetValue(ktxVersionOption)
+                : GetDefaultKtxVersion(outputPath);
+            var colorSpaces = new ImageColorSpaces(
+                parseResult.GetValue(pngColorSpaceOption),
+                parseResult.GetValue(jpgColorSpaceOption),
+                parseResult.GetValue(gifColorSpaceOption));
+            var quality = parseResult.GetValue(qualityOption);
+
+            using var compressionRegistration = CreateTextureCompressionRegistration(format, quality);
+            var texture = CreateAssembledTexture(
+                format,
+                colorSpaces,
+                parseResult.GetValue(layersOption) ?? [],
+                parseResult.GetValue(cubeOption) ?? [],
+                parseResult.GetValue(mipsOption) ?? []);
+            WriteStructuredTexture(texture, outputPath, outputKind, format, ktxVersion, quality: null);
+            Console.WriteLine($"wrote {outputPath}");
+            return 0;
+        }));
+
+        return command;
+    }
+
+    private static Option<string> CreateFormatOption()
+    {
+        var option = new Option<string>("--format", "-f")
+        {
+            Description = "TextureFormats field name or texture format name. Use `formats <query>` to search.",
+            DefaultValueFactory = _ => nameof(TextureFormats.Rgba8UNorm)
+        };
+        option.Validators.Add(result =>
+        {
+            var value = result.GetValueOrDefault<string>();
+            if (value is not null && !TextureFormatCatalog.TryGet(value, out _))
+            {
+                result.AddError(BuildUnknownFormatMessage(value));
+            }
+        });
+
+        return option;
     }
 
     private static Option<int> CreateMipOption(string name = "--mip", string? description = null)
@@ -824,6 +963,154 @@ internal static class Cli
 
     private static TexturePayload FromTexture(PvrTexture texture) =>
         new(texture.Format, texture.Subresources, texture.MipLevelCount, texture.ArrayLayerCount, texture.FaceCount);
+
+    private static TexturePayload CreateAssembledTexture(
+        TextureFormat format,
+        ImageColorSpaces colorSpaces,
+        IReadOnlyList<FileInfo> layerFiles,
+        IReadOnlyList<FileInfo> cubeFiles,
+        IReadOnlyList<FileInfo> mipFiles)
+    {
+        if (layerFiles.Count != 0)
+        {
+            return CreateArrayLayerTexture(format, DecodeImageFiles(layerFiles, colorSpaces));
+        }
+
+        if (cubeFiles.Count != 0)
+        {
+            return CreateCubeTexture(format, DecodeImageFiles(cubeFiles, colorSpaces));
+        }
+
+        if (mipFiles.Count != 0)
+        {
+            return CreateMipChainTexture(format, DecodeImageFiles(mipFiles, colorSpaces));
+        }
+
+        throw new ArgumentException("Specify exactly one of --layers, --cube, or --mips.");
+    }
+
+    private static TexturePayload CreateArrayLayerTexture(TextureFormat format, IReadOnlyList<ArrayBitmap<Rgba8UNorm>> images)
+    {
+        EnsureImageCount(images, minimumCount: 1, "--layers");
+        EnsureSameDimensions(images, "--layers");
+
+        var subresources = new TextureSubresource[images.Count];
+        for (var layer = 0; layer < images.Count; layer++)
+        {
+            var image = images[layer];
+            subresources[layer] = EncodeSubresource(format, image, mipLevel: 0, arrayLayer: layer, faceIndex: 0);
+        }
+
+        return new TexturePayload(format, subresources, MipLevelCount: 1, ArrayLayerCount: images.Count, FaceCount: 1);
+    }
+
+    private static TexturePayload CreateCubeTexture(TextureFormat format, IReadOnlyList<ArrayBitmap<Rgba8UNorm>> images)
+    {
+        if (images.Count != 6)
+        {
+            throw new ArgumentException("--cube requires exactly six input images.");
+        }
+
+        EnsureSameDimensions(images, "--cube");
+        if (images[0].Width != images[0].Height)
+        {
+            throw new ArgumentException("--cube input images must be square.");
+        }
+
+        var subresources = new TextureSubresource[images.Count];
+        for (var face = 0; face < images.Count; face++)
+        {
+            var image = images[face];
+            subresources[face] = EncodeSubresource(format, image, mipLevel: 0, arrayLayer: 0, face);
+        }
+
+        return new TexturePayload(format, subresources, MipLevelCount: 1, ArrayLayerCount: 1, FaceCount: 6);
+    }
+
+    private static TexturePayload CreateMipChainTexture(TextureFormat format, IReadOnlyList<ArrayBitmap<Rgba8UNorm>> images)
+    {
+        EnsureImageCount(images, minimumCount: 1, "--mips");
+        var fullMipLevelCount = TextureMipLevel.GetFullMipLevelCount(images[0].Width, images[0].Height);
+        if (images.Count > fullMipLevelCount)
+        {
+            throw new ArgumentException("--mips contains more images than the full mip chain for the base dimensions.");
+        }
+
+        var subresources = new TextureSubresource[images.Count];
+        for (var mipLevel = 0; mipLevel < images.Count; mipLevel++)
+        {
+            var image = images[mipLevel];
+            var expectedWidth = TextureMipLevel.GetDimension(images[0].Width, mipLevel);
+            var expectedHeight = TextureMipLevel.GetDimension(images[0].Height, mipLevel);
+            if (image.Width != expectedWidth || image.Height != expectedHeight)
+            {
+                throw new ArgumentException(
+                    $"--mips image {mipLevel} is {image.Width}x{image.Height}, but {expectedWidth}x{expectedHeight} was expected.");
+            }
+
+            subresources[mipLevel] = EncodeSubresource(format, image, mipLevel, arrayLayer: 0, faceIndex: 0);
+        }
+
+        return new TexturePayload(format, subresources, images.Count, ArrayLayerCount: 1, FaceCount: 1);
+    }
+
+    private static ArrayBitmap<Rgba8UNorm>[] DecodeImageFiles(IReadOnlyList<FileInfo> files, ImageColorSpaces colorSpaces)
+    {
+        var images = new ArrayBitmap<Rgba8UNorm>[files.Count];
+        for (var i = 0; i < files.Count; i++)
+        {
+            images[i] = DecodeAssembleImage(files[i], colorSpaces);
+        }
+
+        return images;
+    }
+
+    private static ArrayBitmap<Rgba8UNorm> DecodeAssembleImage(FileInfo file, ImageColorSpaces colorSpaces)
+    {
+        var path = file.FullName;
+        var container = GetContainer(path);
+        if (container is not (TextureContainer.Png or TextureContainer.Jpeg or TextureContainer.Gif))
+        {
+            throw new NotSupportedException("Assemble inputs must be PNG, JPEG, or GIF images.");
+        }
+
+        return Decode(path, colorSpaces);
+    }
+
+    private static TextureSubresource EncodeSubresource(
+        TextureFormat format,
+        IBitmap<Rgba8UNorm> image,
+        int mipLevel,
+        int arrayLayer,
+        int faceIndex)
+    {
+        var coder = TextureCoderManager.Global.GetCoder(format);
+        var payload = new byte[coder.GetEncodedByteCount(image.Width, image.Height)];
+        coder.Encode(image.AsView(), payload);
+        return new TextureSubresource(mipLevel, arrayLayer, faceIndex, image.Width, image.Height, payload);
+    }
+
+    private static void EnsureImageCount(IReadOnlyList<ArrayBitmap<Rgba8UNorm>> images, int minimumCount, string optionName)
+    {
+        if (images.Count < minimumCount)
+        {
+            throw new ArgumentException($"{optionName} requires at least {minimumCount} input image(s).");
+        }
+    }
+
+    private static void EnsureSameDimensions(IReadOnlyList<ArrayBitmap<Rgba8UNorm>> images, string optionName)
+    {
+        var width = images[0].Width;
+        var height = images[0].Height;
+        for (var i = 1; i < images.Count; i++)
+        {
+            if (images[i].Width != width || images[i].Height != height)
+            {
+                throw new ArgumentException(
+                    $"{optionName} image {i} is {images[i].Width}x{images[i].Height}, but {width}x{height} was expected.");
+            }
+        }
+    }
 
     private static void WriteStructuredTexture(
         TexturePayload texture,
