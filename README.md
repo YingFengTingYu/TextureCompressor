@@ -422,6 +422,7 @@ dotnet run --project src/TextureCompressor.Cli -- convert input.png output.dds -
 dotnet run --project src/TextureCompressor.Cli -- convert input.png output.ktx2 --format Bc7Srgb --ktx-version 2 --quality High
 dotnet run --project src/TextureCompressor.Cli -- assemble array.ktx2 --layers layer0.png layer1.png
 dotnet run --project src/TextureCompressor.Cli -- assemble skybox.dds --cube px.png nx.png py.png ny.png pz.png nz.png
+dotnet run --project src/TextureCompressor.Cli -- extract array.ktx2 extracted --manifest
 dotnet run --project src/TextureCompressor.Cli -- quality source.png output.dds
 ```
 
@@ -431,9 +432,10 @@ Common commands:
 - `info <input>` / `inspect <input>`: print container metadata such as size, texture format, mip levels, payload size, and container-specific header fields; add `--subresources` to list mip/layer/face payloads.
 - `convert <input> <output>`: convert between image and texture containers. The output container is inferred from the extension unless `--container` is passed explicitly. DDS/KTX/PVR to DDS/KTX/PVR conversions preserve mip levels, array layers, and cube faces by default; omit `--format` to keep the source texture format, or pass `--format` to re-encode every subresource. Texture inputs can select a single subresource with `--mip`, `--layer`, and `--face`.
 - `assemble <output>`: build a DDS/KTX/PVR texture from PNG/JPEG/GIF images. Use exactly one of `--layers`, `--cube`, or `--mips`; `--cube` expects PositiveX, NegativeX, PositiveY, NegativeY, PositiveZ, NegativeZ order.
+- `extract <input> <output-directory>`: extract DDS/KTX/PVR subresources to PNG/JPEG/GIF images. Add `--mip`, `--layer`, or `--face` to filter, `--container` to choose the image type, `--pattern` to control file names, and `--manifest` to write JSON metadata.
 - `quality <expected> <actual>`: decode two image/texture files and print MSE, RMSE, and PSNR; add `--ignore-alpha` to ignore alpha. Use `--mip`/`--layer`/`--face` for both inputs, or `--expected-*` and `--actual-*` options to select each input independently.
 
-Image containers support PNG, JPEG, and GIF. `convert` and `assemble` provide `--png-color-space`, `--jpg-color-space`, and `--gif-color-space` conversions between Linear and Srgb. JPEG output quality is controlled with `--jpeg-quality`; S3TC, FXT1, ETC/EAC, ASTC, ATC, RGTC/LATC, BPTC, and PVRTC built-in texture encoding quality can be selected with `--quality`. DDS, KTX, and PVR outputs can generate full mip-map chains with `--mipmaps Generate` during single-image conversion.
+Image containers support PNG, JPEG, and GIF. `convert`, `assemble`, and `extract` provide `--png-color-space`, `--jpg-color-space`, and `--gif-color-space` conversions between Linear and Srgb. JPEG output quality is controlled with `--jpeg-quality`; S3TC, FXT1, ETC/EAC, ASTC, ATC, RGTC/LATC, BPTC, and PVRTC built-in texture encoding quality can be selected with `--quality`. DDS, KTX, and PVR outputs can generate full mip-map chains with `--mipmaps Generate` during single-image conversion.
 
 ## Common Workflows
 

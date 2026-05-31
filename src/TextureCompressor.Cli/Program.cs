@@ -1,6 +1,7 @@
 ﻿using System.CommandLine;
 using System.Buffers.Binary;
 using System.Globalization;
+using System.Text.Json;
 using TextureCompressor.Analysis;
 using TextureCompressor.Bitmaps;
 using TextureCompressor.Colors;
@@ -26,6 +27,7 @@ internal static class Cli
         var root = new RootCommand("TextureCompressor development CLI.");
         root.Subcommands.Add(CreateConvertCommand());
         root.Subcommands.Add(CreateAssembleCommand());
+        root.Subcommands.Add(CreateExtractCommand());
         root.Subcommands.Add(CreateQualityCommand());
         root.Subcommands.Add(CreateFormatsCommand());
         root.Subcommands.Add(CreateInfoCommand("info", "Print metadata for a supported texture or image container."));
@@ -475,6 +477,131 @@ internal static class Cli
         return command;
     }
 
+    private static Command CreateExtractCommand()
+    {
+        var inputArgument = new Argument<FileInfo>("input")
+        {
+            Description = "Input DDS, KTX, or PVR texture file."
+        };
+        var outputDirectoryArgument = new Argument<DirectoryInfo>("output-directory")
+        {
+            Description = "Directory where extracted images are written."
+        };
+        var containerOption = new Option<TextureContainer>("--container", "-c")
+        {
+            Description = "Output image container. Supported values are Png, Jpeg, and Gif.",
+            DefaultValueFactory = _ => TextureContainer.Png
+        };
+        containerOption.Validators.Add(result =>
+        {
+            var container = result.GetValueOrDefault<TextureContainer>();
+            if (!IsImageContainer(container))
+            {
+                result.AddError("--container for extract must be Png, Jpeg, or Gif.");
+            }
+        });
+        var patternOption = new Option<string>("--pattern")
+        {
+            Description = "Output file name pattern without extension. Supports {mip}, {layer}, {face}, {faceIndex}, {width}, and {height}.",
+            DefaultValueFactory = _ => "mip{mip}_layer{layer}_face{face}"
+        };
+        var manifestOption = new Option<bool>("--manifest")
+        {
+            Description = "Write manifest.json with extracted subresource metadata."
+        };
+        var pngColorSpaceOption = new Option<ImageColorSpace>("--png-color-space")
+        {
+            Description = "How to write PNG RGB values.",
+            DefaultValueFactory = _ => ImageColorSpace.Linear
+        };
+        var jpgColorSpaceOption = new Option<ImageColorSpace>("--jpg-color-space")
+        {
+            Description = "How to write JPEG RGB values.",
+            DefaultValueFactory = _ => ImageColorSpace.Linear
+        };
+        var gifColorSpaceOption = new Option<ImageColorSpace>("--gif-color-space")
+        {
+            Description = "How to write GIF RGB values.",
+            DefaultValueFactory = _ => ImageColorSpace.Linear
+        };
+        var jpegQualityOption = new Option<int>("--jpeg-quality")
+        {
+            Description = "JPEG output quality from 1 to 100.",
+            DefaultValueFactory = _ => 90
+        };
+        jpegQualityOption.Validators.Add(result =>
+        {
+            var quality = result.GetValueOrDefault<int>();
+            if (quality is < 1 or > 100)
+            {
+                result.AddError("--jpeg-quality must be between 1 and 100.");
+            }
+        });
+        var mipOption = CreateOptionalIndexOption("--mip", "Only extract this mip level.");
+        var layerOption = CreateOptionalIndexOption("--layer", "Only extract this array layer.");
+        var faceOption = CreateFaceOption("--face", "Only extract this cube-map face.");
+
+        var command = new Command("extract", "Extract DDS, KTX, or PVR subresources into image files.");
+        command.Arguments.Add(inputArgument);
+        command.Arguments.Add(outputDirectoryArgument);
+        command.Options.Add(containerOption);
+        command.Options.Add(patternOption);
+        command.Options.Add(manifestOption);
+        command.Options.Add(pngColorSpaceOption);
+        command.Options.Add(jpgColorSpaceOption);
+        command.Options.Add(gifColorSpaceOption);
+        command.Options.Add(jpegQualityOption);
+        command.Options.Add(mipOption);
+        command.Options.Add(layerOption);
+        command.Options.Add(faceOption);
+        command.SetAction(parseResult => RunCommand(() =>
+        {
+            var inputPath = RequireFile(parseResult.GetValue(inputArgument), "input").FullName;
+            var outputDirectory = RequireDirectory(parseResult.GetValue(outputDirectoryArgument), "output-directory").FullName;
+            var inputKind = GetContainer(inputPath);
+            if (!IsStructuredTextureContainer(inputKind))
+            {
+                throw new NotSupportedException("Extract input must be DDS, KTX, or PVR.");
+            }
+
+            var imageKind = parseResult.GetValue(containerOption);
+            var pattern = parseResult.GetValue(patternOption) ?? "mip{mip}_layer{layer}_face{face}";
+            var jpegQuality = parseResult.GetValue(jpegQualityOption);
+            var colorSpaces = new ImageColorSpaces(
+                parseResult.GetValue(pngColorSpaceOption),
+                parseResult.GetValue(jpgColorSpaceOption),
+                parseResult.GetValue(gifColorSpaceOption));
+            var texture = ReadStructuredTexture(inputPath, inputKind);
+            var subresources = SelectSubresources(
+                texture,
+                parseResult.GetValue(mipOption),
+                parseResult.GetValue(layerOption),
+                parseResult.GetValue(faceOption));
+
+            Directory.CreateDirectory(outputDirectory);
+            var manifestEntries = ExtractSubresources(
+                texture,
+                subresources,
+                outputDirectory,
+                imageKind,
+                pattern,
+                jpegQuality,
+                colorSpaces);
+            Console.WriteLine($"wrote {manifestEntries.Count} image(s) to {outputDirectory}");
+
+            if (parseResult.GetValue(manifestOption))
+            {
+                var manifestPath = Path.Combine(outputDirectory, "manifest.json");
+                WriteExtractManifest(inputPath, inputKind, texture, imageKind, manifestPath, manifestEntries);
+                Console.WriteLine($"wrote {manifestPath}");
+            }
+
+            return 0;
+        }));
+
+        return command;
+    }
+
     private static Option<string> CreateFormatOption()
     {
         var option = new Option<string>("--format", "-f")
@@ -530,6 +657,24 @@ internal static class Cli
         return option;
     }
 
+    private static Option<int?> CreateOptionalIndexOption(string name, string description)
+    {
+        var option = new Option<int?>(name)
+        {
+            Description = description
+        };
+        option.Validators.Add(result =>
+        {
+            var value = result.GetValueOrDefault<int?>();
+            if (value is < 0)
+            {
+                result.AddError($"{name} must be zero or greater.");
+            }
+        });
+
+        return option;
+    }
+
     private static Option<TextureCubeFace?> CreateFaceOption(string name = "--face", string? description = null) =>
         new(name)
         {
@@ -556,6 +701,9 @@ internal static class Cli
 
     private static FileInfo RequireFile(FileInfo? file, string argumentName) =>
         file ?? throw new ArgumentException($"Missing required argument '{argumentName}'.");
+
+    private static DirectoryInfo RequireDirectory(DirectoryInfo? directory, string argumentName) =>
+        directory ?? throw new ArgumentException($"Missing required argument '{argumentName}'.");
 
     private static bool IsOptionExplicit(ParseResult parseResult, Option option) =>
         parseResult.GetResult(option) is { Implicit: false };
@@ -784,13 +932,10 @@ internal static class Cli
         Console.WriteLine("Subresources:");
         foreach (var subresource in subresources)
         {
-            var face = faceCount == 6
-                ? ((TextureCubeFace)subresource.FaceIndex).ToString()
-                : FormatInvariant(subresource.FaceIndex);
             Console.WriteLine(
                 string.Create(
                     CultureInfo.InvariantCulture,
-                    $"  mip={subresource.MipLevel} layer={subresource.ArrayLayer} face={face} size={subresource.Width}x{subresource.Height} payload={subresource.Payload.Length}"));
+                    $"  mip={subresource.MipLevel} layer={subresource.ArrayLayer} face={FormatFace(subresource.FaceIndex, faceCount)} size={subresource.Width}x{subresource.Height} payload={subresource.Payload.Length}"));
         }
     }
 
@@ -934,6 +1079,11 @@ internal static class Cli
     private static string FormatSize(int width, int height) =>
         string.Create(CultureInfo.InvariantCulture, $"{width}x{height}");
 
+    private static string FormatFace(int faceIndex, int faceCount) =>
+        faceCount == 6
+            ? ((TextureCubeFace)faceIndex).ToString()
+            : FormatInvariant(faceIndex);
+
     private static string FormatInvariant(long value) =>
         value.ToString(CultureInfo.InvariantCulture);
 
@@ -945,6 +1095,18 @@ internal static class Cli
 
     private static bool IsStructuredTextureContainer(TextureContainer container) =>
         container is TextureContainer.Dds or TextureContainer.Ktx or TextureContainer.Pvr;
+
+    private static bool IsImageContainer(TextureContainer container) =>
+        container is TextureContainer.Png or TextureContainer.Jpeg or TextureContainer.Gif;
+
+    private static string GetImageExtension(TextureContainer container) =>
+        container switch
+        {
+            TextureContainer.Png => ".png",
+            TextureContainer.Jpeg => ".jpg",
+            TextureContainer.Gif => ".gif",
+            _ => throw new NotSupportedException($"'{FormatContainer(container)}' is not an image container.")
+        };
 
     private static TexturePayload ReadStructuredTexture(string path, TextureContainer container) =>
         container switch
@@ -963,6 +1125,167 @@ internal static class Cli
 
     private static TexturePayload FromTexture(PvrTexture texture) =>
         new(texture.Format, texture.Subresources, texture.MipLevelCount, texture.ArrayLayerCount, texture.FaceCount);
+
+    private static IReadOnlyList<ExtractManifestImage> ExtractSubresources(
+        TexturePayload texture,
+        IReadOnlyList<TextureSubresource> subresources,
+        string outputDirectory,
+        TextureContainer imageContainer,
+        string pattern,
+        int jpegQuality,
+        ImageColorSpaces colorSpaces)
+    {
+        var entries = new List<ExtractManifestImage>(subresources.Count);
+        var usedFileNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var subresource in subresources)
+        {
+            var fileName = BuildExtractFileName(subresource, texture.FaceCount, imageContainer, pattern);
+            if (!usedFileNames.Add(fileName))
+            {
+                throw new InvalidOperationException($"Pattern produced duplicate output file '{fileName}'.");
+            }
+
+            var outputPath = Path.Combine(outputDirectory, fileName);
+            var bitmap = DecodeSubresource(texture.Format, subresource);
+            Encode(bitmap, outputPath, imageContainer, TextureFormats.Rgba8UNorm, 1, jpegQuality, null, MipmapMode.None, colorSpaces);
+            entries.Add(new ExtractManifestImage(
+                subresource.MipLevel,
+                subresource.ArrayLayer,
+                FormatFace(subresource.FaceIndex, texture.FaceCount),
+                subresource.FaceIndex,
+                subresource.Width,
+                subresource.Height,
+                fileName));
+        }
+
+        return entries;
+    }
+
+    private static IReadOnlyList<TextureSubresource> SelectSubresources(
+        TexturePayload texture,
+        int? mipLevel,
+        int? arrayLayer,
+        TextureCubeFace? face)
+    {
+        if (mipLevel is { } selectedMipLevel && selectedMipLevel >= texture.MipLevelCount)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(mipLevel),
+                $"Mip level {selectedMipLevel} is outside the texture mip level count {texture.MipLevelCount}.");
+        }
+
+        if (arrayLayer is { } selectedArrayLayer && selectedArrayLayer >= texture.ArrayLayerCount)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(arrayLayer),
+                $"Array layer {selectedArrayLayer} is outside the texture array layer count {texture.ArrayLayerCount}.");
+        }
+
+        var faceIndex = face is { } selectedFace ? (int)selectedFace : (int?)null;
+        if (faceIndex is not null && texture.FaceCount != 6)
+        {
+            throw new ArgumentOutOfRangeException(nameof(face), "Face selection requires a cube-map texture.");
+        }
+
+        if (faceIndex is { } selectedFaceIndex && selectedFaceIndex >= texture.FaceCount)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(face),
+                $"Face index {selectedFaceIndex} is outside the texture face count {texture.FaceCount}.");
+        }
+
+        var selected = new List<TextureSubresource>();
+        foreach (var subresource in texture.Subresources)
+        {
+            if (mipLevel is { } mip && subresource.MipLevel != mip)
+            {
+                continue;
+            }
+
+            if (arrayLayer is { } layer && subresource.ArrayLayer != layer)
+            {
+                continue;
+            }
+
+            if (faceIndex is { } faceValue && subresource.FaceIndex != faceValue)
+            {
+                continue;
+            }
+
+            selected.Add(subresource);
+        }
+
+        return selected;
+    }
+
+    private static string BuildExtractFileName(
+        TextureSubresource subresource,
+        int faceCount,
+        TextureContainer imageContainer,
+        string pattern)
+    {
+        var face = FormatFace(subresource.FaceIndex, faceCount);
+        var stem = pattern
+            .Replace("{mip}", FormatInvariant(subresource.MipLevel), StringComparison.OrdinalIgnoreCase)
+            .Replace("{layer}", FormatInvariant(subresource.ArrayLayer), StringComparison.OrdinalIgnoreCase)
+            .Replace("{face}", face, StringComparison.OrdinalIgnoreCase)
+            .Replace("{faceIndex}", FormatInvariant(subresource.FaceIndex), StringComparison.OrdinalIgnoreCase)
+            .Replace("{width}", FormatInvariant(subresource.Width), StringComparison.OrdinalIgnoreCase)
+            .Replace("{height}", FormatInvariant(subresource.Height), StringComparison.OrdinalIgnoreCase);
+        stem = SanitizeFileName(stem);
+        if (string.IsNullOrWhiteSpace(stem))
+        {
+            throw new ArgumentException("--pattern produced an empty output file name.");
+        }
+
+        return stem + GetImageExtension(imageContainer);
+    }
+
+    private static string SanitizeFileName(string fileName)
+    {
+        var invalidChars = Path.GetInvalidFileNameChars();
+        var chars = fileName.ToCharArray();
+        for (var i = 0; i < chars.Length; i++)
+        {
+            if (Array.IndexOf(invalidChars, chars[i]) >= 0)
+            {
+                chars[i] = '_';
+            }
+        }
+
+        var sanitized = new string(chars).Trim();
+        return sanitized is "." or ".." ? "_" + sanitized : sanitized;
+    }
+
+    private static void WriteExtractManifest(
+        string inputPath,
+        TextureContainer sourceContainer,
+        TexturePayload texture,
+        TextureContainer imageContainer,
+        string manifestPath,
+        IReadOnlyList<ExtractManifestImage> images)
+    {
+        var baseSubresource = texture.GetSubresource(default);
+        var manifest = new ExtractManifest(
+            inputPath,
+            FormatContainer(sourceContainer),
+            FormatTextureFormat(texture.Format),
+            FormatContainer(imageContainer),
+            baseSubresource.Width,
+            baseSubresource.Height,
+            texture.MipLevelCount,
+            texture.ArrayLayerCount,
+            texture.FaceCount,
+            images);
+        var json = JsonSerializer.Serialize(
+            manifest,
+            new JsonSerializerOptions
+            {
+                PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+                WriteIndented = true
+            });
+        File.WriteAllText(manifestPath, json + Environment.NewLine);
+    }
 
     private static TexturePayload CreateAssembledTexture(
         TextureFormat format,
@@ -1770,6 +2093,27 @@ internal sealed record ImageColorSpaces(ImageColorSpace Png, ImageColorSpace Jpe
         ImageColorSpace.Linear,
         ImageColorSpace.Linear);
 }
+
+internal sealed record ExtractManifest(
+    string Source,
+    string SourceContainer,
+    string SourceFormat,
+    string ImageContainer,
+    int Width,
+    int Height,
+    int MipLevels,
+    int ArrayLayers,
+    int Faces,
+    IReadOnlyList<ExtractManifestImage> Images);
+
+internal sealed record ExtractManifestImage(
+    int Mip,
+    int Layer,
+    string Face,
+    int FaceIndex,
+    int Width,
+    int Height,
+    string File);
 
 internal sealed record KtxInfo(
     int Version,
