@@ -1,0 +1,41 @@
+namespace TextureCompressor.Formats;
+
+public sealed class TextureSubresource
+{
+    public TextureSubresource(
+        int mipLevel,
+        int arrayLayer,
+        int faceIndex,
+        int width,
+        int height,
+        byte[] payload)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegative(mipLevel);
+        ArgumentOutOfRangeException.ThrowIfNegative(arrayLayer);
+        ArgumentOutOfRangeException.ThrowIfNegative(faceIndex);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(width);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(height);
+        ArgumentNullException.ThrowIfNull(payload);
+
+        MipLevel = mipLevel;
+        ArrayLayer = arrayLayer;
+        FaceIndex = faceIndex;
+        Width = width;
+        Height = height;
+        Payload = payload;
+    }
+
+    public int MipLevel { get; }
+
+    public int ArrayLayer { get; }
+
+    public int FaceIndex { get; }
+
+    public int Width { get; }
+
+    public int Height { get; }
+
+    public byte[] Payload { get; }
+
+    public byte[] Data => Payload;
+}

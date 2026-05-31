@@ -266,6 +266,41 @@ public sealed class KtxCodecTests
     }
 
     [Fact]
+    public void WriteCubeMapWritesReadableKtx()
+    {
+        var texture = new KtxTexture(TextureFormats.Rgba8UNorm, CreateCubeSubresources(width: 1, height: 1, mipLevelCount: 1), faceCount: 6);
+
+        var ktx = KtxCodec.Write(texture);
+        var read = KtxCodec.Read(ktx);
+
+        Assert.Equal(6u, BinaryPrimitives.ReadUInt32LittleEndian(ktx.AsSpan(52, 4)));
+        Assert.Equal(4u, BinaryPrimitives.ReadUInt32LittleEndian(ktx.AsSpan(64, 4)));
+        Assert.Equal(68 + (6 * 4), ktx.Length);
+        Assert.True(read.IsCubeMap);
+        Assert.Equal(6, read.FaceCount);
+        Assert.Equal(6, read.GetSubresource(mipLevel: 0, faceIndex: 5).Payload[0]);
+        Assert.Equal(1, read.Payload[0]);
+    }
+
+    [Fact]
+    public void WriteCubeMapVersion2WritesReadableKtx2()
+    {
+        var texture = new KtxTexture(TextureFormats.Rgba8UNorm, CreateCubeSubresources(width: 1, height: 1, mipLevelCount: 1), faceCount: 6);
+
+        var ktx = KtxCodec.Write(texture, new KtxEncodingOptions { Version = KtxVersion.Version2 });
+        var read = KtxCodec.Read(ktx);
+
+        Assert.Equal(6u, BinaryPrimitives.ReadUInt32LittleEndian(ktx.AsSpan(36, 4)));
+        Assert.Equal(24ul, BinaryPrimitives.ReadUInt64LittleEndian(ktx.AsSpan(88, 8)));
+        Assert.Equal(24ul, BinaryPrimitives.ReadUInt64LittleEndian(ktx.AsSpan(96, 8)));
+        Assert.Equal(128 + (6 * 4), ktx.Length);
+        Assert.True(read.IsCubeMap);
+        Assert.Equal(6, read.FaceCount);
+        Assert.Equal(6, read.GetSubresource(mipLevel: 0, faceIndex: 5).Payload[0]);
+        Assert.Equal(1, read.Payload[0]);
+    }
+
+    [Fact]
     public void ReadVersion2SupercompressionThrows()
     {
         var ktx = CreateHeaderV2(KtxVkFormat.R8G8B8A8UNorm, width: 1, height: 1, supercompressionScheme: 1);
@@ -427,5 +462,29 @@ public sealed class KtxCodecTests
         BinaryPrimitives.WriteUInt64LittleEndian(ktx.AsSpan(96, 8), checked((ulong)(width * height * 4)));
         BinaryPrimitives.WriteUInt32LittleEndian(ktx.AsSpan(104, 4), 24);
         return ktx;
+    }
+
+    private static TextureSubresource[] CreateCubeSubresources(int width, int height, int mipLevelCount)
+    {
+        var subresources = new TextureSubresource[checked(6 * mipLevelCount)];
+        var index = 0;
+        for (var face = 0; face < 6; face++)
+        {
+            for (var mipLevel = 0; mipLevel < mipLevelCount; mipLevel++)
+            {
+                var mipWidth = TextureMipLevel.GetDimension(width, mipLevel);
+                var mipHeight = TextureMipLevel.GetDimension(height, mipLevel);
+                var byteCount = checked(mipWidth * mipHeight * 4);
+                subresources[index++] = new TextureSubresource(
+                    mipLevel,
+                    arrayLayer: 0,
+                    face,
+                    mipWidth,
+                    mipHeight,
+                    Enumerable.Repeat((byte)(face + 1 + (mipLevel * 10)), byteCount).ToArray());
+            }
+        }
+
+        return subresources;
     }
 }

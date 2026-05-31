@@ -330,7 +330,7 @@ internal static class Cli
 
     private static void PrintDdsInfo(DdsTexture texture, long fileBytes)
     {
-        PrintTextureInfo(TextureContainer.Dds, texture.Format, texture.Width, texture.Height, texture.MipLevels, fileBytes);
+        PrintTextureInfo(TextureContainer.Dds, texture.Format, texture.Width, texture.Height, texture.MipLevelCount, texture.ArrayLayerCount, texture.FaceCount, GetPayloadByteCount(texture.Subresources), fileBytes);
         PrintInfoLine("Header", texture.HeaderKind);
         if (texture.DxgiFormat is not null)
         {
@@ -346,7 +346,7 @@ internal static class Cli
 
     private static void PrintKtxInfo(KtxTexture texture, KtxInfo info, long fileBytes)
     {
-        PrintTextureInfo(TextureContainer.Ktx, texture.Format, texture.Width, texture.Height, texture.MipLevels, fileBytes);
+        PrintTextureInfo(TextureContainer.Ktx, texture.Format, texture.Width, texture.Height, texture.MipLevelCount, texture.ArrayLayerCount, texture.FaceCount, GetPayloadByteCount(texture.Subresources), fileBytes);
         PrintInfoLine("Version", info.Version);
         if (texture.VkFormat is not null)
         {
@@ -386,7 +386,7 @@ internal static class Cli
 
     private static void PrintPvrInfo(PvrTexture texture, PvrInfo info, long fileBytes)
     {
-        PrintTextureInfo(TextureContainer.Pvr, texture.Format, texture.Width, texture.Height, texture.MipLevels, fileBytes);
+        PrintTextureInfo(TextureContainer.Pvr, texture.Format, texture.Width, texture.Height, texture.MipLevelCount, texture.ArrayLayerCount, texture.FaceCount, GetPayloadByteCount(texture.Subresources), fileBytes);
         PrintInfoLine("Version", info.Version);
         if (info.PixelFormat is not null)
         {
@@ -432,6 +432,8 @@ internal static class Cli
             texture.Width,
             texture.Height,
             mipLevelCount: 1,
+            arrayLayerCount: 1,
+            faceCount: 1,
             payloadBytes: texture.Payload.Length,
             fileBytes);
     }
@@ -443,7 +445,7 @@ internal static class Cli
         int height,
         IReadOnlyList<TextureMipLevel> mipLevels,
         long fileBytes) =>
-        PrintTextureInfo(container, format, width, height, mipLevels.Count, GetPayloadByteCount(mipLevels), fileBytes);
+        PrintTextureInfo(container, format, width, height, mipLevels.Count, arrayLayerCount: 1, faceCount: 1, GetPayloadByteCount(mipLevels), fileBytes);
 
     private static void PrintTextureInfo(
         TextureContainer container,
@@ -451,6 +453,8 @@ internal static class Cli
         int width,
         int height,
         int mipLevelCount,
+        int arrayLayerCount,
+        int faceCount,
         long payloadBytes,
         long fileBytes)
     {
@@ -460,6 +464,16 @@ internal static class Cli
         PrintInfoLine("Value kind", format.ValueKind);
         PrintInfoLine("Size", FormatSize(width, height));
         PrintInfoLine("Mip levels", FormatInvariant(mipLevelCount));
+        if (arrayLayerCount > 1)
+        {
+            PrintInfoLine("Array layers", FormatInvariant(arrayLayerCount));
+        }
+
+        if (faceCount > 1)
+        {
+            PrintInfoLine("Faces", FormatInvariant(faceCount));
+        }
+
         PrintInfoLine("Payload bytes", FormatInvariant(payloadBytes));
         PrintInfoLine("File bytes", FormatInvariant(fileBytes));
 
@@ -566,6 +580,17 @@ internal static class Cli
         foreach (var mipLevel in mipLevels)
         {
             byteCount = checked(byteCount + mipLevel.Payload.Length);
+        }
+
+        return byteCount;
+    }
+
+    private static long GetPayloadByteCount(IReadOnlyList<TextureSubresource> subresources)
+    {
+        long byteCount = 0;
+        foreach (var subresource in subresources)
+        {
+            byteCount = checked(byteCount + subresource.Payload.Length);
         }
 
         return byteCount;

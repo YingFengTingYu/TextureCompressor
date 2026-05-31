@@ -61,7 +61,7 @@ public static class PvrCodec
         var coder = TextureCoderManager.Global.GetCoder(format);
         var mipLevelCount = GetMipLevelCount(header);
         ValidateMipLevelCount(header.Width, header.Height, mipLevelCount);
-        var expectedPayloadByteCount = GetMipLevelsByteCount(coder, header.Width, header.Height, mipLevelCount);
+        var expectedPayloadByteCount = GetSubresourcesByteCount(coder, header.Width, header.Height, mipLevelCount, header.FaceCount);
         var payloadByteCount = header.PayloadByteCount == 0 ? expectedPayloadByteCount : header.PayloadByteCount;
         if (payloadByteCount != expectedPayloadByteCount)
         {
@@ -69,9 +69,9 @@ public static class PvrCodec
                 $"PVR texture payload is {payloadByteCount} bytes, but '{format.Name}' expects {expectedPayloadByteCount} bytes for {header.Width}x{header.Height}.");
         }
 
-        var mipLevels = ReadMipLevels(stream, coder, header.Width, header.Height, mipLevelCount);
+        var subresources = ReadSubresources(stream, coder, header.Width, header.Height, mipLevelCount, header.FaceCount);
 
-        return new PvrTexture(format, mipLevels, metadata);
+        return new PvrTexture(format, subresources, header.SurfaceCount, header.FaceCount, metadata);
     }
 
     public static ArrayBitmap<Rgba8UNorm> Decode(string path)
@@ -305,10 +305,15 @@ public static class PvrCodec
 
         var coder = TextureCoderManager.Global.GetCoder(texture.Format);
         ValidateTexturePayloads(texture, coder);
-        var expectedByteCount = GetMipLevelsByteCount(coder, texture.Width, texture.Height, texture.MipLevelCount);
+        var expectedByteCount = GetSubresourcesByteCount(coder, texture.Width, texture.Height, texture.MipLevelCount, texture.FaceCount);
 
         if (version == 3)
         {
+            if (texture.ArrayLayerCount != 1)
+            {
+                throw new NotSupportedException("PVR texture arrays are not supported.");
+            }
+
             var descriptor = GetPvrDescriptor(texture.Format, options);
             var metadataSize = GetMetadataByteCount(texture.Metadata);
             WriteHeader(stream, new PvrHeader(
@@ -320,8 +325,8 @@ public static class PvrCodec
                 texture.Height,
                 texture.Width,
                 Depth: 1,
-                SurfaceCount: 1,
-                FaceCount: 1,
+                SurfaceCount: texture.ArrayLayerCount,
+                FaceCount: texture.FaceCount,
                 MipMapCount: texture.MipLevelCount,
                 metadataSize,
                 PayloadByteCount: 0,
@@ -336,6 +341,16 @@ public static class PvrCodec
         }
         else
         {
+            if (texture.ArrayLayerCount != 1)
+            {
+                throw new NotSupportedException("PVR v1/v2 texture arrays are not supported.");
+            }
+
+            if (texture.FaceCount != 1)
+            {
+                throw new NotSupportedException("PVR v1/v2 cube maps are not supported.");
+            }
+
             if (texture.MipLevelCount != 1)
             {
                 throw new NotSupportedException("PVR v1/v2 mip-map chains are not supported.");
@@ -349,9 +364,12 @@ public static class PvrCodec
             WriteLegacyHeader(stream, texture, version, checked((uint)expectedByteCount), options);
         }
 
-        foreach (var level in texture.MipLevels)
+        for (var mipLevel = 0; mipLevel < texture.MipLevelCount; mipLevel++)
         {
-            stream.Write(level.Payload);
+            for (var face = 0; face < texture.FaceCount; face++)
+            {
+                stream.Write(texture.GetSubresource(mipLevel, faceIndex: face).Payload);
+            }
         }
     }
 
@@ -527,9 +545,9 @@ public static class PvrCodec
             throw new NotSupportedException("PVR texture arrays are not supported.");
         }
 
-        if (header.FaceCount != 1)
+        if (header.FaceCount is not (1 or 6))
         {
-            throw new NotSupportedException("PVR cube maps are not supported.");
+            throw new NotSupportedException("PVR partial cube maps are not supported.");
         }
 
     }
@@ -565,24 +583,32 @@ public static class PvrCodec
         return byteCount;
     }
 
-    private static TextureMipLevel[] ReadMipLevels(
+    private static int GetSubresourcesByteCount(ITextureCoder coder, int baseWidth, int baseHeight, int mipLevelCount, int faceCount) =>
+        checked(GetMipLevelsByteCount(coder, baseWidth, baseHeight, mipLevelCount) * faceCount);
+
+    private static TextureSubresource[] ReadSubresources(
         Stream stream,
         ITextureCoder coder,
         int baseWidth,
         int baseHeight,
-        int mipLevelCount)
+        int mipLevelCount,
+        int faceCount)
     {
-        var levels = new TextureMipLevel[mipLevelCount];
-        for (var i = 0; i < mipLevelCount; i++)
+        var subresources = new TextureSubresource[checked(mipLevelCount * faceCount)];
+        var index = 0;
+        for (var mipLevel = 0; mipLevel < mipLevelCount; mipLevel++)
         {
-            var width = TextureMipLevel.GetDimension(baseWidth, i);
-            var height = TextureMipLevel.GetDimension(baseHeight, i);
-            var payload = new byte[coder.GetEncodedByteCount(width, height)];
-            ReadExactly(stream, payload);
-            levels[i] = new TextureMipLevel(width, height, payload);
+            var width = TextureMipLevel.GetDimension(baseWidth, mipLevel);
+            var height = TextureMipLevel.GetDimension(baseHeight, mipLevel);
+            for (var face = 0; face < faceCount; face++)
+            {
+                var payload = new byte[coder.GetEncodedByteCount(width, height)];
+                ReadExactly(stream, payload);
+                subresources[index++] = new TextureSubresource(mipLevel, arrayLayer: 0, face, width, height, payload);
+            }
         }
 
-        return levels;
+        return subresources;
     }
 
     private static TextureMipLevel[] EncodeMipLevels<TPixel>(IReadOnlyList<IBitmap<TPixel>> mipLevels, ITextureCoder coder)
@@ -628,14 +654,13 @@ public static class PvrCodec
             throw new ArgumentException("PVR mip level count exceeds the full mip chain for the base dimensions.", nameof(texture));
         }
 
-        for (var i = 0; i < texture.MipLevels.Count; i++)
+        foreach (var subresource in texture.Subresources)
         {
-            var level = texture.MipLevels[i];
-            var expectedByteCount = coder.GetEncodedByteCount(level.Width, level.Height);
-            if (level.Payload.Length != expectedByteCount)
+            var expectedByteCount = coder.GetEncodedByteCount(subresource.Width, subresource.Height);
+            if (subresource.Payload.Length != expectedByteCount)
             {
                 throw new ArgumentException(
-                    $"PVR mip level {i} payload length is {level.Payload.Length} bytes, but '{texture.Format.Name}' expects {expectedByteCount} bytes for {level.Width}x{level.Height}.",
+                    $"PVR subresource mip level {subresource.MipLevel}, array layer {subresource.ArrayLayer}, face {subresource.FaceIndex} payload length is {subresource.Payload.Length} bytes, but '{texture.Format.Name}' expects {expectedByteCount} bytes for {subresource.Width}x{subresource.Height}.",
                     nameof(texture));
             }
         }

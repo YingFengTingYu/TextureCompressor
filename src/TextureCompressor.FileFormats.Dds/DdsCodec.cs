@@ -72,6 +72,7 @@ public static class DdsCodec
         DdsDxgiFormat? dxgiFormat = null;
         DdsLegacyPixelFormat? legacyPixelFormat = null;
         var alphaMode = DdsAlphaMode.Unknown;
+        var faceCount = 1;
 
         if (IsDxt10Header(header.PixelFormat))
         {
@@ -81,6 +82,7 @@ public static class DdsCodec
             headerKind = DdsHeaderKind.Dxt10;
             dxgiFormat = dxt10.DxgiFormat;
             alphaMode = GetAlphaMode(dxt10.MiscFlags2);
+            faceCount = GetDxt10FaceCount(header, dxt10);
         }
         else
         {
@@ -88,15 +90,16 @@ public static class DdsCodec
             format = mapping.TextureFormat;
             headerKind = DdsHeaderKind.Legacy;
             legacyPixelFormat = mapping.LegacyPixelFormat;
+            faceCount = GetLegacyFaceCount(header);
         }
 
         var coder = TextureCoderManager.Global.GetCoder(format);
         var mipLevelCount = GetMipLevelCount(header);
         ValidateBasePitch(header, format);
         ValidateMipLevelCount(header.Width, header.Height, mipLevelCount);
-        var mipLevels = ReadMipLevels(stream, format, coder, header.Width, header.Height, mipLevelCount);
+        var subresources = ReadSubresources(stream, coder, header.Width, header.Height, mipLevelCount, faceCount);
 
-        return new DdsTexture(format, mipLevels, headerKind, dxgiFormat, legacyPixelFormat, alphaMode);
+        return new DdsTexture(format, subresources, 1, faceCount, headerKind, dxgiFormat, legacyPixelFormat, alphaMode);
     }
 
     public static ArrayBitmap<Rgba8UNorm> Decode(string path)
@@ -329,21 +332,29 @@ public static class DdsCodec
         var coder = TextureCoderManager.Global.GetCoder(texture.Format);
         ValidateTexturePayloads(texture, coder);
 
+        if (texture.ArrayLayerCount != 1)
+        {
+            throw new NotSupportedException("DDS texture arrays are not supported.");
+        }
+
         if (headerKind == DdsHeaderKind.Dxt10)
         {
             var dxgiDescriptor = GetDxgiDescriptor(texture.Format, options);
-            WriteHeader(stream, CreateHeader(texture.Width, texture.Height, texture.Format, coder, CreateDxt10PixelFormat(), texture.MipLevelCount));
-            WriteDxt10Header(stream, dxgiDescriptor.DxgiFormat, GetEncodingAlphaMode(options));
+            WriteHeader(stream, CreateHeader(texture.Width, texture.Height, texture.Format, coder, CreateDxt10PixelFormat(), texture.MipLevelCount, texture.FaceCount));
+            WriteDxt10Header(stream, dxgiDescriptor.DxgiFormat, GetEncodingAlphaMode(options), texture.IsCubeMap);
         }
         else
         {
             var legacyDescriptor = GetLegacyDescriptor(texture.Format, options);
-            WriteHeader(stream, CreateHeader(texture.Width, texture.Height, texture.Format, coder, legacyDescriptor.PixelFormat, texture.MipLevelCount));
+            WriteHeader(stream, CreateHeader(texture.Width, texture.Height, texture.Format, coder, legacyDescriptor.PixelFormat, texture.MipLevelCount, texture.FaceCount));
         }
 
-        foreach (var level in texture.MipLevels)
+        for (var face = 0; face < texture.FaceCount; face++)
         {
-            stream.Write(level.Payload);
+            for (var mipLevel = 0; mipLevel < texture.MipLevelCount; mipLevel++)
+            {
+                stream.Write(texture.GetSubresource(mipLevel, faceIndex: face).Payload);
+            }
         }
     }
 
@@ -436,13 +447,14 @@ public static class DdsCodec
         stream.Write(fileHeader);
     }
 
-    private static void WriteDxt10Header(Stream stream, DdsDxgiFormat dxgiFormat, DdsAlphaMode alphaMode)
+    private static void WriteDxt10Header(Stream stream, DdsDxgiFormat dxgiFormat, DdsAlphaMode alphaMode, bool isCubeMap)
     {
         Byte20Buffer bufferStorage = default;
         Span<byte> buffer = bufferStorage;
         buffer.Clear();
         BinaryPrimitives.WriteUInt32LittleEndian(buffer, (uint)dxgiFormat);
         BinaryPrimitives.WriteUInt32LittleEndian(buffer.Slice(4, 4), DdsDimensionTexture2D);
+        BinaryPrimitives.WriteUInt32LittleEndian(buffer.Slice(8, 4), isCubeMap ? DdsResourceMiscTextureCube : 0);
         BinaryPrimitives.WriteUInt32LittleEndian(buffer.Slice(12, 4), 1);
         BinaryPrimitives.WriteUInt32LittleEndian(buffer.Slice(16, 4), (uint)alphaMode);
         stream.Write(buffer);
@@ -454,16 +466,21 @@ public static class DdsCodec
         TextureFormat format,
         ITextureCoder coder,
         DdsPixelFormat pixelFormat,
-        int mipLevelCount)
+        int mipLevelCount,
+        int faceCount)
     {
         var isCompressed = format.Kind == TextureFormatKind.BlockCompressed;
+        var isCubeMap = faceCount == 6;
         var flags = HeaderFlagCaps | HeaderFlagHeight | HeaderFlagWidth | HeaderFlagPixelFormat
             | (isCompressed ? HeaderFlagLinearSize : HeaderFlagPitch)
             | (mipLevelCount > 1 ? HeaderFlagMipMapCount : 0);
         var pitchOrLinearSize = isCompressed
             ? checked((uint)coder.GetEncodedByteCount(width, height))
             : checked((uint)format.GetRowByteCount(width));
-        var caps = CapsTexture | (mipLevelCount > 1 ? CapsComplex | CapsMipMap : 0);
+        var caps = CapsTexture
+            | (mipLevelCount > 1 ? CapsComplex | CapsMipMap : 0)
+            | (isCubeMap ? CapsComplex : 0);
+        var caps2 = isCubeMap ? Caps2CubeMap | Caps2CubeMapFaces : 0;
 
         return new DdsHeader(
             flags,
@@ -474,7 +491,7 @@ public static class DdsCodec
             MipMapCount: mipLevelCount > 1 ? checked((uint)mipLevelCount) : 0,
             pixelFormat,
             caps,
-            Caps2: 0,
+            Caps2: caps2,
             Caps3: 0,
             Caps4: 0);
     }
@@ -492,11 +509,6 @@ public static class DdsCodec
             throw new InvalidDataException("DDS header is missing the texture capability.");
         }
 
-        if ((header.Caps2 & (Caps2CubeMap | Caps2CubeMapFaces)) != 0)
-        {
-            throw new NotSupportedException("DDS cube maps are not supported.");
-        }
-
         if ((header.Caps2 & Caps2Volume) != 0 || ((header.Flags & HeaderFlagDepth) != 0 && header.Depth > 1))
         {
             throw new NotSupportedException("DDS volume textures are not supported.");
@@ -512,12 +524,15 @@ public static class DdsCodec
 
         if (header.ArraySize != 1)
         {
-            throw new NotSupportedException("DDS texture arrays are not supported.");
+            throw new NotSupportedException(
+                (header.MiscFlag & DdsResourceMiscTextureCube) != 0
+                    ? "DDS cube map arrays are not supported."
+                    : "DDS texture arrays are not supported.");
         }
 
-        if ((header.MiscFlag & DdsResourceMiscTextureCube) != 0)
+        if ((header.MiscFlag & ~DdsResourceMiscTextureCube) != 0)
         {
-            throw new NotSupportedException("DDS DX10 cube maps are not supported.");
+            throw new NotSupportedException($"DDS DX10 misc flag value 0x{header.MiscFlag:x8} is not supported.");
         }
 
         if ((header.MiscFlags2 & ~DdsMiscFlags2AlphaModeMask) != 0)
@@ -555,25 +570,57 @@ public static class DdsCodec
         }
     }
 
-    private static TextureMipLevel[] ReadMipLevels(
+    private static int GetDxt10FaceCount(DdsHeader header, DdsDxt10Header dxt10)
+    {
+        var faceFlags = header.Caps2 & Caps2CubeMapFaces;
+        if (faceFlags != 0 && faceFlags != Caps2CubeMapFaces)
+        {
+            throw new NotSupportedException("DDS partial cube maps are not supported.");
+        }
+
+        return (dxt10.MiscFlag & DdsResourceMiscTextureCube) != 0 || (header.Caps2 & Caps2CubeMap) != 0 || faceFlags != 0
+            ? 6
+            : 1;
+    }
+
+    private static int GetLegacyFaceCount(DdsHeader header)
+    {
+        if ((header.Caps2 & (Caps2CubeMap | Caps2CubeMapFaces)) == 0)
+        {
+            return 1;
+        }
+
+        if ((header.Caps2 & Caps2CubeMap) == 0 || (header.Caps2 & Caps2CubeMapFaces) != Caps2CubeMapFaces)
+        {
+            throw new NotSupportedException("DDS partial cube maps are not supported.");
+        }
+
+        return 6;
+    }
+
+    private static TextureSubresource[] ReadSubresources(
         Stream stream,
-        TextureFormat format,
         ITextureCoder coder,
         int baseWidth,
         int baseHeight,
-        int mipLevelCount)
+        int mipLevelCount,
+        int faceCount)
     {
-        var levels = new TextureMipLevel[mipLevelCount];
-        for (var i = 0; i < mipLevelCount; i++)
+        var subresources = new TextureSubresource[checked(mipLevelCount * faceCount)];
+        var index = 0;
+        for (var face = 0; face < faceCount; face++)
         {
-            var width = TextureMipLevel.GetDimension(baseWidth, i);
-            var height = TextureMipLevel.GetDimension(baseHeight, i);
-            var payload = new byte[coder.GetEncodedByteCount(width, height)];
-            ReadExactly(stream, payload);
-            levels[i] = new TextureMipLevel(width, height, payload);
+            for (var mipLevel = 0; mipLevel < mipLevelCount; mipLevel++)
+            {
+                var width = TextureMipLevel.GetDimension(baseWidth, mipLevel);
+                var height = TextureMipLevel.GetDimension(baseHeight, mipLevel);
+                var payload = new byte[coder.GetEncodedByteCount(width, height)];
+                ReadExactly(stream, payload);
+                subresources[index++] = new TextureSubresource(mipLevel, arrayLayer: 0, face, width, height, payload);
+            }
         }
 
-        return levels;
+        return subresources;
     }
 
     private static void ValidateBasePitch(DdsHeader header, TextureFormat format)
@@ -634,14 +681,13 @@ public static class DdsCodec
             throw new ArgumentException("DDS mip level count exceeds the full mip chain for the base dimensions.", nameof(texture));
         }
 
-        for (var i = 0; i < texture.MipLevels.Count; i++)
+        foreach (var subresource in texture.Subresources)
         {
-            var level = texture.MipLevels[i];
-            var expectedByteCount = coder.GetEncodedByteCount(level.Width, level.Height);
-            if (level.Payload.Length != expectedByteCount)
+            var expectedByteCount = coder.GetEncodedByteCount(subresource.Width, subresource.Height);
+            if (subresource.Payload.Length != expectedByteCount)
             {
                 throw new ArgumentException(
-                    $"DDS mip level {i} payload length is {level.Payload.Length} bytes, but '{texture.Format.Name}' expects {expectedByteCount} bytes for {level.Width}x{level.Height}.",
+                    $"DDS subresource mip level {subresource.MipLevel}, array layer {subresource.ArrayLayer}, face {subresource.FaceIndex} payload length is {subresource.Payload.Length} bytes, but '{texture.Format.Name}' expects {expectedByteCount} bytes for {subresource.Width}x{subresource.Height}.",
                     nameof(texture));
             }
         }

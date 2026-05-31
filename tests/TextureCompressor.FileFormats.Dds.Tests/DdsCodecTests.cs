@@ -193,11 +193,69 @@ public sealed class DdsCodecTests
     }
 
     [Fact]
-    public void ReadCubeMapThrows()
+    public void ReadDx10CubeMapReadsFacesAndMipChains()
     {
-        var dds = CreateDx10Header(DdsDxgiFormat.R8G8B8A8UNorm, width: 1, height: 1, caps2: 0x00000200);
+        var dds = CreateDx10Header(
+            DdsDxgiFormat.R8G8B8A8UNorm,
+            width: 2,
+            height: 2,
+            mipMapCount: 2,
+            caps2: 0x0000fe00,
+            miscFlag: 0x00000004);
+        Array.Resize(ref dds, 148 + (6 * (16 + 4)));
+        var offset = 148;
+        for (var face = 0; face < 6; face++)
+        {
+            dds[offset] = (byte)(face + 1);
+            offset += 16;
+            dds[offset] = (byte)(face + 11);
+            offset += 4;
+        }
 
-        Assert.Throws<NotSupportedException>(() => DdsCodec.Read(dds));
+        var texture = DdsCodec.Read(dds);
+
+        Assert.True(texture.IsCubeMap);
+        Assert.Equal(6, texture.FaceCount);
+        Assert.Equal(12, texture.Subresources.Count);
+        Assert.Equal(2, texture.MipLevelCount);
+        Assert.Equal(1, texture.GetSubresource(mipLevel: 0, faceIndex: 0).Payload[0]);
+        Assert.Equal(6, texture.GetSubresource(mipLevel: 0, faceIndex: 5).Payload[0]);
+        Assert.Equal(16, texture.GetSubresource(mipLevel: 1, faceIndex: 5).Payload[0]);
+        Assert.Equal(2, texture.MipLevels.Count);
+        Assert.Equal(1, texture.Payload[0]);
+    }
+
+    [Fact]
+    public void WriteCubeMapWritesDx10HeaderAndPayloads()
+    {
+        var texture = new DdsTexture(TextureFormats.Rgba8UNorm, CreateCubeSubresources(width: 2, height: 2, mipLevelCount: 2), faceCount: 6);
+
+        var dds = DdsCodec.Write(texture);
+        var read = DdsCodec.Read(dds);
+
+        Assert.Equal(0x0000fe00u, BinaryPrimitives.ReadUInt32LittleEndian(dds.AsSpan(112, 4)));
+        Assert.Equal(0x00000004u, BinaryPrimitives.ReadUInt32LittleEndian(dds.AsSpan(136, 4)));
+        Assert.Equal(1u, BinaryPrimitives.ReadUInt32LittleEndian(dds.AsSpan(140, 4)));
+        Assert.Equal(148 + (6 * (16 + 4)), dds.Length);
+        Assert.True(read.IsCubeMap);
+        Assert.Equal(6, read.FaceCount);
+        Assert.Equal(6, read.GetSubresource(mipLevel: 0, faceIndex: 5).Payload[0]);
+        Assert.Equal(16, read.GetSubresource(mipLevel: 1, faceIndex: 5).Payload[0]);
+    }
+
+    [Fact]
+    public void WriteCubeMapWithLegacyHeaderWritesCaps2Faces()
+    {
+        var texture = new DdsTexture(TextureFormats.Rgba8UNorm, CreateCubeSubresources(width: 1, height: 1, mipLevelCount: 1), faceCount: 6);
+
+        var dds = DdsCodec.Write(texture, new DdsEncodingOptions { HeaderKind = DdsHeaderKind.Legacy });
+        var read = DdsCodec.Read(dds);
+
+        Assert.Equal(0x0000fe00u, BinaryPrimitives.ReadUInt32LittleEndian(dds.AsSpan(112, 4)));
+        Assert.Equal(128 + (6 * 4), dds.Length);
+        Assert.Equal(DdsHeaderKind.Legacy, read.HeaderKind);
+        Assert.True(read.IsCubeMap);
+        Assert.Equal(6, read.GetSubresource(mipLevel: 0, faceIndex: 5).Payload[0]);
     }
 
     private static void AssertDx10Header(byte[] dds, DdsDxgiFormat expectedDxgiFormat, int width, int height, int payloadSize)
@@ -237,7 +295,9 @@ public sealed class DdsCodecTests
         int width,
         int height,
         uint mipMapCount = 0,
-        uint caps2 = 0)
+        uint caps2 = 0,
+        uint miscFlag = 0,
+        uint arraySize = 1)
     {
         var dds = new byte[148];
         BinaryPrimitives.WriteUInt32LittleEndian(dds.AsSpan(0, 4), MakeFourCc("DDS "));
@@ -254,8 +314,33 @@ public sealed class DdsCodecTests
         BinaryPrimitives.WriteUInt32LittleEndian(dds.AsSpan(112, 4), caps2);
         BinaryPrimitives.WriteUInt32LittleEndian(dds.AsSpan(128, 4), (uint)dxgiFormat);
         BinaryPrimitives.WriteUInt32LittleEndian(dds.AsSpan(132, 4), 3);
-        BinaryPrimitives.WriteUInt32LittleEndian(dds.AsSpan(140, 4), 1);
+        BinaryPrimitives.WriteUInt32LittleEndian(dds.AsSpan(136, 4), miscFlag);
+        BinaryPrimitives.WriteUInt32LittleEndian(dds.AsSpan(140, 4), arraySize);
         return dds;
+    }
+
+    private static TextureSubresource[] CreateCubeSubresources(int width, int height, int mipLevelCount)
+    {
+        var subresources = new TextureSubresource[checked(6 * mipLevelCount)];
+        var index = 0;
+        for (var face = 0; face < 6; face++)
+        {
+            for (var mipLevel = 0; mipLevel < mipLevelCount; mipLevel++)
+            {
+                var mipWidth = TextureMipLevel.GetDimension(width, mipLevel);
+                var mipHeight = TextureMipLevel.GetDimension(height, mipLevel);
+                var byteCount = checked(mipWidth * mipHeight * 4);
+                subresources[index++] = new TextureSubresource(
+                    mipLevel,
+                    arrayLayer: 0,
+                    face,
+                    mipWidth,
+                    mipHeight,
+                    Enumerable.Repeat((byte)(face + 1 + (mipLevel * 10)), byteCount).ToArray());
+            }
+        }
+
+        return subresources;
     }
 
     private static uint MakeFourCc(string value) =>

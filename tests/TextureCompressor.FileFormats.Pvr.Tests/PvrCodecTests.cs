@@ -381,6 +381,70 @@ public sealed class PvrCodecTests
     }
 
     [Fact]
+    public void ReadCubeMapReadsFacesAndMipChains()
+    {
+        var pvr = CreateHeader(
+            pixelFormat: 0x0808080861626772,
+            colourSpace: 0,
+            channelType: 0,
+            width: 2,
+            height: 2,
+            mipMapCount: 2,
+            faceCount: 6);
+        Array.Resize(ref pvr, 52 + (6 * (16 + 4)));
+        var offset = 52;
+        for (var face = 0; face < 6; face++)
+        {
+            pvr[offset] = (byte)(face + 1);
+            offset += 16;
+        }
+
+        for (var face = 0; face < 6; face++)
+        {
+            pvr[offset] = (byte)(face + 11);
+            offset += 4;
+        }
+
+        var texture = PvrCodec.Read(pvr);
+
+        Assert.True(texture.IsCubeMap);
+        Assert.Equal(6, texture.FaceCount);
+        Assert.Equal(12, texture.Subresources.Count);
+        Assert.Equal(2, texture.MipLevelCount);
+        Assert.Equal(1, texture.GetSubresource(mipLevel: 0, faceIndex: 0).Payload[0]);
+        Assert.Equal(6, texture.GetSubresource(mipLevel: 0, faceIndex: 5).Payload[0]);
+        Assert.Equal(16, texture.GetSubresource(mipLevel: 1, faceIndex: 5).Payload[0]);
+        Assert.Equal(1, texture.Payload[0]);
+    }
+
+    [Fact]
+    public void WriteCubeMapWritesReadablePvr()
+    {
+        var texture = new PvrTexture(TextureFormats.Rgba8UNorm, CreateCubeSubresources(width: 2, height: 2, mipLevelCount: 2), faceCount: 6);
+
+        var pvr = PvrCodec.Write(texture);
+        var read = PvrCodec.Read(pvr);
+
+        AssertHeader(pvr, expectedPixelFormat: 0x0808080861626772, colourSpace: 0, channelType: 0, width: 2, height: 2, mipMapCount: 2, faceCount: 6);
+        Assert.Equal(52 + (6 * (16 + 4)), pvr.Length);
+        Assert.Equal(1, pvr[52]);
+        Assert.Equal(6, pvr[52 + (5 * 16)]);
+        Assert.Equal(16, pvr[52 + (6 * 16) + (5 * 4)]);
+        Assert.True(read.IsCubeMap);
+        Assert.Equal(6, read.FaceCount);
+        Assert.Equal(6, read.GetSubresource(mipLevel: 0, faceIndex: 5).Payload[0]);
+        Assert.Equal(16, read.GetSubresource(mipLevel: 1, faceIndex: 5).Payload[0]);
+    }
+
+    [Fact]
+    public void WriteCubeMapVersion2Throws()
+    {
+        var texture = new PvrTexture(TextureFormats.Rgba8UNorm, CreateCubeSubresources(width: 1, height: 1, mipLevelCount: 1), faceCount: 6);
+
+        Assert.Throws<NotSupportedException>(() => PvrCodec.Write(texture, new PvrEncodingOptions { Version = 2 }));
+    }
+
+    [Fact]
     public void EncodeWithGenerateMipmapsWritesReadableCompressedMipChain()
     {
         var source = new ArrayBitmap<Rgba8UNorm>(
@@ -575,7 +639,15 @@ public sealed class PvrCodecTests
         { TextureFormats.Yvu10Lsb2P420UNorm, PvrPixelFormat.Yvu10Lsb2P420, 4u }
     };
 
-    private static void AssertHeader(byte[] pvr, ulong expectedPixelFormat, uint colourSpace, uint channelType, int width, int height)
+    private static void AssertHeader(
+        byte[] pvr,
+        ulong expectedPixelFormat,
+        uint colourSpace,
+        uint channelType,
+        int width,
+        int height,
+        uint mipMapCount = 1,
+        uint faceCount = 1)
     {
         Assert.Equal(0x03525650u, BinaryPrimitives.ReadUInt32LittleEndian(pvr.AsSpan(0, 4)));
         Assert.Equal(expectedPixelFormat, BinaryPrimitives.ReadUInt64LittleEndian(pvr.AsSpan(8, 8)));
@@ -585,7 +657,8 @@ public sealed class PvrCodecTests
         Assert.Equal((uint)width, BinaryPrimitives.ReadUInt32LittleEndian(pvr.AsSpan(28, 4)));
         Assert.Equal(1u, BinaryPrimitives.ReadUInt32LittleEndian(pvr.AsSpan(32, 4)));
         Assert.Equal(1u, BinaryPrimitives.ReadUInt32LittleEndian(pvr.AsSpan(36, 4)));
-        Assert.Equal(1u, BinaryPrimitives.ReadUInt32LittleEndian(pvr.AsSpan(40, 4)));
+        Assert.Equal(faceCount, BinaryPrimitives.ReadUInt32LittleEndian(pvr.AsSpan(40, 4)));
+        Assert.Equal(mipMapCount, BinaryPrimitives.ReadUInt32LittleEndian(pvr.AsSpan(44, 4)));
     }
 
     private static void AssertLegacyHeader(
@@ -615,7 +688,8 @@ public sealed class PvrCodecTests
         uint channelType,
         int width,
         int height,
-        uint mipMapCount = 1)
+        uint mipMapCount = 1,
+        uint faceCount = 1)
     {
         var pvr = new byte[52];
         BinaryPrimitives.WriteUInt32LittleEndian(pvr.AsSpan(0, 4), 0x03525650);
@@ -626,7 +700,7 @@ public sealed class PvrCodecTests
         BinaryPrimitives.WriteUInt32LittleEndian(pvr.AsSpan(28, 4), checked((uint)width));
         BinaryPrimitives.WriteUInt32LittleEndian(pvr.AsSpan(32, 4), 1);
         BinaryPrimitives.WriteUInt32LittleEndian(pvr.AsSpan(36, 4), 1);
-        BinaryPrimitives.WriteUInt32LittleEndian(pvr.AsSpan(40, 4), 1);
+        BinaryPrimitives.WriteUInt32LittleEndian(pvr.AsSpan(40, 4), faceCount);
         BinaryPrimitives.WriteUInt32LittleEndian(pvr.AsSpan(44, 4), mipMapCount);
         return pvr;
     }
@@ -681,4 +755,28 @@ public sealed class PvrCodecTests
 
     private static int GetEncodedByteCount(TextureFormat format, int width, int height) =>
         TextureCoderManager.Global.GetCoder(format).GetEncodedByteCount(width, height);
+
+    private static TextureSubresource[] CreateCubeSubresources(int width, int height, int mipLevelCount)
+    {
+        var subresources = new TextureSubresource[checked(6 * mipLevelCount)];
+        var index = 0;
+        for (var face = 0; face < 6; face++)
+        {
+            for (var mipLevel = 0; mipLevel < mipLevelCount; mipLevel++)
+            {
+                var mipWidth = TextureMipLevel.GetDimension(width, mipLevel);
+                var mipHeight = TextureMipLevel.GetDimension(height, mipLevel);
+                var byteCount = checked(mipWidth * mipHeight * 4);
+                subresources[index++] = new TextureSubresource(
+                    mipLevel,
+                    arrayLayer: 0,
+                    face,
+                    mipWidth,
+                    mipHeight,
+                    Enumerable.Repeat((byte)(face + 1 + (mipLevel * 10)), byteCount).ToArray());
+            }
+        }
+
+        return subresources;
+    }
 }
