@@ -340,14 +340,14 @@ public sealed class AstcTextureCoder : IPitchTextureCoder
     {
         static abstract void DecodeBlock(ReadOnlySpan<byte> source, int blockWidth, int blockHeight, Span<Rgba8UNorm> destination);
 
-        static abstract void EncodeBlock(ReadOnlySpan<Rgba8UNorm> source, int blockWidth, int blockHeight, AstcCompressionMode compressionMode, Span<byte> destination);
+        static abstract void EncodeBlock(ReadOnlySpan<Rgba8UNorm> source, int blockWidth, int blockHeight, TextureCompressionLevel compressionMode, Span<byte> destination);
     }
 
     private interface IAstcFloatTransfer
     {
         static abstract void DecodeBlock(ReadOnlySpan<byte> source, int blockWidth, int blockHeight, Span<Rgba16Float> destination);
 
-        static abstract void EncodeBlock(ReadOnlySpan<Rgba16Float> source, int blockWidth, int blockHeight, AstcCompressionMode compressionMode, Span<byte> destination);
+        static abstract void EncodeBlock(ReadOnlySpan<Rgba16Float> source, int blockWidth, int blockHeight, TextureCompressionLevel compressionMode, Span<byte> destination);
     }
 
     private readonly struct AstcLdrTransfer : IAstcUNormTransfer
@@ -355,7 +355,7 @@ public sealed class AstcTextureCoder : IPitchTextureCoder
         public static void DecodeBlock(ReadOnlySpan<byte> source, int blockWidth, int blockHeight, Span<Rgba8UNorm> destination) =>
             DecodeLdrBlock(source, blockWidth, blockHeight, srgb: false, destination);
 
-        public static void EncodeBlock(ReadOnlySpan<Rgba8UNorm> source, int blockWidth, int blockHeight, AstcCompressionMode compressionMode, Span<byte> destination) =>
+        public static void EncodeBlock(ReadOnlySpan<Rgba8UNorm> source, int blockWidth, int blockHeight, TextureCompressionLevel compressionMode, Span<byte> destination) =>
             EncodeLdrBlock(source, blockWidth, blockHeight, srgb: false, compressionMode, destination);
     }
 
@@ -364,7 +364,7 @@ public sealed class AstcTextureCoder : IPitchTextureCoder
         public static void DecodeBlock(ReadOnlySpan<byte> source, int blockWidth, int blockHeight, Span<Rgba8UNorm> destination) =>
             DecodeLdrBlock(source, blockWidth, blockHeight, srgb: true, destination);
 
-        public static void EncodeBlock(ReadOnlySpan<Rgba8UNorm> source, int blockWidth, int blockHeight, AstcCompressionMode compressionMode, Span<byte> destination) =>
+        public static void EncodeBlock(ReadOnlySpan<Rgba8UNorm> source, int blockWidth, int blockHeight, TextureCompressionLevel compressionMode, Span<byte> destination) =>
             EncodeLdrBlock(source, blockWidth, blockHeight, srgb: true, compressionMode, destination);
     }
 
@@ -373,7 +373,7 @@ public sealed class AstcTextureCoder : IPitchTextureCoder
         public static void DecodeBlock(ReadOnlySpan<byte> source, int blockWidth, int blockHeight, Span<Rgba16Float> destination) =>
             DecodeHdrBlock(source, blockWidth, blockHeight, destination);
 
-        public static void EncodeBlock(ReadOnlySpan<Rgba16Float> source, int blockWidth, int blockHeight, AstcCompressionMode compressionMode, Span<byte> destination) =>
+        public static void EncodeBlock(ReadOnlySpan<Rgba16Float> source, int blockWidth, int blockHeight, TextureCompressionLevel compressionMode, Span<byte> destination) =>
             EncodeHdrBlock(source, blockWidth, blockHeight, compressionMode, destination);
     }
 
@@ -483,7 +483,7 @@ public sealed class AstcTextureCoder : IPitchTextureCoder
         int blockWidth,
         int blockHeight,
         bool srgb,
-        AstcCompressionMode compressionMode,
+        TextureCompressionLevel compressionMode,
         Span<byte> destination)
     {
         var texelCount = blockWidth * blockHeight;
@@ -501,12 +501,12 @@ public sealed class AstcTextureCoder : IPitchTextureCoder
 
         switch (compressionMode)
         {
-            case AstcCompressionMode.Fast:
+            case TextureCompressionLevel.Fast:
                 EncodeLdrBlockFast(storage, blockWidth, blockHeight, texelCount, destination);
                 return;
-            case AstcCompressionMode.Normal:
-            case AstcCompressionMode.High:
-            case AstcCompressionMode.Exhaustive:
+            case TextureCompressionLevel.Normal:
+            case TextureCompressionLevel.High:
+            case TextureCompressionLevel.Exhaustive:
                 EncodeLdrBlockOptimized(storage, blockWidth, blockHeight, texelCount, compressionMode, destination);
                 return;
             default:
@@ -570,7 +570,7 @@ public sealed class AstcTextureCoder : IPitchTextureCoder
         int blockWidth,
         int blockHeight,
         int texelCount,
-        AstcCompressionMode compressionMode,
+        TextureCompressionLevel compressionMode,
         Span<byte> destination)
     {
         Span<AstcWeightGridCandidate> candidates = stackalloc AstcWeightGridCandidate[128];
@@ -643,9 +643,9 @@ public sealed class AstcTextureCoder : IPitchTextureCoder
             }
         }
 
-        if (compressionMode is AstcCompressionMode.High or AstcCompressionMode.Exhaustive)
+        if (compressionMode is TextureCompressionLevel.High or TextureCompressionLevel.Exhaustive)
         {
-            if (isOpaque && compressionMode == AstcCompressionMode.Exhaustive)
+            if (isOpaque && compressionMode == TextureCompressionLevel.Exhaustive)
             {
                 TryEncodeLdrDualPlaneRgbCandidates(
                     storage,
@@ -833,7 +833,7 @@ public sealed class AstcTextureCoder : IPitchTextureCoder
         int blockWidth,
         int blockHeight,
         int texelCount,
-        AstcCompressionMode compressionMode,
+        TextureCompressionLevel compressionMode,
         Rgba8UNorm boundsLow,
         Rgba8UNorm boundsHigh,
         bool hasPrincipalEndpoints,
@@ -844,7 +844,7 @@ public sealed class AstcTextureCoder : IPitchTextureCoder
     {
         Span<AstcWeightGridCandidate> candidates = stackalloc AstcWeightGridCandidate[128];
         var candidateCount = GetDualPlaneWeightGridCandidates(blockWidth, blockHeight, compressionMode, candidates);
-        var candidateLimit = compressionMode == AstcCompressionMode.Exhaustive ? 32 : 4;
+        var candidateLimit = compressionMode == TextureCompressionLevel.Exhaustive ? 32 : 4;
 
         for (var i = 0; i < candidateCount && i < candidateLimit; i++)
         {
@@ -979,7 +979,7 @@ public sealed class AstcTextureCoder : IPitchTextureCoder
         int blockHeight,
         int texelCount,
         ReadOnlySpan<AstcWeightGridCandidate> candidates,
-        AstcCompressionMode compressionMode,
+        TextureCompressionLevel compressionMode,
         bool isOpaque,
         int iterationLimit,
         ref AstcLdrEncodingResult best)
@@ -1024,7 +1024,7 @@ public sealed class AstcTextureCoder : IPitchTextureCoder
         int blockHeight,
         int texelCount,
         ReadOnlySpan<AstcWeightGridCandidate> candidates,
-        AstcCompressionMode compressionMode,
+        TextureCompressionLevel compressionMode,
         int iterationLimit,
         ref AstcLdrEncodingResult best)
     {
@@ -1394,7 +1394,7 @@ public sealed class AstcTextureCoder : IPitchTextureCoder
     private static int GetWeightGridCandidates(
         int blockWidth,
         int blockHeight,
-        AstcCompressionMode compressionMode,
+        TextureCompressionLevel compressionMode,
         Span<AstcWeightGridCandidate> candidates)
     {
         ValidateCompressionMode(compressionMode);
@@ -1402,12 +1402,12 @@ public sealed class AstcTextureCoder : IPitchTextureCoder
         var count = 0;
         AddWeightGridCandidate(blockWidth, blockHeight, 4, 4, 3, candidates, ref count);
 
-        if (compressionMode == AstcCompressionMode.Normal)
+        if (compressionMode == TextureCompressionLevel.Normal)
         {
             return count;
         }
 
-        if (compressionMode == AstcCompressionMode.Exhaustive)
+        if (compressionMode == TextureCompressionLevel.Exhaustive)
         {
             for (var blockMode = 0; blockMode < 2048; blockMode++)
             {
@@ -1567,13 +1567,13 @@ public sealed class AstcTextureCoder : IPitchTextureCoder
         int blockHeight,
         int texelCount,
         int partitionCount,
-        AstcCompressionMode compressionMode,
+        TextureCompressionLevel compressionMode,
         Span<int> seeds)
     {
         Span<double> scores = stackalloc double[32];
         var count = 0;
-        var seedStep = compressionMode == AstcCompressionMode.Exhaustive ? 1 : 32;
-        var seedLimit = compressionMode == AstcCompressionMode.Exhaustive ? 16 : 4;
+        var seedStep = compressionMode == TextureCompressionLevel.Exhaustive ? 1 : 32;
+        var seedLimit = compressionMode == TextureCompressionLevel.Exhaustive ? 16 : 4;
         var partitions = new IntTexelBlock();
 
         for (var seed = 0; seed < 1024; seed += seedStep)
@@ -1593,13 +1593,13 @@ public sealed class AstcTextureCoder : IPitchTextureCoder
     private static int GetDualPlaneWeightGridCandidates(
         int blockWidth,
         int blockHeight,
-        AstcCompressionMode compressionMode,
+        TextureCompressionLevel compressionMode,
         Span<AstcWeightGridCandidate> candidates)
     {
         ValidateCompressionMode(compressionMode);
 
         var count = 0;
-        if (compressionMode == AstcCompressionMode.Exhaustive)
+        if (compressionMode == TextureCompressionLevel.Exhaustive)
         {
             for (var blockMode = 0; blockMode < 2048; blockMode++)
             {
@@ -1721,11 +1721,11 @@ public sealed class AstcTextureCoder : IPitchTextureCoder
         return score;
     }
 
-    private static int GetTwoPartitionWeightCandidateLimit(AstcCompressionMode compressionMode) =>
-        compressionMode == AstcCompressionMode.Exhaustive ? 64 : 8;
+    private static int GetTwoPartitionWeightCandidateLimit(TextureCompressionLevel compressionMode) =>
+        compressionMode == TextureCompressionLevel.Exhaustive ? 64 : 8;
 
-    private static int GetThreePartitionWeightCandidateLimit(AstcCompressionMode compressionMode) =>
-        compressionMode == AstcCompressionMode.Exhaustive ? 64 : 8;
+    private static int GetThreePartitionWeightCandidateLimit(TextureCompressionLevel compressionMode) =>
+        compressionMode == TextureCompressionLevel.Exhaustive ? 64 : 8;
 
     private static bool TryBuildPartitionAssignments(
         int partitionSeed,
@@ -2626,11 +2626,11 @@ public sealed class AstcTextureCoder : IPitchTextureCoder
         return error;
     }
 
-    private static int GetLdrEndpointOptimizationIterationLimit(AstcCompressionMode compressionMode) => compressionMode switch
+    private static int GetLdrEndpointOptimizationIterationLimit(TextureCompressionLevel compressionMode) => compressionMode switch
     {
-        AstcCompressionMode.Normal => 1,
-        AstcCompressionMode.High => 2,
-        AstcCompressionMode.Exhaustive => 4,
+        TextureCompressionLevel.Normal => 1,
+        TextureCompressionLevel.High => 2,
+        TextureCompressionLevel.Exhaustive => 4,
         _ => 0
     };
 
@@ -2673,7 +2673,7 @@ public sealed class AstcTextureCoder : IPitchTextureCoder
         ReadOnlySpan<Rgba16Float> source,
         int blockWidth,
         int blockHeight,
-        AstcCompressionMode compressionMode,
+        TextureCompressionLevel compressionMode,
         Span<byte> destination)
     {
         var texelCount = blockWidth * blockHeight;
@@ -2691,12 +2691,12 @@ public sealed class AstcTextureCoder : IPitchTextureCoder
 
         switch (compressionMode)
         {
-            case AstcCompressionMode.Fast:
+            case TextureCompressionLevel.Fast:
                 EncodeHdrBlockFast(storage, blockWidth, blockHeight, texelCount, destination);
                 return;
-            case AstcCompressionMode.Normal:
-            case AstcCompressionMode.High:
-            case AstcCompressionMode.Exhaustive:
+            case TextureCompressionLevel.Normal:
+            case TextureCompressionLevel.High:
+            case TextureCompressionLevel.Exhaustive:
                 EncodeHdrBlockOptimized(storage, blockWidth, blockHeight, texelCount, compressionMode, destination);
                 return;
             default:
@@ -2767,7 +2767,7 @@ public sealed class AstcTextureCoder : IPitchTextureCoder
         int blockWidth,
         int blockHeight,
         int texelCount,
-        AstcCompressionMode compressionMode,
+        TextureCompressionLevel compressionMode,
         Span<byte> destination)
     {
         Span<AstcWeightGridCandidate> candidates = stackalloc AstcWeightGridCandidate[128];
@@ -3354,11 +3354,11 @@ public sealed class AstcTextureCoder : IPitchTextureCoder
         return DecodeHdrTexel(endpoint, weight, weight, weight, weight);
     }
 
-    private static int GetHdrEndpointOptimizationIterationLimit(AstcCompressionMode compressionMode) => compressionMode switch
+    private static int GetHdrEndpointOptimizationIterationLimit(TextureCompressionLevel compressionMode) => compressionMode switch
     {
-        AstcCompressionMode.Normal => 1,
-        AstcCompressionMode.High => 2,
-        AstcCompressionMode.Exhaustive => 4,
+        TextureCompressionLevel.Normal => 1,
+        TextureCompressionLevel.High => 2,
+        TextureCompressionLevel.Exhaustive => 4,
         _ => 0
     };
 
@@ -4166,12 +4166,12 @@ public sealed class AstcTextureCoder : IPitchTextureCoder
 
     private static int SafeLeftShift(int value, int shift) => (int)((uint)value << shift);
 
-    private static void ValidateCompressionMode(AstcCompressionMode compressionMode)
+    private static void ValidateCompressionMode(TextureCompressionLevel compressionMode)
     {
-        if (compressionMode is not (AstcCompressionMode.Fast
-            or AstcCompressionMode.Normal
-            or AstcCompressionMode.High
-            or AstcCompressionMode.Exhaustive))
+        if (compressionMode is not (TextureCompressionLevel.Fast
+            or TextureCompressionLevel.Normal
+            or TextureCompressionLevel.High
+            or TextureCompressionLevel.Exhaustive))
         {
             throw new ArgumentOutOfRangeException(
                 nameof(compressionMode),

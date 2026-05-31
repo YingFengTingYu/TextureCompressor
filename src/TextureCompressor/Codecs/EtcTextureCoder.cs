@@ -205,7 +205,7 @@ public sealed class EtcTextureCoder : IPitchTextureCoder
             targets[i] = Math.Clamp(source[i], 0, 2047);
         }
 
-        EncodeEacBlock(ref targets, EacBlockKind.Unsigned11, EtcCompressionMode.Fast, destination);
+        EncodeEacBlock(ref targets, EacBlockKind.Unsigned11, TextureCompressionLevel.Fast, destination);
     }
 
     private static void DecodeColor<TPixel, TTransfer>(ReadOnlySpan<byte> source, BitmapView<TPixel> destination, int rowPitch)
@@ -235,7 +235,7 @@ public sealed class EtcTextureCoder : IPitchTextureCoder
         BitmapView<TPixel> source,
         Span<byte> destination,
         int rowPitch,
-        EtcCompressionMode compressionMode)
+        TextureCompressionLevel compressionMode)
         where TPixel : unmanaged, IPixel<TPixel>
         where TTransfer : IEtcColorTransfer
     {
@@ -325,7 +325,7 @@ public sealed class EtcTextureCoder : IPitchTextureCoder
         BitmapView<TPixel> source,
         Span<byte> destination,
         int rowPitch,
-        EtcCompressionMode compressionMode)
+        TextureCompressionLevel compressionMode)
         where TPixel : unmanaged, IPixel<TPixel>
         where TTransfer : IUnsignedEacTransfer
     {
@@ -415,7 +415,7 @@ public sealed class EtcTextureCoder : IPitchTextureCoder
         BitmapView<TPixel> source,
         Span<byte> destination,
         int rowPitch,
-        EtcCompressionMode compressionMode)
+        TextureCompressionLevel compressionMode)
         where TPixel : unmanaged, IPixel<TPixel>
         where TTransfer : ISignedEacTransfer
     {
@@ -484,7 +484,7 @@ public sealed class EtcTextureCoder : IPitchTextureCoder
 
         static abstract void DecodeBlock(ReadOnlySpan<byte> source, Span<Rgba8UNorm> destination);
 
-        static abstract void EncodeBlock(ReadOnlySpan<Rgba8UNorm> source, Span<byte> destination, EtcCompressionMode compressionMode);
+        static abstract void EncodeBlock(ReadOnlySpan<Rgba8UNorm> source, Span<byte> destination, TextureCompressionLevel compressionMode);
     }
 
     private readonly struct RgbEtc1Transfer : IEtcColorTransfer
@@ -494,7 +494,7 @@ public sealed class EtcTextureCoder : IPitchTextureCoder
         public static void DecodeBlock(ReadOnlySpan<byte> source, Span<Rgba8UNorm> destination) =>
             DecodeEtcColorBlock(source, etc2: false, punchthrough: false, destination);
 
-        public static void EncodeBlock(ReadOnlySpan<Rgba8UNorm> source, Span<byte> destination, EtcCompressionMode compressionMode) =>
+        public static void EncodeBlock(ReadOnlySpan<Rgba8UNorm> source, Span<byte> destination, TextureCompressionLevel compressionMode) =>
             EncodeEtcColorBlock(source, punchthrough: false, etc2: false, compressionMode, destination);
     }
 
@@ -505,7 +505,7 @@ public sealed class EtcTextureCoder : IPitchTextureCoder
         public static void DecodeBlock(ReadOnlySpan<byte> source, Span<Rgba8UNorm> destination) =>
             DecodeEtcColorBlock(source, etc2: true, punchthrough: false, destination);
 
-        public static void EncodeBlock(ReadOnlySpan<Rgba8UNorm> source, Span<byte> destination, EtcCompressionMode compressionMode) =>
+        public static void EncodeBlock(ReadOnlySpan<Rgba8UNorm> source, Span<byte> destination, TextureCompressionLevel compressionMode) =>
             EncodeEtcColorBlock(source, punchthrough: false, etc2: true, compressionMode, destination);
     }
 
@@ -519,7 +519,7 @@ public sealed class EtcTextureCoder : IPitchTextureCoder
             DecodeSrgbColors(destination);
         }
 
-        public static void EncodeBlock(ReadOnlySpan<Rgba8UNorm> source, Span<byte> destination, EtcCompressionMode compressionMode) =>
+        public static void EncodeBlock(ReadOnlySpan<Rgba8UNorm> source, Span<byte> destination, TextureCompressionLevel compressionMode) =>
             EncodeSrgbEtcColorBlock(source, punchthrough: false, compressionMode, destination);
     }
 
@@ -530,7 +530,7 @@ public sealed class EtcTextureCoder : IPitchTextureCoder
         public static void DecodeBlock(ReadOnlySpan<byte> source, Span<Rgba8UNorm> destination) =>
             DecodeEtcColorBlock(source, etc2: true, punchthrough: true, destination);
 
-        public static void EncodeBlock(ReadOnlySpan<Rgba8UNorm> source, Span<byte> destination, EtcCompressionMode compressionMode) =>
+        public static void EncodeBlock(ReadOnlySpan<Rgba8UNorm> source, Span<byte> destination, TextureCompressionLevel compressionMode) =>
             EncodeEtcColorBlock(source, punchthrough: true, etc2: true, compressionMode, destination);
     }
 
@@ -544,7 +544,7 @@ public sealed class EtcTextureCoder : IPitchTextureCoder
             DecodeSrgbColors(destination);
         }
 
-        public static void EncodeBlock(ReadOnlySpan<Rgba8UNorm> source, Span<byte> destination, EtcCompressionMode compressionMode) =>
+        public static void EncodeBlock(ReadOnlySpan<Rgba8UNorm> source, Span<byte> destination, TextureCompressionLevel compressionMode) =>
             EncodeSrgbEtcColorBlock(source, punchthrough: true, compressionMode, destination);
     }
 
@@ -555,7 +555,7 @@ public sealed class EtcTextureCoder : IPitchTextureCoder
         public static void DecodeBlock(ReadOnlySpan<byte> source, Span<Rgba8UNorm> destination) =>
             DecodeEtc2RgbaBlock(source, srgb: false, destination);
 
-        public static void EncodeBlock(ReadOnlySpan<Rgba8UNorm> source, Span<byte> destination, EtcCompressionMode compressionMode) =>
+        public static void EncodeBlock(ReadOnlySpan<Rgba8UNorm> source, Span<byte> destination, TextureCompressionLevel compressionMode) =>
             EncodeEtc2RgbaBlock(source, srgb: false, compressionMode, destination);
     }
 
@@ -566,7 +566,7 @@ public sealed class EtcTextureCoder : IPitchTextureCoder
         public static void DecodeBlock(ReadOnlySpan<byte> source, Span<Rgba8UNorm> destination) =>
             DecodeEtc2RgbaBlock(source, srgb: true, destination);
 
-        public static void EncodeBlock(ReadOnlySpan<Rgba8UNorm> source, Span<byte> destination, EtcCompressionMode compressionMode) =>
+        public static void EncodeBlock(ReadOnlySpan<Rgba8UNorm> source, Span<byte> destination, TextureCompressionLevel compressionMode) =>
             EncodeEtc2RgbaBlock(source, srgb: true, compressionMode, destination);
     }
 
@@ -576,7 +576,7 @@ public sealed class EtcTextureCoder : IPitchTextureCoder
 
         static abstract void DecodeBlock(ReadOnlySpan<byte> source, Span<Rgba16UNorm> destination);
 
-        static abstract void EncodeBlock(ReadOnlySpan<Rgba16UNorm> source, Span<byte> destination, EtcCompressionMode compressionMode);
+        static abstract void EncodeBlock(ReadOnlySpan<Rgba16UNorm> source, Span<byte> destination, TextureCompressionLevel compressionMode);
     }
 
     private readonly struct R11EacTransfer : IUnsignedEacTransfer
@@ -586,7 +586,7 @@ public sealed class EtcTextureCoder : IPitchTextureCoder
         public static void DecodeBlock(ReadOnlySpan<byte> source, Span<Rgba16UNorm> destination) =>
             DecodeUnsignedEacRBlock(source, destination);
 
-        public static void EncodeBlock(ReadOnlySpan<Rgba16UNorm> source, Span<byte> destination, EtcCompressionMode compressionMode) =>
+        public static void EncodeBlock(ReadOnlySpan<Rgba16UNorm> source, Span<byte> destination, TextureCompressionLevel compressionMode) =>
             EncodeUnsignedEacRBlock(source, compressionMode, destination);
     }
 
@@ -597,7 +597,7 @@ public sealed class EtcTextureCoder : IPitchTextureCoder
         public static void DecodeBlock(ReadOnlySpan<byte> source, Span<Rgba16UNorm> destination) =>
             DecodeUnsignedEacRgBlock(source, destination);
 
-        public static void EncodeBlock(ReadOnlySpan<Rgba16UNorm> source, Span<byte> destination, EtcCompressionMode compressionMode) =>
+        public static void EncodeBlock(ReadOnlySpan<Rgba16UNorm> source, Span<byte> destination, TextureCompressionLevel compressionMode) =>
             EncodeUnsignedEacRgBlock(source, compressionMode, destination);
     }
 
@@ -607,7 +607,7 @@ public sealed class EtcTextureCoder : IPitchTextureCoder
 
         static abstract void DecodeBlock(ReadOnlySpan<byte> source, Span<Rgba16SNorm> destination);
 
-        static abstract void EncodeBlock(ReadOnlySpan<Rgba16SNorm> source, Span<byte> destination, EtcCompressionMode compressionMode);
+        static abstract void EncodeBlock(ReadOnlySpan<Rgba16SNorm> source, Span<byte> destination, TextureCompressionLevel compressionMode);
     }
 
     private readonly struct R11EacSignedTransfer : ISignedEacTransfer
@@ -617,7 +617,7 @@ public sealed class EtcTextureCoder : IPitchTextureCoder
         public static void DecodeBlock(ReadOnlySpan<byte> source, Span<Rgba16SNorm> destination) =>
             DecodeSignedEacRBlock(source, destination);
 
-        public static void EncodeBlock(ReadOnlySpan<Rgba16SNorm> source, Span<byte> destination, EtcCompressionMode compressionMode) =>
+        public static void EncodeBlock(ReadOnlySpan<Rgba16SNorm> source, Span<byte> destination, TextureCompressionLevel compressionMode) =>
             EncodeSignedEacRBlock(source, compressionMode, destination);
     }
 
@@ -628,7 +628,7 @@ public sealed class EtcTextureCoder : IPitchTextureCoder
         public static void DecodeBlock(ReadOnlySpan<byte> source, Span<Rgba16SNorm> destination) =>
             DecodeSignedEacRgBlock(source, destination);
 
-        public static void EncodeBlock(ReadOnlySpan<Rgba16SNorm> source, Span<byte> destination, EtcCompressionMode compressionMode) =>
+        public static void EncodeBlock(ReadOnlySpan<Rgba16SNorm> source, Span<byte> destination, TextureCompressionLevel compressionMode) =>
             EncodeSignedEacRgBlock(source, compressionMode, destination);
     }
 
@@ -646,7 +646,7 @@ public sealed class EtcTextureCoder : IPitchTextureCoder
     private static void EncodeEtc2RgbaBlock(
         ReadOnlySpan<Rgba8UNorm> source,
         bool srgb,
-        EtcCompressionMode compressionMode,
+        TextureCompressionLevel compressionMode,
         Span<byte> destination)
     {
         EncodeEtc2AlphaBlock(source, compressionMode, destination[..8]);
@@ -925,7 +925,7 @@ public sealed class EtcTextureCoder : IPitchTextureCoder
 
     private static void EncodeEtc2AlphaBlock(
         ReadOnlySpan<Rgba8UNorm> source,
-        EtcCompressionMode compressionMode,
+        TextureCompressionLevel compressionMode,
         Span<byte> destination)
     {
         var alpha = new IntBlock();
@@ -1007,7 +1007,7 @@ public sealed class EtcTextureCoder : IPitchTextureCoder
 
     private static void EncodeUnsignedEacRBlock(
         ReadOnlySpan<Rgba16UNorm> source,
-        EtcCompressionMode compressionMode,
+        TextureCompressionLevel compressionMode,
         Span<byte> destination)
     {
         var red = new IntBlock();
@@ -1021,7 +1021,7 @@ public sealed class EtcTextureCoder : IPitchTextureCoder
 
     private static void EncodeUnsignedEacRgBlock(
         ReadOnlySpan<Rgba16UNorm> source,
-        EtcCompressionMode compressionMode,
+        TextureCompressionLevel compressionMode,
         Span<byte> destination)
     {
         var red = new IntBlock();
@@ -1038,7 +1038,7 @@ public sealed class EtcTextureCoder : IPitchTextureCoder
 
     private static void EncodeSignedEacRBlock(
         ReadOnlySpan<Rgba16SNorm> source,
-        EtcCompressionMode compressionMode,
+        TextureCompressionLevel compressionMode,
         Span<byte> destination)
     {
         var red = new IntBlock();
@@ -1052,7 +1052,7 @@ public sealed class EtcTextureCoder : IPitchTextureCoder
 
     private static void EncodeSignedEacRgBlock(
         ReadOnlySpan<Rgba16SNorm> source,
-        EtcCompressionMode compressionMode,
+        TextureCompressionLevel compressionMode,
         Span<byte> destination)
     {
         var red = new IntBlock();
@@ -1070,7 +1070,7 @@ public sealed class EtcTextureCoder : IPitchTextureCoder
     private static void EncodeSrgbEtcColorBlock(
         ReadOnlySpan<Rgba8UNorm> source,
         bool punchthrough,
-        EtcCompressionMode compressionMode,
+        TextureCompressionLevel compressionMode,
         Span<byte> destination)
     {
         Span<Rgba8UNorm> srgbBlock = stackalloc Rgba8UNorm[TexelsPerBlock];
@@ -1082,7 +1082,7 @@ public sealed class EtcTextureCoder : IPitchTextureCoder
         ReadOnlySpan<Rgba8UNorm> source,
         bool punchthrough,
         bool etc2,
-        EtcCompressionMode compressionMode,
+        TextureCompressionLevel compressionMode,
         Span<byte> destination)
     {
         var colors = new EtcColorBlock();
@@ -1097,8 +1097,8 @@ public sealed class EtcTextureCoder : IPitchTextureCoder
 
         var encoded = compressionMode switch
         {
-            EtcCompressionMode.Fast => EncodeEtcColorBlockFast(ref colors, punchthrough),
-            EtcCompressionMode.Normal or EtcCompressionMode.High or EtcCompressionMode.Exhaustive =>
+            TextureCompressionLevel.Fast => EncodeEtcColorBlockFast(ref colors, punchthrough),
+            TextureCompressionLevel.Normal or TextureCompressionLevel.High or TextureCompressionLevel.Exhaustive =>
                 EncodeEtcColorBlockOptimized(ref colors, punchthrough, etc2, compressionMode),
             _ => throw CreateUnsupportedCompressionModeException(compressionMode)
         };
@@ -1116,11 +1116,11 @@ public sealed class EtcTextureCoder : IPitchTextureCoder
         ref EtcColorBlock colors,
         bool punchthrough,
         bool etc2,
-        EtcCompressionMode compressionMode)
+        TextureCompressionLevel compressionMode)
     {
         var hasTransparent = punchthrough && HasTransparentTexel(ref colors);
-        var best = compressionMode == EtcCompressionMode.Exhaustive
-            ? EncodeEtcColorBlockOptimized(ref colors, punchthrough, etc2, EtcCompressionMode.High)
+        var best = compressionMode == TextureCompressionLevel.Exhaustive
+            ? EncodeEtcColorBlockOptimized(ref colors, punchthrough, etc2, TextureCompressionLevel.High)
             : RecalculateEtcColorEncodingError(
                 ref colors,
                 EncodeEtcColorBlockFast(ref colors, punchthrough),
@@ -1157,7 +1157,7 @@ public sealed class EtcTextureCoder : IPitchTextureCoder
                     etc2,
                     transparentPunchthrough: false));
 
-            if (compressionMode is EtcCompressionMode.High or EtcCompressionMode.Exhaustive)
+            if (compressionMode is TextureCompressionLevel.High or TextureCompressionLevel.Exhaustive)
             {
                 best = BestEncoding(
                     best,
@@ -1222,7 +1222,7 @@ public sealed class EtcTextureCoder : IPitchTextureCoder
 
     private static EtcColorEncoding EncodeIndividualOptimized(
         ref EtcColorBlock colors,
-        EtcCompressionMode compressionMode)
+        TextureCompressionLevel compressionMode)
     {
         var best = EtcColorEncoding.Worst;
         for (var flip = 0; flip <= 1; flip++)
@@ -1250,7 +1250,7 @@ public sealed class EtcTextureCoder : IPitchTextureCoder
         ref EtcColorBlock colors,
         bool flip,
         int subblock,
-        EtcCompressionMode compressionMode,
+        TextureCompressionLevel compressionMode,
         out IndividualSubblockEncoding encoding)
     {
         AverageSubblock(ref colors, flip, subblock, ignoreTransparent: false, out var average);
@@ -1352,7 +1352,7 @@ public sealed class EtcTextureCoder : IPitchTextureCoder
     private static EtcColorEncoding EncodeDifferentialOptimized(
         ref EtcColorBlock colors,
         bool transparentPunchthrough,
-        EtcCompressionMode compressionMode)
+        TextureCompressionLevel compressionMode)
     {
         var best = EtcColorEncoding.Worst;
         var capacity = GetDifferentialSubblockCandidateCapacity(compressionMode);
@@ -1423,7 +1423,7 @@ public sealed class EtcTextureCoder : IPitchTextureCoder
         bool flip,
         int subblock,
         bool transparentPunchthrough,
-        EtcCompressionMode compressionMode,
+        TextureCompressionLevel compressionMode,
         Span<DifferentialSubblockEncoding> destination)
     {
         AverageSubblock(ref colors, flip, subblock, transparentPunchthrough, out var average);
@@ -1489,12 +1489,12 @@ public sealed class EtcTextureCoder : IPitchTextureCoder
     private static EtcColorEncoding EncodeTModeHigh(
         ref EtcColorBlock colors,
         bool transparentPunchthrough,
-        EtcCompressionMode compressionMode)
+        TextureCompressionLevel compressionMode)
     {
         Span<EtcColorPairSeed> seeds = stackalloc EtcColorPairSeed[GetEtc2ModeSeedCapacity(compressionMode)];
         var seedCount = 0;
         AddEtc2ModeSeeds(ref colors, transparentPunchthrough, seeds, ref seedCount);
-        if (compressionMode == EtcCompressionMode.Exhaustive)
+        if (compressionMode == TextureCompressionLevel.Exhaustive)
         {
             AddUniqueEtc2ModeSeeds(ref colors, transparentPunchthrough, seeds, ref seedCount);
         }
@@ -1526,12 +1526,12 @@ public sealed class EtcTextureCoder : IPitchTextureCoder
     private static EtcColorEncoding EncodeHModeHigh(
         ref EtcColorBlock colors,
         bool transparentPunchthrough,
-        EtcCompressionMode compressionMode)
+        TextureCompressionLevel compressionMode)
     {
         Span<EtcColorPairSeed> seeds = stackalloc EtcColorPairSeed[GetEtc2ModeSeedCapacity(compressionMode)];
         var seedCount = 0;
         AddEtc2ModeSeeds(ref colors, transparentPunchthrough, seeds, ref seedCount);
-        if (compressionMode == EtcCompressionMode.Exhaustive)
+        if (compressionMode == TextureCompressionLevel.Exhaustive)
         {
             AddUniqueEtc2ModeSeeds(ref colors, transparentPunchthrough, seeds, ref seedCount);
         }
@@ -2349,17 +2349,17 @@ public sealed class EtcTextureCoder : IPitchTextureCoder
     private static void EncodeEacBlock(
         ref IntBlock source,
         EacBlockKind kind,
-        EtcCompressionMode compressionMode,
+        TextureCompressionLevel compressionMode,
         Span<byte> destination)
     {
         switch (compressionMode)
         {
-            case EtcCompressionMode.Fast:
+            case TextureCompressionLevel.Fast:
                 EncodeEacBlockFast(ref source, kind, destination);
                 return;
-            case EtcCompressionMode.Normal:
-            case EtcCompressionMode.High:
-            case EtcCompressionMode.Exhaustive:
+            case TextureCompressionLevel.Normal:
+            case TextureCompressionLevel.High:
+            case TextureCompressionLevel.Exhaustive:
                 EncodeEacBlockOptimized(ref source, kind, compressionMode, destination);
                 return;
             default:
@@ -2409,21 +2409,21 @@ public sealed class EtcTextureCoder : IPitchTextureCoder
     private static void EncodeEacBlockOptimized(
         ref IntBlock source,
         EacBlockKind kind,
-        EtcCompressionMode compressionMode,
+        TextureCompressionLevel compressionMode,
         Span<byte> destination)
     {
         GetTargetStats(ref source, out var min, out var max, out var average);
         var best = EacEncoding.Worst;
         var targetRange = max - min;
-        Span<int> multipliers = stackalloc int[compressionMode == EtcCompressionMode.Exhaustive ? 16 : 5];
-        Span<int> bases = stackalloc int[compressionMode == EtcCompressionMode.Exhaustive ? 160 : 32];
+        Span<int> multipliers = stackalloc int[compressionMode == TextureCompressionLevel.Exhaustive ? 16 : 5];
+        Span<int> bases = stackalloc int[compressionMode == TextureCompressionLevel.Exhaustive ? 160 : 32];
         Span<int> palette = stackalloc int[8];
 
         for (var table = 0; table < 16; table++)
         {
             var multiplierCount = 0;
             var estimatedMultiplier = EstimateEacMultiplier(kind, table, targetRange);
-            if (compressionMode == EtcCompressionMode.Exhaustive)
+            if (compressionMode == TextureCompressionLevel.Exhaustive)
             {
                 for (var multiplier = 0; multiplier <= 15; multiplier++)
                 {
@@ -2449,7 +2449,7 @@ public sealed class EtcTextureCoder : IPitchTextureCoder
                 AddBaseCandidate(kind, average, (minTerm + maxTerm) / 2, bases, ref baseCount);
                 AddBaseCandidate(kind, average, 0, bases, ref baseCount);
 
-                if (compressionMode is EtcCompressionMode.High or EtcCompressionMode.Exhaustive)
+                if (compressionMode is TextureCompressionLevel.High or TextureCompressionLevel.Exhaustive)
                 {
                     for (var index = 0; index < 8; index++)
                     {
@@ -2460,7 +2460,7 @@ public sealed class EtcTextureCoder : IPitchTextureCoder
                     }
                 }
 
-                if (compressionMode == EtcCompressionMode.Exhaustive)
+                if (compressionMode == TextureCompressionLevel.Exhaustive)
                 {
                     for (var texel = 0; texel < TexelsPerBlock; texel++)
                     {
@@ -3081,31 +3081,31 @@ public sealed class EtcTextureCoder : IPitchTextureCoder
     private static EacEncoding BestEncoding(EacEncoding left, EacEncoding right) =>
         left.Error <= right.Error ? left : right;
 
-    private static int GetIndividualEndpointSearchRadius(EtcCompressionMode compressionMode) => compressionMode switch
+    private static int GetIndividualEndpointSearchRadius(TextureCompressionLevel compressionMode) => compressionMode switch
     {
-        EtcCompressionMode.Normal or EtcCompressionMode.High => 1,
-        EtcCompressionMode.Exhaustive => 2,
+        TextureCompressionLevel.Normal or TextureCompressionLevel.High => 1,
+        TextureCompressionLevel.Exhaustive => 2,
         _ => throw CreateUnsupportedCompressionModeException(compressionMode)
     };
 
-    private static int GetDifferentialEndpointSearchRadius(EtcCompressionMode compressionMode) => compressionMode switch
+    private static int GetDifferentialEndpointSearchRadius(TextureCompressionLevel compressionMode) => compressionMode switch
     {
-        EtcCompressionMode.Normal or EtcCompressionMode.High => 1,
-        EtcCompressionMode.Exhaustive => 2,
+        TextureCompressionLevel.Normal or TextureCompressionLevel.High => 1,
+        TextureCompressionLevel.Exhaustive => 2,
         _ => throw CreateUnsupportedCompressionModeException(compressionMode)
     };
 
-    private static int GetDifferentialSubblockCandidateCapacity(EtcCompressionMode compressionMode)
+    private static int GetDifferentialSubblockCandidateCapacity(TextureCompressionLevel compressionMode)
     {
         var radius = GetDifferentialEndpointSearchRadius(compressionMode);
         var diameter = (radius * 2) + 1;
         return diameter * diameter * diameter;
     }
 
-    private static int GetEtc2ModeSeedCapacity(EtcCompressionMode compressionMode) => compressionMode switch
+    private static int GetEtc2ModeSeedCapacity(TextureCompressionLevel compressionMode) => compressionMode switch
     {
-        EtcCompressionMode.High => 16,
-        EtcCompressionMode.Exhaustive => 272,
+        TextureCompressionLevel.High => 16,
+        TextureCompressionLevel.Exhaustive => 272,
         _ => throw CreateUnsupportedCompressionModeException(compressionMode)
     };
 
@@ -3384,7 +3384,7 @@ public sealed class EtcTextureCoder : IPitchTextureCoder
     private static NotSupportedException CreateUnsupportedFormatException(TextureFormat format) =>
         new($"ETC/EAC texture coder does not support texture format '{format.Name}'.");
 
-    private static ArgumentOutOfRangeException CreateUnsupportedCompressionModeException(EtcCompressionMode compressionMode) =>
+    private static ArgumentOutOfRangeException CreateUnsupportedCompressionModeException(TextureCompressionLevel compressionMode) =>
         new(
             nameof(compressionMode),
             compressionMode,

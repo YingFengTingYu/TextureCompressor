@@ -368,7 +368,7 @@ public sealed class RgtcLatcTextureCoder : IPitchTextureCoder
     private static void EncodeUnsignedBlock<TLayout>(
         ReadOnlySpan<Rgba8UNorm> source,
         Span<byte> destination,
-        RgtcLatcCompressionMode compressionMode)
+        TextureCompressionLevel compressionMode)
         where TLayout : IRgtcLatcLayoutTransfer
     {
         EncodeUNormFirstComponentBlock<TLayout>(source, destination[..8], compressionMode);
@@ -382,7 +382,7 @@ public sealed class RgtcLatcTextureCoder : IPitchTextureCoder
     private static void EncodeSignedBlock<TLayout>(
         ReadOnlySpan<Rgba8SNorm> source,
         Span<byte> destination,
-        RgtcLatcCompressionMode compressionMode)
+        TextureCompressionLevel compressionMode)
         where TLayout : IRgtcLatcLayoutTransfer
     {
         EncodeSNormFirstComponentBlock<TLayout>(source, destination[..8], compressionMode);
@@ -448,7 +448,7 @@ public sealed class RgtcLatcTextureCoder : IPitchTextureCoder
     private static void EncodeUNormFirstComponentBlock<TLayout>(
         ReadOnlySpan<Rgba8UNorm> source,
         Span<byte> destination,
-        RgtcLatcCompressionMode compressionMode)
+        TextureCompressionLevel compressionMode)
         where TLayout : IRgtcLatcLayoutTransfer
     {
         Span<int> values = stackalloc int[TexelsPerBlock];
@@ -463,7 +463,7 @@ public sealed class RgtcLatcTextureCoder : IPitchTextureCoder
     private static void EncodeUNormSecondComponentBlock<TLayout>(
         ReadOnlySpan<Rgba8UNorm> source,
         Span<byte> destination,
-        RgtcLatcCompressionMode compressionMode)
+        TextureCompressionLevel compressionMode)
         where TLayout : IRgtcLatcLayoutTransfer
     {
         Span<int> values = stackalloc int[TexelsPerBlock];
@@ -478,7 +478,7 @@ public sealed class RgtcLatcTextureCoder : IPitchTextureCoder
     private static void EncodeSNormFirstComponentBlock<TLayout>(
         ReadOnlySpan<Rgba8SNorm> source,
         Span<byte> destination,
-        RgtcLatcCompressionMode compressionMode)
+        TextureCompressionLevel compressionMode)
         where TLayout : IRgtcLatcLayoutTransfer
     {
         Span<int> values = stackalloc int[TexelsPerBlock];
@@ -493,7 +493,7 @@ public sealed class RgtcLatcTextureCoder : IPitchTextureCoder
     private static void EncodeSNormSecondComponentBlock<TLayout>(
         ReadOnlySpan<Rgba8SNorm> source,
         Span<byte> destination,
-        RgtcLatcCompressionMode compressionMode)
+        TextureCompressionLevel compressionMode)
         where TLayout : IRgtcLatcLayoutTransfer
     {
         Span<int> values = stackalloc int[TexelsPerBlock];
@@ -562,21 +562,21 @@ public sealed class RgtcLatcTextureCoder : IPitchTextureCoder
         ReadOnlySpan<int> source,
         int minValue,
         int maxValue,
-        RgtcLatcCompressionMode compressionMode,
+        TextureCompressionLevel compressionMode,
         Span<byte> destination)
     {
         switch (compressionMode)
         {
-            case RgtcLatcCompressionMode.Fast:
+            case TextureCompressionLevel.Fast:
                 EncodeScalarBlockFast(source, minValue, maxValue, destination);
                 return;
-            case RgtcLatcCompressionMode.Normal:
+            case TextureCompressionLevel.Normal:
                 EncodeScalarBlockOptimized(source, minValue, maxValue, highQuality: false, destination);
                 return;
-            case RgtcLatcCompressionMode.High:
+            case TextureCompressionLevel.High:
                 EncodeScalarBlockOptimized(source, minValue, maxValue, highQuality: true, destination);
                 return;
-            case RgtcLatcCompressionMode.Exhaustive:
+            case TextureCompressionLevel.Exhaustive:
                 EncodeScalarBlockExhaustive(source, minValue, maxValue, destination);
                 return;
             default:

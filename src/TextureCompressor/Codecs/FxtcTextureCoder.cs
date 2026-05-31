@@ -177,12 +177,12 @@ public sealed class FxtcTextureCoder : IPitchTextureCoder
     {
         switch (_options.CompressionMode)
         {
-            case FxtcCompressionMode.Fast:
+            case TextureCompressionLevel.Fast:
                 EncodeBlockFast(source, destination);
                 return;
-            case FxtcCompressionMode.Normal:
-            case FxtcCompressionMode.High:
-            case FxtcCompressionMode.Exhaustive:
+            case TextureCompressionLevel.Normal:
+            case TextureCompressionLevel.High:
+            case TextureCompressionLevel.Exhaustive:
                 EncodeBlockOptimized(source, destination, _options.CompressionMode);
                 return;
             default:
@@ -223,7 +223,7 @@ public sealed class FxtcTextureCoder : IPitchTextureCoder
     private void EncodeBlockOptimized(
         ReadOnlySpan<Rgba8UNorm> source,
         Span<byte> destination,
-        FxtcCompressionMode compressionMode)
+        TextureCompressionLevel compressionMode)
     {
         Span<byte> best = stackalloc byte[BytesPerBlock];
         Span<byte> candidate = stackalloc byte[BytesPerBlock];
@@ -232,11 +232,11 @@ public sealed class FxtcTextureCoder : IPitchTextureCoder
         EncodeBlockFast(source, candidate);
         UpdateBestCandidate(source, candidate, best, ref bestError);
 
-        if (compressionMode is FxtcCompressionMode.High or FxtcCompressionMode.Exhaustive)
+        if (compressionMode is TextureCompressionLevel.High or TextureCompressionLevel.Exhaustive)
         {
-            var previousMode = compressionMode == FxtcCompressionMode.High
-                ? FxtcCompressionMode.Normal
-                : FxtcCompressionMode.High;
+            var previousMode = compressionMode == TextureCompressionLevel.High
+                ? TextureCompressionLevel.Normal
+                : TextureCompressionLevel.High;
             EncodeBlockOptimized(source, candidate, previousMode);
             UpdateBestCandidate(source, candidate, best, ref bestError);
         }
@@ -334,10 +334,10 @@ public sealed class FxtcTextureCoder : IPitchTextureCoder
     private void EncodeCcHiBlockOptimized(
         ReadOnlySpan<Rgba8UNorm> source,
         Span<byte> destination,
-        FxtcCompressionMode compressionMode)
+        TextureCompressionLevel compressionMode)
     {
         Span<CcHiEndpointPair> seeds = stackalloc CcHiEndpointPair[
-            compressionMode == FxtcCompressionMode.Exhaustive ? 272 : 16];
+            compressionMode == TextureCompressionLevel.Exhaustive ? 272 : 16];
         var seedCount = 0;
         var compareAlpha = Format == TextureFormats.RgbaFxt1UNorm;
         var ignoreTransparent = compareAlpha && HasTransparentTexel(source);
@@ -369,20 +369,20 @@ public sealed class FxtcTextureCoder : IPitchTextureCoder
             AddCcHiSeed(seeds, ref seedCount, PackRgb555Nearest(axisMax), PackRgb555Nearest(axisMin));
         }
 
-        if (compressionMode is FxtcCompressionMode.High or FxtcCompressionMode.Exhaustive
+        if (compressionMode is TextureCompressionLevel.High or TextureCompressionLevel.Exhaustive
             && TryFindFarthestColorEndpoints(source, ignoreTransparent, out var farA, out var farB))
         {
             AddCcHiSeed(seeds, ref seedCount, PackRgb555(farA), PackRgb555(farB));
             AddCcHiSeed(seeds, ref seedCount, PackRgb555(farB), PackRgb555(farA));
         }
 
-        if (compressionMode is FxtcCompressionMode.High or FxtcCompressionMode.Exhaustive
+        if (compressionMode is TextureCompressionLevel.High or TextureCompressionLevel.Exhaustive
             && TryFindAverageColor(source, ignoreTransparent, out var average))
         {
             AddCcHiSeed(seeds, ref seedCount, PackRgb555Nearest(average), PackRgb555Nearest(average));
         }
 
-        if (compressionMode == FxtcCompressionMode.Exhaustive)
+        if (compressionMode == TextureCompressionLevel.Exhaustive)
         {
             AddUniqueCcHiSeeds(source, ignoreTransparent, seeds, ref seedCount);
         }
@@ -648,7 +648,7 @@ public sealed class FxtcTextureCoder : IPitchTextureCoder
     private static void EncodeCcChromaBlockOptimized(
         ReadOnlySpan<Rgba8UNorm> source,
         Span<byte> destination,
-        FxtcCompressionMode compressionMode)
+        TextureCompressionLevel compressionMode)
     {
         Span<ushort> colors = stackalloc ushort[4];
         Span<Rgba8UNorm> palette = stackalloc Rgba8UNorm[4];
@@ -659,7 +659,7 @@ public sealed class FxtcTextureCoder : IPitchTextureCoder
         }
 
         var best = EvaluateCcChromaCandidate(source, colors);
-        if (compressionMode == FxtcCompressionMode.Exhaustive
+        if (compressionMode == TextureCompressionLevel.Exhaustive
             && TryBuildGreedyCcChromaSeed(source, colors))
         {
             var candidate = EvaluateCcChromaCandidate(source, colors);
@@ -968,7 +968,7 @@ public sealed class FxtcTextureCoder : IPitchTextureCoder
     private static void EncodeCcMixedOpaqueBlockOptimized(
         ReadOnlySpan<Rgba8UNorm> source,
         Span<byte> destination,
-        FxtcCompressionMode compressionMode)
+        TextureCompressionLevel compressionMode)
     {
         destination.Clear();
         var left = FindBestCcMixedOpaqueHalf(source, 0, 64, 79, 125, compressionMode);
@@ -984,10 +984,10 @@ public sealed class FxtcTextureCoder : IPitchTextureCoder
         int color0BitOffset,
         int color1BitOffset,
         int greenLowBitOffset,
-        FxtcCompressionMode compressionMode)
+        TextureCompressionLevel compressionMode)
     {
         Span<Rgb565EndpointPair> seeds = stackalloc Rgb565EndpointPair[
-            compressionMode == FxtcCompressionMode.Exhaustive ? 280 : 14];
+            compressionMode == TextureCompressionLevel.Exhaustive ? 280 : 14];
         var seedCount = 0;
 
         FindColorBounds(source, start, LeftTexelCount, includeAlpha: false, ignoreTransparent: false, out var min, out var max);
@@ -1006,20 +1006,20 @@ public sealed class FxtcTextureCoder : IPitchTextureCoder
             AddRgb565Seed(seeds, ref seedCount, PackRgb565Nearest(axisMax), PackRgb565Nearest(axisMin));
         }
 
-        if (compressionMode is FxtcCompressionMode.High or FxtcCompressionMode.Exhaustive
+        if (compressionMode is TextureCompressionLevel.High or TextureCompressionLevel.Exhaustive
             && TryFindFarthestColorEndpoints(source, start, LeftTexelCount, ignoreTransparent: false, out var farA, out var farB))
         {
             AddRgb565Seed(seeds, ref seedCount, PackRgb565(farA), PackRgb565(farB));
             AddRgb565Seed(seeds, ref seedCount, PackRgb565(farB), PackRgb565(farA));
         }
 
-        if (compressionMode is FxtcCompressionMode.High or FxtcCompressionMode.Exhaustive
+        if (compressionMode is TextureCompressionLevel.High or TextureCompressionLevel.Exhaustive
             && TryFindAverageColor(source, start, LeftTexelCount, ignoreTransparent: false, out var average))
         {
             AddRgb565Seed(seeds, ref seedCount, PackRgb565Nearest(average), PackRgb565Nearest(average));
         }
 
-        if (compressionMode == FxtcCompressionMode.Exhaustive)
+        if (compressionMode == TextureCompressionLevel.Exhaustive)
         {
             AddUniqueRgb565Seeds(source, start, LeftTexelCount, ignoreTransparent: false, seeds, ref seedCount);
         }
@@ -1357,7 +1357,7 @@ public sealed class FxtcTextureCoder : IPitchTextureCoder
     private static void EncodeCcMixedAlphaBlockOptimized(
         ReadOnlySpan<Rgba8UNorm> source,
         Span<byte> destination,
-        FxtcCompressionMode compressionMode)
+        TextureCompressionLevel compressionMode)
     {
         destination.Clear();
         var left = FindBestCcMixedAlphaHalf(source, 0, 64, 79, 125, compressionMode);
@@ -1374,7 +1374,7 @@ public sealed class FxtcTextureCoder : IPitchTextureCoder
         int color0BitOffset,
         int color1BitOffset,
         int greenLowBitOffset,
-        FxtcCompressionMode compressionMode)
+        TextureCompressionLevel compressionMode)
     {
         if (!HasOpaqueTexel(source, start, LeftTexelCount))
         {
@@ -1382,7 +1382,7 @@ public sealed class FxtcTextureCoder : IPitchTextureCoder
         }
 
         Span<MixedAlphaEndpointPair> seeds = stackalloc MixedAlphaEndpointPair[
-            compressionMode == FxtcCompressionMode.Exhaustive ? 280 : 14];
+            compressionMode == TextureCompressionLevel.Exhaustive ? 280 : 14];
         var seedCount = 0;
 
         FindColorBounds(source, start, LeftTexelCount, includeAlpha: false, ignoreTransparent: true, out var min, out var max);
@@ -1401,20 +1401,20 @@ public sealed class FxtcTextureCoder : IPitchTextureCoder
             AddMixedAlphaSeed(seeds, ref seedCount, PackRgb555Nearest(axisMax), PackRgb565Nearest(axisMin));
         }
 
-        if (compressionMode is FxtcCompressionMode.High or FxtcCompressionMode.Exhaustive
+        if (compressionMode is TextureCompressionLevel.High or TextureCompressionLevel.Exhaustive
             && TryFindFarthestColorEndpoints(source, start, LeftTexelCount, ignoreTransparent: true, out var farA, out var farB))
         {
             AddMixedAlphaSeed(seeds, ref seedCount, PackRgb555(farA), PackRgb565(farB));
             AddMixedAlphaSeed(seeds, ref seedCount, PackRgb555(farB), PackRgb565(farA));
         }
 
-        if (compressionMode is FxtcCompressionMode.High or FxtcCompressionMode.Exhaustive
+        if (compressionMode is TextureCompressionLevel.High or TextureCompressionLevel.Exhaustive
             && TryFindAverageColor(source, start, LeftTexelCount, ignoreTransparent: true, out var average))
         {
             AddMixedAlphaSeed(seeds, ref seedCount, PackRgb555Nearest(average), PackRgb565Nearest(average));
         }
 
-        if (compressionMode == FxtcCompressionMode.Exhaustive)
+        if (compressionMode == TextureCompressionLevel.Exhaustive)
         {
             AddUniqueMixedAlphaSeeds(source, start, seeds, ref seedCount);
         }
@@ -1792,7 +1792,7 @@ public sealed class FxtcTextureCoder : IPitchTextureCoder
     private static void EncodeCcAlphaBlockOptimized(
         ReadOnlySpan<Rgba8UNorm> source,
         Span<byte> destination,
-        FxtcCompressionMode compressionMode)
+        TextureCompressionLevel compressionMode)
     {
         Span<byte> best = stackalloc byte[BytesPerBlock];
         Span<byte> candidate = stackalloc byte[BytesPerBlock];
@@ -1832,7 +1832,7 @@ public sealed class FxtcTextureCoder : IPitchTextureCoder
     private static void EncodeCcAlphaExplicitBlockOptimized(
         ReadOnlySpan<Rgba8UNorm> source,
         Span<byte> destination,
-        FxtcCompressionMode compressionMode)
+        TextureCompressionLevel compressionMode)
     {
         destination.Clear();
         if (!HasOpaqueTexel(source))
@@ -2541,44 +2541,44 @@ public sealed class FxtcTextureCoder : IPitchTextureCoder
         return true;
     }
 
-    private static int GetColorOptimizationIterationLimit(FxtcCompressionMode compressionMode) => compressionMode switch
+    private static int GetColorOptimizationIterationLimit(TextureCompressionLevel compressionMode) => compressionMode switch
     {
-        FxtcCompressionMode.Normal => 4,
-        FxtcCompressionMode.High => 8,
-        FxtcCompressionMode.Exhaustive => 12,
+        TextureCompressionLevel.Normal => 4,
+        TextureCompressionLevel.High => 8,
+        TextureCompressionLevel.Exhaustive => 12,
         _ => throw new ArgumentOutOfRangeException(
             nameof(compressionMode),
             compressionMode,
             "Unsupported FXT1 compression mode.")
     };
 
-    private static int GetColorRefinementPassLimit(FxtcCompressionMode compressionMode) => compressionMode switch
+    private static int GetColorRefinementPassLimit(TextureCompressionLevel compressionMode) => compressionMode switch
     {
-        FxtcCompressionMode.Normal => 4,
-        FxtcCompressionMode.High => 8,
-        FxtcCompressionMode.Exhaustive => 16,
+        TextureCompressionLevel.Normal => 4,
+        TextureCompressionLevel.High => 8,
+        TextureCompressionLevel.Exhaustive => 16,
         _ => throw new ArgumentOutOfRangeException(
             nameof(compressionMode),
             compressionMode,
             "Unsupported FXT1 compression mode.")
     };
 
-    private static int GetChromaOptimizationIterationLimit(FxtcCompressionMode compressionMode) => compressionMode switch
+    private static int GetChromaOptimizationIterationLimit(TextureCompressionLevel compressionMode) => compressionMode switch
     {
-        FxtcCompressionMode.Normal => 6,
-        FxtcCompressionMode.High => 12,
-        FxtcCompressionMode.Exhaustive => 20,
+        TextureCompressionLevel.Normal => 6,
+        TextureCompressionLevel.High => 12,
+        TextureCompressionLevel.Exhaustive => 20,
         _ => throw new ArgumentOutOfRangeException(
             nameof(compressionMode),
             compressionMode,
             "Unsupported FXT1 compression mode.")
     };
 
-    private static int GetChromaRefinementPassLimit(FxtcCompressionMode compressionMode) => compressionMode switch
+    private static int GetChromaRefinementPassLimit(TextureCompressionLevel compressionMode) => compressionMode switch
     {
-        FxtcCompressionMode.Normal => 2,
-        FxtcCompressionMode.High => 8,
-        FxtcCompressionMode.Exhaustive => 16,
+        TextureCompressionLevel.Normal => 2,
+        TextureCompressionLevel.High => 8,
+        TextureCompressionLevel.Exhaustive => 16,
         _ => throw new ArgumentOutOfRangeException(
             nameof(compressionMode),
             compressionMode,

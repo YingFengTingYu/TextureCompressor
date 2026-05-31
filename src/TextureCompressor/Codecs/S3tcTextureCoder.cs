@@ -333,7 +333,7 @@ public sealed class S3tcTextureCoder : IPitchTextureCoder
         static abstract void EncodeBlock(
             ReadOnlySpan<Rgba8UNorm> source,
             Span<byte> destination,
-            S3tcCompressionMode compressionMode);
+            TextureCompressionLevel compressionMode);
     }
 
     private readonly struct Dxt1RgbTransfer : IS3tcTransfer
@@ -346,7 +346,7 @@ public sealed class S3tcTextureCoder : IPitchTextureCoder
         public static void EncodeBlock(
             ReadOnlySpan<Rgba8UNorm> source,
             Span<byte> destination,
-            S3tcCompressionMode compressionMode) =>
+            TextureCompressionLevel compressionMode) =>
             EncodeColorBlock(source, Dxt1ColorMode.Rgb, destination, compressionMode);
     }
 
@@ -363,7 +363,7 @@ public sealed class S3tcTextureCoder : IPitchTextureCoder
         public static void EncodeBlock(
             ReadOnlySpan<Rgba8UNorm> source,
             Span<byte> destination,
-            S3tcCompressionMode compressionMode) =>
+            TextureCompressionLevel compressionMode) =>
             EncodeSrgbColorBlock(source, Dxt1ColorMode.Rgb, destination, compressionMode);
     }
 
@@ -377,7 +377,7 @@ public sealed class S3tcTextureCoder : IPitchTextureCoder
         public static void EncodeBlock(
             ReadOnlySpan<Rgba8UNorm> source,
             Span<byte> destination,
-            S3tcCompressionMode compressionMode) =>
+            TextureCompressionLevel compressionMode) =>
             EncodeBigEndianBlock<Dxt1RgbTransfer>(source, destination, BigEndianByteSwapMode.Swap8In16, compressionMode);
     }
 
@@ -391,7 +391,7 @@ public sealed class S3tcTextureCoder : IPitchTextureCoder
         public static void EncodeBlock(
             ReadOnlySpan<Rgba8UNorm> source,
             Span<byte> destination,
-            S3tcCompressionMode compressionMode) =>
+            TextureCompressionLevel compressionMode) =>
             EncodeColorBlock(source, Dxt1ColorMode.Rgba, destination, compressionMode);
     }
 
@@ -408,7 +408,7 @@ public sealed class S3tcTextureCoder : IPitchTextureCoder
         public static void EncodeBlock(
             ReadOnlySpan<Rgba8UNorm> source,
             Span<byte> destination,
-            S3tcCompressionMode compressionMode) =>
+            TextureCompressionLevel compressionMode) =>
             EncodeSrgbColorBlock(source, Dxt1ColorMode.Rgba, destination, compressionMode);
     }
 
@@ -422,7 +422,7 @@ public sealed class S3tcTextureCoder : IPitchTextureCoder
         public static void EncodeBlock(
             ReadOnlySpan<Rgba8UNorm> source,
             Span<byte> destination,
-            S3tcCompressionMode compressionMode) =>
+            TextureCompressionLevel compressionMode) =>
             EncodeBigEndianBlock<Dxt1RgbaTransfer>(source, destination, BigEndianByteSwapMode.Swap8In16, compressionMode);
     }
 
@@ -440,7 +440,7 @@ public sealed class S3tcTextureCoder : IPitchTextureCoder
         public static void EncodeBlock(
             ReadOnlySpan<Rgba8UNorm> source,
             Span<byte> destination,
-            S3tcCompressionMode compressionMode)
+            TextureCompressionLevel compressionMode)
         {
             Span<Rgba8UNorm> premultipliedBlock = stackalloc Rgba8UNorm[TexelsPerBlock];
             PremultiplyAlpha(source, premultipliedBlock);
@@ -459,7 +459,7 @@ public sealed class S3tcTextureCoder : IPitchTextureCoder
         public static void EncodeBlock(
             ReadOnlySpan<Rgba8UNorm> source,
             Span<byte> destination,
-            S3tcCompressionMode compressionMode) =>
+            TextureCompressionLevel compressionMode) =>
             EncodeBigEndianBlock<Dxt2RgbaTransfer>(source, destination, BigEndianByteSwapMode.Swap8In16, compressionMode);
     }
 
@@ -476,7 +476,7 @@ public sealed class S3tcTextureCoder : IPitchTextureCoder
         public static void EncodeBlock(
             ReadOnlySpan<Rgba8UNorm> source,
             Span<byte> destination,
-            S3tcCompressionMode compressionMode)
+            TextureCompressionLevel compressionMode)
         {
             EncodeExplicitAlphaBlock(source, destination[..8], compressionMode);
             EncodeColorBlock(source, Dxt1ColorMode.FourColor, destination[8..], compressionMode);
@@ -496,7 +496,7 @@ public sealed class S3tcTextureCoder : IPitchTextureCoder
         public static void EncodeBlock(
             ReadOnlySpan<Rgba8UNorm> source,
             Span<byte> destination,
-            S3tcCompressionMode compressionMode)
+            TextureCompressionLevel compressionMode)
         {
             Span<Rgba8UNorm> srgbBlock = stackalloc Rgba8UNorm[TexelsPerBlock];
             EncodeSrgbColors(source, srgbBlock);
@@ -515,7 +515,7 @@ public sealed class S3tcTextureCoder : IPitchTextureCoder
         public static void EncodeBlock(
             ReadOnlySpan<Rgba8UNorm> source,
             Span<byte> destination,
-            S3tcCompressionMode compressionMode) =>
+            TextureCompressionLevel compressionMode) =>
             EncodeBigEndianBlock<Dxt3RgbaTransfer>(source, destination, BigEndianByteSwapMode.Swap8In16, compressionMode);
     }
 
@@ -529,7 +529,7 @@ public sealed class S3tcTextureCoder : IPitchTextureCoder
         public static void EncodeBlock(
             ReadOnlySpan<Rgba8UNorm> source,
             Span<byte> destination,
-            S3tcCompressionMode compressionMode) =>
+            TextureCompressionLevel compressionMode) =>
             EncodeExplicitAlphaOnlyBlock(source, destination, compressionMode);
     }
 
@@ -543,7 +543,7 @@ public sealed class S3tcTextureCoder : IPitchTextureCoder
         public static void EncodeBlock(
             ReadOnlySpan<Rgba8UNorm> source,
             Span<byte> destination,
-            S3tcCompressionMode compressionMode) =>
+            TextureCompressionLevel compressionMode) =>
             EncodeBigEndianBlock<Dxt3ATransfer>(source, destination, BigEndianByteSwapMode.Swap8In16, compressionMode);
     }
 
@@ -557,7 +557,7 @@ public sealed class S3tcTextureCoder : IPitchTextureCoder
         public static void EncodeBlock(
             ReadOnlySpan<Rgba8UNorm> source,
             Span<byte> destination,
-            S3tcCompressionMode _) =>
+            TextureCompressionLevel _) =>
             EncodeDxt3A1111Block(source, destination);
     }
 
@@ -571,7 +571,7 @@ public sealed class S3tcTextureCoder : IPitchTextureCoder
         public static void EncodeBlock(
             ReadOnlySpan<Rgba8UNorm> source,
             Span<byte> destination,
-            S3tcCompressionMode compressionMode) =>
+            TextureCompressionLevel compressionMode) =>
             EncodeBigEndianBlock<Dxt3A1111Transfer>(source, destination, BigEndianByteSwapMode.Swap8In16, compressionMode);
     }
 
@@ -589,7 +589,7 @@ public sealed class S3tcTextureCoder : IPitchTextureCoder
         public static void EncodeBlock(
             ReadOnlySpan<Rgba8UNorm> source,
             Span<byte> destination,
-            S3tcCompressionMode compressionMode)
+            TextureCompressionLevel compressionMode)
         {
             Span<Rgba8UNorm> premultipliedBlock = stackalloc Rgba8UNorm[TexelsPerBlock];
             PremultiplyAlpha(source, premultipliedBlock);
@@ -608,7 +608,7 @@ public sealed class S3tcTextureCoder : IPitchTextureCoder
         public static void EncodeBlock(
             ReadOnlySpan<Rgba8UNorm> source,
             Span<byte> destination,
-            S3tcCompressionMode compressionMode) =>
+            TextureCompressionLevel compressionMode) =>
             EncodeBigEndianBlock<Dxt4RgbaTransfer>(source, destination, BigEndianByteSwapMode.Swap8In16, compressionMode);
     }
 
@@ -625,7 +625,7 @@ public sealed class S3tcTextureCoder : IPitchTextureCoder
         public static void EncodeBlock(
             ReadOnlySpan<Rgba8UNorm> source,
             Span<byte> destination,
-            S3tcCompressionMode compressionMode)
+            TextureCompressionLevel compressionMode)
         {
             EncodeInterpolatedAlphaBlock(source, destination[..8], compressionMode);
             EncodeColorBlock(source, Dxt1ColorMode.FourColor, destination[8..], compressionMode);
@@ -645,7 +645,7 @@ public sealed class S3tcTextureCoder : IPitchTextureCoder
         public static void EncodeBlock(
             ReadOnlySpan<Rgba8UNorm> source,
             Span<byte> destination,
-            S3tcCompressionMode compressionMode)
+            TextureCompressionLevel compressionMode)
         {
             Span<Rgba8UNorm> srgbBlock = stackalloc Rgba8UNorm[TexelsPerBlock];
             EncodeSrgbColors(source, srgbBlock);
@@ -664,7 +664,7 @@ public sealed class S3tcTextureCoder : IPitchTextureCoder
         public static void EncodeBlock(
             ReadOnlySpan<Rgba8UNorm> source,
             Span<byte> destination,
-            S3tcCompressionMode compressionMode) =>
+            TextureCompressionLevel compressionMode) =>
             EncodeBigEndianBlock<Dxt5RgbaTransfer>(source, destination, BigEndianByteSwapMode.Swap8In16, compressionMode);
     }
 
@@ -678,7 +678,7 @@ public sealed class S3tcTextureCoder : IPitchTextureCoder
         public static void EncodeBlock(
             ReadOnlySpan<Rgba8UNorm> source,
             Span<byte> destination,
-            S3tcCompressionMode compressionMode) =>
+            TextureCompressionLevel compressionMode) =>
             EncodeInterpolatedAlphaOnlyBlock(source, destination, compressionMode);
     }
 
@@ -692,7 +692,7 @@ public sealed class S3tcTextureCoder : IPitchTextureCoder
         public static void EncodeBlock(
             ReadOnlySpan<Rgba8UNorm> source,
             Span<byte> destination,
-            S3tcCompressionMode compressionMode) =>
+            TextureCompressionLevel compressionMode) =>
             EncodeBigEndianBlock<Dxt5ATransfer>(source, destination, BigEndianByteSwapMode.Swap8In16, compressionMode);
     }
 
@@ -710,7 +710,7 @@ public sealed class S3tcTextureCoder : IPitchTextureCoder
         public static void EncodeBlock(
             ReadOnlySpan<Rgba8UNorm> source,
             Span<byte> destination,
-            S3tcCompressionMode compressionMode)
+            TextureCompressionLevel compressionMode)
         {
             EncodeInterpolatedComponentBlock(source, S3tcScalarComponent.Red, destination[..8], compressionMode);
             EncodeInterpolatedComponentBlock(source, S3tcScalarComponent.Green, destination[8..], compressionMode);
@@ -727,7 +727,7 @@ public sealed class S3tcTextureCoder : IPitchTextureCoder
         public static void EncodeBlock(
             ReadOnlySpan<Rgba8UNorm> source,
             Span<byte> destination,
-            S3tcCompressionMode compressionMode) =>
+            TextureCompressionLevel compressionMode) =>
             EncodeBigEndianBlock<DxnTransfer>(source, destination, BigEndianByteSwapMode.Swap8In16, compressionMode);
     }
 
@@ -741,7 +741,7 @@ public sealed class S3tcTextureCoder : IPitchTextureCoder
         public static void EncodeBlock(
             ReadOnlySpan<Rgba8UNorm> source,
             Span<byte> destination,
-            S3tcCompressionMode _) =>
+            TextureCompressionLevel _) =>
             EncodeCtx1Block(source, destination);
     }
 
@@ -755,7 +755,7 @@ public sealed class S3tcTextureCoder : IPitchTextureCoder
         public static void EncodeBlock(
             ReadOnlySpan<Rgba8UNorm> source,
             Span<byte> destination,
-            S3tcCompressionMode compressionMode) =>
+            TextureCompressionLevel compressionMode) =>
             EncodeBigEndianBlock<Ctx1Transfer>(source, destination, BigEndianByteSwapMode.Swap8In16, compressionMode);
     }
 
@@ -774,7 +774,7 @@ public sealed class S3tcTextureCoder : IPitchTextureCoder
         ReadOnlySpan<Rgba8UNorm> source,
         Span<byte> destination,
         BigEndianByteSwapMode endianMode,
-        S3tcCompressionMode compressionMode)
+        TextureCompressionLevel compressionMode)
         where TTransfer : IS3tcTransfer
     {
         Span<byte> littleEndianBlock = stackalloc byte[TTransfer.BytesPerBlock];
@@ -786,7 +786,7 @@ public sealed class S3tcTextureCoder : IPitchTextureCoder
         ReadOnlySpan<Rgba8UNorm> source,
         Dxt1ColorMode colorMode,
         Span<byte> destination,
-        S3tcCompressionMode compressionMode)
+        TextureCompressionLevel compressionMode)
     {
         Span<Rgba8UNorm> srgbBlock = stackalloc Rgba8UNorm[TexelsPerBlock];
         EncodeSrgbColors(source, srgbBlock);
@@ -814,17 +814,17 @@ public sealed class S3tcTextureCoder : IPitchTextureCoder
         ReadOnlySpan<Rgba8UNorm> source,
         Dxt1ColorMode colorMode,
         Span<byte> destination,
-        S3tcCompressionMode compressionMode)
+        TextureCompressionLevel compressionMode)
     {
         var hasTransparent = colorMode == Dxt1ColorMode.Rgba && HasTransparentTexel(source);
         switch (compressionMode)
         {
-            case S3tcCompressionMode.Fast:
+            case TextureCompressionLevel.Fast:
                 EncodeColorBlockFast(source, colorMode, hasTransparent, destination);
                 return;
-            case S3tcCompressionMode.Normal:
-            case S3tcCompressionMode.High:
-            case S3tcCompressionMode.Exhaustive:
+            case TextureCompressionLevel.Normal:
+            case TextureCompressionLevel.High:
+            case TextureCompressionLevel.Exhaustive:
                 EncodeColorBlockOptimized(source, colorMode, hasTransparent, compressionMode, destination);
                 return;
             default:
@@ -839,7 +839,7 @@ public sealed class S3tcTextureCoder : IPitchTextureCoder
         ReadOnlySpan<Rgba8UNorm> source,
         Dxt1ColorMode colorMode,
         bool hasTransparent,
-        S3tcCompressionMode compressionMode,
+        TextureCompressionLevel compressionMode,
         Span<byte> destination)
     {
         if (hasTransparent && !HasOpaqueTexel(source))
@@ -851,7 +851,7 @@ public sealed class S3tcTextureCoder : IPitchTextureCoder
         }
 
         Span<ColorEndpointPair> seeds = stackalloc ColorEndpointPair[
-            compressionMode == S3tcCompressionMode.Exhaustive ? 272 : 8];
+            compressionMode == TextureCompressionLevel.Exhaustive ? 272 : 8];
         var seedCount = 0;
         FindColorBounds(source, ignoreTransparent: hasTransparent, out var min, out var max);
         AddColorSeed(seeds, ref seedCount, PackRgb565(max), PackRgb565(min), hasTransparent);
@@ -871,19 +871,19 @@ public sealed class S3tcTextureCoder : IPitchTextureCoder
                 hasTransparent);
         }
 
-        if (compressionMode is S3tcCompressionMode.High or S3tcCompressionMode.Exhaustive
+        if (compressionMode is TextureCompressionLevel.High or TextureCompressionLevel.Exhaustive
             && TryFindFarthestColorEndpoints(source, hasTransparent, out var farA, out var farB))
         {
             AddColorSeed(seeds, ref seedCount, PackRgb565(farA), PackRgb565(farB), hasTransparent);
         }
 
-        if (compressionMode is S3tcCompressionMode.High or S3tcCompressionMode.Exhaustive
+        if (compressionMode is TextureCompressionLevel.High or TextureCompressionLevel.Exhaustive
             && TryFindAverageColor(source, hasTransparent, out var average))
         {
             AddColorSeed(seeds, ref seedCount, PackRgb565Nearest(average), PackRgb565Nearest(average), hasTransparent);
         }
 
-        if (compressionMode == S3tcCompressionMode.Exhaustive)
+        if (compressionMode == TextureCompressionLevel.Exhaustive)
         {
             AddUniqueColorSeeds(source, hasTransparent, seeds, ref seedCount);
         }
@@ -978,14 +978,14 @@ public sealed class S3tcTextureCoder : IPitchTextureCoder
     private static void EncodeExplicitAlphaBlock(
         ReadOnlySpan<Rgba8UNorm> source,
         Span<byte> destination,
-        S3tcCompressionMode compressionMode)
+        TextureCompressionLevel compressionMode)
     {
         for (var i = 0; i < 8; i++)
         {
-            var low = compressionMode == S3tcCompressionMode.Fast
+            var low = compressionMode == TextureCompressionLevel.Fast
                 ? source[i * 2].Alpha >> 4
                 : QuantizeAlpha4(source[i * 2].Alpha);
-            var high = compressionMode == S3tcCompressionMode.Fast
+            var high = compressionMode == TextureCompressionLevel.Fast
                 ? source[(i * 2) + 1].Alpha >> 4
                 : QuantizeAlpha4(source[(i * 2) + 1].Alpha);
             destination[i] = (byte)(low | (high << 4));
@@ -995,7 +995,7 @@ public sealed class S3tcTextureCoder : IPitchTextureCoder
     private static void EncodeExplicitAlphaOnlyBlock(
         ReadOnlySpan<Rgba8UNorm> source,
         Span<byte> destination,
-        S3tcCompressionMode compressionMode) =>
+        TextureCompressionLevel compressionMode) =>
         EncodeExplicitAlphaBlock(source, destination, compressionMode);
 
     private static void DecodeDxt3A1111Block(ReadOnlySpan<byte> source, Span<Rgba8UNorm> destination)
@@ -1058,7 +1058,7 @@ public sealed class S3tcTextureCoder : IPitchTextureCoder
     private static void EncodeInterpolatedAlphaBlock(
         ReadOnlySpan<Rgba8UNorm> source,
         Span<byte> destination,
-        S3tcCompressionMode compressionMode)
+        TextureCompressionLevel compressionMode)
     {
         EncodeInterpolatedScalarBlock(source, S3tcScalarComponent.Alpha, destination, compressionMode);
     }
@@ -1066,14 +1066,14 @@ public sealed class S3tcTextureCoder : IPitchTextureCoder
     private static void EncodeInterpolatedAlphaOnlyBlock(
         ReadOnlySpan<Rgba8UNorm> source,
         Span<byte> destination,
-        S3tcCompressionMode compressionMode) =>
+        TextureCompressionLevel compressionMode) =>
         EncodeInterpolatedComponentBlock(source, S3tcScalarComponent.Alpha, destination, compressionMode);
 
     private static void EncodeInterpolatedComponentBlock(
         ReadOnlySpan<Rgba8UNorm> source,
         S3tcScalarComponent component,
         Span<byte> destination,
-        S3tcCompressionMode compressionMode)
+        TextureCompressionLevel compressionMode)
     {
         EncodeInterpolatedScalarBlock(source, component, destination, compressionMode);
     }
@@ -1804,22 +1804,22 @@ public sealed class S3tcTextureCoder : IPitchTextureCoder
         return true;
     }
 
-    private static int GetColorOptimizationIterationLimit(S3tcCompressionMode compressionMode) => compressionMode switch
+    private static int GetColorOptimizationIterationLimit(TextureCompressionLevel compressionMode) => compressionMode switch
     {
-        S3tcCompressionMode.Normal => 4,
-        S3tcCompressionMode.High => 8,
-        S3tcCompressionMode.Exhaustive => 12,
+        TextureCompressionLevel.Normal => 4,
+        TextureCompressionLevel.High => 8,
+        TextureCompressionLevel.Exhaustive => 12,
         _ => throw new ArgumentOutOfRangeException(
             nameof(compressionMode),
             compressionMode,
             "Unsupported S3TC compression mode.")
     };
 
-    private static int GetColorRefinementPassLimit(S3tcCompressionMode compressionMode) => compressionMode switch
+    private static int GetColorRefinementPassLimit(TextureCompressionLevel compressionMode) => compressionMode switch
     {
-        S3tcCompressionMode.Normal => 4,
-        S3tcCompressionMode.High => 8,
-        S3tcCompressionMode.Exhaustive => 16,
+        TextureCompressionLevel.Normal => 4,
+        TextureCompressionLevel.High => 8,
+        TextureCompressionLevel.Exhaustive => 16,
         _ => throw new ArgumentOutOfRangeException(
             nameof(compressionMode),
             compressionMode,
@@ -1938,19 +1938,19 @@ public sealed class S3tcTextureCoder : IPitchTextureCoder
         ReadOnlySpan<Rgba8UNorm> source,
         S3tcScalarComponent component,
         Span<byte> destination,
-        S3tcCompressionMode compressionMode)
+        TextureCompressionLevel compressionMode)
     {
         FindComponentBounds(source, component, out var min, out var max);
         switch (compressionMode)
         {
-            case S3tcCompressionMode.Fast:
+            case TextureCompressionLevel.Fast:
                 EncodeInterpolatedScalarBlockFast(source, component, min, max, destination);
                 return;
-            case S3tcCompressionMode.Normal:
-            case S3tcCompressionMode.High:
+            case TextureCompressionLevel.Normal:
+            case TextureCompressionLevel.High:
                 EncodeInterpolatedScalarBlockOptimized(source, component, min, max, compressionMode, destination);
                 return;
-            case S3tcCompressionMode.Exhaustive:
+            case TextureCompressionLevel.Exhaustive:
                 EncodeInterpolatedScalarBlockExhausted(source, component, destination);
                 return;
             default:
@@ -1991,7 +1991,7 @@ public sealed class S3tcTextureCoder : IPitchTextureCoder
         S3tcScalarComponent component,
         byte min,
         byte max,
-        S3tcCompressionMode compressionMode,
+        TextureCompressionLevel compressionMode,
         Span<byte> destination)
     {
         var best = new ScalarBlockEncoding { Error = long.MaxValue };
@@ -2215,20 +2215,20 @@ public sealed class S3tcTextureCoder : IPitchTextureCoder
         }
     }
 
-    private static int GetScalarOptimizationIterationLimit(S3tcCompressionMode compressionMode) => compressionMode switch
+    private static int GetScalarOptimizationIterationLimit(TextureCompressionLevel compressionMode) => compressionMode switch
     {
-        S3tcCompressionMode.Normal => 4,
-        S3tcCompressionMode.High => 8,
+        TextureCompressionLevel.Normal => 4,
+        TextureCompressionLevel.High => 8,
         _ => throw new ArgumentOutOfRangeException(
             nameof(compressionMode),
             compressionMode,
             "Unsupported S3TC compression mode.")
     };
 
-    private static int GetScalarRefinementPassLimit(S3tcCompressionMode compressionMode) => compressionMode switch
+    private static int GetScalarRefinementPassLimit(TextureCompressionLevel compressionMode) => compressionMode switch
     {
-        S3tcCompressionMode.Normal => 4,
-        S3tcCompressionMode.High => 8,
+        TextureCompressionLevel.Normal => 4,
+        TextureCompressionLevel.High => 8,
         _ => throw new ArgumentOutOfRangeException(
             nameof(compressionMode),
             compressionMode,

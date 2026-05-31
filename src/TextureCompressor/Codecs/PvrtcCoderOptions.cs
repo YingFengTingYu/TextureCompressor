@@ -2,5 +2,5 @@ namespace TextureCompressor.Codecs;
 
 public sealed class PvrtcCoderOptions
 {
-    public PvrtcCompressionMode CompressionMode { get; init; } = PvrtcCompressionMode.Normal;
+    public TextureCompressionLevel CompressionMode { get; init; } = TextureCompressionLevel.Normal;
 }

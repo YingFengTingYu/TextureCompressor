@@ -401,7 +401,7 @@ public sealed class S3tcTextureCoderTests
                 : new Rgba8UNorm(0, 255, 0, 255))
             .ToArray();
         var source = new ArrayBitmap<Rgba8UNorm>(4, 4, pixels);
-        var options = new S3tcCoderOptions { CompressionMode = S3tcCompressionMode.High };
+        var options = new S3tcCoderOptions { CompressionMode = TextureCompressionLevel.High };
         var coder = new S3tcTextureCoder(TextureFormats.Dxt1Rgb, options);
         var rowPitch = coder.GetDefaultPitch(source.Width);
         var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
@@ -418,7 +418,7 @@ public sealed class S3tcTextureCoderTests
 
     [Theory]
     [MemberData(nameof(S3tcCompressionModes))]
-    public void EncodeAndDecodeDxt5RgbaSupportsCompressionMode(S3tcCompressionMode compressionMode)
+    public void EncodeAndDecodeDxt5RgbaSupportsCompressionMode(TextureCompressionLevel compressionMode)
     {
         var pixels = Enumerable.Range(0, 16)
             .Select(i => new Rgba8UNorm(
@@ -456,8 +456,8 @@ public sealed class S3tcTextureCoderTests
             .ToArray();
         var source = new ArrayBitmap<Rgba8UNorm>(4, 4, pixels);
 
-        var highError = EncodeAndDecodeDxt5AAlphaError(source, S3tcCompressionMode.High);
-        var exhaustedError = EncodeAndDecodeDxt5AAlphaError(source, S3tcCompressionMode.Exhaustive);
+        var highError = EncodeAndDecodeDxt5AAlphaError(source, TextureCompressionLevel.High);
+        var exhaustedError = EncodeAndDecodeDxt5AAlphaError(source, TextureCompressionLevel.Exhaustive);
 
         Assert.True(exhaustedError <= highError);
     }
@@ -670,7 +670,7 @@ public sealed class S3tcTextureCoderTests
 
     private static long EncodeAndDecodeDxt5AAlphaError(
         ArrayBitmap<Rgba8UNorm> source,
-        S3tcCompressionMode compressionMode)
+        TextureCompressionLevel compressionMode)
     {
         var decoded = new ArrayBitmap<Rgba8UNorm>(source.Width, source.Height);
         var options = new S3tcCoderOptions { CompressionMode = compressionMode };
@@ -782,11 +782,11 @@ public sealed class S3tcTextureCoderTests
         TextureFormats.Ctx1BigEndian
     };
 
-    public static TheoryData<S3tcCompressionMode> S3tcCompressionModes() => new()
+    public static TheoryData<TextureCompressionLevel> S3tcCompressionModes() => new()
     {
-        S3tcCompressionMode.Fast,
-        S3tcCompressionMode.Normal,
-        S3tcCompressionMode.High,
-        S3tcCompressionMode.Exhaustive
+        TextureCompressionLevel.Fast,
+        TextureCompressionLevel.Normal,
+        TextureCompressionLevel.High,
+        TextureCompressionLevel.Exhaustive
     };
 }

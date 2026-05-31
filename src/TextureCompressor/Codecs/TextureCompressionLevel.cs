@@ -1,6 +1,6 @@
 namespace TextureCompressor.Codecs;
 
-public enum RgtcLatcCompressionMode
+public enum TextureCompressionLevel
 {
     Fast,
     Normal,

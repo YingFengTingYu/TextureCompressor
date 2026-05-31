@@ -20,7 +20,7 @@ public sealed class BptcTextureCoderTests
     [Fact]
     public void ConstructorStoresCompressionOptions()
     {
-        var options = new BptcCoderOptions { CompressionMode = BptcCompressionMode.High };
+        var options = new BptcCoderOptions { CompressionMode = TextureCompressionLevel.High };
         var coder = new BptcTextureCoder(TextureFormats.Bc7UNorm, options);
 
         Assert.Same(options, coder.Options);
@@ -203,7 +203,7 @@ public sealed class BptcTextureCoderTests
         var source = new ArrayBitmap<Rgba32Float>(4, 4, pixels);
         var coder = new BptcTextureCoder(
             TextureFormats.Bc6HUFloat,
-            new BptcCoderOptions { CompressionMode = BptcCompressionMode.Exhaustive });
+            new BptcCoderOptions { CompressionMode = TextureCompressionLevel.Exhaustive });
         var rowPitch = coder.GetDefaultPitch(source.Width);
         var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
 
@@ -225,7 +225,7 @@ public sealed class BptcTextureCoderTests
         var source = new ArrayBitmap<Rgba8UNorm>(4, 4, pixels);
         var coder = new BptcTextureCoder(
             TextureFormats.Bc7UNorm,
-            new BptcCoderOptions { CompressionMode = BptcCompressionMode.Exhaustive });
+            new BptcCoderOptions { CompressionMode = TextureCompressionLevel.Exhaustive });
         var rowPitch = coder.GetDefaultPitch(source.Width);
         var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
 
@@ -236,7 +236,7 @@ public sealed class BptcTextureCoderTests
 
     [Theory]
     [MemberData(nameof(BptcCompressionModes))]
-    public void Bc7CompressionModesEncodeDecodablePayloads(BptcCompressionMode compressionMode)
+    public void Bc7CompressionModesEncodeDecodablePayloads(TextureCompressionLevel compressionMode)
     {
         var source = new ArrayBitmap<Rgba8UNorm>(
             4,
@@ -257,7 +257,7 @@ public sealed class BptcTextureCoderTests
 
     [Theory]
     [MemberData(nameof(BptcCompressionModes))]
-    public void Bc6HCompressionModesEncodeDecodablePayloads(BptcCompressionMode compressionMode)
+    public void Bc6HCompressionModesEncodeDecodablePayloads(TextureCompressionLevel compressionMode)
     {
         var source = new ArrayBitmap<Rgba32Float>(
             4,
@@ -325,12 +325,12 @@ public sealed class BptcTextureCoderTests
         return value;
     }
 
-    public static TheoryData<BptcCompressionMode> BptcCompressionModes() => new()
+    public static TheoryData<TextureCompressionLevel> BptcCompressionModes() => new()
     {
-        BptcCompressionMode.Fast,
-        BptcCompressionMode.Normal,
-        BptcCompressionMode.High,
-        BptcCompressionMode.Exhaustive
+        TextureCompressionLevel.Fast,
+        TextureCompressionLevel.Normal,
+        TextureCompressionLevel.High,
+        TextureCompressionLevel.Exhaustive
     };
 
     public static TheoryData<TextureFormat> BptcFormats() => new()

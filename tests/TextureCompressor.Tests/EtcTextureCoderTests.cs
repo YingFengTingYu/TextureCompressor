@@ -134,7 +134,7 @@ public sealed class EtcTextureCoderTests
         var fastCoder = new EtcTextureCoder(TextureFormats.RgbEtc2UNorm);
         var highCoder = new EtcTextureCoder(
             TextureFormats.RgbEtc2UNorm,
-            new EtcCoderOptions { CompressionMode = EtcCompressionMode.High });
+            new EtcCoderOptions { CompressionMode = TextureCompressionLevel.High });
         var rowPitch = fastCoder.GetDefaultPitch(source.Width);
         var fastEncoded = new byte[fastCoder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
         var highEncoded = new byte[highCoder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
@@ -152,7 +152,7 @@ public sealed class EtcTextureCoderTests
 
     [Theory]
     [MemberData(nameof(EtcCompressionModes))]
-    public void EncodeAndDecodeEtc2RgbAcceptsCompressionModes(EtcCompressionMode compressionMode)
+    public void EncodeAndDecodeEtc2RgbAcceptsCompressionModes(TextureCompressionLevel compressionMode)
     {
         var source = new ArrayBitmap<Rgba8UNorm>(
             4,
@@ -413,7 +413,7 @@ public sealed class EtcTextureCoderTests
 
     private static ArrayBitmap<Rgba8UNorm> EncodeAndDecodeEtc2Rgb(
         ArrayBitmap<Rgba8UNorm> source,
-        EtcCompressionMode compressionMode)
+        TextureCompressionLevel compressionMode)
     {
         var decoded = new ArrayBitmap<Rgba8UNorm>(4, 4);
         var coder = new EtcTextureCoder(
@@ -430,7 +430,7 @@ public sealed class EtcTextureCoderTests
 
     private static ArrayBitmap<Rgba16UNorm> EncodeAndDecodeEacR11UNorm(
         ArrayBitmap<Rgba16UNorm> source,
-        EtcCompressionMode compressionMode)
+        TextureCompressionLevel compressionMode)
     {
         var decoded = new ArrayBitmap<Rgba16UNorm>(4, 4);
         var coder = new EtcTextureCoder(
@@ -493,19 +493,19 @@ public sealed class EtcTextureCoderTests
         TextureFormats.Rg11EacSNorm
     };
 
-    public static TheoryData<EtcCompressionMode> EtcCompressionModes() => new()
+    public static TheoryData<TextureCompressionLevel> EtcCompressionModes() => new()
     {
-        EtcCompressionMode.Fast,
-        EtcCompressionMode.Normal,
-        EtcCompressionMode.High,
-        EtcCompressionMode.Exhaustive
+        TextureCompressionLevel.Fast,
+        TextureCompressionLevel.Normal,
+        TextureCompressionLevel.High,
+        TextureCompressionLevel.Exhaustive
     };
 
-    private static EtcCompressionMode[] OrderedEtcCompressionModes =>
+    private static TextureCompressionLevel[] OrderedEtcCompressionModes =>
     [
-        EtcCompressionMode.Fast,
-        EtcCompressionMode.Normal,
-        EtcCompressionMode.High,
-        EtcCompressionMode.Exhaustive
+        TextureCompressionLevel.Fast,
+        TextureCompressionLevel.Normal,
+        TextureCompressionLevel.High,
+        TextureCompressionLevel.Exhaustive
     ];
 }

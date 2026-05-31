@@ -99,45 +99,9 @@ internal static class Cli
                 result.AddError("--jpeg-quality must be between 1 and 100.");
             }
         });
-        var s3tcQualityOption = new Option<S3tcCompressionMode>("--s3tc-quality")
+        var qualityOption = new Option<TextureCompressionLevel?>("--quality")
         {
-            Description = "S3TC encoding quality.",
-            DefaultValueFactory = _ => S3tcCompressionMode.Fast
-        };
-        var fxtcQualityOption = new Option<FxtcCompressionMode>("--fxtc-quality")
-        {
-            Description = "FXT1 encoding quality.",
-            DefaultValueFactory = _ => FxtcCompressionMode.Fast
-        };
-        var etcQualityOption = new Option<EtcCompressionMode>("--etc-quality")
-        {
-            Description = "ETC/EAC encoding quality.",
-            DefaultValueFactory = _ => EtcCompressionMode.Fast
-        };
-        var atcQualityOption = new Option<AtcCompressionMode>("--atc-quality")
-        {
-            Description = "ATC encoding quality.",
-            DefaultValueFactory = _ => AtcCompressionMode.Fast
-        };
-        var rgtcQualityOption = new Option<RgtcLatcCompressionMode>("--rgtc-quality")
-        {
-            Description = "RGTC/LATC encoding quality.",
-            DefaultValueFactory = _ => RgtcLatcCompressionMode.Fast
-        };
-        var bptcQualityOption = new Option<BptcCompressionMode>("--bptc-quality")
-        {
-            Description = "BPTC/BC6H/BC7 encoding quality.",
-            DefaultValueFactory = _ => BptcCompressionMode.Fast
-        };
-        var pvrtcQualityOption = new Option<PvrtcCompressionMode>("--pvrtc-quality")
-        {
-            Description = "PVRTC encoding quality.",
-            DefaultValueFactory = _ => PvrtcCompressionMode.Normal
-        };
-        var astcQualityOption = new Option<AstcCompressionMode>("--astc-quality")
-        {
-            Description = "ASTC encoding quality.",
-            DefaultValueFactory = _ => AstcCompressionMode.Fast
+            Description = "Built-in texture compression quality."
         };
 
         var command = new Command("convert", "Convert between supported texture and image containers.");
@@ -151,14 +115,7 @@ internal static class Cli
         command.Options.Add(gifColorSpaceOption);
         command.Options.Add(ktxVersionOption);
         command.Options.Add(jpegQualityOption);
-        command.Options.Add(s3tcQualityOption);
-        command.Options.Add(fxtcQualityOption);
-        command.Options.Add(etcQualityOption);
-        command.Options.Add(atcQualityOption);
-        command.Options.Add(rgtcQualityOption);
-        command.Options.Add(bptcQualityOption);
-        command.Options.Add(pvrtcQualityOption);
-        command.Options.Add(astcQualityOption);
+        command.Options.Add(qualityOption);
         command.SetAction(parseResult => RunCommand(() =>
         {
             var inputPath = RequireFile(parseResult.GetValue(inputArgument), "input").FullName;
@@ -167,14 +124,7 @@ internal static class Cli
             var outputKind = parseResult.GetValue(containerOption) ?? GetContainer(outputPath);
             var ktxVersion = parseResult.GetValue(ktxVersionOption);
             var jpegQuality = parseResult.GetValue(jpegQualityOption);
-            var s3tcQuality = parseResult.GetValue(s3tcQualityOption);
-            var fxtcQuality = parseResult.GetValue(fxtcQualityOption);
-            var etcQuality = parseResult.GetValue(etcQualityOption);
-            var atcQuality = parseResult.GetValue(atcQualityOption);
-            var rgtcQuality = parseResult.GetValue(rgtcQualityOption);
-            var bptcQuality = parseResult.GetValue(bptcQualityOption);
-            var pvrtcQuality = parseResult.GetValue(pvrtcQualityOption);
-            var astcQuality = parseResult.GetValue(astcQualityOption);
+            var quality = parseResult.GetValue(qualityOption);
             var colorSpaces = new ImageColorSpaces(
                 parseResult.GetValue(pngColorSpaceOption),
                 parseResult.GetValue(jpgColorSpaceOption),
@@ -182,7 +132,7 @@ internal static class Cli
             var printMetrics = parseResult.GetValue(metricsOption);
 
             var source = Decode(inputPath, colorSpaces);
-            Encode(source, outputPath, outputKind, format, ktxVersion, jpegQuality, s3tcQuality, fxtcQuality, etcQuality, atcQuality, rgtcQuality, bptcQuality, pvrtcQuality, astcQuality, colorSpaces);
+            Encode(source, outputPath, outputKind, format, ktxVersion, jpegQuality, quality, colorSpaces);
             Console.WriteLine($"wrote {outputPath}");
 
             if (printMetrics)
@@ -331,14 +281,7 @@ internal static class Cli
         TextureFormat format,
         int ktxVersion,
         int jpegQuality,
-        S3tcCompressionMode s3tcQuality,
-        FxtcCompressionMode fxtcQuality,
-        EtcCompressionMode etcQuality,
-        AtcCompressionMode atcQuality,
-        RgtcLatcCompressionMode rgtcQuality,
-        BptcCompressionMode bptcQuality,
-        PvrtcCompressionMode pvrtcQuality,
-        AstcCompressionMode astcQuality,
+        TextureCompressionLevel? quality,
         ImageColorSpaces? imageColorSpaces)
     {
         var imageColorSpace = GetImageColorSpace(container, imageColorSpaces);
@@ -347,14 +290,14 @@ internal static class Cli
             EnsureImageColorSpaceContainer(container);
         }
 
-        using var s3tcRegistration = CreateS3tcRegistration(format, s3tcQuality);
-        using var fxtcRegistration = CreateFxtcRegistration(format, fxtcQuality);
-        using var etcRegistration = CreateEtcRegistration(format, etcQuality);
-        using var atcRegistration = CreateAtcRegistration(format, atcQuality);
-        using var rgtcRegistration = CreateRgtcRegistration(format, rgtcQuality);
-        using var bptcRegistration = CreateBptcRegistration(format, bptcQuality);
-        using var pvrtcRegistration = CreatePvrtcRegistration(format, pvrtcQuality);
-        using var astcRegistration = CreateAstcRegistration(format, astcQuality);
+        using var s3tcRegistration = CreateS3tcRegistration(format, quality);
+        using var fxtcRegistration = CreateFxtcRegistration(format, quality);
+        using var etcRegistration = CreateEtcRegistration(format, quality);
+        using var atcRegistration = CreateAtcRegistration(format, quality);
+        using var rgtcRegistration = CreateRgtcRegistration(format, quality);
+        using var bptcRegistration = CreateBptcRegistration(format, quality);
+        using var pvrtcRegistration = CreatePvrtcRegistration(format, quality);
+        using var astcRegistration = CreateAstcRegistration(format, quality);
 
         switch (container)
         {
@@ -388,91 +331,91 @@ internal static class Cli
         }
     }
 
-    private static IDisposable? CreateS3tcRegistration(TextureFormat format, S3tcCompressionMode compressionMode)
+    private static IDisposable? CreateS3tcRegistration(TextureFormat format, TextureCompressionLevel? quality)
     {
-        if (compressionMode == S3tcCompressionMode.Fast || !S3tcTextureCoder.IsSupported(format))
+        if (quality is null || !S3tcTextureCoder.IsSupported(format))
         {
             return null;
         }
 
-        var options = new S3tcCoderOptions { CompressionMode = compressionMode };
+        var options = new S3tcCoderOptions { CompressionMode = quality.Value };
         return TextureCoderManager.Global.Register(format, new S3tcTextureCoder(format, options));
     }
 
-    private static IDisposable? CreateFxtcRegistration(TextureFormat format, FxtcCompressionMode compressionMode)
+    private static IDisposable? CreateFxtcRegistration(TextureFormat format, TextureCompressionLevel? quality)
     {
-        if (compressionMode == FxtcCompressionMode.Fast || !FxtcTextureCoder.IsSupported(format))
+        if (quality is null || !FxtcTextureCoder.IsSupported(format))
         {
             return null;
         }
 
-        var options = new FxtcCoderOptions { CompressionMode = compressionMode };
+        var options = new FxtcCoderOptions { CompressionMode = quality.Value };
         return TextureCoderManager.Global.Register(format, new FxtcTextureCoder(format, options));
     }
 
-    private static IDisposable? CreateEtcRegistration(TextureFormat format, EtcCompressionMode compressionMode)
+    private static IDisposable? CreateEtcRegistration(TextureFormat format, TextureCompressionLevel? quality)
     {
-        if (compressionMode == EtcCompressionMode.Fast || !EtcTextureCoder.IsSupported(format))
+        if (quality is null || !EtcTextureCoder.IsSupported(format))
         {
             return null;
         }
 
-        var options = new EtcCoderOptions { CompressionMode = compressionMode };
+        var options = new EtcCoderOptions { CompressionMode = quality.Value };
         return TextureCoderManager.Global.Register(format, new EtcTextureCoder(format, options));
     }
 
-    private static IDisposable? CreateAtcRegistration(TextureFormat format, AtcCompressionMode compressionMode)
+    private static IDisposable? CreateAtcRegistration(TextureFormat format, TextureCompressionLevel? quality)
     {
-        if (compressionMode == AtcCompressionMode.Fast || !AtcTextureCoder.IsSupported(format))
+        if (quality is null || !AtcTextureCoder.IsSupported(format))
         {
             return null;
         }
 
-        var options = new AtcCoderOptions { CompressionMode = compressionMode };
+        var options = new AtcCoderOptions { CompressionMode = quality.Value };
         return TextureCoderManager.Global.Register(format, new AtcTextureCoder(format, options));
     }
 
-    private static IDisposable? CreateRgtcRegistration(TextureFormat format, RgtcLatcCompressionMode compressionMode)
+    private static IDisposable? CreateRgtcRegistration(TextureFormat format, TextureCompressionLevel? quality)
     {
-        if (compressionMode == RgtcLatcCompressionMode.Fast || !RgtcLatcTextureCoder.IsSupported(format))
+        if (quality is null || !RgtcLatcTextureCoder.IsSupported(format))
         {
             return null;
         }
 
-        var options = new RgtcLatcCoderOptions { CompressionMode = compressionMode };
+        var options = new RgtcLatcCoderOptions { CompressionMode = quality.Value };
         return TextureCoderManager.Global.Register(format, new RgtcLatcTextureCoder(format, options));
     }
 
-    private static IDisposable? CreateBptcRegistration(TextureFormat format, BptcCompressionMode compressionMode)
+    private static IDisposable? CreateBptcRegistration(TextureFormat format, TextureCompressionLevel? quality)
     {
-        if (compressionMode == BptcCompressionMode.Fast || !BptcTextureCoder.IsSupported(format))
+        if (quality is null || !BptcTextureCoder.IsSupported(format))
         {
             return null;
         }
 
-        var options = new BptcCoderOptions { CompressionMode = compressionMode };
+        var options = new BptcCoderOptions { CompressionMode = quality.Value };
         return TextureCoderManager.Global.Register(format, new BptcTextureCoder(format, options));
     }
 
-    private static IDisposable? CreatePvrtcRegistration(TextureFormat format, PvrtcCompressionMode compressionMode)
+    private static IDisposable? CreatePvrtcRegistration(TextureFormat format, TextureCompressionLevel? quality)
     {
-        if (compressionMode == PvrtcCompressionMode.Normal || !PvrtcTextureCoder.IsSupported(format))
+        if (quality is null || !PvrtcTextureCoder.IsSupported(format))
         {
             return null;
         }
 
-        var options = new PvrtcCoderOptions { CompressionMode = compressionMode };
+        var options = new PvrtcCoderOptions { CompressionMode = quality.Value };
         return TextureCoderManager.Global.Register(format, new PvrtcTextureCoder(format, options));
     }
 
-    private static IDisposable? CreateAstcRegistration(TextureFormat format, AstcCompressionMode compressionMode)
+    private static IDisposable? CreateAstcRegistration(TextureFormat format, TextureCompressionLevel? quality)
     {
-        if (compressionMode == AstcCompressionMode.Fast || !AstcTextureCoder.IsSupported(format))
+        if (quality is null || !AstcTextureCoder.IsSupported(format))
         {
             return null;
         }
 
-        var options = new AstcCoderOptions { CompressionMode = compressionMode };
+        var options = new AstcCoderOptions { CompressionMode = quality.Value };
         return TextureCoderManager.Global.Register(format, new AstcTextureCoder(format, options));
     }
 

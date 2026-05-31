@@ -15,16 +15,16 @@ public sealed class FxtcTextureCoderTests
         }
     }
 
-    public static TheoryData<TextureFormat, FxtcCompressionMode> Fxt1FormatCompressionModes() => new()
+    public static TheoryData<TextureFormat, TextureCompressionLevel> Fxt1FormatCompressionModes() => new()
     {
-        { TextureFormats.RgbFxt1UNorm, FxtcCompressionMode.Fast },
-        { TextureFormats.RgbFxt1UNorm, FxtcCompressionMode.Normal },
-        { TextureFormats.RgbFxt1UNorm, FxtcCompressionMode.High },
-        { TextureFormats.RgbFxt1UNorm, FxtcCompressionMode.Exhaustive },
-        { TextureFormats.RgbaFxt1UNorm, FxtcCompressionMode.Fast },
-        { TextureFormats.RgbaFxt1UNorm, FxtcCompressionMode.Normal },
-        { TextureFormats.RgbaFxt1UNorm, FxtcCompressionMode.High },
-        { TextureFormats.RgbaFxt1UNorm, FxtcCompressionMode.Exhaustive }
+        { TextureFormats.RgbFxt1UNorm, TextureCompressionLevel.Fast },
+        { TextureFormats.RgbFxt1UNorm, TextureCompressionLevel.Normal },
+        { TextureFormats.RgbFxt1UNorm, TextureCompressionLevel.High },
+        { TextureFormats.RgbFxt1UNorm, TextureCompressionLevel.Exhaustive },
+        { TextureFormats.RgbaFxt1UNorm, TextureCompressionLevel.Fast },
+        { TextureFormats.RgbaFxt1UNorm, TextureCompressionLevel.Normal },
+        { TextureFormats.RgbaFxt1UNorm, TextureCompressionLevel.High },
+        { TextureFormats.RgbaFxt1UNorm, TextureCompressionLevel.Exhaustive }
     };
 
     [Theory]
@@ -217,7 +217,7 @@ public sealed class FxtcTextureCoderTests
         const int width = 19;
         const int height = 11;
         var source = new ArrayBitmap<Rgba8UNorm>(width, height, CreateGradient(width, height, includeAlpha: format == TextureFormats.RgbaFxt1UNorm));
-        var options = new FxtcCoderOptions { CompressionMode = FxtcCompressionMode.High };
+        var options = new FxtcCoderOptions { CompressionMode = TextureCompressionLevel.High };
         var coder = new FxtcTextureCoder(format, options);
         var rowPitch = coder.GetDefaultPitch(width);
         var encoded = new byte[coder.GetEncodedByteCount(width, height, rowPitch)];
@@ -233,7 +233,7 @@ public sealed class FxtcTextureCoderTests
 
     [Theory]
     [MemberData(nameof(Fxt1FormatCompressionModes))]
-    public void EncodeAndDecodeSupportsCompressionMode(TextureFormat format, FxtcCompressionMode compressionMode)
+    public void EncodeAndDecodeSupportsCompressionMode(TextureFormat format, TextureCompressionLevel compressionMode)
     {
         const int width = 19;
         const int height = 11;
@@ -264,7 +264,7 @@ public sealed class FxtcTextureCoderTests
             source,
             new FxtcTextureCoder(
                 TextureFormats.RgbFxt1UNorm,
-                new FxtcCoderOptions { CompressionMode = FxtcCompressionMode.High }));
+                new FxtcCoderOptions { CompressionMode = TextureCompressionLevel.High }));
 
         Assert.True(
             RgbSquaredError(source, highDecoded) < RgbSquaredError(source, fastDecoded),
@@ -281,12 +281,12 @@ public sealed class FxtcTextureCoderTests
             source,
             new FxtcTextureCoder(
                 TextureFormats.RgbFxt1UNorm,
-                new FxtcCoderOptions { CompressionMode = FxtcCompressionMode.High }));
+                new FxtcCoderOptions { CompressionMode = TextureCompressionLevel.High }));
         var exhaustiveDecoded = EncodeDecode(
             source,
             new FxtcTextureCoder(
                 TextureFormats.RgbFxt1UNorm,
-                new FxtcCoderOptions { CompressionMode = FxtcCompressionMode.Exhaustive }));
+                new FxtcCoderOptions { CompressionMode = TextureCompressionLevel.Exhaustive }));
 
         Assert.True(
             RgbSquaredError(source, exhaustiveDecoded) <= RgbSquaredError(source, highDecoded),

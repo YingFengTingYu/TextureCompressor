@@ -168,7 +168,7 @@ public sealed class RgtcLatcTextureCoderTests
         var fastCoder = new RgtcLatcTextureCoder(TextureFormats.Bc4UNorm);
         var highCoder = new RgtcLatcTextureCoder(
             TextureFormats.Bc4UNorm,
-            new RgtcLatcCoderOptions { CompressionMode = RgtcLatcCompressionMode.High });
+            new RgtcLatcCoderOptions { CompressionMode = TextureCompressionLevel.High });
         var rowPitch = fastCoder.GetDefaultPitch(source.Width);
         var fastEncoded = new byte[fastCoder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
         var highEncoded = new byte[highCoder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
@@ -200,7 +200,7 @@ public sealed class RgtcLatcTextureCoderTests
         var fastCoder = new RgtcLatcTextureCoder(TextureFormats.Bc4SNorm);
         var highCoder = new RgtcLatcTextureCoder(
             TextureFormats.Bc4SNorm,
-            new RgtcLatcCoderOptions { CompressionMode = RgtcLatcCompressionMode.High });
+            new RgtcLatcCoderOptions { CompressionMode = TextureCompressionLevel.High });
         var rowPitch = fastCoder.GetDefaultPitch(source.Width);
         var fastEncoded = new byte[fastCoder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
         var highEncoded = new byte[highCoder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
@@ -217,7 +217,7 @@ public sealed class RgtcLatcTextureCoderTests
 
     [Theory]
     [MemberData(nameof(RgtcLatcCompressionModes))]
-    public void Bc5CompressionModesEncodeDecodablePayloads(RgtcLatcCompressionMode compressionMode)
+    public void Bc5CompressionModesEncodeDecodablePayloads(TextureCompressionLevel compressionMode)
     {
         var pixels = Enumerable.Range(0, 16)
             .Select(i => new Rgba8UNorm((byte)(40 + (i * 9)), (byte)(220 - (i * 7)), 0, 255))
@@ -308,12 +308,12 @@ public sealed class RgtcLatcTextureCoderTests
         return error;
     }
 
-    public static TheoryData<RgtcLatcCompressionMode> RgtcLatcCompressionModes() => new()
+    public static TheoryData<TextureCompressionLevel> RgtcLatcCompressionModes() => new()
     {
-        RgtcLatcCompressionMode.Fast,
-        RgtcLatcCompressionMode.Normal,
-        RgtcLatcCompressionMode.High,
-        RgtcLatcCompressionMode.Exhaustive
+        TextureCompressionLevel.Fast,
+        TextureCompressionLevel.Normal,
+        TextureCompressionLevel.High,
+        TextureCompressionLevel.Exhaustive
     };
 
     public static TheoryData<TextureFormat> RgtcLatcFormats() => new()

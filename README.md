@@ -108,7 +108,7 @@ PngCodec.Encode(decoded, "roundtrip.png");
 
 ## Use Built-In High-Quality Encoding Modes
 
-The default built-in coders favor fast, predictable baseline conversion. The built-in S3TC, FXT1, ETC/EAC, ASTC, ATC, RGTC/LATC, BPTC, and PVRTC implementations expose higher-quality search modes. Register an optioned coder with `TextureCoderManager`, and later `TextureCoderManager.Global.GetCoder(...)`, `DdsCodec.Encode(...)`, `KtxCodec.Encode(...)`, `PvrCodec.Encode(...)`, or `AstcCodec.Encode(...)` calls will prefer your registered coder. The default behavior is restored when the `using var` registration is disposed.
+The default built-in coders favor fast, predictable baseline conversion. The built-in S3TC, FXT1, ETC/EAC, ASTC, ATC, RGTC/LATC, BPTC, and PVRTC implementations expose higher-quality search modes through the shared `TextureCompressionLevel` enum. Register an optioned coder with `TextureCoderManager`, and later `TextureCoderManager.Global.GetCoder(...)`, `DdsCodec.Encode(...)`, `KtxCodec.Encode(...)`, `PvrCodec.Encode(...)`, or `AstcCodec.Encode(...)` calls will prefer your registered coder. The default behavior is restored when the `using var` registration is disposed.
 
 ```csharp
 using TextureCompressor.Codecs;
@@ -119,56 +119,56 @@ using var highQualityS3tc = TextureCoderManager.Global.Register(
     s3tcFormat,
     new S3tcTextureCoder(
         s3tcFormat,
-        new S3tcCoderOptions { CompressionMode = S3tcCompressionMode.High }));
+        new S3tcCoderOptions { CompressionMode = TextureCompressionLevel.High }));
 
 var fxt1Format = TextureFormats.RgbaFxt1UNorm;
 using var highQualityFxt1 = TextureCoderManager.Global.Register(
     fxt1Format,
     new FxtcTextureCoder(
         fxt1Format,
-        new FxtcCoderOptions { CompressionMode = FxtcCompressionMode.High }));
+        new FxtcCoderOptions { CompressionMode = TextureCompressionLevel.High }));
 
 var etcFormat = TextureFormats.RgbaEtc2EacUNorm;
 using var highQualityEtc = TextureCoderManager.Global.Register(
     etcFormat,
     new EtcTextureCoder(
         etcFormat,
-        new EtcCoderOptions { CompressionMode = EtcCompressionMode.High }));
+        new EtcCoderOptions { CompressionMode = TextureCompressionLevel.High }));
 
 var atcFormat = TextureFormats.AtcRgbaInterpolatedAlpha;
 using var highQualityAtc = TextureCoderManager.Global.Register(
     atcFormat,
     new AtcTextureCoder(
         atcFormat,
-        new AtcCoderOptions { CompressionMode = AtcCompressionMode.High }));
+        new AtcCoderOptions { CompressionMode = TextureCompressionLevel.High }));
 
 var rgtcFormat = TextureFormats.Bc5UNorm;
 using var highQualityRgtc = TextureCoderManager.Global.Register(
     rgtcFormat,
     new RgtcLatcTextureCoder(
         rgtcFormat,
-        new RgtcLatcCoderOptions { CompressionMode = RgtcLatcCompressionMode.High }));
+        new RgtcLatcCoderOptions { CompressionMode = TextureCompressionLevel.High }));
 
 var bptcFormat = TextureFormats.Bc7UNorm;
 using var highQualityBptc = TextureCoderManager.Global.Register(
     bptcFormat,
     new BptcTextureCoder(
         bptcFormat,
-        new BptcCoderOptions { CompressionMode = BptcCompressionMode.High }));
+        new BptcCoderOptions { CompressionMode = TextureCompressionLevel.High }));
 
 var astcFormat = TextureFormats.RgbaAstc8x8UNorm;
 using var highQualityAstc = TextureCoderManager.Global.Register(
     astcFormat,
     new AstcTextureCoder(
         astcFormat,
-        new AstcCoderOptions { CompressionMode = AstcCompressionMode.High }));
+        new AstcCoderOptions { CompressionMode = TextureCompressionLevel.High }));
 
 var pvrtcFormat = TextureFormats.RgbaPvrtcI4BppUNorm;
 using var exhaustivePvrtc = TextureCoderManager.Global.Register(
     pvrtcFormat,
     new PvrtcTextureCoder(
         pvrtcFormat,
-        new PvrtcCoderOptions { CompressionMode = PvrtcCompressionMode.Exhaustive }));
+        new PvrtcCoderOptions { CompressionMode = TextureCompressionLevel.Exhaustive }));
 
 var coder = TextureCoderManager.Global.GetCoder(s3tcFormat);
 ```
@@ -408,7 +408,7 @@ dotnet run --project src/TextureCompressor.Cli -- --help
 dotnet run --project src/TextureCompressor.Cli -- formats bc7 --compressed
 dotnet run --project src/TextureCompressor.Cli -- formats rgba --uncompressed
 dotnet run --project src/TextureCompressor.Cli -- convert input.png output.dds --format Bc7UNorm --metrics
-dotnet run --project src/TextureCompressor.Cli -- convert input.png output.ktx2 --format Bc7Srgb --ktx-version 2
+dotnet run --project src/TextureCompressor.Cli -- convert input.png output.ktx2 --format Bc7Srgb --ktx-version 2 --quality High
 dotnet run --project src/TextureCompressor.Cli -- quality source.png output.dds
 ```
 
@@ -418,7 +418,7 @@ Common commands:
 - `convert <input> <output>`: convert between image and texture containers. The output container is inferred from the extension unless `--container` is passed explicitly.
 - `quality <expected> <actual>`: decode two image/texture files and print MSE, RMSE, and PSNR; add `--ignore-alpha` to ignore alpha.
 
-Image containers support PNG, JPEG, and GIF. `convert` provides `--png-color-space`, `--jpg-color-space`, and `--gif-color-space` conversions between Linear and Srgb. JPEG output quality is controlled with `--jpeg-quality`; S3TC, FXT1, ETC/EAC, ASTC, ATC, RGTC/LATC, BPTC, and PVRTC built-in texture encoding quality can be selected with `--s3tc-quality`, `--fxtc-quality`, `--etc-quality`, `--astc-quality`, `--atc-quality`, `--rgtc-quality`, `--bptc-quality`, and `--pvrtc-quality`.
+Image containers support PNG, JPEG, and GIF. `convert` provides `--png-color-space`, `--jpg-color-space`, and `--gif-color-space` conversions between Linear and Srgb. JPEG output quality is controlled with `--jpeg-quality`; S3TC, FXT1, ETC/EAC, ASTC, ATC, RGTC/LATC, BPTC, and PVRTC built-in texture encoding quality can be selected with `--quality`.
 
 ## Common Workflows
 

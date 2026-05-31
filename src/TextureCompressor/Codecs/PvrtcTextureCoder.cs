@@ -614,8 +614,8 @@ public sealed class PvrtcTextureCoder : ITextureCoder
     private static bool UsesEndpointCandidateScoring(PvrtcCoderOptions options) =>
         options.CompressionMode switch
         {
-            PvrtcCompressionMode.Fast or PvrtcCompressionMode.Normal => false,
-            PvrtcCompressionMode.High or PvrtcCompressionMode.Exhaustive => true,
+            TextureCompressionLevel.Fast or TextureCompressionLevel.Normal => false,
+            TextureCompressionLevel.High or TextureCompressionLevel.Exhaustive => true,
             _ => throw new ArgumentOutOfRangeException(
                 nameof(PvrtcCoderOptions.CompressionMode),
                 options.CompressionMode,
@@ -625,8 +625,8 @@ public sealed class PvrtcTextureCoder : ITextureCoder
     private static bool UsesHardTransitionSearch(PvrtcCoderOptions options) =>
         options.CompressionMode switch
         {
-            PvrtcCompressionMode.Fast or PvrtcCompressionMode.Normal => false,
-            PvrtcCompressionMode.High or PvrtcCompressionMode.Exhaustive => true,
+            TextureCompressionLevel.Fast or TextureCompressionLevel.Normal => false,
+            TextureCompressionLevel.High or TextureCompressionLevel.Exhaustive => true,
             _ => throw new ArgumentOutOfRangeException(
                 nameof(PvrtcCoderOptions.CompressionMode),
                 options.CompressionMode,
@@ -636,8 +636,8 @@ public sealed class PvrtcTextureCoder : ITextureCoder
     private static bool UsesModulationModeSearch(PvrtcCoderOptions options) =>
         options.CompressionMode switch
         {
-            PvrtcCompressionMode.Fast or PvrtcCompressionMode.Normal or PvrtcCompressionMode.High => false,
-            PvrtcCompressionMode.Exhaustive => true,
+            TextureCompressionLevel.Fast or TextureCompressionLevel.Normal or TextureCompressionLevel.High => false,
+            TextureCompressionLevel.Exhaustive => true,
             _ => throw new ArgumentOutOfRangeException(
                 nameof(PvrtcCoderOptions.CompressionMode),
                 options.CompressionMode,
@@ -647,8 +647,8 @@ public sealed class PvrtcTextureCoder : ITextureCoder
     private static bool UsesEndpointRefinement(PvrtcCoderOptions options) =>
         options.CompressionMode switch
         {
-            PvrtcCompressionMode.Fast or PvrtcCompressionMode.Normal or PvrtcCompressionMode.High => false,
-            PvrtcCompressionMode.Exhaustive => true,
+            TextureCompressionLevel.Fast or TextureCompressionLevel.Normal or TextureCompressionLevel.High => false,
+            TextureCompressionLevel.Exhaustive => true,
             _ => throw new ArgumentOutOfRangeException(
                 nameof(PvrtcCoderOptions.CompressionMode),
                 options.CompressionMode,

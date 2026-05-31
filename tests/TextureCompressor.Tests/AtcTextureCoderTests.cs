@@ -215,7 +215,7 @@ public sealed class AtcTextureCoderTests
     {
         var pixels = CreateAlternatingRedGreenBlock();
         var source = new ArrayBitmap<Rgba8UNorm>(4, 4, pixels);
-        var options = new AtcCoderOptions { CompressionMode = AtcCompressionMode.High };
+        var options = new AtcCoderOptions { CompressionMode = TextureCompressionLevel.High };
         var coder = new AtcTextureCoder(TextureFormats.AtcRgb, options);
         var rowPitch = coder.GetDefaultPitch(source.Width);
         var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
@@ -240,7 +240,7 @@ public sealed class AtcTextureCoderTests
         var fastCoder = new AtcTextureCoder(TextureFormats.AtcRgbaInterpolatedAlpha);
         var highCoder = new AtcTextureCoder(
             TextureFormats.AtcRgbaInterpolatedAlpha,
-            new AtcCoderOptions { CompressionMode = AtcCompressionMode.High });
+            new AtcCoderOptions { CompressionMode = TextureCompressionLevel.High });
         var rowPitch = fastCoder.GetDefaultPitch(source.Width);
         var fastEncoded = new byte[fastCoder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
         var highEncoded = new byte[highCoder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
@@ -257,7 +257,7 @@ public sealed class AtcTextureCoderTests
 
     [Theory]
     [MemberData(nameof(AtcFormatCompressionModes))]
-    public void EncodeAndDecodeAtcSupportsCompressionMode(TextureFormat format, AtcCompressionMode compressionMode)
+    public void EncodeAndDecodeAtcSupportsCompressionMode(TextureFormat format, TextureCompressionLevel compressionMode)
     {
         var pixels = Enumerable.Range(0, 16)
             .Select(i => new Rgba8UNorm(
@@ -289,10 +289,10 @@ public sealed class AtcTextureCoderTests
         var source = new ArrayBitmap<Rgba8UNorm>(4, 4, pixels);
         var highCoder = new AtcTextureCoder(
             TextureFormats.AtcRgbaInterpolatedAlpha,
-            new AtcCoderOptions { CompressionMode = AtcCompressionMode.High });
+            new AtcCoderOptions { CompressionMode = TextureCompressionLevel.High });
         var exhaustiveCoder = new AtcTextureCoder(
             TextureFormats.AtcRgbaInterpolatedAlpha,
-            new AtcCoderOptions { CompressionMode = AtcCompressionMode.Exhaustive });
+            new AtcCoderOptions { CompressionMode = TextureCompressionLevel.Exhaustive });
         var rowPitch = highCoder.GetDefaultPitch(source.Width);
         var highEncoded = new byte[highCoder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
         var exhaustiveEncoded = new byte[exhaustiveCoder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
@@ -532,19 +532,19 @@ public sealed class AtcTextureCoderTests
         TextureFormats.AtcRgbaInterpolatedAlpha
     };
 
-    public static TheoryData<TextureFormat, AtcCompressionMode> AtcFormatCompressionModes() => new()
+    public static TheoryData<TextureFormat, TextureCompressionLevel> AtcFormatCompressionModes() => new()
     {
-        { TextureFormats.AtcRgb, AtcCompressionMode.Fast },
-        { TextureFormats.AtcRgb, AtcCompressionMode.Normal },
-        { TextureFormats.AtcRgb, AtcCompressionMode.High },
-        { TextureFormats.AtcRgb, AtcCompressionMode.Exhaustive },
-        { TextureFormats.AtcRgbaExplicitAlpha, AtcCompressionMode.Fast },
-        { TextureFormats.AtcRgbaExplicitAlpha, AtcCompressionMode.Normal },
-        { TextureFormats.AtcRgbaExplicitAlpha, AtcCompressionMode.High },
-        { TextureFormats.AtcRgbaExplicitAlpha, AtcCompressionMode.Exhaustive },
-        { TextureFormats.AtcRgbaInterpolatedAlpha, AtcCompressionMode.Fast },
-        { TextureFormats.AtcRgbaInterpolatedAlpha, AtcCompressionMode.Normal },
-        { TextureFormats.AtcRgbaInterpolatedAlpha, AtcCompressionMode.High },
-        { TextureFormats.AtcRgbaInterpolatedAlpha, AtcCompressionMode.Exhaustive }
+        { TextureFormats.AtcRgb, TextureCompressionLevel.Fast },
+        { TextureFormats.AtcRgb, TextureCompressionLevel.Normal },
+        { TextureFormats.AtcRgb, TextureCompressionLevel.High },
+        { TextureFormats.AtcRgb, TextureCompressionLevel.Exhaustive },
+        { TextureFormats.AtcRgbaExplicitAlpha, TextureCompressionLevel.Fast },
+        { TextureFormats.AtcRgbaExplicitAlpha, TextureCompressionLevel.Normal },
+        { TextureFormats.AtcRgbaExplicitAlpha, TextureCompressionLevel.High },
+        { TextureFormats.AtcRgbaExplicitAlpha, TextureCompressionLevel.Exhaustive },
+        { TextureFormats.AtcRgbaInterpolatedAlpha, TextureCompressionLevel.Fast },
+        { TextureFormats.AtcRgbaInterpolatedAlpha, TextureCompressionLevel.Normal },
+        { TextureFormats.AtcRgbaInterpolatedAlpha, TextureCompressionLevel.High },
+        { TextureFormats.AtcRgbaInterpolatedAlpha, TextureCompressionLevel.Exhaustive }
     };
 }

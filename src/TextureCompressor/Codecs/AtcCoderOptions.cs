@@ -2,5 +2,5 @@ namespace TextureCompressor.Codecs;
 
 public sealed class AtcCoderOptions
 {
-    public AtcCompressionMode CompressionMode { get; init; } = AtcCompressionMode.Fast;
+    public TextureCompressionLevel CompressionMode { get; init; } = TextureCompressionLevel.Fast;
 }

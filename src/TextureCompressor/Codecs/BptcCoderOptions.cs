@@ -2,5 +2,5 @@ namespace TextureCompressor.Codecs;
 
 public sealed class BptcCoderOptions
 {
-    public BptcCompressionMode CompressionMode { get; init; } = BptcCompressionMode.Fast;
+    public TextureCompressionLevel CompressionMode { get; init; } = TextureCompressionLevel.Fast;
 }

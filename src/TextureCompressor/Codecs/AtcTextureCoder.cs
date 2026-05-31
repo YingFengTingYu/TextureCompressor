@@ -123,7 +123,7 @@ public sealed class AtcTextureCoder : IPitchTextureCoder
         BitmapView<TPixel> source,
         Span<byte> destination,
         int rowPitch,
-        AtcCompressionMode compressionMode)
+        TextureCompressionLevel compressionMode)
         where TPixel : unmanaged, IPixel<TPixel>
         where TTransfer : IAtcTransfer
     {
@@ -195,7 +195,7 @@ public sealed class AtcTextureCoder : IPitchTextureCoder
         static abstract void EncodeBlock(
             ReadOnlySpan<Rgba8UNorm> source,
             Span<byte> destination,
-            AtcCompressionMode compressionMode);
+            TextureCompressionLevel compressionMode);
     }
 
     private readonly struct AtcRgbTransfer : IAtcTransfer
@@ -208,7 +208,7 @@ public sealed class AtcTextureCoder : IPitchTextureCoder
         public static void EncodeBlock(
             ReadOnlySpan<Rgba8UNorm> source,
             Span<byte> destination,
-            AtcCompressionMode compressionMode) =>
+            TextureCompressionLevel compressionMode) =>
             EncodeColorBlock(source, destination, compressionMode);
     }
 
@@ -225,7 +225,7 @@ public sealed class AtcTextureCoder : IPitchTextureCoder
         public static void EncodeBlock(
             ReadOnlySpan<Rgba8UNorm> source,
             Span<byte> destination,
-            AtcCompressionMode compressionMode)
+            TextureCompressionLevel compressionMode)
         {
             EncodeExplicitAlphaBlock(source, destination[..8]);
             EncodeColorBlock(source, destination[8..], compressionMode);
@@ -245,7 +245,7 @@ public sealed class AtcTextureCoder : IPitchTextureCoder
         public static void EncodeBlock(
             ReadOnlySpan<Rgba8UNorm> source,
             Span<byte> destination,
-            AtcCompressionMode compressionMode)
+            TextureCompressionLevel compressionMode)
         {
             EncodeInterpolatedAlphaBlock(source, destination[..8], compressionMode);
             EncodeColorBlock(source, destination[8..], compressionMode);
@@ -269,16 +269,16 @@ public sealed class AtcTextureCoder : IPitchTextureCoder
     private static void EncodeColorBlock(
         ReadOnlySpan<Rgba8UNorm> source,
         Span<byte> destination,
-        AtcCompressionMode compressionMode)
+        TextureCompressionLevel compressionMode)
     {
         switch (compressionMode)
         {
-            case AtcCompressionMode.Fast:
+            case TextureCompressionLevel.Fast:
                 EncodeColorBlockFast(source, destination);
                 return;
-            case AtcCompressionMode.Normal:
-            case AtcCompressionMode.High:
-            case AtcCompressionMode.Exhaustive:
+            case TextureCompressionLevel.Normal:
+            case TextureCompressionLevel.High:
+            case TextureCompressionLevel.Exhaustive:
                 EncodeColorBlockOptimized(source, compressionMode, destination);
                 return;
             default:
@@ -310,11 +310,11 @@ public sealed class AtcTextureCoder : IPitchTextureCoder
 
     private static void EncodeColorBlockOptimized(
         ReadOnlySpan<Rgba8UNorm> source,
-        AtcCompressionMode compressionMode,
+        TextureCompressionLevel compressionMode,
         Span<byte> destination)
     {
         Span<ColorEndpointPair> seeds = stackalloc ColorEndpointPair[
-            compressionMode == AtcCompressionMode.Exhaustive ? 536 : 24];
+            compressionMode == TextureCompressionLevel.Exhaustive ? 536 : 24];
         var seedCount = 0;
         FindColorBounds(source, out var min, out var max);
         AddColorSeed(seeds, ref seedCount, PackRgb555(min), PackRgb565(max));
@@ -329,7 +329,7 @@ public sealed class AtcTextureCoder : IPitchTextureCoder
             AddColorSeed(seeds, ref seedCount, (ushort)(PackRgb555(insetMax) | 0x8000), PackRgb565(insetMin));
         }
 
-        if (compressionMode is AtcCompressionMode.High or AtcCompressionMode.Exhaustive
+        if (compressionMode is TextureCompressionLevel.High or TextureCompressionLevel.Exhaustive
             && TryFindFarthestColorEndpoints(source, out var farA, out var farB))
         {
             AddColorSeed(seeds, ref seedCount, PackRgb555(farA), PackRgb565(farB));
@@ -345,14 +345,14 @@ public sealed class AtcTextureCoder : IPitchTextureCoder
             AddColorSeed(seeds, ref seedCount, (ushort)(PackRgb555(axisMax) | 0x8000), PackRgb565(axisMin));
         }
 
-        if (compressionMode is AtcCompressionMode.High or AtcCompressionMode.Exhaustive
+        if (compressionMode is TextureCompressionLevel.High or TextureCompressionLevel.Exhaustive
             && TryFindAverageColor(source, out var average))
         {
             AddColorSeed(seeds, ref seedCount, PackRgb555(average), PackRgb565(average));
             AddColorSeed(seeds, ref seedCount, (ushort)(PackRgb555(average) | 0x8000), PackRgb565(average));
         }
 
-        if (compressionMode == AtcCompressionMode.Exhaustive)
+        if (compressionMode == TextureCompressionLevel.Exhaustive)
         {
             AddUniqueColorSeeds(source, seeds, ref seedCount);
         }
@@ -630,22 +630,22 @@ public sealed class AtcTextureCoder : IPitchTextureCoder
     private static double SolveEndpointB(double ap, double bp, double aa, double ab, double determinant) =>
         ((aa * bp) - (ab * ap)) / determinant;
 
-    private static int GetColorOptimizationIterationLimit(AtcCompressionMode compressionMode) => compressionMode switch
+    private static int GetColorOptimizationIterationLimit(TextureCompressionLevel compressionMode) => compressionMode switch
     {
-        AtcCompressionMode.Normal => 4,
-        AtcCompressionMode.High => 8,
-        AtcCompressionMode.Exhaustive => 12,
+        TextureCompressionLevel.Normal => 4,
+        TextureCompressionLevel.High => 8,
+        TextureCompressionLevel.Exhaustive => 12,
         _ => throw new ArgumentOutOfRangeException(
             nameof(compressionMode),
             compressionMode,
             "Unsupported ATC compression mode.")
     };
 
-    private static int GetColorRefinementPassLimit(AtcCompressionMode compressionMode) => compressionMode switch
+    private static int GetColorRefinementPassLimit(TextureCompressionLevel compressionMode) => compressionMode switch
     {
-        AtcCompressionMode.Normal => 1,
-        AtcCompressionMode.High => 2,
-        AtcCompressionMode.Exhaustive => 4,
+        TextureCompressionLevel.Normal => 1,
+        TextureCompressionLevel.High => 2,
+        TextureCompressionLevel.Exhaustive => 4,
         _ => throw new ArgumentOutOfRangeException(
             nameof(compressionMode),
             compressionMode,
@@ -741,18 +741,18 @@ public sealed class AtcTextureCoder : IPitchTextureCoder
     private static void EncodeInterpolatedAlphaBlock(
         ReadOnlySpan<Rgba8UNorm> source,
         Span<byte> destination,
-        AtcCompressionMode compressionMode)
+        TextureCompressionLevel compressionMode)
     {
         switch (compressionMode)
         {
-            case AtcCompressionMode.Fast:
+            case TextureCompressionLevel.Fast:
                 EncodeInterpolatedAlphaBlockFast(source, destination);
                 return;
-            case AtcCompressionMode.Normal:
-            case AtcCompressionMode.High:
+            case TextureCompressionLevel.Normal:
+            case TextureCompressionLevel.High:
                 EncodeInterpolatedAlphaBlockOptimized(source, compressionMode, destination);
                 return;
-            case AtcCompressionMode.Exhaustive:
+            case TextureCompressionLevel.Exhaustive:
                 EncodeInterpolatedAlphaBlockExhaustive(source, destination);
                 return;
             default:
@@ -785,7 +785,7 @@ public sealed class AtcTextureCoder : IPitchTextureCoder
 
     private static void EncodeInterpolatedAlphaBlockOptimized(
         ReadOnlySpan<Rgba8UNorm> source,
-        AtcCompressionMode compressionMode,
+        TextureCompressionLevel compressionMode,
         Span<byte> destination)
     {
         FindAlphaBounds(source, out var min, out var max);
@@ -1034,20 +1034,20 @@ public sealed class AtcTextureCoder : IPitchTextureCoder
         }
     }
 
-    private static int GetAlphaOptimizationIterationLimit(AtcCompressionMode compressionMode) => compressionMode switch
+    private static int GetAlphaOptimizationIterationLimit(TextureCompressionLevel compressionMode) => compressionMode switch
     {
-        AtcCompressionMode.Normal => 4,
-        AtcCompressionMode.High => 8,
+        TextureCompressionLevel.Normal => 4,
+        TextureCompressionLevel.High => 8,
         _ => throw new ArgumentOutOfRangeException(
             nameof(compressionMode),
             compressionMode,
             "Unsupported ATC compression mode.")
     };
 
-    private static int GetAlphaRefinementPassLimit(AtcCompressionMode compressionMode) => compressionMode switch
+    private static int GetAlphaRefinementPassLimit(TextureCompressionLevel compressionMode) => compressionMode switch
     {
-        AtcCompressionMode.Normal => 1,
-        AtcCompressionMode.High => 2,
+        TextureCompressionLevel.Normal => 1,
+        TextureCompressionLevel.High => 2,
         _ => throw new ArgumentOutOfRangeException(
             nameof(compressionMode),
             compressionMode,

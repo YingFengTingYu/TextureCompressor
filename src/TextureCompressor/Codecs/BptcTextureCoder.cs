@@ -147,7 +147,7 @@ public sealed class BptcTextureCoder : IPitchTextureCoder
         BitmapView<TPixel> source,
         Span<byte> destination,
         int rowPitch,
-        BptcCompressionMode compressionMode)
+        TextureCompressionLevel compressionMode)
         where TPixel : unmanaged, IPixel<TPixel>
         where TTransfer : IBc6HTransfer
     {
@@ -237,7 +237,7 @@ public sealed class BptcTextureCoder : IPitchTextureCoder
         BitmapView<TPixel> source,
         Span<byte> destination,
         int rowPitch,
-        BptcCompressionMode compressionMode)
+        TextureCompressionLevel compressionMode)
         where TPixel : unmanaged, IPixel<TPixel>
         where TTransfer : IBc7Transfer
     {
@@ -309,7 +309,7 @@ public sealed class BptcTextureCoder : IPitchTextureCoder
         static abstract void EncodeBlock(
             ReadOnlySpan<Rgba32Float> source,
             Span<byte> destination,
-            BptcCompressionMode compressionMode);
+            TextureCompressionLevel compressionMode);
     }
 
     private interface IBc7Transfer
@@ -321,7 +321,7 @@ public sealed class BptcTextureCoder : IPitchTextureCoder
         static abstract void EncodeBlock(
             ReadOnlySpan<Rgba8UNorm> source,
             Span<byte> destination,
-            BptcCompressionMode compressionMode);
+            TextureCompressionLevel compressionMode);
     }
 
     private readonly struct Bc6HUFloatTransfer : IBc6HTransfer
@@ -334,7 +334,7 @@ public sealed class BptcTextureCoder : IPitchTextureCoder
         public static void EncodeBlock(
             ReadOnlySpan<Rgba32Float> source,
             Span<byte> destination,
-            BptcCompressionMode compressionMode) =>
+            TextureCompressionLevel compressionMode) =>
             EncodeBc6HBlock(source, signed: false, destination, compressionMode);
     }
 
@@ -348,7 +348,7 @@ public sealed class BptcTextureCoder : IPitchTextureCoder
         public static void EncodeBlock(
             ReadOnlySpan<Rgba32Float> source,
             Span<byte> destination,
-            BptcCompressionMode compressionMode) =>
+            TextureCompressionLevel compressionMode) =>
             EncodeBc6HBlock(source, signed: true, destination, compressionMode);
     }
 
@@ -362,7 +362,7 @@ public sealed class BptcTextureCoder : IPitchTextureCoder
         public static void EncodeBlock(
             ReadOnlySpan<Rgba8UNorm> source,
             Span<byte> destination,
-            BptcCompressionMode compressionMode) =>
+            TextureCompressionLevel compressionMode) =>
             EncodeBc7Block(source, srgb: false, destination, compressionMode);
     }
 
@@ -376,7 +376,7 @@ public sealed class BptcTextureCoder : IPitchTextureCoder
         public static void EncodeBlock(
             ReadOnlySpan<Rgba8UNorm> source,
             Span<byte> destination,
-            BptcCompressionMode compressionMode) =>
+            TextureCompressionLevel compressionMode) =>
             EncodeBc7Block(source, srgb: true, destination, compressionMode);
     }
 
@@ -473,16 +473,16 @@ public sealed class BptcTextureCoder : IPitchTextureCoder
         ReadOnlySpan<Rgba32Float> source,
         bool signed,
         Span<byte> destination,
-        BptcCompressionMode compressionMode)
+        TextureCompressionLevel compressionMode)
     {
         switch (compressionMode)
         {
-            case BptcCompressionMode.Fast:
+            case TextureCompressionLevel.Fast:
                 WriteBc6HMode3Block(source, signed, destination);
                 return;
-            case BptcCompressionMode.Normal:
-            case BptcCompressionMode.High:
-            case BptcCompressionMode.Exhaustive:
+            case TextureCompressionLevel.Normal:
+            case TextureCompressionLevel.High:
+            case TextureCompressionLevel.Exhaustive:
                 EncodeBc6HBlockWithModeSearch(source, signed, destination, compressionMode);
                 return;
             default:
@@ -537,7 +537,7 @@ public sealed class BptcTextureCoder : IPitchTextureCoder
         ReadOnlySpan<Rgba32Float> source,
         bool signed,
         Span<byte> destination,
-        BptcCompressionMode compressionMode)
+        TextureCompressionLevel compressionMode)
     {
         Span<byte> best = stackalloc byte[BytesPerBlock];
         Span<byte> candidate = stackalloc byte[BytesPerBlock];
@@ -555,7 +555,7 @@ public sealed class BptcTextureCoder : IPitchTextureCoder
         ReadOnlySpan<Rgba32Float> source,
         bool signed,
         int mode,
-        BptcCompressionMode compressionMode,
+        TextureCompressionLevel compressionMode,
         Span<byte> candidate,
         Span<byte> best,
         ref float bestError)
@@ -563,13 +563,13 @@ public sealed class BptcTextureCoder : IPitchTextureCoder
         FindBc6HEndpoints(source, signed, out var endpoint0, out var endpoint1);
         TryBc6HModeCandidate(source, signed, mode, endpoint0, endpoint1, candidate, best, ref bestError);
 
-        if (compressionMode is BptcCompressionMode.High or BptcCompressionMode.Exhaustive)
+        if (compressionMode is TextureCompressionLevel.High or TextureCompressionLevel.Exhaustive)
         {
             FindBc6HComponentBounds(source, signed, out endpoint0, out endpoint1);
             TryBc6HModeCandidate(source, signed, mode, endpoint0, endpoint1, candidate, best, ref bestError);
         }
 
-        if (compressionMode != BptcCompressionMode.Exhaustive)
+        if (compressionMode != TextureCompressionLevel.Exhaustive)
         {
             return;
         }
@@ -985,16 +985,16 @@ public sealed class BptcTextureCoder : IPitchTextureCoder
         ReadOnlySpan<Rgba8UNorm> source,
         bool srgb,
         Span<byte> destination,
-        BptcCompressionMode compressionMode)
+        TextureCompressionLevel compressionMode)
     {
         switch (compressionMode)
         {
-            case BptcCompressionMode.Fast:
+            case TextureCompressionLevel.Fast:
                 WriteBc7Mode6FastBlock(source, srgb, destination);
                 return;
-            case BptcCompressionMode.Normal:
-            case BptcCompressionMode.High:
-            case BptcCompressionMode.Exhaustive:
+            case TextureCompressionLevel.Normal:
+            case TextureCompressionLevel.High:
+            case TextureCompressionLevel.Exhaustive:
                 EncodeBc7BlockWithModeSearch(source, srgb, destination, compressionMode);
                 return;
             default:
@@ -1035,7 +1035,7 @@ public sealed class BptcTextureCoder : IPitchTextureCoder
         ReadOnlySpan<Rgba8UNorm> source,
         bool srgb,
         Span<byte> destination,
-        BptcCompressionMode compressionMode)
+        TextureCompressionLevel compressionMode)
     {
         var storage = new InlineArray16<Bc7Color32>();
         for (var i = 0; i < TexelsPerBlock; i++)
@@ -1051,15 +1051,15 @@ public sealed class BptcTextureCoder : IPitchTextureCoder
         TryBc7ModeCandidates(storage, mode: 6, partitionLimit: 1, candidate, best, ref bestError);
         TryBc7ModeCandidates(storage, mode: 5, partitionLimit: 1, candidate, best, ref bestError);
 
-        if (compressionMode is BptcCompressionMode.High or BptcCompressionMode.Exhaustive)
+        if (compressionMode is TextureCompressionLevel.High or TextureCompressionLevel.Exhaustive)
         {
-            var partitionLimit = compressionMode == BptcCompressionMode.High ? 16 : 64;
+            var partitionLimit = compressionMode == TextureCompressionLevel.High ? 16 : 64;
             TryBc7ModeCandidates(storage, mode: 1, partitionLimit, candidate, best, ref bestError);
             TryBc7ModeCandidates(storage, mode: 3, partitionLimit, candidate, best, ref bestError);
             TryBc7ModeCandidates(storage, mode: 7, partitionLimit, candidate, best, ref bestError);
         }
 
-        if (compressionMode == BptcCompressionMode.Exhaustive)
+        if (compressionMode == TextureCompressionLevel.Exhaustive)
         {
             TryBc7ModeCandidates(storage, mode: 0, partitionLimit: 64, candidate, best, ref bestError);
             TryBc7ModeCandidates(storage, mode: 2, partitionLimit: 64, candidate, best, ref bestError);

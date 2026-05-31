@@ -2,5 +2,5 @@ namespace TextureCompressor.Codecs;
 
 public sealed class FxtcCoderOptions
 {
-    public FxtcCompressionMode CompressionMode { get; init; } = FxtcCompressionMode.Fast;
+    public TextureCompressionLevel CompressionMode { get; init; } = TextureCompressionLevel.Fast;
 }

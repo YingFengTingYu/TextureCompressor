@@ -106,7 +106,7 @@ PngCodec.Encode(decoded, "roundtrip.png");
 
 ## 使用内置高质量编码模式
 
-默认的内置 coder 偏向快速、可预测的基础转换。S3TC、FXT1、ETC/EAC、ASTC、ATC、RGTC/LATC、BPTC、PVRTC 的内置实现提供更高质量的搜索模式；把带选项的 coder 注册到 `TextureCoderManager` 后，后续 `TextureCoderManager.Global.GetCoder(...)`、`DdsCodec.Encode(...)`、`KtxCodec.Encode(...)`、`PvrCodec.Encode(...)` 或 `AstcCodec.Encode(...)` 都会优先使用你注册的版本。`using var` 作用域结束后会自动恢复默认行为。
+默认的内置 coder 偏向快速、可预测的基础转换。S3TC、FXT1、ETC/EAC、ASTC、ATC、RGTC/LATC、BPTC、PVRTC 的内置实现通过统一的 `TextureCompressionLevel` 枚举提供更高质量的搜索模式；把带选项的 coder 注册到 `TextureCoderManager` 后，后续 `TextureCoderManager.Global.GetCoder(...)`、`DdsCodec.Encode(...)`、`KtxCodec.Encode(...)`、`PvrCodec.Encode(...)` 或 `AstcCodec.Encode(...)` 都会优先使用你注册的版本。`using var` 作用域结束后会自动恢复默认行为。
 
 ```csharp
 using TextureCompressor.Codecs;
@@ -117,56 +117,56 @@ using var highQualityS3tc = TextureCoderManager.Global.Register(
     s3tcFormat,
     new S3tcTextureCoder(
         s3tcFormat,
-        new S3tcCoderOptions { CompressionMode = S3tcCompressionMode.High }));
+        new S3tcCoderOptions { CompressionMode = TextureCompressionLevel.High }));
 
 var fxt1Format = TextureFormats.RgbaFxt1UNorm;
 using var highQualityFxt1 = TextureCoderManager.Global.Register(
     fxt1Format,
     new FxtcTextureCoder(
         fxt1Format,
-        new FxtcCoderOptions { CompressionMode = FxtcCompressionMode.High }));
+        new FxtcCoderOptions { CompressionMode = TextureCompressionLevel.High }));
 
 var etcFormat = TextureFormats.RgbaEtc2EacUNorm;
 using var highQualityEtc = TextureCoderManager.Global.Register(
     etcFormat,
     new EtcTextureCoder(
         etcFormat,
-        new EtcCoderOptions { CompressionMode = EtcCompressionMode.High }));
+        new EtcCoderOptions { CompressionMode = TextureCompressionLevel.High }));
 
 var atcFormat = TextureFormats.AtcRgbaInterpolatedAlpha;
 using var highQualityAtc = TextureCoderManager.Global.Register(
     atcFormat,
     new AtcTextureCoder(
         atcFormat,
-        new AtcCoderOptions { CompressionMode = AtcCompressionMode.High }));
+        new AtcCoderOptions { CompressionMode = TextureCompressionLevel.High }));
 
 var rgtcFormat = TextureFormats.Bc5UNorm;
 using var highQualityRgtc = TextureCoderManager.Global.Register(
     rgtcFormat,
     new RgtcLatcTextureCoder(
         rgtcFormat,
-        new RgtcLatcCoderOptions { CompressionMode = RgtcLatcCompressionMode.High }));
+        new RgtcLatcCoderOptions { CompressionMode = TextureCompressionLevel.High }));
 
 var bptcFormat = TextureFormats.Bc7UNorm;
 using var highQualityBptc = TextureCoderManager.Global.Register(
     bptcFormat,
     new BptcTextureCoder(
         bptcFormat,
-        new BptcCoderOptions { CompressionMode = BptcCompressionMode.High }));
+        new BptcCoderOptions { CompressionMode = TextureCompressionLevel.High }));
 
 var astcFormat = TextureFormats.RgbaAstc8x8UNorm;
 using var highQualityAstc = TextureCoderManager.Global.Register(
     astcFormat,
     new AstcTextureCoder(
         astcFormat,
-        new AstcCoderOptions { CompressionMode = AstcCompressionMode.High }));
+        new AstcCoderOptions { CompressionMode = TextureCompressionLevel.High }));
 
 var pvrtcFormat = TextureFormats.RgbaPvrtcI4BppUNorm;
 using var exhaustivePvrtc = TextureCoderManager.Global.Register(
     pvrtcFormat,
     new PvrtcTextureCoder(
         pvrtcFormat,
-        new PvrtcCoderOptions { CompressionMode = PvrtcCompressionMode.Exhaustive }));
+        new PvrtcCoderOptions { CompressionMode = TextureCompressionLevel.Exhaustive }));
 
 var coder = TextureCoderManager.Global.GetCoder(s3tcFormat);
 ```
@@ -406,7 +406,7 @@ dotnet run --project src/TextureCompressor.Cli -- --help
 dotnet run --project src/TextureCompressor.Cli -- formats bc7 --compressed
 dotnet run --project src/TextureCompressor.Cli -- formats rgba --uncompressed
 dotnet run --project src/TextureCompressor.Cli -- convert input.png output.dds --format Bc7UNorm --metrics
-dotnet run --project src/TextureCompressor.Cli -- convert input.png output.ktx2 --format Bc7Srgb --ktx-version 2
+dotnet run --project src/TextureCompressor.Cli -- convert input.png output.ktx2 --format Bc7Srgb --ktx-version 2 --quality High
 dotnet run --project src/TextureCompressor.Cli -- quality source.png output.dds
 ```
 
@@ -416,7 +416,7 @@ dotnet run --project src/TextureCompressor.Cli -- quality source.png output.dds
 - `convert <input> <output>`：在图片和纹理容器之间转换。输出容器默认由扩展名推断，也可以用 `--container` 显式指定。
 - `quality <expected> <actual>`：解码两张图片/纹理并输出 MSE、RMSE、PSNR；可加 `--ignore-alpha` 忽略 Alpha。
 
-图片容器支持 PNG、JPEG、GIF。`convert` 提供 `--png-color-space`、`--jpg-color-space`、`--gif-color-space` 在 Linear 与 Srgb 之间转换；JPEG 输出可用 `--jpeg-quality` 设置质量；内置 S3TC、FXT1、ETC/EAC、ASTC、ATC、RGTC/LATC、BPTC、PVRTC 纹理编码质量可分别用 `--s3tc-quality`、`--fxtc-quality`、`--etc-quality`、`--astc-quality`、`--atc-quality`、`--rgtc-quality`、`--bptc-quality`、`--pvrtc-quality` 选择。
+图片容器支持 PNG、JPEG、GIF。`convert` 提供 `--png-color-space`、`--jpg-color-space`、`--gif-color-space` 在 Linear 与 Srgb 之间转换；JPEG 输出可用 `--jpeg-quality` 设置质量；内置 S3TC、FXT1、ETC/EAC、ASTC、ATC、RGTC/LATC、BPTC、PVRTC 纹理编码质量可用统一的 `--quality` 选择。
 
 ## 常见工作流
 

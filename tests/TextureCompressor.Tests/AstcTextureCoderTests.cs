@@ -330,7 +330,7 @@ public sealed class AstcTextureCoderTests
         var fastCoder = new AstcTextureCoder(TextureFormats.RgbaAstc4x4UNorm);
         var highCoder = new AstcTextureCoder(
             TextureFormats.RgbaAstc4x4UNorm,
-            new AstcCoderOptions { CompressionMode = AstcCompressionMode.High });
+            new AstcCoderOptions { CompressionMode = TextureCompressionLevel.High });
         var rowPitch = fastCoder.GetDefaultPitch(source.Width);
         var fastEncoded = new byte[fastCoder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
         var highEncoded = new byte[highCoder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
@@ -348,7 +348,7 @@ public sealed class AstcTextureCoderTests
 
     [Theory]
     [MemberData(nameof(AstcCompressionModes))]
-    public void EncodeAndDecodeAstcSupportsCompressionMode(AstcCompressionMode compressionMode)
+    public void EncodeAndDecodeAstcSupportsCompressionMode(TextureCompressionLevel compressionMode)
     {
         var source = new ArrayBitmap<Rgba8UNorm>(8, 8);
         for (var y = 0; y < source.Height; y++)
@@ -393,8 +393,8 @@ public sealed class AstcTextureCoderTests
             }
         }
 
-        var highError = EncodeAndDecodeAstcError(source, AstcCompressionMode.High);
-        var exhaustiveError = EncodeAndDecodeAstcError(source, AstcCompressionMode.Exhaustive);
+        var highError = EncodeAndDecodeAstcError(source, TextureCompressionLevel.High);
+        var exhaustiveError = EncodeAndDecodeAstcError(source, TextureCompressionLevel.Exhaustive);
 
         Assert.True(exhaustiveError <= highError);
     }
@@ -487,7 +487,7 @@ public sealed class AstcTextureCoderTests
 
     [Theory]
     [MemberData(nameof(AstcCompressionModes))]
-    public void EncodeAndDecodeHdrAstcSupportsCompressionMode(AstcCompressionMode compressionMode)
+    public void EncodeAndDecodeHdrAstcSupportsCompressionMode(TextureCompressionLevel compressionMode)
     {
         var source = CreateHdrGradientSource(8, 8);
         var decoded = new ArrayBitmap<Rgba16Float>(8, 8);
@@ -509,8 +509,8 @@ public sealed class AstcTextureCoderTests
     {
         var source = CreateHdrGradientSource(8, 8);
 
-        var fastError = EncodeAndDecodeHdrAstcError(source, AstcCompressionMode.Fast);
-        var highError = EncodeAndDecodeHdrAstcError(source, AstcCompressionMode.High);
+        var fastError = EncodeAndDecodeHdrAstcError(source, TextureCompressionLevel.Fast);
+        var highError = EncodeAndDecodeHdrAstcError(source, TextureCompressionLevel.High);
 
         Assert.True(highError <= fastError);
     }
@@ -520,8 +520,8 @@ public sealed class AstcTextureCoderTests
     {
         var source = CreateHdrGradientSource(8, 8);
 
-        var highError = EncodeAndDecodeHdrAstcError(source, AstcCompressionMode.High);
-        var exhaustiveError = EncodeAndDecodeHdrAstcError(source, AstcCompressionMode.Exhaustive);
+        var highError = EncodeAndDecodeHdrAstcError(source, TextureCompressionLevel.High);
+        var exhaustiveError = EncodeAndDecodeHdrAstcError(source, TextureCompressionLevel.Exhaustive);
 
         Assert.True(exhaustiveError <= highError);
     }
@@ -609,15 +609,15 @@ public sealed class AstcTextureCoderTests
         TextureFormats.RgbaAstc12x12Float
     };
 
-    public static TheoryData<AstcCompressionMode> AstcCompressionModes() => new()
+    public static TheoryData<TextureCompressionLevel> AstcCompressionModes() => new()
     {
-        AstcCompressionMode.Fast,
-        AstcCompressionMode.Normal,
-        AstcCompressionMode.High,
-        AstcCompressionMode.Exhaustive
+        TextureCompressionLevel.Fast,
+        TextureCompressionLevel.Normal,
+        TextureCompressionLevel.High,
+        TextureCompressionLevel.Exhaustive
     };
 
-    private static long EncodeAndDecodeAstcError(ArrayBitmap<Rgba8UNorm> source, AstcCompressionMode compressionMode)
+    private static long EncodeAndDecodeAstcError(ArrayBitmap<Rgba8UNorm> source, TextureCompressionLevel compressionMode)
     {
         var coder = new AstcTextureCoder(
             TextureFormats.RgbaAstc8x8UNorm,
@@ -632,7 +632,7 @@ public sealed class AstcTextureCoderTests
         return RgbaSquaredError(source, decoded);
     }
 
-    private static double EncodeAndDecodeHdrAstcError(ArrayBitmap<Rgba16Float> source, AstcCompressionMode compressionMode)
+    private static double EncodeAndDecodeHdrAstcError(ArrayBitmap<Rgba16Float> source, TextureCompressionLevel compressionMode)
     {
         var coder = new AstcTextureCoder(
             TextureFormats.RgbaAstc8x8Float,
