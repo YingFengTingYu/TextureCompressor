@@ -29,6 +29,43 @@ public sealed class CliWorkflowTests
     }
 
     [Fact]
+    public async Task QualityJsonPrintsStructuredMetrics()
+    {
+        using var workspace = new CliWorkspace();
+        var expected = WriteSolidPng(workspace, "expected.png", new Rgba8UNorm(255, 0, 0, 255));
+        var actual = WriteSolidPng(workspace, "actual.png", new Rgba8UNorm(0, 0, 255, 255));
+
+        var output = await RunCliAsync(workspace, "quality", expected, actual, "--ignore-alpha", "--json");
+
+        using var document = JsonDocument.Parse(output.StandardOutput);
+        Assert.Equal(8, document.RootElement.GetProperty("width").GetInt32());
+        Assert.Equal(8, document.RootElement.GetProperty("height").GetInt32());
+        Assert.False(document.RootElement.GetProperty("includesAlpha").GetBoolean());
+        Assert.True(document.RootElement.GetProperty("meanSquaredError").GetDouble() > 0);
+        Assert.True(document.RootElement.GetProperty("channels").GetProperty("red").GetProperty("meanSquaredError").GetDouble() > 0);
+        Assert.False(document.RootElement.GetProperty("channels").TryGetProperty("alpha", out _));
+    }
+
+    [Fact]
+    public async Task ConvertMetricsJsonPrintsStructuredResult()
+    {
+        using var workspace = new CliWorkspace();
+        var source = WriteSolidPng(workspace, "source.png", new Rgba8UNorm(32, 64, 128, 255));
+        var dds = workspace.GetPath("output.dds");
+
+        var output = await RunCliAsync(workspace, "convert", source, dds, "--format", "Rgba8UNorm", "--metrics", "--json");
+
+        Assert.True(File.Exists(dds));
+        using var document = JsonDocument.Parse(output.StandardOutput);
+        Assert.Equal(dds, document.RootElement.GetProperty("output").GetString());
+        var quality = document.RootElement.GetProperty("quality");
+        Assert.Equal(8, quality.GetProperty("width").GetInt32());
+        Assert.Equal(8, quality.GetProperty("height").GetInt32());
+        Assert.Equal(0, quality.GetProperty("meanSquaredError").GetDouble());
+        Assert.Equal("inf", quality.GetProperty("peakSignalToNoiseRatioText").GetString());
+    }
+
+    [Fact]
     public async Task ConvertAndExtractCanSelectGeneratedPvrMips()
     {
         using var workspace = new CliWorkspace();

@@ -55,6 +55,10 @@ internal static class Cli
         {
             Description = "Decode the written output and print quality metrics."
         };
+        var jsonOption = new Option<bool>("--json")
+        {
+            Description = "Print conversion result and optional metrics as JSON."
+        };
         var pngColorSpaceOption = new Option<ImageColorSpace>("--png-color-space")
         {
             Description = "How to interpret and write PNG RGB values.",
@@ -115,6 +119,7 @@ internal static class Cli
         command.Options.Add(formatOption);
         command.Options.Add(containerOption);
         command.Options.Add(metricsOption);
+        command.Options.Add(jsonOption);
         command.Options.Add(pngColorSpaceOption);
         command.Options.Add(jpgColorSpaceOption);
         command.Options.Add(gifColorSpaceOption);
@@ -147,6 +152,7 @@ internal static class Cli
                 parseResult.GetValue(jpgColorSpaceOption),
                 parseResult.GetValue(gifColorSpaceOption));
             var printMetrics = parseResult.GetValue(metricsOption);
+            var printJson = parseResult.GetValue(jsonOption);
 
             var inputKind = GetContainer(inputPath);
             if (IsStructuredTextureContainer(inputKind) && IsStructuredTextureContainer(outputKind))
@@ -156,40 +162,40 @@ internal static class Cli
                 if (!hasSubresourceSelection && mipmaps == MipmapMode.None)
                 {
                     WriteStructuredTexture(texture, outputPath, outputKind, format, ktxVersion, quality);
-                    Console.WriteLine($"wrote {outputPath}");
-
+                    BitmapQualityResult? structuredMetrics = null;
                     if (printMetrics)
                     {
                         var decoded = Decode(outputPath, colorSpaces);
-                        PrintQuality(BitmapQuality.Compare(DecodeSubresource(texture.Format, texture.GetSubresource(default)), decoded));
+                        structuredMetrics = BitmapQuality.Compare(DecodeSubresource(texture.Format, texture.GetSubresource(default)), decoded);
                     }
 
+                    PrintConvertResult(outputPath, structuredMetrics, printJson);
                     return 0;
                 }
 
                 var selectedSource = DecodeSubresource(texture.Format, texture.GetSubresource(selection));
                 Encode(selectedSource, outputPath, outputKind, format, ktxVersion, jpegQuality, quality, mipmaps, colorSpaces);
-                Console.WriteLine($"wrote {outputPath}");
-
+                BitmapQualityResult? selectedMetrics = null;
                 if (printMetrics)
                 {
                     var decoded = Decode(outputPath, colorSpaces);
-                    PrintQuality(BitmapQuality.Compare(selectedSource, decoded));
+                    selectedMetrics = BitmapQuality.Compare(selectedSource, decoded);
                 }
 
+                PrintConvertResult(outputPath, selectedMetrics, printJson);
                 return 0;
             }
 
             var source = Decode(inputPath, colorSpaces, selection);
             Encode(source, outputPath, outputKind, requestedFormat, ktxVersion, jpegQuality, quality, mipmaps, colorSpaces);
-            Console.WriteLine($"wrote {outputPath}");
-
+            BitmapQualityResult? imageMetrics = null;
             if (printMetrics)
             {
                 var decoded = Decode(outputPath, colorSpaces);
-                PrintQuality(BitmapQuality.Compare(source, decoded));
+                imageMetrics = BitmapQuality.Compare(source, decoded);
             }
 
+            PrintConvertResult(outputPath, imageMetrics, printJson);
             return 0;
         }));
 
@@ -293,6 +299,10 @@ internal static class Cli
         var actualMipOption = CreateMipOption("--actual-mip", "Mip level to decode from the actual texture.");
         var actualLayerOption = CreateLayerOption("--actual-layer", "Array layer to decode from the actual texture.");
         var actualFaceOption = CreateFaceOption("--actual-face", "Cube-map face to decode from the actual texture.");
+        var jsonOption = new Option<bool>("--json")
+        {
+            Description = "Print quality metrics as JSON."
+        };
 
         var command = new Command("quality", "Compare two decoded images and print quality metrics.");
         command.Arguments.Add(expectedArgument);
@@ -310,6 +320,7 @@ internal static class Cli
         command.Options.Add(actualMipOption);
         command.Options.Add(actualLayerOption);
         command.Options.Add(actualFaceOption);
+        command.Options.Add(jsonOption);
         command.SetAction(parseResult => RunCommand(() =>
         {
             var expectedPath = RequireFile(parseResult.GetValue(expectedArgument), "expected").FullName;
@@ -325,7 +336,7 @@ internal static class Cli
 
             var expected = Decode(expectedPath, colorSpaces, expectedSelection);
             var actual = Decode(actualPath, colorSpaces, actualSelection);
-            PrintQuality(BitmapQuality.Compare(expected, actual, includeAlpha));
+            PrintQuality(BitmapQuality.Compare(expected, actual, includeAlpha), parseResult.GetValue(jsonOption));
 
             return 0;
         }));
@@ -2415,7 +2426,76 @@ internal static class Cli
 
     private static string Pad(string value, int width) => value.PadRight(width);
 
-    private static void PrintQuality(BitmapQualityResult quality)
+    private static void PrintConvertResult(string outputPath, BitmapQualityResult? metrics, bool printJson)
+    {
+        if (printJson)
+        {
+            var document = new ConvertResultDocument(
+                outputPath,
+                metrics is null ? null : BuildQualityDocument(metrics));
+            Console.WriteLine(JsonSerializer.Serialize(document, CreateJsonOptions(writeIndented: true)));
+            return;
+        }
+
+        Console.WriteLine($"wrote {outputPath}");
+        if (metrics is not null)
+        {
+            PrintQuality(metrics);
+        }
+    }
+
+    private static void PrintQuality(BitmapQualityResult quality, bool printJson = false)
+    {
+        if (printJson)
+        {
+            Console.WriteLine(JsonSerializer.Serialize(BuildQualityDocument(quality), CreateJsonOptions(writeIndented: true)));
+            return;
+        }
+
+        PrintQualityText(quality);
+    }
+
+    private static QualityDocument BuildQualityDocument(BitmapQualityResult quality) =>
+        new(
+            quality.Width,
+            quality.Height,
+            quality.IncludesAlpha,
+            quality.MeanSquaredError,
+            quality.RootMeanSquaredError,
+            GetFiniteValueOrNull(quality.PeakSignalToNoiseRatio),
+            FormatPsnrValue(quality.PeakSignalToNoiseRatio),
+            new QualityChannelsDocument(
+                BuildQualityChannelDocument(quality.Red),
+                BuildQualityChannelDocument(quality.Green),
+                BuildQualityChannelDocument(quality.Blue),
+                quality.Alpha is null ? null : BuildQualityChannelDocument(quality.Alpha)));
+
+    private static QualityChannelDocument BuildQualityChannelDocument(BitmapChannelQuality quality) =>
+        new(
+            quality.MeanSquaredError,
+            quality.RootMeanSquaredError,
+            GetFiniteValueOrNull(quality.PeakSignalToNoiseRatio),
+            FormatPsnrValue(quality.PeakSignalToNoiseRatio));
+
+    private static double? GetFiniteValueOrNull(double value) =>
+        double.IsFinite(value) ? value : null;
+
+    private static string FormatPsnrValue(double value)
+    {
+        if (double.IsPositiveInfinity(value))
+        {
+            return "inf";
+        }
+
+        if (double.IsNegativeInfinity(value))
+        {
+            return "-inf";
+        }
+
+        return value.ToString("F3", CultureInfo.InvariantCulture) + " dB";
+    }
+
+    private static void PrintQualityText(BitmapQualityResult quality)
     {
         Console.WriteLine($"size: {quality.Width}x{quality.Height}");
         Console.WriteLine($"mse: {quality.MeanSquaredError:F6}");
@@ -2598,6 +2678,32 @@ internal sealed record PvrInfoDocument(
     int? MetadataEntries,
     string? LegacyPixelType,
     uint? LegacyBitCount);
+
+internal sealed record ConvertResultDocument(
+    string Output,
+    QualityDocument? Quality);
+
+internal sealed record QualityDocument(
+    int Width,
+    int Height,
+    bool IncludesAlpha,
+    double MeanSquaredError,
+    double RootMeanSquaredError,
+    double? PeakSignalToNoiseRatio,
+    string PeakSignalToNoiseRatioText,
+    QualityChannelsDocument Channels);
+
+internal sealed record QualityChannelsDocument(
+    QualityChannelDocument Red,
+    QualityChannelDocument Green,
+    QualityChannelDocument Blue,
+    QualityChannelDocument? Alpha);
+
+internal sealed record QualityChannelDocument(
+    double MeanSquaredError,
+    double RootMeanSquaredError,
+    double? PeakSignalToNoiseRatio,
+    string PeakSignalToNoiseRatioText);
 
 internal sealed record FormatsDocument(
     string? Query,
