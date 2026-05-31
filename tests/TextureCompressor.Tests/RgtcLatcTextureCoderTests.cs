@@ -136,7 +136,7 @@ public sealed class RgtcLatcTextureCoderTests
     }
 
     [Fact]
-    public void EncodeBc4UNormUsesFastBoundsByDefault()
+    public void EncodeBc4UNormUsesFastBoundsInFastMode()
     {
         var pixels = new[]
         {
@@ -146,7 +146,9 @@ public sealed class RgtcLatcTextureCoderTests
             new Rgba8UNorm(150, 0, 0), new Rgba8UNorm(155, 0, 0), new Rgba8UNorm(160, 0, 0), new Rgba8UNorm(165, 0, 0)
         };
         var source = new ArrayBitmap<Rgba8UNorm>(4, 4, pixels);
-        var coder = new RgtcLatcTextureCoder(TextureFormats.Bc4UNorm);
+        var coder = new RgtcLatcTextureCoder(
+            TextureFormats.Bc4UNorm,
+            new TextureCompressionOptions { CompressionMode = TextureCompressionLevel.Fast });
         var rowPitch = coder.GetDefaultPitch(source.Width);
         var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
 
@@ -167,10 +169,12 @@ public sealed class RgtcLatcTextureCoderTests
             new Rgba8UNorm(150, 0, 0), new Rgba8UNorm(155, 0, 0), new Rgba8UNorm(160, 0, 0), new Rgba8UNorm(165, 0, 0)
         };
         var source = new ArrayBitmap<Rgba8UNorm>(4, 4, pixels);
-        var fastCoder = new RgtcLatcTextureCoder(TextureFormats.Bc4UNorm);
+        var fastCoder = new RgtcLatcTextureCoder(
+            TextureFormats.Bc4UNorm,
+            new TextureCompressionOptions { CompressionMode = TextureCompressionLevel.Fast });
         var highCoder = new RgtcLatcTextureCoder(
             TextureFormats.Bc4UNorm,
-            new RgtcLatcCoderOptions { CompressionMode = TextureCompressionLevel.High });
+            new TextureCompressionOptions { CompressionMode = TextureCompressionLevel.High });
         var rowPitch = fastCoder.GetDefaultPitch(source.Width);
         var fastEncoded = new byte[fastCoder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
         var highEncoded = new byte[highCoder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
@@ -199,10 +203,12 @@ public sealed class RgtcLatcTextureCoderTests
         };
         var pixels = values.Select(value => new Rgba8SNorm((sbyte)value, 0, 0)).ToArray();
         var source = new ArrayBitmap<Rgba8SNorm>(4, 4, pixels);
-        var fastCoder = new RgtcLatcTextureCoder(TextureFormats.Bc4SNorm);
+        var fastCoder = new RgtcLatcTextureCoder(
+            TextureFormats.Bc4SNorm,
+            new TextureCompressionOptions { CompressionMode = TextureCompressionLevel.Fast });
         var highCoder = new RgtcLatcTextureCoder(
             TextureFormats.Bc4SNorm,
-            new RgtcLatcCoderOptions { CompressionMode = TextureCompressionLevel.High });
+            new TextureCompressionOptions { CompressionMode = TextureCompressionLevel.High });
         var rowPitch = fastCoder.GetDefaultPitch(source.Width);
         var fastEncoded = new byte[fastCoder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
         var highEncoded = new byte[highCoder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
@@ -228,7 +234,7 @@ public sealed class RgtcLatcTextureCoderTests
         var decoded = new ArrayBitmap<Rgba8UNorm>(4, 4);
         var coder = new RgtcLatcTextureCoder(
             TextureFormats.Bc5UNorm,
-            new RgtcLatcCoderOptions { CompressionMode = compressionMode });
+            new TextureCompressionOptions { CompressionMode = compressionMode });
         var rowPitch = coder.GetDefaultPitch(source.Width);
         var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
 

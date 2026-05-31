@@ -28,22 +28,22 @@ public sealed class BptcTextureCoder : IPitchTextureCoder
     ];
 
     private readonly BptcTransfer _transfer;
-    private readonly BptcCoderOptions _options;
+    private readonly TextureCompressionOptions _options;
 
-    public BptcTextureCoder(TextureFormat format, BptcCoderOptions? options = null)
+    public BptcTextureCoder(TextureFormat format, TextureCompressionOptions? options = null)
     {
         if (!TryGetTransfer(format, out _transfer))
         {
             throw CreateUnsupportedFormatException(format);
         }
 
-        _options = options ?? new BptcCoderOptions();
+        _options = options ?? new TextureCompressionOptions();
         Format = format;
     }
 
     public TextureFormat Format { get; }
 
-    public BptcCoderOptions Options => _options;
+    public TextureCompressionOptions Options => _options;
 
     public static ReadOnlySpan<TextureFormat> SupportedFormats => SSupportedFormats;
 

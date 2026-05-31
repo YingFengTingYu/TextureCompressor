@@ -133,10 +133,12 @@ public sealed class EtcTextureCoderTests
                 : new Rgba8UNorm(0, 255, 0, 255))
             .ToArray();
         var source = new ArrayBitmap<Rgba8UNorm>(4, 4, pixels);
-        var fastCoder = new EtcTextureCoder(TextureFormats.RgbEtc2UNorm);
+        var fastCoder = new EtcTextureCoder(
+            TextureFormats.RgbEtc2UNorm,
+            new TextureCompressionOptions { CompressionMode = TextureCompressionLevel.Fast });
         var highCoder = new EtcTextureCoder(
             TextureFormats.RgbEtc2UNorm,
-            new EtcCoderOptions { CompressionMode = TextureCompressionLevel.High });
+            new TextureCompressionOptions { CompressionMode = TextureCompressionLevel.High });
         var rowPitch = fastCoder.GetDefaultPitch(source.Width);
         var fastEncoded = new byte[fastCoder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
         var highEncoded = new byte[highCoder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
@@ -165,7 +167,7 @@ public sealed class EtcTextureCoderTests
         var decoded = new ArrayBitmap<Rgba8UNorm>(4, 4);
         var coder = new EtcTextureCoder(
             TextureFormats.RgbEtc2UNorm,
-            new EtcCoderOptions { CompressionMode = compressionMode });
+            new TextureCompressionOptions { CompressionMode = compressionMode });
         var rowPitch = coder.GetDefaultPitch(source.Width);
         var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
 
@@ -420,7 +422,7 @@ public sealed class EtcTextureCoderTests
         var decoded = new ArrayBitmap<Rgba8UNorm>(4, 4);
         var coder = new EtcTextureCoder(
             TextureFormats.RgbEtc2UNorm,
-            new EtcCoderOptions { CompressionMode = compressionMode });
+            new TextureCompressionOptions { CompressionMode = compressionMode });
         var rowPitch = coder.GetDefaultPitch(source.Width);
         var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
 
@@ -437,7 +439,7 @@ public sealed class EtcTextureCoderTests
         var decoded = new ArrayBitmap<Rgba16UNorm>(4, 4);
         var coder = new EtcTextureCoder(
             TextureFormats.R11EacUNorm,
-            new EtcCoderOptions { CompressionMode = compressionMode });
+            new TextureCompressionOptions { CompressionMode = compressionMode });
         var rowPitch = coder.GetDefaultPitch(source.Width);
         var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
 

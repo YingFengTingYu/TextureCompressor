@@ -13,22 +13,22 @@ public sealed class RgtcLatcTextureCoder : IPitchTextureCoder
 
     private readonly RgtcLatcLayout _layout;
     private readonly bool _isSigned;
-    private readonly RgtcLatcCoderOptions _options;
+    private readonly TextureCompressionOptions _options;
 
-    public RgtcLatcTextureCoder(TextureFormat format, RgtcLatcCoderOptions? options = null)
+    public RgtcLatcTextureCoder(TextureFormat format, TextureCompressionOptions? options = null)
     {
         if (!TryGetLayout(format, out _layout, out _isSigned))
         {
             throw CreateUnsupportedFormatException(format);
         }
 
-        _options = options ?? new RgtcLatcCoderOptions();
+        _options = options ?? new TextureCompressionOptions();
         Format = format;
     }
 
     public TextureFormat Format { get; }
 
-    public RgtcLatcCoderOptions Options => _options;
+    public TextureCompressionOptions Options => _options;
 
     public static bool IsSupported(TextureFormat format) => TryGetLayout(format, out _, out _);
 

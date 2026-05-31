@@ -109,7 +109,7 @@ PngCodec.Encode(decoded, "roundtrip.png");
 
 ## Use Built-In High-Quality Encoding Modes
 
-The default built-in coders favor fast, predictable baseline conversion. The built-in S3TC, FXT1, ETC/EAC, ASTC, ATC, RGTC/LATC, BPTC, and PVRTC implementations expose higher-quality search modes through the shared `TextureCompressionLevel` enum. Register an optioned coder with `TextureCoderManager`, and later `TextureCoderManager.Global.GetCoder(...)`, `DdsCodec.Encode(...)`, `KtxCodec.Encode(...)`, `PvrCodec.Encode(...)`, or `AstcCodec.Encode(...)` calls will prefer your registered coder. The default behavior is restored when the `using var` registration is disposed.
+The default built-in coders use `TextureCompressionLevel.Normal` for predictable baseline conversion. The built-in S3TC, FXT1, ETC/EAC, ASTC, ATC, RGTC/LATC, BPTC, and PVRTC implementations expose faster or higher-quality search modes through the shared `TextureCompressionOptions` type and `TextureCompressionLevel` enum. Register an optioned coder with `TextureCoderManager`, and later `TextureCoderManager.Global.GetCoder(...)`, `DdsCodec.Encode(...)`, `KtxCodec.Encode(...)`, `PvrCodec.Encode(...)`, or `AstcCodec.Encode(...)` calls will prefer your registered coder. The default behavior is restored when the `using var` registration is disposed.
 
 ```csharp
 using TextureCompressor.Codecs;
@@ -117,61 +117,66 @@ using TextureCompressor.Formats;
 using TextureCompressor.Options;
 using TextureCompressor.Registry;
 
+var highQualityOptions = new TextureCompressionOptions
+{
+    CompressionMode = TextureCompressionLevel.High
+};
+
 var s3tcFormat = TextureFormats.Bc3Rgba;
 using var highQualityS3tc = TextureCoderManager.Global.Register(
     s3tcFormat,
     new S3tcTextureCoder(
         s3tcFormat,
-        new S3tcCoderOptions { CompressionMode = TextureCompressionLevel.High }));
+        highQualityOptions));
 
 var fxt1Format = TextureFormats.RgbaFxt1UNorm;
 using var highQualityFxt1 = TextureCoderManager.Global.Register(
     fxt1Format,
     new FxtcTextureCoder(
         fxt1Format,
-        new FxtcCoderOptions { CompressionMode = TextureCompressionLevel.High }));
+        highQualityOptions));
 
 var etcFormat = TextureFormats.RgbaEtc2EacUNorm;
 using var highQualityEtc = TextureCoderManager.Global.Register(
     etcFormat,
     new EtcTextureCoder(
         etcFormat,
-        new EtcCoderOptions { CompressionMode = TextureCompressionLevel.High }));
+        highQualityOptions));
 
 var atcFormat = TextureFormats.AtcRgbaInterpolatedAlpha;
 using var highQualityAtc = TextureCoderManager.Global.Register(
     atcFormat,
     new AtcTextureCoder(
         atcFormat,
-        new AtcCoderOptions { CompressionMode = TextureCompressionLevel.High }));
+        highQualityOptions));
 
 var rgtcFormat = TextureFormats.Bc5UNorm;
 using var highQualityRgtc = TextureCoderManager.Global.Register(
     rgtcFormat,
     new RgtcLatcTextureCoder(
         rgtcFormat,
-        new RgtcLatcCoderOptions { CompressionMode = TextureCompressionLevel.High }));
+        highQualityOptions));
 
 var bptcFormat = TextureFormats.Bc7UNorm;
 using var highQualityBptc = TextureCoderManager.Global.Register(
     bptcFormat,
     new BptcTextureCoder(
         bptcFormat,
-        new BptcCoderOptions { CompressionMode = TextureCompressionLevel.High }));
+        highQualityOptions));
 
 var astcFormat = TextureFormats.RgbaAstc8x8UNorm;
 using var highQualityAstc = TextureCoderManager.Global.Register(
     astcFormat,
     new AstcTextureCoder(
         astcFormat,
-        new AstcCoderOptions { CompressionMode = TextureCompressionLevel.High }));
+        highQualityOptions));
 
 var pvrtcFormat = TextureFormats.RgbaPvrtcI4BppUNorm;
 using var exhaustivePvrtc = TextureCoderManager.Global.Register(
     pvrtcFormat,
     new PvrtcTextureCoder(
         pvrtcFormat,
-        new PvrtcCoderOptions { CompressionMode = TextureCompressionLevel.Exhaustive }));
+        new TextureCompressionOptions { CompressionMode = TextureCompressionLevel.Exhaustive }));
 
 var coder = TextureCoderManager.Global.GetCoder(s3tcFormat);
 ```

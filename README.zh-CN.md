@@ -107,7 +107,7 @@ PngCodec.Encode(decoded, "roundtrip.png");
 
 ## 使用内置高质量编码模式
 
-默认的内置 coder 偏向快速、可预测的基础转换。S3TC、FXT1、ETC/EAC、ASTC、ATC、RGTC/LATC、BPTC、PVRTC 的内置实现通过统一的 `TextureCompressionLevel` 枚举提供更高质量的搜索模式；把带选项的 coder 注册到 `TextureCoderManager` 后，后续 `TextureCoderManager.Global.GetCoder(...)`、`DdsCodec.Encode(...)`、`KtxCodec.Encode(...)`、`PvrCodec.Encode(...)` 或 `AstcCodec.Encode(...)` 都会优先使用你注册的版本。`using var` 作用域结束后会自动恢复默认行为。
+默认的内置 coder 使用 `TextureCompressionLevel.Normal`，提供可预测的基础转换。S3TC、FXT1、ETC/EAC、ASTC、ATC、RGTC/LATC、BPTC、PVRTC 的内置实现通过统一的 `TextureCompressionOptions` 类型和 `TextureCompressionLevel` 枚举提供更快或更高质量的搜索模式；把带选项的 coder 注册到 `TextureCoderManager` 后，后续 `TextureCoderManager.Global.GetCoder(...)`、`DdsCodec.Encode(...)`、`KtxCodec.Encode(...)`、`PvrCodec.Encode(...)` 或 `AstcCodec.Encode(...)` 都会优先使用你注册的版本。`using var` 作用域结束后会自动恢复默认行为。
 
 ```csharp
 using TextureCompressor.Codecs;
@@ -115,61 +115,66 @@ using TextureCompressor.Formats;
 using TextureCompressor.Options;
 using TextureCompressor.Registry;
 
+var highQualityOptions = new TextureCompressionOptions
+{
+    CompressionMode = TextureCompressionLevel.High
+};
+
 var s3tcFormat = TextureFormats.Bc3Rgba;
 using var highQualityS3tc = TextureCoderManager.Global.Register(
     s3tcFormat,
     new S3tcTextureCoder(
         s3tcFormat,
-        new S3tcCoderOptions { CompressionMode = TextureCompressionLevel.High }));
+        highQualityOptions));
 
 var fxt1Format = TextureFormats.RgbaFxt1UNorm;
 using var highQualityFxt1 = TextureCoderManager.Global.Register(
     fxt1Format,
     new FxtcTextureCoder(
         fxt1Format,
-        new FxtcCoderOptions { CompressionMode = TextureCompressionLevel.High }));
+        highQualityOptions));
 
 var etcFormat = TextureFormats.RgbaEtc2EacUNorm;
 using var highQualityEtc = TextureCoderManager.Global.Register(
     etcFormat,
     new EtcTextureCoder(
         etcFormat,
-        new EtcCoderOptions { CompressionMode = TextureCompressionLevel.High }));
+        highQualityOptions));
 
 var atcFormat = TextureFormats.AtcRgbaInterpolatedAlpha;
 using var highQualityAtc = TextureCoderManager.Global.Register(
     atcFormat,
     new AtcTextureCoder(
         atcFormat,
-        new AtcCoderOptions { CompressionMode = TextureCompressionLevel.High }));
+        highQualityOptions));
 
 var rgtcFormat = TextureFormats.Bc5UNorm;
 using var highQualityRgtc = TextureCoderManager.Global.Register(
     rgtcFormat,
     new RgtcLatcTextureCoder(
         rgtcFormat,
-        new RgtcLatcCoderOptions { CompressionMode = TextureCompressionLevel.High }));
+        highQualityOptions));
 
 var bptcFormat = TextureFormats.Bc7UNorm;
 using var highQualityBptc = TextureCoderManager.Global.Register(
     bptcFormat,
     new BptcTextureCoder(
         bptcFormat,
-        new BptcCoderOptions { CompressionMode = TextureCompressionLevel.High }));
+        highQualityOptions));
 
 var astcFormat = TextureFormats.RgbaAstc8x8UNorm;
 using var highQualityAstc = TextureCoderManager.Global.Register(
     astcFormat,
     new AstcTextureCoder(
         astcFormat,
-        new AstcCoderOptions { CompressionMode = TextureCompressionLevel.High }));
+        highQualityOptions));
 
 var pvrtcFormat = TextureFormats.RgbaPvrtcI4BppUNorm;
 using var exhaustivePvrtc = TextureCoderManager.Global.Register(
     pvrtcFormat,
     new PvrtcTextureCoder(
         pvrtcFormat,
-        new PvrtcCoderOptions { CompressionMode = TextureCompressionLevel.Exhaustive }));
+        new TextureCompressionOptions { CompressionMode = TextureCompressionLevel.Exhaustive }));
 
 var coder = TextureCoderManager.Global.GetCoder(s3tcFormat);
 ```

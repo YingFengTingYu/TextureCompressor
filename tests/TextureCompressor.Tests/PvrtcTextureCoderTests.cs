@@ -31,7 +31,7 @@ public sealed unsafe class PvrtcTextureCoderTests
     [Fact]
     public void ConstructorStoresCompressionOptions()
     {
-        var options = new PvrtcCoderOptions { CompressionMode = TextureCompressionLevel.High };
+        var options = new TextureCompressionOptions { CompressionMode = TextureCompressionLevel.High };
         var coder = new PvrtcTextureCoder(TextureFormats.RgbaPvrtcII4BppUNorm, options);
 
         Assert.Same(options, coder.Options);

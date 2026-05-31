@@ -16,7 +16,7 @@ public sealed class FxtcTextureCoder : IPitchTextureCoder
     private const int ExhaustiveCcHiColorSeedLimit = 16;
     private const byte AlphaCutoff = 128;
 
-    private readonly FxtcCoderOptions _options;
+    private readonly TextureCompressionOptions _options;
 
     private static readonly TextureFormat[] SSupportedFormats =
     [
@@ -24,7 +24,7 @@ public sealed class FxtcTextureCoder : IPitchTextureCoder
         TextureFormats.RgbaFxt1UNorm
     ];
 
-    public FxtcTextureCoder(TextureFormat format, FxtcCoderOptions? options = null)
+    public FxtcTextureCoder(TextureFormat format, TextureCompressionOptions? options = null)
     {
         if (!IsSupported(format))
         {
@@ -32,7 +32,7 @@ public sealed class FxtcTextureCoder : IPitchTextureCoder
         }
 
         Format = format;
-        _options = options ?? new FxtcCoderOptions();
+        _options = options ?? new TextureCompressionOptions();
     }
 
     public TextureFormat Format { get; }
@@ -189,7 +189,7 @@ public sealed class FxtcTextureCoder : IPitchTextureCoder
                 return;
             default:
                 throw new ArgumentOutOfRangeException(
-                    nameof(FxtcCoderOptions.CompressionMode),
+                    nameof(TextureCompressionOptions.CompressionMode),
                     _options.CompressionMode,
                     "Unsupported FXT1 compression mode.");
         }

@@ -329,10 +329,12 @@ public sealed class AstcTextureCoderTests
                 : new Rgba8UNorm(0, 255, 0, 255))
             .ToArray();
         var source = new ArrayBitmap<Rgba8UNorm>(4, 4, pixels);
-        var fastCoder = new AstcTextureCoder(TextureFormats.RgbaAstc4x4UNorm);
+        var fastCoder = new AstcTextureCoder(
+            TextureFormats.RgbaAstc4x4UNorm,
+            new TextureCompressionOptions { CompressionMode = TextureCompressionLevel.Fast });
         var highCoder = new AstcTextureCoder(
             TextureFormats.RgbaAstc4x4UNorm,
-            new AstcCoderOptions { CompressionMode = TextureCompressionLevel.High });
+            new TextureCompressionOptions { CompressionMode = TextureCompressionLevel.High });
         var rowPitch = fastCoder.GetDefaultPitch(source.Width);
         var fastEncoded = new byte[fastCoder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
         var highEncoded = new byte[highCoder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
@@ -368,7 +370,7 @@ public sealed class AstcTextureCoderTests
         var decoded = new ArrayBitmap<Rgba8UNorm>(8, 8);
         var coder = new AstcTextureCoder(
             TextureFormats.RgbaAstc8x8UNorm,
-            new AstcCoderOptions { CompressionMode = compressionMode });
+            new TextureCompressionOptions { CompressionMode = compressionMode });
         var rowPitch = coder.GetDefaultPitch(source.Width);
         var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
 
@@ -495,7 +497,7 @@ public sealed class AstcTextureCoderTests
         var decoded = new ArrayBitmap<Rgba16Float>(8, 8);
         var coder = new AstcTextureCoder(
             TextureFormats.RgbaAstc8x8Float,
-            new AstcCoderOptions { CompressionMode = compressionMode });
+            new TextureCompressionOptions { CompressionMode = compressionMode });
         var rowPitch = coder.GetDefaultPitch(source.Width);
         var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
 
@@ -623,7 +625,7 @@ public sealed class AstcTextureCoderTests
     {
         var coder = new AstcTextureCoder(
             TextureFormats.RgbaAstc8x8UNorm,
-            new AstcCoderOptions { CompressionMode = compressionMode });
+            new TextureCompressionOptions { CompressionMode = compressionMode });
         var rowPitch = coder.GetDefaultPitch(source.Width);
         var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
         var decoded = new ArrayBitmap<Rgba8UNorm>(source.Width, source.Height);
@@ -638,7 +640,7 @@ public sealed class AstcTextureCoderTests
     {
         var coder = new AstcTextureCoder(
             TextureFormats.RgbaAstc8x8Float,
-            new AstcCoderOptions { CompressionMode = compressionMode });
+            new TextureCompressionOptions { CompressionMode = compressionMode });
         var rowPitch = coder.GetDefaultPitch(source.Width);
         var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
         var decoded = new ArrayBitmap<Rgba16Float>(source.Width, source.Height);

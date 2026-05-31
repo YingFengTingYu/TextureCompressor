@@ -65,9 +65,9 @@ public sealed class EtcTextureCoder : IPitchTextureCoder
     ];
 
     private readonly EtcTransfer _transfer;
-    private readonly EtcCoderOptions _options;
+    private readonly TextureCompressionOptions _options;
 
-    public EtcTextureCoder(TextureFormat format, EtcCoderOptions? options = null)
+    public EtcTextureCoder(TextureFormat format, TextureCompressionOptions? options = null)
     {
         if (!TryGetTransfer(format, out _transfer))
         {
@@ -75,7 +75,7 @@ public sealed class EtcTextureCoder : IPitchTextureCoder
         }
 
         Format = format;
-        _options = options ?? new EtcCoderOptions();
+        _options = options ?? new TextureCompressionOptions();
     }
 
     public TextureFormat Format { get; }

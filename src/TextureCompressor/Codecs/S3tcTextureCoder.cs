@@ -14,9 +14,9 @@ public sealed class S3tcTextureCoder : IPitchTextureCoder
     private const byte AlphaCutoff = 128;
 
     private readonly S3tcTransfer _transfer;
-    private readonly S3tcCoderOptions _options;
+    private readonly TextureCompressionOptions _options;
 
-    public S3tcTextureCoder(TextureFormat format, S3tcCoderOptions? options = null)
+    public S3tcTextureCoder(TextureFormat format, TextureCompressionOptions? options = null)
     {
         if (!TryGetTransfer(format, out _transfer))
         {
@@ -24,7 +24,7 @@ public sealed class S3tcTextureCoder : IPitchTextureCoder
         }
 
         Format = format;
-        _options = options ?? new S3tcCoderOptions();
+        _options = options ?? new TextureCompressionOptions();
     }
 
     public TextureFormat Format { get; }

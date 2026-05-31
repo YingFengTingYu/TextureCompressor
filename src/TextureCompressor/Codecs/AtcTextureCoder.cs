@@ -14,9 +14,9 @@ public sealed class AtcTextureCoder : IPitchTextureCoder
     private const int TexelsPerBlock = BlockSize * BlockSize;
 
     private readonly AtcTransfer _transfer;
-    private readonly AtcCoderOptions _options;
+    private readonly TextureCompressionOptions _options;
 
-    public AtcTextureCoder(TextureFormat format, AtcCoderOptions? options = null)
+    public AtcTextureCoder(TextureFormat format, TextureCompressionOptions? options = null)
     {
         if (!TryGetTransfer(format, out _transfer))
         {
@@ -24,7 +24,7 @@ public sealed class AtcTextureCoder : IPitchTextureCoder
         }
 
         Format = format;
-        _options = options ?? new AtcCoderOptions();
+        _options = options ?? new TextureCompressionOptions();
     }
 
     public TextureFormat Format { get; }

@@ -39,9 +39,9 @@ public sealed class PvrtcTextureCoder : ITextureCoder
     private static readonly int[] SRepVals0 = [0, 3, 5, 8];
     private const float HdrMinLuma = 1e-6f;
 
-    private readonly PvrtcCoderOptions _options;
+    private readonly TextureCompressionOptions _options;
 
-    public PvrtcTextureCoder(TextureFormat format, PvrtcCoderOptions? options = null)
+    public PvrtcTextureCoder(TextureFormat format, TextureCompressionOptions? options = null)
     {
         if (!IsSupported(format))
         {
@@ -49,12 +49,12 @@ public sealed class PvrtcTextureCoder : ITextureCoder
         }
 
         Format = format;
-        _options = options ?? new PvrtcCoderOptions();
+        _options = options ?? new TextureCompressionOptions();
     }
 
     public TextureFormat Format { get; }
 
-    public PvrtcCoderOptions Options => _options;
+    public TextureCompressionOptions Options => _options;
 
     public static ReadOnlySpan<TextureFormat> SupportedFormats => SSupportedFormats;
 
@@ -201,7 +201,7 @@ public sealed class PvrtcTextureCoder : ITextureCoder
                 Format,
                 destination,
                 IsSrgb(Format),
-                _options);
+                _options.CompressionMode);
             return;
         }
 
@@ -218,7 +218,7 @@ public sealed class PvrtcTextureCoder : ITextureCoder
                 colorSpan[i] = EncodeStorageColor(TPixel.ToRgba8UNorm(pixels[i]), encodeSrgb, hasAlpha);
             }
 
-            EncodeFromRgba8Storage(info, source.Width, source.Height, colorSpan, destination, _options);
+            EncodeFromRgba8Storage(info, source.Width, source.Height, colorSpan, destination, _options.CompressionMode);
         }
         finally
         {
@@ -231,7 +231,7 @@ public sealed class PvrtcTextureCoder : ITextureCoder
         int width,
         int height,
         TextureFormat format,
-        PvrtcCoderOptions? options = null)
+        TextureCompressionOptions? options = null)
     {
         var result = new byte[GetEncodedByteCount(format, width, height)];
         EncodeRgba8(source, width, height, format, result, options);
@@ -243,7 +243,7 @@ public sealed class PvrtcTextureCoder : ITextureCoder
         int width,
         int height,
         TextureFormat format,
-        PvrtcCoderOptions? options = null)
+        TextureCompressionOptions? options = null)
     {
         var result = new byte[GetEncodedByteCount(format, width, height)];
         EncodeLinear(source, width, height, format, result, options);
@@ -340,8 +340,15 @@ public sealed class PvrtcTextureCoder : ITextureCoder
         int height,
         TextureFormat format,
         Span<byte> destination,
-        PvrtcCoderOptions? options = null) =>
-        EncodeStorageOrNormalizedRgba8(source, width, height, format, destination, encodeSrgbColors: false, options);
+        TextureCompressionOptions? options = null) =>
+        EncodeStorageOrNormalizedRgba8(
+            source,
+            width,
+            height,
+            format,
+            destination,
+            encodeSrgbColors: false,
+            GetCompressionMode(options));
 
     private static void EncodeStorageOrNormalizedRgba8(
         ReadOnlySpan<Rgba8UNorm> source,
@@ -350,10 +357,9 @@ public sealed class PvrtcTextureCoder : ITextureCoder
         TextureFormat format,
         Span<byte> destination,
         bool encodeSrgbColors,
-        PvrtcCoderOptions? options = null,
+        TextureCompressionLevel compressionMode,
         bool scoreEndpointCandidates = false)
     {
-        options ??= new PvrtcCoderOptions();
         var info = GetFormatInfo(format);
         ValidateDimensions(info, width, height);
         ValidateTexelSpan(width, height, source.Length, nameof(source));
@@ -371,7 +377,7 @@ public sealed class PvrtcTextureCoder : ITextureCoder
                     linearSpan[i] = Rgba8UNorm.ToRgba32Float(source[i]);
                 }
 
-                EncodeHdr(info, width, height, linearSpan, destination, options);
+                EncodeHdr(info, width, height, linearSpan, destination, compressionMode);
                 return;
             }
             finally
@@ -383,7 +389,7 @@ public sealed class PvrtcTextureCoder : ITextureCoder
         var colorCount = checked(width * height);
         if (!encodeSrgbColors)
         {
-            EncodeFromRgba8Storage(info, width, height, source[..colorCount], destination, options, scoreEndpointCandidates);
+            EncodeFromRgba8Storage(info, width, height, source[..colorCount], destination, compressionMode, scoreEndpointCandidates);
             return;
         }
 
@@ -392,7 +398,7 @@ public sealed class PvrtcTextureCoder : ITextureCoder
         {
             var colorSpan = colors.AsSpan(0, colorCount);
             CopyToStorageRgba8(source, colorSpan, encodeSrgb: true, hasAlpha: info.HasAlpha);
-            EncodeFromRgba8Storage(info, width, height, colorSpan, destination, options, scoreEndpointCandidates);
+            EncodeFromRgba8Storage(info, width, height, colorSpan, destination, compressionMode, scoreEndpointCandidates);
         }
         finally
         {
@@ -409,9 +415,9 @@ public sealed class PvrtcTextureCoder : ITextureCoder
         int height,
         TextureFormat format,
         Span<byte> destination,
-        PvrtcCoderOptions? options = null)
+        TextureCompressionOptions? options = null)
     {
-        options ??= new PvrtcCoderOptions();
+        var compressionMode = GetCompressionMode(options);
         var info = GetFormatInfo(format);
         ValidateDimensions(info, width, height);
         ValidateTexelSpan(width, height, source.Length, nameof(source));
@@ -420,7 +426,7 @@ public sealed class PvrtcTextureCoder : ITextureCoder
 
         if (info.IsHdr)
         {
-            EncodeHdr(info, width, height, source, destination, options);
+            EncodeHdr(info, width, height, source, destination, compressionMode);
             return;
         }
 
@@ -442,13 +448,16 @@ public sealed class PvrtcTextureCoder : ITextureCoder
                 colorSpan[i] = LinearToStorageRgba8(info.HasAlpha ? source[i] : WithAlpha(source[i], 1f), srgb);
             }
 
-            EncodeFromRgba8Storage(info, width, height, colorSpan, destination, options);
+            EncodeFromRgba8Storage(info, width, height, colorSpan, destination, compressionMode);
         }
         finally
         {
             ArrayPool<Rgba8UNorm>.Shared.Return(colors);
         }
     }
+
+    private static TextureCompressionLevel GetCompressionMode(TextureCompressionOptions? options) =>
+        options?.CompressionMode ?? TextureCompressionLevel.Normal;
 
     private static void CopyFromLinear<TPixel>(ReadOnlySpan<Rgba32Float> source, BitmapView<TPixel> destination)
         where TPixel : unmanaged, IPixel<TPixel>
@@ -563,12 +572,12 @@ public sealed class PvrtcTextureCoder : ITextureCoder
         int height,
         ReadOnlySpan<Rgba32Float> source,
         Span<byte> destination,
-        PvrtcCoderOptions options)
+        TextureCompressionLevel compressionMode)
     {
         var lumaByteCount = GetPvrtcByteCount(info, width, height, 4);
         var chromaByteCount = GetPvrtcByteCount(info, width, height, info.ChromaBitsPerPixel);
         var texelCount = checked(width * height);
-        var scoreEndpointCandidates = UsesEndpointCandidateScoring(options);
+        var scoreEndpointCandidates = UsesEndpointCandidateScoring(compressionMode);
         var lumaPixels = ArrayPool<Rgba8UNorm>.Shared.Rent(texelCount);
         var chromaPixels = ArrayPool<Rgba8UNorm>.Shared.Rent(texelCount);
         var decodedLumaPixels = ArrayPool<Rgba8UNorm>.Shared.Rent(texelCount);
@@ -591,7 +600,7 @@ public sealed class PvrtcTextureCoder : ITextureCoder
                 lumaFormat,
                 lumaPayload,
                 encodeSrgbColors: false,
-                options,
+                compressionMode,
                 scoreEndpointCandidates);
             DecodeRgba8(lumaFormat, width, height, lumaPayload, decodedLumaSpan);
             BuildHdrChromaPlane(source, decodedLumaSpan, chromaSpan);
@@ -602,7 +611,7 @@ public sealed class PvrtcTextureCoder : ITextureCoder
                 chromaFormat,
                 chromaPayload,
                 encodeSrgbColors: false,
-                options,
+                compressionMode,
                 scoreEndpointCandidates);
         }
         finally
@@ -613,47 +622,47 @@ public sealed class PvrtcTextureCoder : ITextureCoder
         }
     }
 
-    private static bool UsesEndpointCandidateScoring(PvrtcCoderOptions options) =>
-        options.CompressionMode switch
+    private static bool UsesEndpointCandidateScoring(TextureCompressionLevel compressionMode) =>
+        compressionMode switch
         {
             TextureCompressionLevel.Fast or TextureCompressionLevel.Normal => false,
             TextureCompressionLevel.High or TextureCompressionLevel.Exhaustive => true,
             _ => throw new ArgumentOutOfRangeException(
-                nameof(PvrtcCoderOptions.CompressionMode),
-                options.CompressionMode,
+                nameof(compressionMode),
+                compressionMode,
                 "Unsupported PVRTC compression mode.")
         };
 
-    private static bool UsesHardTransitionSearch(PvrtcCoderOptions options) =>
-        options.CompressionMode switch
+    private static bool UsesHardTransitionSearch(TextureCompressionLevel compressionMode) =>
+        compressionMode switch
         {
             TextureCompressionLevel.Fast or TextureCompressionLevel.Normal => false,
             TextureCompressionLevel.High or TextureCompressionLevel.Exhaustive => true,
             _ => throw new ArgumentOutOfRangeException(
-                nameof(PvrtcCoderOptions.CompressionMode),
-                options.CompressionMode,
+                nameof(compressionMode),
+                compressionMode,
                 "Unsupported PVRTC compression mode.")
         };
 
-    private static bool UsesModulationModeSearch(PvrtcCoderOptions options) =>
-        options.CompressionMode switch
+    private static bool UsesModulationModeSearch(TextureCompressionLevel compressionMode) =>
+        compressionMode switch
         {
             TextureCompressionLevel.Fast or TextureCompressionLevel.Normal or TextureCompressionLevel.High => false,
             TextureCompressionLevel.Exhaustive => true,
             _ => throw new ArgumentOutOfRangeException(
-                nameof(PvrtcCoderOptions.CompressionMode),
-                options.CompressionMode,
+                nameof(compressionMode),
+                compressionMode,
                 "Unsupported PVRTC compression mode.")
         };
 
-    private static bool UsesEndpointRefinement(PvrtcCoderOptions options) =>
-        options.CompressionMode switch
+    private static bool UsesEndpointRefinement(TextureCompressionLevel compressionMode) =>
+        compressionMode switch
         {
             TextureCompressionLevel.Fast or TextureCompressionLevel.Normal or TextureCompressionLevel.High => false,
             TextureCompressionLevel.Exhaustive => true,
             _ => throw new ArgumentOutOfRangeException(
-                nameof(PvrtcCoderOptions.CompressionMode),
-                options.CompressionMode,
+                nameof(compressionMode),
+                compressionMode,
                 "Unsupported PVRTC compression mode.")
         };
 
@@ -1356,17 +1365,16 @@ public sealed class PvrtcTextureCoder : ITextureCoder
         int height,
         ReadOnlySpan<Rgba8UNorm> image,
         Span<byte> destination,
-        PvrtcCoderOptions? options = null,
+        TextureCompressionLevel compressionMode,
         bool scoreEndpointCandidates = false)
     {
-        options ??= new PvrtcCoderOptions();
         var storageExtent = GetStorageExtent(info, width, height, info.BitsPerPixel);
         var storageTexelCount = checked(storageExtent.Width * storageExtent.Height);
         var wordWidth = GetWordWidth(info.BitsPerPixel);
         var wordCount = GetWordCount(info, storageExtent.Width, storageExtent.Height);
-        var useHardTransitionSearch = UsesHardTransitionSearch(options);
-        var useModulationModeSearch = UsesModulationModeSearch(options);
-        var useEndpointRefinement = UsesEndpointRefinement(options);
+        var useHardTransitionSearch = UsesHardTransitionSearch(compressionMode);
+        var useModulationModeSearch = UsesModulationModeSearch(compressionMode);
+        var useEndpointRefinement = UsesEndpointRefinement(compressionMode);
         var imageA = ArrayPool<Rgba8UNorm>.Shared.Rent(wordCount);
         var imageB = ArrayPool<Rgba8UNorm>.Shared.Rent(wordCount);
         var modulation = ArrayPool<byte>.Shared.Rent(storageTexelCount);

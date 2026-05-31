@@ -71,9 +71,9 @@ public sealed class AstcTextureCoder : IPitchTextureCoder
     private readonly AstcTransfer _transfer;
     private readonly int _blockWidth;
     private readonly int _blockHeight;
-    private readonly AstcCoderOptions _options;
+    private readonly TextureCompressionOptions _options;
 
-    public AstcTextureCoder(TextureFormat format, AstcCoderOptions? options = null)
+    public AstcTextureCoder(TextureFormat format, TextureCompressionOptions? options = null)
     {
         if (!TryGetFormatInfo(format, out var info))
         {
@@ -84,7 +84,7 @@ public sealed class AstcTextureCoder : IPitchTextureCoder
         _transfer = info.Transfer;
         _blockWidth = info.BlockWidth;
         _blockHeight = info.BlockHeight;
-        _options = options ?? new AstcCoderOptions();
+        _options = options ?? new TextureCompressionOptions();
     }
 
     public TextureFormat Format { get; }

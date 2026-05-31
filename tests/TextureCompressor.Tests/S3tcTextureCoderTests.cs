@@ -377,7 +377,7 @@ public sealed class S3tcTextureCoderTests
     }
 
     [Fact]
-    public void EncodeDxt1RgbUsesFastBoundsByDefault()
+    public void EncodeDxt1RgbUsesFastBoundsInFastMode()
     {
         var pixels = Enumerable.Range(0, 16)
             .Select(i => (i & 1) == 0
@@ -385,7 +385,9 @@ public sealed class S3tcTextureCoderTests
                 : new Rgba8UNorm(0, 255, 0, 255))
             .ToArray();
         var source = new ArrayBitmap<Rgba8UNorm>(4, 4, pixels);
-        var coder = new S3tcTextureCoder(TextureFormats.Dxt1Rgb);
+        var coder = new S3tcTextureCoder(
+            TextureFormats.Dxt1Rgb,
+            new TextureCompressionOptions { CompressionMode = TextureCompressionLevel.Fast });
         var rowPitch = coder.GetDefaultPitch(source.Width);
         var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
 
@@ -403,7 +405,7 @@ public sealed class S3tcTextureCoderTests
                 : new Rgba8UNorm(0, 255, 0, 255))
             .ToArray();
         var source = new ArrayBitmap<Rgba8UNorm>(4, 4, pixels);
-        var options = new S3tcCoderOptions { CompressionMode = TextureCompressionLevel.High };
+        var options = new TextureCompressionOptions { CompressionMode = TextureCompressionLevel.High };
         var coder = new S3tcTextureCoder(TextureFormats.Dxt1Rgb, options);
         var rowPitch = coder.GetDefaultPitch(source.Width);
         var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
@@ -431,7 +433,7 @@ public sealed class S3tcTextureCoderTests
             .ToArray();
         var source = new ArrayBitmap<Rgba8UNorm>(4, 4, pixels);
         var decoded = new ArrayBitmap<Rgba8UNorm>(4, 4);
-        var options = new S3tcCoderOptions { CompressionMode = compressionMode };
+        var options = new TextureCompressionOptions { CompressionMode = compressionMode };
         var coder = new S3tcTextureCoder(TextureFormats.Dxt5Rgba, options);
         var rowPitch = coder.GetDefaultPitch(source.Width);
         var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
@@ -675,7 +677,7 @@ public sealed class S3tcTextureCoderTests
         TextureCompressionLevel compressionMode)
     {
         var decoded = new ArrayBitmap<Rgba8UNorm>(source.Width, source.Height);
-        var options = new S3tcCoderOptions { CompressionMode = compressionMode };
+        var options = new TextureCompressionOptions { CompressionMode = compressionMode };
         var coder = new S3tcTextureCoder(TextureFormats.Dxt5A, options);
         var rowPitch = coder.GetDefaultPitch(source.Width);
         var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];

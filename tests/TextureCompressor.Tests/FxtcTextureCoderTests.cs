@@ -219,7 +219,7 @@ public sealed class FxtcTextureCoderTests
         const int width = 19;
         const int height = 11;
         var source = new ArrayBitmap<Rgba8UNorm>(width, height, CreateGradient(width, height, includeAlpha: format == TextureFormats.RgbaFxt1UNorm));
-        var options = new FxtcCoderOptions { CompressionMode = TextureCompressionLevel.High };
+        var options = new TextureCompressionOptions { CompressionMode = TextureCompressionLevel.High };
         var coder = new FxtcTextureCoder(format, options);
         var rowPitch = coder.GetDefaultPitch(width);
         var encoded = new byte[coder.GetEncodedByteCount(width, height, rowPitch)];
@@ -240,7 +240,7 @@ public sealed class FxtcTextureCoderTests
         const int width = 19;
         const int height = 11;
         var source = new ArrayBitmap<Rgba8UNorm>(width, height, CreateGradient(width, height, includeAlpha: format == TextureFormats.RgbaFxt1UNorm));
-        var options = new FxtcCoderOptions { CompressionMode = compressionMode };
+        var options = new TextureCompressionOptions { CompressionMode = compressionMode };
         var coder = new FxtcTextureCoder(format, options);
         var rowPitch = coder.GetDefaultPitch(width);
         var encoded = new byte[coder.GetEncodedByteCount(width, height, rowPitch)];
@@ -261,12 +261,16 @@ public sealed class FxtcTextureCoderTests
         const int width = 8;
         const int height = 4;
         var source = new ArrayBitmap<Rgba8UNorm>(width, height, CreateGradient(width, height, includeAlpha: false));
-        var fastDecoded = EncodeDecode(source, new FxtcTextureCoder(TextureFormats.RgbFxt1UNorm));
+        var fastDecoded = EncodeDecode(
+            source,
+            new FxtcTextureCoder(
+                TextureFormats.RgbFxt1UNorm,
+                new TextureCompressionOptions { CompressionMode = TextureCompressionLevel.Fast }));
         var highDecoded = EncodeDecode(
             source,
             new FxtcTextureCoder(
                 TextureFormats.RgbFxt1UNorm,
-                new FxtcCoderOptions { CompressionMode = TextureCompressionLevel.High }));
+                new TextureCompressionOptions { CompressionMode = TextureCompressionLevel.High }));
 
         Assert.True(
             RgbSquaredError(source, highDecoded) < RgbSquaredError(source, fastDecoded),
@@ -283,12 +287,12 @@ public sealed class FxtcTextureCoderTests
             source,
             new FxtcTextureCoder(
                 TextureFormats.RgbFxt1UNorm,
-                new FxtcCoderOptions { CompressionMode = TextureCompressionLevel.High }));
+                new TextureCompressionOptions { CompressionMode = TextureCompressionLevel.High }));
         var exhaustiveDecoded = EncodeDecode(
             source,
             new FxtcTextureCoder(
                 TextureFormats.RgbFxt1UNorm,
-                new FxtcCoderOptions { CompressionMode = TextureCompressionLevel.Exhaustive }));
+                new TextureCompressionOptions { CompressionMode = TextureCompressionLevel.Exhaustive }));
 
         Assert.True(
             RgbSquaredError(source, exhaustiveDecoded) <= RgbSquaredError(source, highDecoded),
