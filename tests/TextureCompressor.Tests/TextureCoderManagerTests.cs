@@ -9,6 +9,45 @@ namespace TextureCompressor.Tests;
 public sealed class TextureCoderManagerTests
 {
     [Fact]
+    public void RegisterFormatsUsesFactoryForEachFormat()
+    {
+        var manager = new TextureCoderManager();
+
+        var registration = manager.Register(
+            [TextureFormats.Rgba8UNorm, TextureFormats.Bc1Rgba],
+            format => new TestTextureCoder(format));
+
+        Assert.IsType<TestTextureCoder>(manager.GetCoder(TextureFormats.Rgba8UNorm));
+        Assert.IsType<TestTextureCoder>(manager.GetCoder(TextureFormats.Bc1Rgba));
+
+        registration.Dispose();
+
+        Assert.IsType<SequentialUncompressedTextureCoder>(manager.GetCoder(TextureFormats.Rgba8UNorm));
+        Assert.IsType<S3tcTextureCoder>(manager.GetCoder(TextureFormats.Bc1Rgba));
+    }
+
+    [Fact]
+    public void RegisterFormatsRollsBackWhenFactoryThrows()
+    {
+        var manager = new TextureCoderManager();
+
+        Assert.Throws<InvalidOperationException>(() =>
+            manager.Register(
+                [TextureFormats.Rgba8UNorm, TextureFormats.Bc1Rgba],
+                format =>
+                {
+                    if (format == TextureFormats.Bc1Rgba)
+                    {
+                        throw new InvalidOperationException();
+                    }
+
+                    return new TestTextureCoder(format);
+                }));
+
+        Assert.IsType<SequentialUncompressedTextureCoder>(manager.GetCoder(TextureFormats.Rgba8UNorm));
+    }
+
+    [Fact]
     public void GlobalManagerFindsSequentialUncompressedCoder()
     {
         var coder = TextureCoderManager.Global.GetCoder(TextureFormats.Rgba8UNorm);
@@ -2301,6 +2340,25 @@ public sealed class TextureCoderManagerTests
     private static void AssertClose(float expected, float actual, float tolerance)
     {
         Assert.InRange(MathF.Abs(expected - actual), 0f, tolerance);
+    }
+
+    private sealed class TestTextureCoder(TextureFormat format) : ITextureCoder
+    {
+        public TextureFormat Format { get; } = format;
+
+        public void Decode<TPixel>(ReadOnlySpan<byte> source, BitmapView<TPixel> destination)
+            where TPixel : unmanaged, IPixel<TPixel>
+        {
+            throw new NotSupportedException();
+        }
+
+        public void Encode<TPixel>(BitmapView<TPixel> source, Span<byte> destination)
+            where TPixel : unmanaged, IPixel<TPixel>
+        {
+            throw new NotSupportedException();
+        }
+
+        public int GetEncodedByteCount(int width, int height) => 0;
     }
 
     public static TheoryData<TextureFormat> PackedUNormFormats() => new()

@@ -28,6 +28,32 @@ public sealed class TextureCoderManager
         return new Registration(this, entry);
     }
 
+    public IDisposable Register(IEnumerable<TextureFormat> formats, Func<TextureFormat, ITextureCoder> coderFactory)
+    {
+        ArgumentNullException.ThrowIfNull(formats);
+        ArgumentNullException.ThrowIfNull(coderFactory);
+
+        var registrations = new List<IDisposable>();
+        try
+        {
+            foreach (var format in formats)
+            {
+                registrations.Add(Register(format, coderFactory(format)));
+            }
+        }
+        catch
+        {
+            foreach (var registration in registrations)
+            {
+                registration.Dispose();
+            }
+
+            throw;
+        }
+
+        return new CompositeRegistration(registrations);
+    }
+
     public bool TryGetCoder(TextureFormat format, [NotNullWhen(true)] out ITextureCoder? coder)
     {
         lock (_sync)
@@ -256,6 +282,25 @@ public sealed class TextureCoderManager
         {
             var manager = Interlocked.Exchange(ref _manager, null);
             manager?.Unregister(entry);
+        }
+    }
+
+    private sealed class CompositeRegistration(IReadOnlyList<IDisposable> registrations) : IDisposable
+    {
+        private IReadOnlyList<IDisposable>? _registrations = registrations ?? throw new ArgumentNullException(nameof(registrations));
+
+        public void Dispose()
+        {
+            var registrations = Interlocked.Exchange(ref _registrations, null);
+            if (registrations is null)
+            {
+                return;
+            }
+
+            for (var i = registrations.Count - 1; i >= 0; i--)
+            {
+                registrations[i].Dispose();
+            }
         }
     }
 }
