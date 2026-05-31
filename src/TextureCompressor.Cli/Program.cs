@@ -370,6 +370,10 @@ internal static class Cli
             Arity = ArgumentArity.OneOrMore,
             AllowMultipleArgumentsPerToken = true
         };
+        var manifestOption = new Option<FileInfo?>("--manifest")
+        {
+            Description = "Extract manifest.json to rebuild a full texture topology."
+        };
         var formatOption = CreateFormatOption();
         var containerOption = new Option<TextureContainer?>("--container", "-c")
         {
@@ -413,6 +417,7 @@ internal static class Cli
         command.Options.Add(layersOption);
         command.Options.Add(cubeOption);
         command.Options.Add(mipsOption);
+        command.Options.Add(manifestOption);
         command.Options.Add(formatOption);
         command.Options.Add(containerOption);
         command.Options.Add(pngColorSpaceOption);
@@ -438,9 +443,14 @@ internal static class Cli
                 modeCount++;
             }
 
+            if (result.GetResult(manifestOption) is { Implicit: false })
+            {
+                modeCount++;
+            }
+
             if (modeCount != 1)
             {
-                result.AddError("Specify exactly one of --layers, --cube, or --mips.");
+                result.AddError("Specify exactly one of --layers, --cube, --mips, or --manifest.");
             }
         });
         command.SetAction(parseResult => RunCommand(() =>
@@ -452,7 +462,6 @@ internal static class Cli
                 throw new NotSupportedException("Assemble output must be DDS, KTX, or PVR.");
             }
 
-            var format = TextureFormatCatalog.Get(parseResult.GetValue(formatOption) ?? nameof(TextureFormats.Rgba8UNorm));
             var ktxVersion = IsOptionExplicit(parseResult, ktxVersionOption)
                 ? parseResult.GetValue(ktxVersionOption)
                 : GetDefaultKtxVersion(outputPath);
@@ -461,14 +470,21 @@ internal static class Cli
                 parseResult.GetValue(jpgColorSpaceOption),
                 parseResult.GetValue(gifColorSpaceOption));
             var quality = parseResult.GetValue(qualityOption);
+            var manifestFile = parseResult.GetValue(manifestOption);
+            var manifest = manifestFile is null
+                ? null
+                : ReadExtractManifest(RequireFile(manifestFile, "--manifest").FullName);
+            var format = ResolveAssembleFormat(parseResult, formatOption, manifest);
 
             using var compressionRegistration = CreateTextureCompressionRegistration(format, quality);
-            var texture = CreateAssembledTexture(
-                format,
-                colorSpaces,
-                parseResult.GetValue(layersOption) ?? [],
-                parseResult.GetValue(cubeOption) ?? [],
-                parseResult.GetValue(mipsOption) ?? []);
+            var texture = manifest is null
+                ? CreateAssembledTexture(
+                    format,
+                    colorSpaces,
+                    parseResult.GetValue(layersOption) ?? [],
+                    parseResult.GetValue(cubeOption) ?? [],
+                    parseResult.GetValue(mipsOption) ?? [])
+                : CreateManifestTexture(format, colorSpaces, manifestFile!.FullName, manifest);
             WriteStructuredTexture(texture, outputPath, outputKind, format, ktxVersion, quality: null);
             Console.WriteLine($"wrote {outputPath}");
             return 0;
@@ -1126,6 +1142,175 @@ internal static class Cli
     private static TexturePayload FromTexture(PvrTexture texture) =>
         new(texture.Format, texture.Subresources, texture.MipLevelCount, texture.ArrayLayerCount, texture.FaceCount);
 
+    private static TextureFormat ResolveAssembleFormat(
+        ParseResult parseResult,
+        Option<string> formatOption,
+        ExtractManifest? manifest)
+    {
+        if (IsOptionExplicit(parseResult, formatOption) || manifest is null)
+        {
+            return TextureFormatCatalog.Get(parseResult.GetValue(formatOption) ?? nameof(TextureFormats.Rgba8UNorm));
+        }
+
+        var formatName = GetManifestFormatName(manifest);
+        return TextureFormatCatalog.TryGet(formatName, out var format)
+            ? format
+            : throw new NotSupportedException($"Manifest source format '{manifest.SourceFormat}' is not recognized. Pass --format to choose an output format.");
+    }
+
+    private static string GetManifestFormatName(ExtractManifest manifest)
+    {
+        if (!string.IsNullOrWhiteSpace(manifest.SourceFormatName))
+        {
+            return manifest.SourceFormatName;
+        }
+
+        var sourceFormat = manifest.SourceFormat?.Trim() ?? string.Empty;
+        if (sourceFormat.Length == 0)
+        {
+            throw new InvalidDataException("Manifest sourceFormat must not be empty. Pass --format to choose an output format.");
+        }
+
+        var separatorIndex = sourceFormat.IndexOf(' ', StringComparison.Ordinal);
+        return separatorIndex < 0
+            ? sourceFormat
+            : sourceFormat[..separatorIndex];
+    }
+
+    private static ExtractManifest ReadExtractManifest(string path)
+    {
+        var manifest = JsonSerializer.Deserialize<ExtractManifest>(
+            File.ReadAllText(path),
+            CreateManifestJsonOptions(writeIndented: false));
+        return manifest ?? throw new InvalidDataException($"Manifest '{path}' is empty.");
+    }
+
+    private static TexturePayload CreateManifestTexture(
+        TextureFormat format,
+        ImageColorSpaces colorSpaces,
+        string manifestPath,
+        ExtractManifest manifest)
+    {
+        ValidateManifestTopology(manifest);
+
+        var manifestDirectory = Path.GetDirectoryName(Path.GetFullPath(manifestPath))
+            ?? throw new InvalidOperationException("Manifest path has no parent directory.");
+        var subresources = new TextureSubresource[checked(manifest.MipLevels * manifest.ArrayLayers * manifest.Faces)];
+        foreach (var image in manifest.Images)
+        {
+            ValidateManifestImage(manifest, image);
+            var imagePath = ResolveManifestImagePath(manifestDirectory, image.File);
+            var bitmap = DecodeAssembleImage(new FileInfo(imagePath), colorSpaces);
+            var expectedWidth = TextureMipLevel.GetDimension(manifest.Width, image.Mip);
+            var expectedHeight = TextureMipLevel.GetDimension(manifest.Height, image.Mip);
+            if (bitmap.Width != expectedWidth || bitmap.Height != expectedHeight)
+            {
+                throw new InvalidDataException(
+                    $"Manifest image '{image.File}' is {bitmap.Width}x{bitmap.Height}, but {expectedWidth}x{expectedHeight} was expected for mip {image.Mip}.");
+            }
+
+            var subresource = EncodeSubresource(format, bitmap, image.Mip, image.Layer, image.FaceIndex);
+            var index = GetSubresourceIndex(image.Mip, image.Layer, image.FaceIndex, manifest.MipLevels, manifest.Faces);
+            if (subresources[index] is not null)
+            {
+                throw new InvalidDataException(
+                    $"Manifest contains duplicate subresource mip={image.Mip} layer={image.Layer} face={FormatFace(image.FaceIndex, manifest.Faces)}.");
+            }
+
+            subresources[index] = subresource;
+        }
+
+        for (var layer = 0; layer < manifest.ArrayLayers; layer++)
+        {
+            for (var face = 0; face < manifest.Faces; face++)
+            {
+                for (var mip = 0; mip < manifest.MipLevels; mip++)
+                {
+                    var index = GetSubresourceIndex(mip, layer, face, manifest.MipLevels, manifest.Faces);
+                    if (subresources[index] is null)
+                    {
+                        throw new InvalidDataException(
+                            $"Manifest is missing subresource mip={mip} layer={layer} face={FormatFace(face, manifest.Faces)}.");
+                    }
+                }
+            }
+        }
+
+        return new TexturePayload(format, subresources, manifest.MipLevels, manifest.ArrayLayers, manifest.Faces);
+    }
+
+    private static void ValidateManifestTopology(ExtractManifest manifest)
+    {
+        if (manifest.Width <= 0 || manifest.Height <= 0)
+        {
+            throw new InvalidDataException("Manifest width and height must be greater than zero.");
+        }
+
+        if (manifest.MipLevels <= 0)
+        {
+            throw new InvalidDataException("Manifest mipLevels must be greater than zero.");
+        }
+
+        if (manifest.ArrayLayers <= 0)
+        {
+            throw new InvalidDataException("Manifest arrayLayers must be greater than zero.");
+        }
+
+        if (manifest.Faces is not (1 or 6))
+        {
+            throw new InvalidDataException("Manifest faces must be 1 or 6.");
+        }
+
+        if (manifest.Faces == 6 && manifest.Width != manifest.Height)
+        {
+            throw new InvalidDataException("Cube-map manifests must have square base dimensions.");
+        }
+
+        if (manifest.Images is null || manifest.Images.Count == 0)
+        {
+            throw new InvalidDataException("Manifest must contain at least one image.");
+        }
+    }
+
+    private static void ValidateManifestImage(ExtractManifest manifest, ExtractManifestImage image)
+    {
+        if (image.Mip < 0 || image.Mip >= manifest.MipLevels)
+        {
+            throw new InvalidDataException($"Manifest image mip {image.Mip} is outside mipLevels {manifest.MipLevels}.");
+        }
+
+        if (image.Layer < 0 || image.Layer >= manifest.ArrayLayers)
+        {
+            throw new InvalidDataException($"Manifest image layer {image.Layer} is outside arrayLayers {manifest.ArrayLayers}.");
+        }
+
+        if (image.FaceIndex < 0 || image.FaceIndex >= manifest.Faces)
+        {
+            throw new InvalidDataException($"Manifest image faceIndex {image.FaceIndex} is outside faces {manifest.Faces}.");
+        }
+
+        if (string.IsNullOrWhiteSpace(image.File))
+        {
+            throw new InvalidDataException("Manifest image file must not be empty.");
+        }
+
+        var expectedWidth = TextureMipLevel.GetDimension(manifest.Width, image.Mip);
+        var expectedHeight = TextureMipLevel.GetDimension(manifest.Height, image.Mip);
+        if (image.Width != expectedWidth || image.Height != expectedHeight)
+        {
+            throw new InvalidDataException(
+                $"Manifest image '{image.File}' declares {image.Width}x{image.Height}, but {expectedWidth}x{expectedHeight} was expected for mip {image.Mip}.");
+        }
+    }
+
+    private static string ResolveManifestImagePath(string manifestDirectory, string imageFile) =>
+        Path.IsPathRooted(imageFile)
+            ? imageFile
+            : Path.GetFullPath(Path.Combine(manifestDirectory, imageFile));
+
+    private static int GetSubresourceIndex(int mipLevel, int arrayLayer, int faceIndex, int mipLevelCount, int faceCount) =>
+        checked((((arrayLayer * faceCount) + faceIndex) * mipLevelCount) + mipLevel);
+
     private static IReadOnlyList<ExtractManifestImage> ExtractSubresources(
         TexturePayload texture,
         IReadOnlyList<TextureSubresource> subresources,
@@ -1276,16 +1461,23 @@ internal static class Cli
             texture.MipLevelCount,
             texture.ArrayLayerCount,
             texture.FaceCount,
-            images);
+            images)
+        {
+            SourceFormatName = TextureFormatCatalog.GetFieldName(texture.Format)
+        };
         var json = JsonSerializer.Serialize(
             manifest,
-            new JsonSerializerOptions
-            {
-                PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-                WriteIndented = true
-            });
+            CreateManifestJsonOptions(writeIndented: true));
         File.WriteAllText(manifestPath, json + Environment.NewLine);
     }
+
+    private static JsonSerializerOptions CreateManifestJsonOptions(bool writeIndented) =>
+        new()
+        {
+            PropertyNameCaseInsensitive = true,
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+            WriteIndented = writeIndented
+        };
 
     private static TexturePayload CreateAssembledTexture(
         TextureFormat format,
@@ -2104,7 +2296,10 @@ internal sealed record ExtractManifest(
     int MipLevels,
     int ArrayLayers,
     int Faces,
-    IReadOnlyList<ExtractManifestImage> Images);
+    IReadOnlyList<ExtractManifestImage> Images)
+{
+    public string? SourceFormatName { get; init; }
+}
 
 internal sealed record ExtractManifestImage(
     int Mip,

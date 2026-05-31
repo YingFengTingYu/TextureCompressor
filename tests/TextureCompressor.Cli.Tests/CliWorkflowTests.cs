@@ -17,6 +17,9 @@ public sealed class CliWorkflowTests
         var pvr = workspace.GetPath("generated.pvr");
         var convertedMip = workspace.GetPath("converted-mip2.png");
         var extractedDirectory = workspace.GetPath("extracted");
+        var fullExtractedDirectory = workspace.GetPath("full-extracted");
+        var rebuiltPvr = workspace.GetPath("rebuilt.pvr");
+        var rebuiltMip = workspace.GetPath("rebuilt-mip2.png");
 
         await RunCliAsync(workspace, "convert", source, pvr, "--format", "Rgba8UNorm", "--mipmaps", "Generate");
         var info = await RunCliAsync(workspace, "info", pvr, "--subresources");
@@ -31,8 +34,17 @@ public sealed class CliWorkflowTests
         AssertPngSize(Path.Combine(extractedDirectory, "mip1_layer0_face0.png"), 256, 256);
         using var manifest = JsonDocument.Parse(File.ReadAllText(Path.Combine(extractedDirectory, "manifest.json")));
         Assert.Equal("PVR", manifest.RootElement.GetProperty("sourceContainer").GetString());
+        Assert.Equal("Rgba8UNorm", manifest.RootElement.GetProperty("sourceFormatName").GetString());
         Assert.Equal(1, manifest.RootElement.GetProperty("images").GetArrayLength());
         Assert.Equal(1, manifest.RootElement.GetProperty("images")[0].GetProperty("mip").GetInt32());
+
+        await RunCliAsync(workspace, "extract", pvr, fullExtractedDirectory, "--manifest");
+        await RunCliAsync(workspace, "assemble", rebuiltPvr, "--manifest", Path.Combine(fullExtractedDirectory, "manifest.json"));
+        var rebuiltInfo = await RunCliAsync(workspace, "info", rebuiltPvr, "--subresources");
+        Assert.Contains("Container: PVR", rebuiltInfo.StandardOutput, StringComparison.Ordinal);
+        Assert.Contains("mip=2 layer=0 face=0 size=128x128", rebuiltInfo.StandardOutput, StringComparison.Ordinal);
+        await RunCliAsync(workspace, "convert", rebuiltPvr, rebuiltMip, "--mip", "2");
+        AssertPngSize(rebuiltMip, 128, 128);
     }
 
     [Fact]
@@ -44,6 +56,9 @@ public sealed class CliWorkflowTests
         var layer2 = GetNormalizedFixturePath("natural-scene-512.png");
         var ktx = workspace.GetPath("array.ktx2");
         var extractedDirectory = workspace.GetPath("extracted");
+        var fullExtractedDirectory = workspace.GetPath("full-extracted");
+        var rebuiltKtx = workspace.GetPath("rebuilt.ktx2");
+        var rebuiltExtractedDirectory = workspace.GetPath("rebuilt-extracted");
 
         await RunCliAsync(workspace, "assemble", ktx, "--layers", layer0, layer1, layer2, "--ktx-version", "2");
         var info = await RunCliAsync(workspace, "info", ktx, "--subresources");
@@ -60,6 +75,14 @@ public sealed class CliWorkflowTests
         Assert.Equal("KTX", manifest.RootElement.GetProperty("sourceContainer").GetString());
         Assert.Equal(3, manifest.RootElement.GetProperty("arrayLayers").GetInt32());
         Assert.Equal(1, manifest.RootElement.GetProperty("images")[0].GetProperty("layer").GetInt32());
+
+        await RunCliAsync(workspace, "extract", ktx, fullExtractedDirectory, "--manifest");
+        await RunCliAsync(workspace, "assemble", rebuiltKtx, "--manifest", Path.Combine(fullExtractedDirectory, "manifest.json"), "--ktx-version", "2");
+        var rebuiltInfo = await RunCliAsync(workspace, "info", rebuiltKtx, "--subresources");
+        Assert.Contains("Array layers: 3", rebuiltInfo.StandardOutput, StringComparison.Ordinal);
+        Assert.Contains("mip=0 layer=2 face=0 size=512x512", rebuiltInfo.StandardOutput, StringComparison.Ordinal);
+        await RunCliAsync(workspace, "extract", rebuiltKtx, rebuiltExtractedDirectory, "--layer", "2");
+        AssertPngPixelsEqual(layer2, Path.Combine(rebuiltExtractedDirectory, "mip0_layer2_face0.png"));
     }
 
     [Fact]
@@ -77,6 +100,9 @@ public sealed class CliWorkflowTests
         };
         var dds = workspace.GetPath("cube.dds");
         var extractedDirectory = workspace.GetPath("extracted");
+        var fullExtractedDirectory = workspace.GetPath("full-extracted");
+        var rebuiltDds = workspace.GetPath("rebuilt.dds");
+        var rebuiltExtractedDirectory = workspace.GetPath("rebuilt-extracted");
 
         await RunCliAsync(workspace, new[] { "assemble", dds, "--cube" }.Concat(faceFiles).ToArray());
         var info = await RunCliAsync(workspace, "info", dds, "--subresources");
@@ -103,6 +129,14 @@ public sealed class CliWorkflowTests
         Assert.Equal(6, manifest.RootElement.GetProperty("faces").GetInt32());
         Assert.Equal("PositiveZ", manifest.RootElement.GetProperty("images")[0].GetProperty("face").GetString());
         Assert.Equal(4, manifest.RootElement.GetProperty("images")[0].GetProperty("faceIndex").GetInt32());
+
+        await RunCliAsync(workspace, "extract", dds, fullExtractedDirectory, "--manifest");
+        await RunCliAsync(workspace, "assemble", rebuiltDds, "--manifest", Path.Combine(fullExtractedDirectory, "manifest.json"));
+        var rebuiltInfo = await RunCliAsync(workspace, "info", rebuiltDds, "--subresources");
+        Assert.Contains("Faces: 6", rebuiltInfo.StandardOutput, StringComparison.Ordinal);
+        Assert.Contains("mip=0 layer=0 face=PositiveZ size=8x8", rebuiltInfo.StandardOutput, StringComparison.Ordinal);
+        await RunCliAsync(workspace, "extract", rebuiltDds, rebuiltExtractedDirectory, "--face", "PositiveZ");
+        AssertPngPixelsEqual(faceFiles[4], Path.Combine(rebuiltExtractedDirectory, "mip0_layer0_facePositiveZ.png"));
     }
 
     private static async Task<CliResult> RunCliAsync(CliWorkspace workspace, params string[] arguments)
