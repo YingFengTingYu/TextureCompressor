@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <PackageId>TextureCompressor.FileFormats.Hdr</PackageId>
+    <Description>Radiance HDR file format encoder and decoder for TextureCompressor bitmaps.</Description>
+    <PackageTags>texture-compression;hdr;radiance;rgbe;image;bitmap</PackageTags>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\TextureCompressor.Bitmap\TextureCompressor.Bitmap.csproj" />
+    <ProjectReference Include="..\TextureCompressor\TextureCompressor.csproj" />
+  </ItemGroup>
+
+</Project>

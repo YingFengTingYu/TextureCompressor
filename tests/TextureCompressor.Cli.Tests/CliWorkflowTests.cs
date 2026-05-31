@@ -66,6 +66,21 @@ public sealed class CliWorkflowTests
     }
 
     [Fact]
+    public async Task ConvertPngToHdrAndReadInfo()
+    {
+        using var workspace = new CliWorkspace();
+        var source = WriteSolidPng(workspace, "source.png", new Rgba8UNorm(128, 64, 32, 255));
+        var hdr = workspace.GetPath("output.hdr");
+
+        await RunCliAsync(workspace, "convert", source, hdr);
+        var info = await RunCliAsync(workspace, "info", hdr);
+
+        Assert.True(File.Exists(hdr));
+        Assert.Contains("Container: HDR", info.StandardOutput, StringComparison.Ordinal);
+        Assert.Contains("Decoded format: Rgba32Float", info.StandardOutput, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task ConvertAndExtractCanSelectGeneratedPvrMips()
     {
         using var workspace = new CliWorkspace();

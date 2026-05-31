@@ -2,7 +2,7 @@
 
 [中文文档](README.zh-CN.md)
 
-TextureCompressor is a .NET texture codec library for converting bitmap data to common GPU texture formats and for reading or writing DDS, KTX, PVR, PNG, and ASTC containers.
+TextureCompressor is a .NET texture codec library for converting bitmap data to common GPU texture formats and for reading or writing DDS, KTX, PVR, PNG, HDR, and ASTC containers.
 
 > The public API is still early and may change before the first stable release.
 
@@ -12,7 +12,7 @@ TextureCompressor is a .NET texture codec library for converting bitmap data to 
 - Texture metadata: `TextureFormats` definitions for uncompressed, packed, paletted, planar YUV, and block-compressed formats.
 - Built-in texture coders: representative coverage for S3TC/DXT, RGTC/LATC, BPTC, ETC/EAC, ASTC, ATC, PVRTC, FXT1, RGBM/RGBD, YUV, depth/stencil, and XR-style formats.
 - The core `TextureCompressor` package and built-in coders are fully managed and do not require external native libraries or texture-compression tools.
-- File-format packages: PNG, JPEG, GIF, DDS, KTX, PVR, and ASTC read/write helpers.
+- File-format packages: PNG, JPEG, GIF, HDR, DDS, KTX, PVR, and ASTC read/write helpers.
 - Unified file-format registration and non-CLI conversion APIs for converting between image and texture containers from library code.
 - Quality analysis: whole-image and per-channel MSE, RMSE, and PSNR.
 - Development CLI: format search, container metadata inspection, conversion, and quality metric output.
@@ -36,6 +36,7 @@ README only lists the major supported families. See [docs/texture-format-support
 - `src/TextureCompressor.FileFormats.Png`: PNG decoder and encoder.
 - `src/TextureCompressor.FileFormats.Jpeg`: baseline JPEG decoder and encoder.
 - `src/TextureCompressor.FileFormats.Gif`: static GIF decoder and encoder.
+- `src/TextureCompressor.FileFormats.Hdr`: Radiance RGBE `.hdr` decoder and encoder.
 - `src/TextureCompressor.FileFormats.Dds`: DDS/DX10 and legacy DDS container I/O.
 - `src/TextureCompressor.FileFormats.Ktx`: KTX v1/v2 container I/O, including KTX2 Zstandard supercompression.
 - `src/TextureCompressor.FileFormats.Pvr`: PVR v1/v2/v3 container I/O.
@@ -58,6 +59,7 @@ dotnet add YourApp.csproj reference src/TextureCompressor/TextureCompressor.cspr
 dotnet add YourApp.csproj reference src/TextureCompressor.FileFormats.Png/TextureCompressor.FileFormats.Png.csproj
 dotnet add YourApp.csproj reference src/TextureCompressor.FileFormats.Jpeg/TextureCompressor.FileFormats.Jpeg.csproj
 dotnet add YourApp.csproj reference src/TextureCompressor.FileFormats.Gif/TextureCompressor.FileFormats.Gif.csproj
+dotnet add YourApp.csproj reference src/TextureCompressor.FileFormats.Hdr/TextureCompressor.FileFormats.Hdr.csproj
 ```
 
 Reference the container packages you need:
@@ -166,7 +168,7 @@ converter.Convert(
     });
 ```
 
-Pass format-specific options through `ReadOptions` and `WriteOptions`. Option types implement `IFileFormatOptions`, including `PngEncodingOptions`, `JpegEncodingOptions`, `DdsEncodingOptions`, `KtxEncodingOptions`, `PvrEncodingOptions`, `AstcReadOptions`, and `AstcEncodingOptions`. For non-file workflows, `TextureConverter` also exposes `EncodeTexture(...)`, `DecodeTexture(...)`, and `TranscodeTexture(...)`.
+Pass format-specific options through `ReadOptions` and `WriteOptions`. Option types implement `IFileFormatOptions`, including `PngEncodingOptions`, `JpegEncodingOptions`, `HdrEncodingOptions`, `DdsEncodingOptions`, `KtxEncodingOptions`, `PvrEncodingOptions`, `AstcReadOptions`, and `AstcEncodingOptions`. For non-file workflows, `TextureConverter` also exposes `EncodeTexture(...)`, `DecodeTexture(...)`, and `TranscodeTexture(...)`.
 
 ## Use Built-In High-Quality Encoding Modes
 
@@ -283,6 +285,19 @@ using TextureCompressor.FileFormats.Gif;
 
 var icon = GifCodec.DecodeRgba8("icon.gif");
 GifCodec.Encode(icon, "icon-copy.gif");
+```
+
+## Read And Write HDR
+
+The HDR codec supports Radiance RGBE `.hdr` files. Decode defaults to `Rgba32Float` so values above 1.0 are preserved:
+
+```csharp
+using TextureCompressor.Colors;
+using TextureCompressor.FileFormats.Hdr;
+
+var hdr = HdrCodec.Decode("lighting.hdr");
+var ldrPreview = HdrCodec.Decode<Rgba8UNorm>("lighting.hdr");
+HdrCodec.Encode(hdr, "lighting-copy.hdr");
 ```
 
 ## Query Texture Formats
@@ -497,11 +512,11 @@ Common commands:
 - `formats [query]`: list or search texture formats accepted by `--format`; add `--compressed` or `--uncompressed` to filter, or `--json` for structured output.
 - `info <input>` / `inspect <input>`: print container metadata such as size, texture format, mip levels, payload size, and container-specific header fields; add `--subresources` to list mip/layer/face payloads, or `--json` for structured metadata output.
 - `convert <input> <output>`: convert between image and texture containers. The output container is inferred from the extension unless `--container` is passed explicitly. DDS/KTX/PVR to DDS/KTX/PVR conversions preserve mip levels, array layers, and cube faces by default; omit `--format` to keep the source texture format, or pass `--format` to re-encode every subresource. Texture inputs can select a single subresource with `--mip`, `--layer`, and `--face`; add `--metrics --json` for structured quality metrics after writing.
-- `assemble <output>`: build a DDS/KTX/PVR texture from PNG/JPEG/GIF images. Use exactly one of `--layers`, `--cube`, `--mips`, or `--manifest`; `--cube` expects PositiveX, NegativeX, PositiveY, NegativeY, PositiveZ, NegativeZ order, and `--manifest` rebuilds a complete extracted topology from `manifest.json`.
-- `extract <input> <output-directory>`: extract DDS/KTX/PVR subresources to PNG/JPEG/GIF images. Add `--mip`, `--layer`, or `--face` to filter, `--container` to choose the image type, `--pattern` to control file names, and `--manifest` to write JSON metadata.
+- `assemble <output>`: build a DDS/KTX/PVR texture from PNG/JPEG/GIF/HDR images. Use exactly one of `--layers`, `--cube`, `--mips`, or `--manifest`; `--cube` expects PositiveX, NegativeX, PositiveY, NegativeY, PositiveZ, NegativeZ order, and `--manifest` rebuilds a complete extracted topology from `manifest.json`.
+- `extract <input> <output-directory>`: extract DDS/KTX/PVR subresources to PNG/JPEG/GIF/HDR images. Add `--mip`, `--layer`, or `--face` to filter, `--container` to choose the image type, `--pattern` to control file names, and `--manifest` to write JSON metadata.
 - `quality <expected> <actual>`: decode two image/texture files and print MSE, RMSE, and PSNR; add `--ignore-alpha` to ignore alpha or `--json` for structured output. Use `--mip`/`--layer`/`--face` for both inputs, or `--expected-*` and `--actual-*` options to select each input independently.
 
-Image containers support PNG, JPEG, and GIF. `convert`, `assemble`, and `extract` provide `--png-color-space`, `--jpg-color-space`, and `--gif-color-space` conversions between Linear and Srgb. JPEG output quality is controlled with `--jpeg-quality`; S3TC, FXT1, ETC/EAC, ASTC, ATC, RGTC/LATC, BPTC, and PVRTC built-in texture encoding quality can be selected with `--quality`. DDS, KTX, and PVR outputs can generate full mip-map chains with `--mipmaps Generate` during single-image conversion.
+Image containers support PNG, JPEG, GIF, and HDR. `convert`, `assemble`, and `extract` provide `--png-color-space`, `--jpg-color-space`, and `--gif-color-space` conversions between Linear and Srgb for LDR image formats. JPEG output quality is controlled with `--jpeg-quality`; S3TC, FXT1, ETC/EAC, ASTC, ATC, RGTC/LATC, BPTC, and PVRTC built-in texture encoding quality can be selected with `--quality`. DDS, KTX, and PVR outputs can generate full mip-map chains with `--mipmaps Generate` during single-image conversion.
 
 ## Common Workflows
 
@@ -547,6 +562,7 @@ DdsCodec.Write(texture, "texture.dds");
 - PNG supports common static PNG files. Animated PNG is not supported.
 - JPEG supports baseline JPEG. Progressive JPEG is not supported.
 - GIF reads the first image frame. Animation frame sequences are not emitted as animation.
+- HDR supports Radiance RGBE images without alpha.
 
 ## Build And Test
 

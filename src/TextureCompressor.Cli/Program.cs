@@ -10,6 +10,7 @@ using TextureCompressor.Codecs;
 using TextureCompressor.FileFormats.Astc;
 using TextureCompressor.FileFormats.Dds;
 using TextureCompressor.FileFormats.Gif;
+using TextureCompressor.FileFormats.Hdr;
 using TextureCompressor.FileFormats.Jpeg;
 using TextureCompressor.FileFormats.Ktx;
 using TextureCompressor.FileFormats.Png;
@@ -532,7 +533,7 @@ internal static class Cli
         };
         var containerOption = new Option<TextureContainer>("--container", "-c")
         {
-            Description = "Output image container. Supported values are Png, Jpeg, and Gif.",
+            Description = "Output image container. Supported values are Png, Jpeg, Gif, and Hdr.",
             DefaultValueFactory = _ => TextureContainer.Png
         };
         containerOption.Validators.Add(result =>
@@ -540,7 +541,7 @@ internal static class Cli
             var container = result.GetValueOrDefault<TextureContainer>();
             if (!IsImageContainer(container))
             {
-                result.AddError("--container for extract must be Png, Jpeg, or Gif.");
+                result.AddError("--container for extract must be Png, Jpeg, Gif, or Hdr.");
             }
         });
         var patternOption = new Option<string>("--pattern")
@@ -782,6 +783,9 @@ internal static class Cli
             case TextureContainer.Gif:
                 PrintImageInfo(container, GifCodec.Decode(path), fileBytes);
                 break;
+            case TextureContainer.Hdr:
+                PrintImageInfo(container, HdrCodec.Decode(path), fileBytes, nameof(TextureFormats.Rgba32Float));
+                break;
             case TextureContainer.Dds:
                 PrintDdsInfo(DdsCodec.Read(path), fileBytes, printSubresources);
                 break;
@@ -809,6 +813,7 @@ internal static class Cli
             TextureContainer.Png => BuildImageInfoDocument(container, PngCodec.Decode(path), fileBytes),
             TextureContainer.Jpeg => BuildImageInfoDocument(container, JpegCodec.Decode(path), fileBytes),
             TextureContainer.Gif => BuildImageInfoDocument(container, GifCodec.Decode(path), fileBytes),
+            TextureContainer.Hdr => BuildImageInfoDocument(container, HdrCodec.Decode(path), fileBytes, nameof(TextureFormats.Rgba32Float)),
             TextureContainer.Dds => BuildDdsInfoDocument(DdsCodec.Read(path), fileBytes, includeSubresources),
             TextureContainer.Ktx => BuildKtxInfoDocument(KtxCodec.Read(path), ReadKtxInfo(path), fileBytes, includeSubresources),
             TextureContainer.Pvr => BuildPvrInfoDocument(PvrCodec.Read(path), ReadPvrInfo(path), fileBytes, includeSubresources),
@@ -817,10 +822,15 @@ internal static class Cli
         };
     }
 
-    private static InfoDocument BuildImageInfoDocument(TextureContainer container, IBitmap<Rgba8UNorm> bitmap, long fileBytes) =>
+    private static InfoDocument BuildImageInfoDocument<TPixel>(
+        TextureContainer container,
+        IBitmap<TPixel> bitmap,
+        long fileBytes,
+        string decodedFormat = nameof(TextureFormats.Rgba8UNorm))
+        where TPixel : unmanaged, IPixel<TPixel> =>
         new(FormatContainer(container), bitmap.Width, bitmap.Height, fileBytes)
         {
-            DecodedFormat = nameof(TextureFormats.Rgba8UNorm)
+            DecodedFormat = decodedFormat
         };
 
     private static InfoDocument BuildDdsInfoDocument(DdsTexture texture, long fileBytes, bool includeSubresources) =>
@@ -967,11 +977,16 @@ internal static class Cli
         return items;
     }
 
-    private static void PrintImageInfo(TextureContainer container, IBitmap<Rgba8UNorm> bitmap, long fileBytes)
+    private static void PrintImageInfo<TPixel>(
+        TextureContainer container,
+        IBitmap<TPixel> bitmap,
+        long fileBytes,
+        string decodedFormat = nameof(TextureFormats.Rgba8UNorm))
+        where TPixel : unmanaged, IPixel<TPixel>
     {
         PrintInfoLine("Container", FormatContainer(container));
         PrintInfoLine("Size", FormatSize(bitmap.Width, bitmap.Height));
-        PrintInfoLine("Decoded format", nameof(TextureFormats.Rgba8UNorm));
+        PrintInfoLine("Decoded format", decodedFormat);
         PrintInfoLine("File bytes", FormatInvariant(fileBytes));
     }
 
@@ -1283,6 +1298,7 @@ internal static class Cli
             TextureContainer.Png => "PNG",
             TextureContainer.Jpeg => "JPEG",
             TextureContainer.Gif => "GIF",
+            TextureContainer.Hdr => "HDR",
             TextureContainer.Dds => "DDS",
             TextureContainer.Ktx => "KTX",
             TextureContainer.Pvr => "PVR",
@@ -1327,7 +1343,7 @@ internal static class Cli
         container is TextureContainer.Dds or TextureContainer.Ktx or TextureContainer.Pvr;
 
     private static bool IsImageContainer(TextureContainer container) =>
-        container is TextureContainer.Png or TextureContainer.Jpeg or TextureContainer.Gif;
+        container is TextureContainer.Png or TextureContainer.Jpeg or TextureContainer.Gif or TextureContainer.Hdr;
 
     private static string GetImageExtension(TextureContainer container) =>
         container switch
@@ -1335,6 +1351,7 @@ internal static class Cli
             TextureContainer.Png => ".png",
             TextureContainer.Jpeg => ".jpg",
             TextureContainer.Gif => ".gif",
+            TextureContainer.Hdr => ".hdr",
             _ => throw new NotSupportedException($"'{FormatContainer(container)}' is not an image container.")
         };
 
@@ -1799,9 +1816,9 @@ internal static class Cli
     {
         var path = file.FullName;
         var container = GetContainer(path);
-        if (container is not (TextureContainer.Png or TextureContainer.Jpeg or TextureContainer.Gif))
+        if (!IsImageContainer(container))
         {
-            throw new NotSupportedException("Assemble inputs must be PNG, JPEG, or GIF images.");
+            throw new NotSupportedException("Assemble inputs must be PNG, JPEG, GIF, or HDR images.");
         }
 
         return Decode(path, colorSpaces);
@@ -1914,6 +1931,7 @@ internal static class Cli
             TextureContainer.Png => DecodeImage(PngCodec.Decode(path), selection),
             TextureContainer.Jpeg => DecodeImage(JpegCodec.Decode(path), selection),
             TextureContainer.Gif => DecodeImage(GifCodec.Decode(path), selection),
+            TextureContainer.Hdr => DecodeImage(HdrCodec.DecodeRgba8(path), selection),
             TextureContainer.Dds => DecodeTexture(DdsCodec.Read(path), selection),
             TextureContainer.Ktx => DecodeTexture(KtxCodec.Read(path), selection),
             TextureContainer.Pvr => DecodeTexture(PvrCodec.Read(path), selection),
@@ -2055,6 +2073,10 @@ internal static class Cli
             case TextureContainer.Gif:
                 EnsureNoMipmaps(mipmaps, container);
                 GifCodec.Encode(ApplyOutputImageColorSpace(bitmap, container, imageColorSpace), path);
+                break;
+            case TextureContainer.Hdr:
+                EnsureNoMipmaps(mipmaps, container);
+                HdrCodec.Encode(bitmap, path);
                 break;
             case TextureContainer.Dds:
                 if (mipmaps == MipmapMode.Generate)
@@ -2234,6 +2256,7 @@ internal static class Cli
             ".png" => TextureContainer.Png,
             ".jpg" or ".jpeg" => TextureContainer.Jpeg,
             ".gif" => TextureContainer.Gif,
+            ".hdr" => TextureContainer.Hdr,
             ".dds" => TextureContainer.Dds,
             ".ktx" or ".ktx2" => TextureContainer.Ktx,
             ".pvr" => TextureContainer.Pvr,
@@ -2539,6 +2562,7 @@ internal enum TextureContainer
     Png,
     Jpeg,
     Gif,
+    Hdr,
     Dds,
     Ktx,
     Pvr,

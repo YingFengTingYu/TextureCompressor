@@ -18,6 +18,7 @@
     <ProjectReference Include="..\TextureCompressor.FileFormats.Astc\TextureCompressor.FileFormats.Astc.csproj" />
     <ProjectReference Include="..\TextureCompressor.FileFormats.Dds\TextureCompressor.FileFormats.Dds.csproj" />
     <ProjectReference Include="..\TextureCompressor.FileFormats.Gif\TextureCompressor.FileFormats.Gif.csproj" />
+    <ProjectReference Include="..\TextureCompressor.FileFormats.Hdr\TextureCompressor.FileFormats.Hdr.csproj" />
     <ProjectReference Include="..\TextureCompressor.FileFormats.Jpeg\TextureCompressor.FileFormats.Jpeg.csproj" />
     <ProjectReference Include="..\TextureCompressor.FileFormats.Ktx\TextureCompressor.FileFormats.Ktx.csproj" />
     <ProjectReference Include="..\TextureCompressor.FileFormats.Png\TextureCompressor.FileFormats.Png.csproj" />
