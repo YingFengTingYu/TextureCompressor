@@ -93,6 +93,23 @@ public sealed class TextureCoderManager
             ? coder
             : throw new NotSupportedException($"No texture coder is registered for texture format '{format.Name}'.");
 
+    public bool TryGetCoder3D(TextureFormat format, [NotNullWhen(true)] out ITextureCoder3D? coder)
+    {
+        if (TryGetCoder(format, out var textureCoder) && textureCoder is ITextureCoder3D textureCoder3D)
+        {
+            coder = textureCoder3D;
+            return true;
+        }
+
+        coder = null;
+        return false;
+    }
+
+    public ITextureCoder3D GetCoder3D(TextureFormat format) =>
+        TryGetCoder3D(format, out var coder)
+            ? coder
+            : throw new NotSupportedException($"No 3D texture coder is registered for texture format '{format.Name}'.");
+
     private void Unregister(CoderEntry entry)
     {
         lock (_sync)
