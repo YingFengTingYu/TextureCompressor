@@ -26,8 +26,7 @@ README 只列主要支持的大类。完整支持列表见 [docs/texture-format-
 
 ## 项目结构
 
-- `src/TextureCompressor.Bitmap`：像素结构、位图和 view 抽象。
-- `src/TextureCompressor`：纹理格式定义、核心 coder、`TextureCoderManager`、文件格式注册接口和 `TextureConverter`。
+- `src/TextureCompressor`：像素结构、位图和 view 抽象、纹理格式定义、核心 coder、`TextureCoderManager`、文件格式注册接口和 `TextureConverter`。
 - `src/TextureCompressor.SourceGenerators`：生成 `TextureFormatCatalog`，便于枚举和按名称查找格式。
 - `src/TextureCompressor.Analysis`：位图质量指标计算。
 - `src/TextureCompressor.Cli`：开发用命令行工具。
@@ -52,7 +51,6 @@ README 只列主要支持的大类。完整支持列表见 [docs/texture-format-
 当前仓库以源码项目为主，可以在同一个 solution 中用项目引用接入：
 
 ```bash
-dotnet add YourApp.csproj reference src/TextureCompressor.Bitmap/TextureCompressor.Bitmap.csproj
 dotnet add YourApp.csproj reference src/TextureCompressor/TextureCompressor.csproj
 dotnet add YourApp.csproj reference src/TextureCompressor.FileFormats.Png/TextureCompressor.FileFormats.Png.csproj
 dotnet add YourApp.csproj reference src/TextureCompressor.FileFormats.Jpeg/TextureCompressor.FileFormats.Jpeg.csproj

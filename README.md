@@ -28,8 +28,7 @@ README only lists the major supported families. See [docs/texture-format-support
 
 ## Project Layout
 
-- `src/TextureCompressor.Bitmap`: pixel structs plus bitmap and view abstractions.
-- `src/TextureCompressor`: texture format definitions, core coders, `TextureCoderManager`, file-format registration interfaces, and `TextureConverter`.
+- `src/TextureCompressor`: pixel structs, bitmap and view abstractions, texture format definitions, core coders, `TextureCoderManager`, file-format registration interfaces, and `TextureConverter`.
 - `src/TextureCompressor.SourceGenerators`: generates `TextureFormatCatalog` for format enumeration and name lookup.
 - `src/TextureCompressor.Analysis`: bitmap quality metrics.
 - `src/TextureCompressor.Cli`: development command-line tool.
@@ -54,7 +53,6 @@ README only lists the major supported families. See [docs/texture-format-support
 The repository currently ships as source projects. Add project references from your app or library:
 
 ```bash
-dotnet add YourApp.csproj reference src/TextureCompressor.Bitmap/TextureCompressor.Bitmap.csproj
 dotnet add YourApp.csproj reference src/TextureCompressor/TextureCompressor.csproj
 dotnet add YourApp.csproj reference src/TextureCompressor.FileFormats.Png/TextureCompressor.FileFormats.Png.csproj
 dotnet add YourApp.csproj reference src/TextureCompressor.FileFormats.Jpeg/TextureCompressor.FileFormats.Jpeg.csproj

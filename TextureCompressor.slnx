@@ -16,7 +16,6 @@
     <Project Path="src/TextureCompressor.Cli/TextureCompressor.Cli.csproj" />
     <Project Path="src/TextureCompressor.Analysis/TextureCompressor.Analysis.csproj" />
     <Project Path="src/TextureCompressor.SourceGenerators/TextureCompressor.SourceGenerators.csproj" />
-    <Project Path="src/TextureCompressor.Bitmap/TextureCompressor.Bitmap.csproj" />
     <Project Path="src/TextureCompressor/TextureCompressor.csproj" />
   </Folder>
   <Folder Name="/tests/">

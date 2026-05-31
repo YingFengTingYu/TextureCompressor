@@ -14,7 +14,6 @@
 
   <ItemGroup>
     <ProjectReference Include="..\TextureCompressor.Analysis\TextureCompressor.Analysis.csproj" />
-    <ProjectReference Include="..\TextureCompressor.Bitmap\TextureCompressor.Bitmap.csproj" />
     <ProjectReference Include="..\TextureCompressor.FileFormats.Astc\TextureCompressor.FileFormats.Astc.csproj" />
     <ProjectReference Include="..\TextureCompressor.FileFormats.Dds\TextureCompressor.FileFormats.Dds.csproj" />
     <ProjectReference Include="..\TextureCompressor.FileFormats.Gif\TextureCompressor.FileFormats.Gif.csproj" />
