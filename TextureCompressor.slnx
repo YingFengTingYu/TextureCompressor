@@ -31,6 +31,7 @@
     <Project Path="tests/TextureCompressor.Codecs.BasisUniversal.Tests/TextureCompressor.Codecs.BasisUniversal.Tests.csproj" />
     <Project Path="tests/TextureCompressor.Codecs.DirectXTex.Tests/TextureCompressor.Codecs.DirectXTex.Tests.csproj" />
     <Project Path="tests/TextureCompressor.Codecs.PVRTexLib.Tests/TextureCompressor.Codecs.PVRTexLib.Tests.csproj" />
+    <Project Path="tests/TextureCompressor.Cli.Tests/TextureCompressor.Cli.Tests.csproj" />
     <Project Path="tests/TextureCompressor.Tests/TextureCompressor.Tests.csproj" />
   </Folder>
 </Solution>
