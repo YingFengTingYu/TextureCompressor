@@ -90,6 +90,7 @@ The core library includes the texture coders below. They can be accessed through
 - Basis Universal
     - ETC1S raw payload (BasisLZ)
         - `RgbaBasisEtc1sUNorm`
+        - `RgbaBasisEtc1sSrgb`
     - UASTC LDR 4x4
         - `RgbaBasisUastcLdr4x4UNorm`
         - `RgbaBasisUastcLdr4x4Srgb`

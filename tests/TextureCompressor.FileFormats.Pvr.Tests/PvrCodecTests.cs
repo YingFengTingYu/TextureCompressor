@@ -381,6 +381,94 @@ public sealed class PvrCodecTests
     }
 
     [Fact]
+    public void ReadSrgbBasisUEtc1sDecodesToLinearRgba8()
+    {
+        var source = new ArrayBitmap<Rgba8UNorm>(
+            4,
+            4,
+            Enumerable.Repeat(new Rgba8UNorm(64, 128, 192, 255), 16).ToArray());
+        var basis = BasisEtc1sTextureCoder.Encode(source.AsView(), srgb: true);
+
+        var pvr = CreateBasisUEtc1sPvr(width: 4, height: 4, basis, colourSpace: 1);
+        var texture = PvrCodec.Read(pvr);
+        var decoded = PvrCodec.Decode(pvr);
+
+        AssertHeader(pvr, expectedPixelFormat: (uint)PvrPixelFormat.BasisUEtc1s, colourSpace: 1, channelType: 0, width: 4, height: 4);
+        Assert.Equal(TextureFormats.Rgba8UNorm, texture.Texture.Format);
+        Assert.All(decoded.Pixels, pixel =>
+        {
+            Assert.InRange(pixel.Red, 56, 72);
+            Assert.InRange(pixel.Green, 120, 136);
+            Assert.InRange(pixel.Blue, 180, 200);
+        });
+    }
+
+    [Fact]
+    public void EncodeBasisUEtc1sWritesReadablePvr()
+    {
+        var source = new ArrayBitmap<Rgba8UNorm>(
+            4,
+            4,
+            Enumerable.Repeat(new Rgba8UNorm(12, 34, 56, 78), 16).ToArray());
+
+        var pvr = PvrCodec.Encode(source, new PvrEncodingOptions
+        {
+            TextureFormat = TextureFormats.RgbaBasisEtc1sUNorm
+        });
+        var texture = PvrCodec.Read(pvr);
+        var decoded = PvrCodec.Decode(pvr);
+
+        AssertHeader(
+            pvr,
+            expectedPixelFormat: (uint)PvrPixelFormat.BasisUEtc1s,
+            colourSpace: 0,
+            channelType: 0,
+            width: 4,
+            height: 4);
+        Assert.Equal(TextureFormats.Rgba8UNorm, texture.Texture.Format);
+        Assert.All(decoded.Pixels, pixel =>
+        {
+            Assert.InRange(pixel.Red, 4, 20);
+            Assert.InRange(pixel.Green, 26, 42);
+            Assert.InRange(pixel.Blue, 48, 64);
+            Assert.InRange(pixel.Alpha, 70, 86);
+        });
+    }
+
+    [Fact]
+    public void EncodeSrgbBasisUEtc1sWritesReadablePvr()
+    {
+        var source = new ArrayBitmap<Rgba8UNorm>(
+            4,
+            4,
+            Enumerable.Repeat(new Rgba8UNorm(64, 128, 192, 220), 16).ToArray());
+
+        var pvr = PvrCodec.Encode(source, new PvrEncodingOptions
+        {
+            PvrPixelFormat = PvrPixelFormat.BasisUEtc1s,
+            IsSrgb = true
+        });
+        var texture = PvrCodec.Read(pvr);
+        var decoded = PvrCodec.Decode(pvr);
+
+        AssertHeader(
+            pvr,
+            expectedPixelFormat: (uint)PvrPixelFormat.BasisUEtc1s,
+            colourSpace: 1,
+            channelType: 0,
+            width: 4,
+            height: 4);
+        Assert.Equal(TextureFormats.Rgba8UNorm, texture.Texture.Format);
+        Assert.All(decoded.Pixels, pixel =>
+        {
+            Assert.InRange(pixel.Red, 56, 72);
+            Assert.InRange(pixel.Green, 120, 136);
+            Assert.InRange(pixel.Blue, 180, 200);
+            Assert.InRange(pixel.Alpha, 212, 228);
+        });
+    }
+
+    [Fact]
     public void EncodeBasisUUastcWritesReadablePvr()
     {
         var source = new ArrayBitmap<Rgba8UNorm>(
@@ -856,7 +944,7 @@ public sealed class PvrCodecTests
         return pvr;
     }
 
-    private static byte[] CreateBasisUEtc1sPvr(int width, int height, BasisEtc1sEncodedPayload basis)
+    private static byte[] CreateBasisUEtc1sPvr(int width, int height, BasisEtc1sEncodedPayload basis, uint colourSpace = 0)
     {
         var payloadLength = checked(basis.RgbSliceData.Length + basis.AlphaSliceData.Length);
         var payload = new byte[payloadLength];
@@ -887,6 +975,7 @@ public sealed class PvrCodecTests
         var pvr = new byte[checked(52 + metadataLength + payload.Length)];
         BinaryPrimitives.WriteUInt32LittleEndian(pvr.AsSpan(0, 4), 0x03525650);
         BinaryPrimitives.WriteUInt64LittleEndian(pvr.AsSpan(8, 8), (uint)PvrPixelFormat.BasisUEtc1s);
+        BinaryPrimitives.WriteUInt32LittleEndian(pvr.AsSpan(16, 4), colourSpace);
         BinaryPrimitives.WriteUInt32LittleEndian(pvr.AsSpan(24, 4), checked((uint)height));
         BinaryPrimitives.WriteUInt32LittleEndian(pvr.AsSpan(28, 4), checked((uint)width));
         BinaryPrimitives.WriteUInt32LittleEndian(pvr.AsSpan(32, 4), 1);

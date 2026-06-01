@@ -15,7 +15,13 @@ public static class BasisEtc1sTextureCoder
 {
     public static TextureFormat Format => TextureFormats.RgbaBasisEtc1sUNorm;
 
+    public static TextureFormat SrgbFormat => TextureFormats.RgbaBasisEtc1sSrgb;
+
     public static void Decode<TPixel>(BasisEtc1sRawPayload source, BitmapView<TPixel> destination)
+        where TPixel : unmanaged, IPixel<TPixel> =>
+        Decode(source, destination, srgb: false);
+
+    public static void Decode<TPixel>(BasisEtc1sRawPayload source, BitmapView<TPixel> destination, bool srgb)
         where TPixel : unmanaged, IPixel<TPixel>
     {
         if (source.IsPFrame)
@@ -33,7 +39,7 @@ public static class BasisEtc1sTextureCoder
             source.SelectorCount,
             source.SelectorData);
         bitstream.DecodeTables(source.TablesData);
-        bitstream.DecodeRgbSlice(source.RgbSliceData, blockCountX, blockCountY, destination);
+        bitstream.DecodeRgbSlice(source.RgbSliceData, blockCountX, blockCountY, destination, srgb);
 
         if (!source.AlphaSliceData.IsEmpty)
         {
@@ -43,7 +49,11 @@ public static class BasisEtc1sTextureCoder
 
     public static BasisEtc1sEncodedPayload Encode<TPixel>(BitmapView<TPixel> source)
         where TPixel : unmanaged, IPixel<TPixel> =>
-        EncodeBasisEtc1s(source);
+        Encode(source, srgb: false);
+
+    public static BasisEtc1sEncodedPayload Encode<TPixel>(BitmapView<TPixel> source, bool srgb)
+        where TPixel : unmanaged, IPixel<TPixel> =>
+        EncodeBasisEtc1s(source, srgb);
 
     private const int BlockWidth = 4;
     private const int BlockHeight = 4;
@@ -62,7 +72,7 @@ public static class BasisEtc1sTextureCoder
         -183, -47, 47, 183
     ];
 
-    private static BasisEtc1sEncodedPayload EncodeBasisEtc1s<TPixel>(BitmapView<TPixel> source)
+    private static BasisEtc1sEncodedPayload EncodeBasisEtc1s<TPixel>(BitmapView<TPixel> source, bool srgb)
         where TPixel : unmanaged, IPixel<TPixel>
     {
         var blockCountX = GetBlockCount(source.Width);
@@ -80,7 +90,7 @@ public static class BasisEtc1sTextureCoder
             for (var blockX = 0; blockX < blockCountX; blockX++)
             {
                 var blockIndex = (blockY * blockCountX) + blockX;
-                LoadBlock(source, blockX, blockY, texels);
+                LoadBlock(source, blockX, blockY, texels, srgb);
 
                 EncodeColorBlock(texels, out endpoints[blockIndex], out selectors[blockIndex]);
                 EncodeAlphaBlock(texels, out endpoints[blockCount + blockIndex], out selectors[blockCount + blockIndex]);
@@ -358,7 +368,7 @@ public static class BasisEtc1sTextureCoder
         return bestSelector;
     }
 
-    private static void LoadBlock<TPixel>(BitmapView<TPixel> source, int blockX, int blockY, Span<Rgba8UNorm> destination)
+    private static void LoadBlock<TPixel>(BitmapView<TPixel> source, int blockX, int blockY, Span<Rgba8UNorm> destination, bool srgb)
         where TPixel : unmanaged, IPixel<TPixel>
     {
         var originX = blockX * BlockWidth;
@@ -371,10 +381,23 @@ public static class BasisEtc1sTextureCoder
             for (var x = 0; x < BlockWidth; x++)
             {
                 var sourceX = Math.Min(originX + x, lastX);
-                destination[(y * BlockWidth) + x] = TPixel.ToRgba8UNorm(source[sourceX, sourceY]);
+                var color = TPixel.ToRgba8UNorm(source[sourceX, sourceY]);
+                destination[(y * BlockWidth) + x] = srgb ? EncodeStorageColor(color) : color;
             }
         }
     }
+
+    private static Rgba8UNorm EncodeStorageColor(Rgba8UNorm color) => new(
+        RgbaColorConversions.LinearUNorm8ToSrgb8(color.Red),
+        RgbaColorConversions.LinearUNorm8ToSrgb8(color.Green),
+        RgbaColorConversions.LinearUNorm8ToSrgb8(color.Blue),
+        color.Alpha);
+
+    private static Rgba8UNorm DecodeStorageColor(Rgba8UNorm color) => new(
+        RgbaColorConversions.Srgb8ToLinearUNorm8(color.Red),
+        RgbaColorConversions.Srgb8ToLinearUNorm8(color.Green),
+        RgbaColorConversions.Srgb8ToLinearUNorm8(color.Blue),
+        color.Alpha);
 
     private static int Average(ReadOnlySpan<Rgba8UNorm> texels, Func<Rgba8UNorm, byte> selector)
     {
@@ -622,15 +645,15 @@ public static class BasisEtc1sTextureCoder
             }
         }
 
-        public void DecodeRgbSlice<TPixel>(ReadOnlySpan<byte> imageData, int blockCountX, int blockCountY, BitmapView<TPixel> destination)
+        public void DecodeRgbSlice<TPixel>(ReadOnlySpan<byte> imageData, int blockCountX, int blockCountY, BitmapView<TPixel> destination, bool srgb)
             where TPixel : unmanaged, IPixel<TPixel> =>
-            DecodeSlice(imageData, blockCountX, blockCountY, destination, alphaOnly: false);
+            DecodeSlice(imageData, blockCountX, blockCountY, destination, alphaOnly: false, srgb: srgb);
 
         public void DecodeAlphaSlice<TPixel>(ReadOnlySpan<byte> imageData, int blockCountX, int blockCountY, BitmapView<TPixel> destination)
             where TPixel : unmanaged, IPixel<TPixel> =>
-            DecodeSlice(imageData, blockCountX, blockCountY, destination, alphaOnly: true);
+            DecodeSlice(imageData, blockCountX, blockCountY, destination, alphaOnly: true, srgb: false);
 
-        private void DecodeSlice<TPixel>(ReadOnlySpan<byte> imageData, int blockCountX, int blockCountY, BitmapView<TPixel> destination, bool alphaOnly)
+        private void DecodeSlice<TPixel>(ReadOnlySpan<byte> imageData, int blockCountX, int blockCountY, BitmapView<TPixel> destination, bool alphaOnly, bool srgb)
             where TPixel : unmanaged, IPixel<TPixel>
         {
             ArgumentOutOfRangeException.ThrowIfNegativeOrZero(blockCountX);
@@ -797,7 +820,7 @@ public static class BasisEtc1sTextureCoder
                     else
                     {
                         DecodeRgbBlock(_endpoints[endpointIndex], _selectors[selectorIndex], blockPixels);
-                        CopyColorBlock(blockPixels, destination, blockX, blockY);
+                        CopyColorBlock(blockPixels, destination, blockX, blockY, srgb);
                     }
                 }
             }
@@ -856,7 +879,7 @@ public static class BasisEtc1sTextureCoder
             }
         }
 
-        private static void CopyColorBlock<TPixel>(ReadOnlySpan<Rgba8UNorm> source, BitmapView<TPixel> destination, int blockX, int blockY)
+        private static void CopyColorBlock<TPixel>(ReadOnlySpan<Rgba8UNorm> source, BitmapView<TPixel> destination, int blockX, int blockY, bool srgb)
             where TPixel : unmanaged, IPixel<TPixel>
         {
             var xCount = Math.Min(BlockWidth, destination.Width - (blockX * BlockWidth));
@@ -865,8 +888,9 @@ public static class BasisEtc1sTextureCoder
             {
                 for (var x = 0; x < xCount; x++)
                 {
+                    var color = source[(y * BlockWidth) + x];
                     destination[(blockX * BlockWidth) + x, (blockY * BlockHeight) + y] =
-                        TPixel.FromRgba8UNorm(source[(y * BlockWidth) + x]);
+                        TPixel.FromRgba8UNorm(srgb ? DecodeStorageColor(color) : color);
                 }
             }
         }

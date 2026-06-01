@@ -434,6 +434,7 @@ public sealed class TextureFormatTests
         { TextureFormats.RgbEtc2Srgb, "RGB_ETC2_SRGB" },
         { TextureFormats.RgbA1Etc2Srgb, "RGB_A1_ETC2_SRGB" },
         { TextureFormats.RgbaEtc2EacSrgb, "RGBA_ETC2_EAC_SRGB" },
+        { TextureFormats.RgbaBasisEtc1sSrgb, "RGBA_BASIS_ETC1S_SRGB" },
         { TextureFormats.RgbaAstc4x4Srgb, "RGBA_ASTC_4X4_SRGB" },
         { TextureFormats.RgbaAstc5x4Srgb, "RGBA_ASTC_5X4_SRGB" },
         { TextureFormats.RgbaAstc5x5Srgb, "RGBA_ASTC_5X5_SRGB" },

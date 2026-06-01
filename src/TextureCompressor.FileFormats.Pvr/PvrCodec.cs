@@ -267,6 +267,12 @@ public static class PvrCodec
         ValidateEncodingVersion(version);
         var selection = GetEncodingSelection(options, version);
         var format = selection.TextureFormat;
+        if (IsBasisEtc1sFormat(format))
+        {
+            EncodeBasisUEtc1s(bitmap, stream, options, format);
+            return;
+        }
+
         var coder = TextureCoderManager.Global.GetCoder(format);
         if (options?.GenerateMipmaps == true)
         {
@@ -321,6 +327,11 @@ public static class PvrCodec
         ValidateEncodingVersion(version);
         var selection = GetEncodingSelection(options, version);
         var format = selection.TextureFormat;
+        if (IsBasisEtc1sFormat(format))
+        {
+            throw new NotSupportedException("PVR BasisU ETC1S mip-map chain encoding is not supported yet.");
+        }
+
         var coder = TextureCoderManager.Global.GetCoder(format);
         var encodedSubresources = EncodeMipSubresources(mipLevels, coder);
         Write(new PvrTexture(format, encodedSubresources, faceCount: 1), stream, options);
@@ -687,12 +698,13 @@ public static class PvrCodec
             throw new NotSupportedException("PVR BasisU ETC1S textures must use unsigned byte normalized channel data.");
         }
 
-        var format = header.ColourSpace switch
+        var srgb = header.ColourSpace switch
         {
-            (uint)PvrColourSpace.Linear => TextureFormats.Rgba8UNorm,
-            (uint)PvrColourSpace.Srgb => TextureFormats.Rgba8Srgb,
+            (uint)PvrColourSpace.Linear => false,
+            (uint)PvrColourSpace.Srgb => true,
             _ => throw new NotSupportedException($"Unsupported PVR BasisU ETC1S colour space {header.ColourSpace}.")
         };
+        var format = TextureFormats.Rgba8UNorm;
 
         var mipLevelCount = GetMipLevelCount(header);
         ValidateMipLevelCount(header.Width, header.Height, header.Depth, mipLevelCount);
@@ -722,7 +734,7 @@ public static class PvrCodec
                     var imagePayload = payload.AsSpan(payloadOffset, imagePayloadByteCount);
                     payloadOffset = checked(payloadOffset + imagePayloadByteCount);
 
-                    var bitmap = DecodeBasisLzEtc1sImage(globalData, imagePayload, imageDesc, width, height);
+                    var bitmap = DecodeBasisLzEtc1sImage(globalData, imagePayload, imageDesc, width, height, srgb);
                     subresources.Add(new TextureSubresource(
                         mipLevel,
                         arrayLayer,
@@ -871,7 +883,8 @@ public static class PvrCodec
         ReadOnlySpan<byte> imagePayload,
         PvrBasisLzImageDesc imageDesc,
         int width,
-        int height)
+        int height,
+        bool srgb)
     {
         if (imageDesc.IsPFrame)
         {
@@ -892,8 +905,109 @@ public static class PvrCodec
             globalData.TableData,
             rgbSlice,
             alphaSlice);
-        BasisEtc1sTextureCoder.Decode(rawPayload, bitmap.AsView());
+        BasisEtc1sTextureCoder.Decode(rawPayload, bitmap.AsView(), srgb);
         return bitmap;
+    }
+
+    private static void EncodeBasisUEtc1s<TPixel>(BitmapView<TPixel> bitmap, Stream stream, PvrEncodingOptions? options, TextureFormat format)
+        where TPixel : unmanaged, IPixel<TPixel>
+    {
+        if (GetEncodingVersion(options) != 3)
+        {
+            throw new NotSupportedException("PVR BasisU ETC1S encoding requires PVR v3.");
+        }
+
+        if (options?.GenerateMipmaps == true)
+        {
+            throw new NotSupportedException("PVR BasisU ETC1S mip-map generation is not supported yet.");
+        }
+
+        var srgb = format.ValueKind == TextureValueKind.Srgb;
+        var basis = BasisEtc1sTextureCoder.Encode(bitmap, srgb);
+        var descriptor = GetPvrDescriptor(format, options);
+        var metadata = CreateBasisLzMetadata([basis]);
+        var metadataSize = GetMetadataByteCount(metadata);
+
+        WriteHeader(stream, new PvrHeader(
+            ContainerVersion: 3,
+            descriptor.PixelFormat,
+            Flags: 0,
+            descriptor.ColourSpace,
+            descriptor.ChannelType,
+            bitmap.Height,
+            bitmap.Width,
+            Depth: 1,
+            SurfaceCount: 1,
+            FaceCount: 1,
+            MipMapCount: 1,
+            metadataSize,
+            PayloadByteCount: 0,
+            LegacyPixelType: 0,
+            LegacyHasAlpha: false,
+            LegacyBitCount: 0,
+            LegacyRedMask: 0,
+            LegacyGreenMask: 0,
+            LegacyBlueMask: 0,
+            LegacyAlphaMask: 0));
+        WriteMetadata(stream, metadata);
+        WriteBasisLzImagePayload(stream, basis);
+    }
+
+    private static IReadOnlyList<PvrMetadata> CreateBasisLzMetadata(IReadOnlyList<BasisEtc1sEncodedPayload> images)
+    {
+        if (images.Count == 0)
+        {
+            throw new ArgumentException("PVR BasisU ETC1S metadata must describe at least one image.", nameof(images));
+        }
+
+        var first = images[0];
+        var endpointByteLength = first.EndpointData.Length;
+        var selectorByteLength = first.SelectorData.Length;
+        var tableByteLength = first.TablesData.Length;
+        var dataLength = checked(BasisLzHeaderByteCount + (images.Count * BasisLzImageDescByteCount) + endpointByteLength + selectorByteLength + tableByteLength);
+        var data = new byte[dataLength];
+
+        BinaryPrimitives.WriteUInt16LittleEndian(data.AsSpan(0, 2), checked((ushort)first.EndpointCount));
+        BinaryPrimitives.WriteUInt16LittleEndian(data.AsSpan(2, 2), checked((ushort)first.SelectorCount));
+        BinaryPrimitives.WriteUInt32LittleEndian(data.AsSpan(4, 4), checked((uint)endpointByteLength));
+        BinaryPrimitives.WriteUInt32LittleEndian(data.AsSpan(8, 4), checked((uint)selectorByteLength));
+        BinaryPrimitives.WriteUInt32LittleEndian(data.AsSpan(12, 4), checked((uint)tableByteLength));
+
+        var imageDescOffset = BasisLzHeaderByteCount;
+        for (var i = 0; i < images.Count; i++)
+        {
+            var image = images[i];
+            if (image.EndpointCount != first.EndpointCount
+                || image.SelectorCount != first.SelectorCount
+                || !image.EndpointData.Span.SequenceEqual(first.EndpointData.Span)
+                || !image.SelectorData.Span.SequenceEqual(first.SelectorData.Span)
+                || !image.TablesData.Span.SequenceEqual(first.TablesData.Span))
+            {
+                throw new NotSupportedException("PVR BasisU ETC1S encoding requires all images to share one BasisLZ global codebook.");
+            }
+
+            var imageDesc = data.AsSpan(imageDescOffset + (i * BasisLzImageDescByteCount), BasisLzImageDescByteCount);
+            BinaryPrimitives.WriteUInt32LittleEndian(imageDesc, image.IsPFrame ? BasisLzImageFlagIsPFrame : 0);
+            BinaryPrimitives.WriteUInt32LittleEndian(imageDesc.Slice(4, 4), 0);
+            BinaryPrimitives.WriteUInt32LittleEndian(imageDesc.Slice(8, 4), checked((uint)image.RgbSliceData.Length));
+            BinaryPrimitives.WriteUInt32LittleEndian(imageDesc.Slice(12, 4), checked((uint)image.RgbSliceData.Length));
+            BinaryPrimitives.WriteUInt32LittleEndian(imageDesc.Slice(16, 4), checked((uint)image.AlphaSliceData.Length));
+        }
+
+        var offset = checked(BasisLzHeaderByteCount + (images.Count * BasisLzImageDescByteCount));
+        first.EndpointData.Span.CopyTo(data.AsSpan(offset));
+        offset = checked(offset + endpointByteLength);
+        first.SelectorData.Span.CopyTo(data.AsSpan(offset));
+        offset = checked(offset + selectorByteLength);
+        first.TablesData.Span.CopyTo(data.AsSpan(offset));
+
+        return [new PvrMetadata(Version, MetadataKeySupercompressionGlobalData, data)];
+    }
+
+    private static void WriteBasisLzImagePayload(Stream stream, BasisEtc1sEncodedPayload image)
+    {
+        stream.Write(image.RgbSliceData.Span);
+        stream.Write(image.AlphaSliceData.Span);
     }
 
     private static ReadOnlySpan<byte> SliceBasisLzImagePayload(ReadOnlySpan<byte> imagePayload, uint byteOffset, uint byteLength, string sliceName)
@@ -1223,6 +1337,10 @@ public static class PvrCodec
         throw new NotSupportedException($"PVR v3 pixel format '{pixelFormat}' with {(isSrgb ? "sRGB" : "linear")} colour space is not supported.");
     }
 
+    private static bool IsBasisEtc1sFormat(TextureFormat format) =>
+        format == TextureFormats.RgbaBasisEtc1sUNorm
+        || format == TextureFormats.RgbaBasisEtc1sSrgb;
+
     private static EncodingSelection GetLegacyEncodingSelection(PvrLegacyPixelType pixelType)
     {
         if (SFormatMappings.Value.LegacyPixelTypeToTexture.TryGetValue(pixelType, out var mapping))
@@ -1262,6 +1380,19 @@ public static class PvrCodec
                 return;
             }
 
+            var descriptor = new PvrFormatDescriptor(pixelFormat, (uint)colourSpace, (uint)channelType);
+            textureToPvr.TryAdd(format, descriptor);
+            pvrToTexture.TryAdd(new PvrFormatKey(pixelFormat, (uint)colourSpace, (uint)channelType), format);
+            if (TryGetPvrPixelFormat(pixelFormat, out var pvrPixelFormat))
+            {
+                pvrPixelFormatToTexture.TryAdd(
+                    new PvrPixelFormatOptionKey(pvrPixelFormat, colourSpace == PvrColourSpace.Srgb),
+                    new PvrFormatMapping(format, descriptor));
+            }
+        }
+
+        void AddContainerEncoded(TextureFormat format, ulong pixelFormat, PvrColourSpace colourSpace, PvrChannelType channelType)
+        {
             var descriptor = new PvrFormatDescriptor(pixelFormat, (uint)colourSpace, (uint)channelType);
             textureToPvr.TryAdd(format, descriptor);
             pvrToTexture.TryAdd(new PvrFormatKey(pixelFormat, (uint)colourSpace, (uint)channelType), format);
@@ -1460,6 +1591,8 @@ public static class PvrCodec
         Add(TextureFormats.RgbPvrtcII8BppFloat, (uint)PvrPixelFormat.PvrtcIIHdr8Bpp, PvrColourSpace.Linear, PvrChannelType.SignedFloat);
 
         Add(TextureFormats.RgbEtc1UNorm, (uint)PvrPixelFormat.Etc1, PvrColourSpace.Linear, PvrChannelType.UnsignedByteNorm);
+        AddContainerEncoded(TextureFormats.RgbaBasisEtc1sUNorm, (uint)PvrPixelFormat.BasisUEtc1s, PvrColourSpace.Linear, PvrChannelType.UnsignedByteNorm);
+        AddContainerEncoded(TextureFormats.RgbaBasisEtc1sSrgb, (uint)PvrPixelFormat.BasisUEtc1s, PvrColourSpace.Srgb, PvrChannelType.UnsignedByteNorm);
         Add(TextureFormats.RgbaBasisUastcLdr4x4UNorm, (uint)PvrPixelFormat.BasisUUastc, PvrColourSpace.Linear, PvrChannelType.UnsignedByteNorm);
         Add(TextureFormats.RgbaBasisUastcLdr4x4Srgb, (uint)PvrPixelFormat.BasisUUastc, PvrColourSpace.Srgb, PvrChannelType.UnsignedByteNorm);
         Add(TextureFormats.RgbEtc2UNorm, (uint)PvrPixelFormat.Etc2Rgb, PvrColourSpace.Linear, PvrChannelType.UnsignedByteNorm);

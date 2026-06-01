@@ -90,6 +90,7 @@
 - Basis Universal
     - ETC1S 原始负载（BasisLZ）
         - `RgbaBasisEtc1sUNorm`
+        - `RgbaBasisEtc1sSrgb`
     - UASTC LDR 4x4
         - `RgbaBasisUastcLdr4x4UNorm`
         - `RgbaBasisUastcLdr4x4Srgb`

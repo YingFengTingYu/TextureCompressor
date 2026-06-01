@@ -10,6 +10,7 @@ public sealed class BasisEtc1sTextureCoderTests
     public void FormatIsBasisEtc1s()
     {
         Assert.Equal(TextureFormats.RgbaBasisEtc1sUNorm, BasisEtc1sTextureCoder.Format);
+        Assert.Equal(TextureFormats.RgbaBasisEtc1sSrgb, BasisEtc1sTextureCoder.SrgbFormat);
     }
 
     [Fact]
@@ -143,6 +144,35 @@ public sealed class BasisEtc1sTextureCoderTests
             Assert.InRange(pixel.Green, 56, 72);
             Assert.InRange(pixel.Blue, 212, 228);
             Assert.InRange(pixel.Alpha, 172, 188);
+        });
+    }
+
+    [Fact]
+    public void EncodeAndDecodeSrgbRgbaBasisEtc1sRoundTripsThroughStorageColorSpace()
+    {
+        var source = new ArrayBitmap<Rgba8UNorm>(
+            4,
+            4,
+            Enumerable.Repeat(new Rgba8UNorm(64, 128, 192, 220), 16).ToArray());
+        var decoded = new ArrayBitmap<Rgba8UNorm>(4, 4);
+        var storageDecoded = new ArrayBitmap<Rgba8UNorm>(4, 4);
+
+        var payload = BasisEtc1sTextureCoder.Encode(source.AsView(), srgb: true);
+        BasisEtc1sTextureCoder.Decode(payload.AsRawPayload(), decoded.AsView(), srgb: true);
+        BasisEtc1sTextureCoder.Decode(payload.AsRawPayload(), storageDecoded.AsView());
+
+        Assert.All(decoded.Pixels, pixel =>
+        {
+            Assert.InRange(pixel.Red, 56, 72);
+            Assert.InRange(pixel.Green, 120, 136);
+            Assert.InRange(pixel.Blue, 180, 200);
+            Assert.InRange(pixel.Alpha, 212, 228);
+        });
+        Assert.All(storageDecoded.Pixels, pixel =>
+        {
+            Assert.True(pixel.Red > 64);
+            Assert.True(pixel.Green > 128);
+            Assert.True(pixel.Blue > 192);
         });
     }
 
