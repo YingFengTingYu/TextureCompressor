@@ -1440,6 +1440,9 @@ public static class TextureFormats
     public static readonly TextureFormat Rg11EacSNorm =
         TextureFormat.BlockCompressed("RG11_EAC_SNORM", TextureComponents.Rg, TextureValueKind.SNorm, 11, 11, 0, 0, 4, 4, 128);
 
+    public static readonly TextureFormat RgbaBasisEtc1sUNorm =
+        TextureFormat.BlockCompressed("RGBA_BASIS_ETC1S_UNORM", TextureComponents.Rgba, TextureValueKind.UNorm, 8, 8, 8, 8, 4, 4, 128);
+
     public static readonly TextureFormat Bc4UNorm =
         RgtcLatc1("BC4_UNORM", TextureComponents.R, TextureValueKind.UNorm);
 
