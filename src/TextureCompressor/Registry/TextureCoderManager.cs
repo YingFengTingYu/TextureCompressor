@@ -95,14 +95,22 @@ public sealed class TextureCoderManager
 
     public bool TryGetCoder3D(TextureFormat format, [NotNullWhen(true)] out ITextureCoder3D? coder)
     {
-        if (TryGetCoder(format, out var textureCoder) && textureCoder is ITextureCoder3D textureCoder3D)
+        if (!TryGetCoder(format, out var textureCoder))
+        {
+            coder = null;
+            return false;
+        }
+
+        if (textureCoder is ITextureCoder3D textureCoder3D)
         {
             coder = textureCoder3D;
             return true;
         }
 
-        coder = null;
-        return false;
+        coder = textureCoder is IPitchTextureCoder pitchTextureCoder
+            ? new PitchTextureArrayCoder(pitchTextureCoder)
+            : new TextureArrayCoder(textureCoder);
+        return true;
     }
 
     public ITextureCoder3D GetCoder3D(TextureFormat format) =>
