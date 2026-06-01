@@ -17,11 +17,23 @@ public static class KtxCodec
     private const int IdentifierByteCount = 12;
     private const int LevelIndexEntryByteCount = 24;
     private const int BasicDfdByteCount = 24;
+    private const int UastcDfdByteCount = 44;
+    private const int DfdDescriptorBlockHeaderByteCount = 24;
+    private const int DfdSampleByteCount = 16;
     private const int BasisLzHeaderByteCount = 20;
     private const int BasisLzImageDescByteCount = 20;
     private const uint BasisLzImageFlagIsPFrame = 0x02;
     private const uint LittleEndianMarker = 0x04030201;
     private const uint BigEndianMarker = 0x01020304;
+    private const byte KhrDataFormatModelBlockCompressed = 0xff;
+    private const byte KhrDataFormatModelUastc = 166;
+    private const byte KhrDataFormatChannelUastcRgb = 0;
+    private const byte KhrDataFormatChannelUastcRgba = 3;
+    private const byte KhrDataFormatChannelUastcRrr = 4;
+    private const byte KhrDataFormatChannelUastcRrrg = 5;
+    private const byte KhrDataFormatChannelUastcRg = 6;
+    private const byte KhrDataFormatTransferLinear = 1;
+    private const byte KhrDataFormatTransferSrgb = 2;
 
     private static readonly Lazy<Mappings> SFormatMappings = new(CreateFormatMappings);
 
@@ -44,7 +56,8 @@ public static class KtxCodec
     {
         ArgumentNullException.ThrowIfNull(stream);
 
-        Span<byte> identifier = stackalloc byte[IdentifierByteCount];
+        Byte12Buffer identifierStorage = default;
+        Span<byte> identifier = identifierStorage;
         ReadExactly(stream, identifier);
         if (identifier.SequenceEqual(IdentifierV2))
         {
@@ -512,14 +525,16 @@ public static class KtxCodec
                 checked((ulong)(HeaderV2ByteCount + (LevelIndexEntryByteCount * mipLevelCount))));
         }
 
-        var format = GetTextureFormat(ktxHeader.VkFormat, isSrgb: IsSrgb(ktxHeader.VkFormat));
+        var currentOffset = checked((ulong)(HeaderV2ByteCount + (LevelIndexEntryByteCount * mipLevelCount)));
+        var format = ktxHeader.VkFormat == KtxVkFormat.Undefined
+            ? GetUndefinedVkTextureFormat(ReadDfd(stream, ktxHeader, ref currentOffset), ktxHeader.SupercompressionScheme)
+            : GetTextureFormat(ktxHeader.VkFormat, isSrgb: IsSrgb(ktxHeader.VkFormat));
         var coder = depth == 1 ? TextureCoderManager.Global.GetCoder(format) : null;
         var coder3D = depth == 1 ? null : TextureCoderManager.Global.GetCoder3D(format);
         var arrayLayerCount = GetArrayLayerCount(ktxHeader.LayerCount, "KTX2");
         var faceCount = GetFaceCount(ktxHeader.FaceCount, "KTX2");
         ValidateTextureShape(depth, arrayLayerCount, faceCount, "KTX2");
         var subresources = new TextureSubresource[checked(mipLevelCount * arrayLayerCount * faceCount)];
-        var currentOffset = checked((ulong)(HeaderV2ByteCount + (LevelIndexEntryByteCount * mipLevelCount)));
         var subresourceIndex = 0;
         for (var i = 0; i < mipLevelCount; i++)
         {
@@ -778,6 +793,60 @@ public static class KtxCodec
         return levelPayload.Slice(checked((int)byteOffset), checked((int)byteLength));
     }
 
+    private static KtxDataFormatDescriptor ReadDfd(Stream stream, KtxHeaderV2 header, ref ulong currentOffset)
+    {
+        if (header.DfdByteLength > int.MaxValue)
+        {
+            throw new InvalidDataException("KTX2 data format descriptor is outside the supported range.");
+        }
+
+        SkipToOffset(stream, header.DfdByteOffset, currentOffset);
+        currentOffset = header.DfdByteOffset;
+
+        var dfd = new byte[checked((int)header.DfdByteLength)];
+        ReadExactly(stream, dfd);
+        currentOffset = checked(currentOffset + header.DfdByteLength);
+        return ParseDfd(dfd);
+    }
+
+    private static KtxDataFormatDescriptor ParseDfd(ReadOnlySpan<byte> dfd)
+    {
+        if (dfd.Length < BasicDfdByteCount)
+        {
+            throw new InvalidDataException("KTX2 data format descriptor is truncated.");
+        }
+
+        var totalSize = BinaryPrimitives.ReadUInt32LittleEndian(dfd);
+        if (totalSize != (uint)dfd.Length)
+        {
+            throw new InvalidDataException($"KTX2 data format descriptor size is {totalSize}, but {dfd.Length} bytes were provided.");
+        }
+
+        var descriptorBlockSize = BinaryPrimitives.ReadUInt16LittleEndian(dfd.Slice(10, 2));
+        if (descriptorBlockSize > dfd.Length - 4)
+        {
+            throw new InvalidDataException("KTX2 data format descriptor block points outside the descriptor.");
+        }
+
+        var colorModel = dfd[12];
+        var sampleCount = descriptorBlockSize < DfdDescriptorBlockHeaderByteCount
+            ? 0
+            : (descriptorBlockSize - DfdDescriptorBlockHeaderByteCount) / DfdSampleByteCount;
+        if (sampleCount == 0)
+        {
+            return new KtxDataFormatDescriptor(colorModel, ChannelType: null, BlockWidth: dfd[16] + 1, BlockHeight: dfd[17] + 1);
+        }
+
+        var sampleOffset = 4 + DfdDescriptorBlockHeaderByteCount;
+        if (dfd.Length < sampleOffset + DfdSampleByteCount)
+        {
+            throw new InvalidDataException("KTX2 data format descriptor sample is truncated.");
+        }
+
+        var channelType = dfd[sampleOffset + 3] & 0x0f;
+        return new KtxDataFormatDescriptor(colorModel, channelType, BlockWidth: dfd[16] + 1, BlockHeight: dfd[17] + 1);
+    }
+
     private static byte[] CopyRgba8Pixels(ArrayBitmap<Rgba8UNorm> bitmap)
     {
         var result = new byte[checked(bitmap.PixelSpan.Length * 4)];
@@ -803,8 +872,9 @@ public static class KtxCodec
             levelPayloads[i] = Compress(ConcatenateLevelPayload(texture, i), supercompressionScheme, options);
         }
 
+        var dfdByteCount = GetDfdByteCount(texture.Texture.Format);
         var dfdOffset = checked(HeaderV2ByteCount + (LevelIndexEntryByteCount * texture.Texture.MipLevelCount));
-        var levelOffset = checked(dfdOffset + BasicDfdByteCount);
+        var levelOffset = AlignUp(checked(dfdOffset + dfdByteCount), GetLevelDataAlignment(texture.Texture.Format));
 
         Byte80Buffer headerStorage = default;
         Span<byte> header = headerStorage;
@@ -820,7 +890,7 @@ public static class KtxCodec
         BinaryPrimitives.WriteUInt32LittleEndian(header.Slice(40, 4), checked((uint)texture.Texture.MipLevelCount));
         BinaryPrimitives.WriteUInt32LittleEndian(header.Slice(44, 4), (uint)supercompressionScheme);
         BinaryPrimitives.WriteUInt32LittleEndian(header.Slice(48, 4), checked((uint)dfdOffset));
-        BinaryPrimitives.WriteUInt32LittleEndian(header.Slice(52, 4), BasicDfdByteCount);
+        BinaryPrimitives.WriteUInt32LittleEndian(header.Slice(52, 4), checked((uint)dfdByteCount));
         stream.Write(header);
 
         Byte24Buffer levelStorage = default;
@@ -837,11 +907,35 @@ public static class KtxCodec
             currentOffset = checked(currentOffset + (ulong)payload.Length);
         }
 
-        WriteBasicDfd(stream, texture.Texture.Format);
+        WriteDfd(stream, texture.Texture.Format);
+        WritePadding(stream, checked(levelOffset - (dfdOffset + dfdByteCount)));
         foreach (var payload in levelPayloads)
         {
             stream.Write(payload);
         }
+    }
+
+    private static int AlignUp(int value, int alignment)
+    {
+        var mask = alignment - 1;
+        return checked((value + mask) & ~mask);
+    }
+
+    private static int GetLevelDataAlignment(TextureFormat format) =>
+        Math.Max(8, format.BytesPerBlock);
+
+    private static int GetDfdByteCount(TextureFormat format) =>
+        format == TextureFormats.RgbaBasisUastcLdr4x4UNorm ? UastcDfdByteCount : BasicDfdByteCount;
+
+    private static void WriteDfd(Stream stream, TextureFormat format)
+    {
+        if (format == TextureFormats.RgbaBasisUastcLdr4x4UNorm)
+        {
+            WriteUastcDfd(stream);
+            return;
+        }
+
+        WriteBasicDfd(stream, format);
     }
 
     private static void WriteBasicDfd(Stream stream, TextureFormat format)
@@ -852,12 +946,37 @@ public static class KtxCodec
         BinaryPrimitives.WriteUInt32LittleEndian(buffer, BasicDfdByteCount);
         BinaryPrimitives.WriteUInt16LittleEndian(buffer.Slice(8, 2), 2);
         BinaryPrimitives.WriteUInt16LittleEndian(buffer.Slice(10, 2), BasicDfdByteCount - 4);
-        buffer[12] = format.Kind == TextureFormatKind.BlockCompressed ? (byte)0xff : (byte)1;
+        buffer[12] = format.Kind == TextureFormatKind.BlockCompressed ? KhrDataFormatModelBlockCompressed : (byte)1;
         buffer[13] = 1;
-        buffer[14] = format.ValueKind == TextureValueKind.Srgb ? (byte)2 : (byte)1;
+        buffer[14] = format.ValueKind == TextureValueKind.Srgb ? KhrDataFormatTransferSrgb : KhrDataFormatTransferLinear;
         buffer[16] = checked((byte)(format.BlockWidth - 1));
         buffer[17] = checked((byte)(format.BlockHeight - 1));
         buffer[18] = checked((byte)(format.BlockDepth - 1));
+        stream.Write(buffer);
+    }
+
+    private static void WriteUastcDfd(Stream stream)
+    {
+        Byte44Buffer bufferStorage = default;
+        Span<byte> buffer = bufferStorage;
+        buffer.Clear();
+        BinaryPrimitives.WriteUInt32LittleEndian(buffer, UastcDfdByteCount);
+        BinaryPrimitives.WriteUInt16LittleEndian(buffer.Slice(8, 2), 2);
+        BinaryPrimitives.WriteUInt16LittleEndian(buffer.Slice(10, 2), UastcDfdByteCount - 4);
+        buffer[12] = KhrDataFormatModelUastc;
+        buffer[13] = 1;
+        buffer[14] = KhrDataFormatTransferSrgb;
+        buffer[16] = BasisUastcLdr4x4TextureCoder.BlockWidth - 1;
+        buffer[17] = BasisUastcLdr4x4TextureCoder.BlockHeight - 1;
+        buffer[20] = BasisUastcLdr4x4TextureCoder.BytesPerBlock;
+
+        const int sampleOffset = 4 + DfdDescriptorBlockHeaderByteCount;
+        buffer[sampleOffset + 2] = 127;
+        buffer[sampleOffset + 3] = KhrDataFormatChannelUastcRgba;
+        buffer[sampleOffset + 12] = byte.MaxValue;
+        buffer[sampleOffset + 13] = byte.MaxValue;
+        buffer[sampleOffset + 14] = byte.MaxValue;
+        buffer[sampleOffset + 15] = byte.MaxValue;
         stream.Write(buffer);
     }
 
@@ -962,9 +1081,13 @@ public static class KtxCodec
 
     private static void ValidateHeader(KtxHeaderV2 header)
     {
-        if (header.VkFormat == KtxVkFormat.Undefined && header.SupercompressionScheme != KtxSupercompressionScheme.BasisLz)
+        if (header.VkFormat == KtxVkFormat.Undefined
+            && header.SupercompressionScheme is not (
+                KtxSupercompressionScheme.None
+                or KtxSupercompressionScheme.BasisLz
+                or KtxSupercompressionScheme.Zstandard))
         {
-            throw new NotSupportedException("KTX2 Basis Universal and VK_FORMAT_UNDEFINED files are not supported.");
+            throw new NotSupportedException("KTX2 VK_FORMAT_UNDEFINED files must use BasisLZ, UASTC, or Zstandard-compressed UASTC data.");
         }
 
         if (header.VkFormat != KtxVkFormat.Undefined && header.SupercompressionScheme == KtxSupercompressionScheme.BasisLz)
@@ -1282,8 +1405,40 @@ public static class KtxCodec
         throw new NotSupportedException($"KTX Vulkan format '{vkFormat}' is not supported.");
     }
 
+    private static TextureFormat GetUndefinedVkTextureFormat(KtxDataFormatDescriptor dfd, KtxSupercompressionScheme supercompressionScheme)
+    {
+        if (dfd.ColorModel != KhrDataFormatModelUastc)
+        {
+            throw new NotSupportedException($"KTX2 VK_FORMAT_UNDEFINED data format model {dfd.ColorModel} is not supported.");
+        }
+
+        if (supercompressionScheme is not (KtxSupercompressionScheme.None or KtxSupercompressionScheme.Zstandard))
+        {
+            throw new NotSupportedException("KTX2 UASTC textures must be uncompressed or use Zstandard supercompression.");
+        }
+
+        if (dfd.BlockWidth != BasisUastcLdr4x4TextureCoder.BlockWidth || dfd.BlockHeight != BasisUastcLdr4x4TextureCoder.BlockHeight)
+        {
+            throw new NotSupportedException($"KTX2 UASTC block dimensions {dfd.BlockWidth}x{dfd.BlockHeight} are not supported.");
+        }
+
+        return dfd.ChannelType switch
+        {
+            KhrDataFormatChannelUastcRgb or KhrDataFormatChannelUastcRgba => TextureFormats.RgbaBasisUastcLdr4x4UNorm,
+            KhrDataFormatChannelUastcRrr or KhrDataFormatChannelUastcRrrg or KhrDataFormatChannelUastcRg =>
+                throw new NotSupportedException($"KTX2 swizzled UASTC channel type {dfd.ChannelType} is not supported."),
+            null => throw new InvalidDataException("KTX2 UASTC data format descriptor is missing its channel sample."),
+            _ => throw new NotSupportedException($"KTX2 UASTC channel type {dfd.ChannelType} is not supported.")
+        };
+    }
+
     private static KtxVkFormat GetVkFormat(TextureFormat textureFormat)
     {
+        if (textureFormat == TextureFormats.RgbaBasisUastcLdr4x4UNorm)
+        {
+            return KtxVkFormat.Undefined;
+        }
+
         if (SFormatMappings.Value.TextureToVk.TryGetValue(textureFormat, out var vkFormat))
         {
             return vkFormat;
@@ -1307,7 +1462,9 @@ public static class KtxCodec
     {
         if (options?.VkFormat is { } vkFormat)
         {
-            var selectedFormat = GetTextureFormat(vkFormat, options.IsSrgb);
+            var selectedFormat = vkFormat == KtxVkFormat.Undefined && textureFormat == TextureFormats.RgbaBasisUastcLdr4x4UNorm
+                ? TextureFormats.RgbaBasisUastcLdr4x4UNorm
+                : GetTextureFormat(vkFormat, options.IsSrgb);
             if (selectedFormat != textureFormat)
             {
                 throw new ArgumentException(
@@ -1365,6 +1522,11 @@ public static class KtxCodec
 
     private static void ValidateTextureFormat(TextureFormat format, string parameterName)
     {
+        if (format == TextureFormats.RgbaBasisUastcLdr4x4UNorm)
+        {
+            return;
+        }
+
         var mappings = SFormatMappings.Value;
         if (!mappings.TextureToKtx.ContainsKey(format) && !mappings.TextureToVk.ContainsKey(format))
         {
@@ -1424,7 +1586,8 @@ public static class KtxCodec
 
     private static uint ReadUInt32(Stream stream, bool littleEndian)
     {
-        Span<byte> buffer = stackalloc byte[4];
+        Byte4Buffer bufferStorage = default;
+        Span<byte> buffer = bufferStorage;
         ReadExactly(stream, buffer);
         return ReadUInt32(buffer, littleEndian);
     }
@@ -1434,7 +1597,8 @@ public static class KtxCodec
 
     private static void WriteUInt32(Stream stream, uint value)
     {
-        Span<byte> buffer = stackalloc byte[4];
+        Byte4Buffer bufferStorage = default;
+        Span<byte> buffer = bufferStorage;
         BinaryPrimitives.WriteUInt32LittleEndian(buffer, value);
         stream.Write(buffer);
     }
@@ -1496,7 +1660,14 @@ public static class KtxCodec
 
     private static void WritePadding(Stream stream, int byteCount)
     {
-        Span<byte> padding = stackalloc byte[3];
+        if (byteCount == 0)
+        {
+            return;
+        }
+
+        Byte16Buffer paddingStorage = default;
+        Span<byte> padding = paddingStorage;
+        padding.Clear();
         stream.Write(padding[..byteCount]);
     }
 
@@ -1764,6 +1935,8 @@ public static class KtxCodec
         public bool IsPFrame => (ImageFlags & BasisLzImageFlagIsPFrame) != 0;
     }
 
+    private readonly record struct KtxDataFormatDescriptor(byte ColorModel, int? ChannelType, int BlockWidth, int BlockHeight);
+
     private readonly record struct KtxFormatDescriptor(
         uint GlType,
         uint GlTypeSize,
@@ -1789,8 +1962,32 @@ public static class KtxCodec
         Dictionary<TextureFormat, KtxVkFormat> TextureToVk,
         Dictionary<VkFormatKey, VkFormatMapping> VkFormatToTexture);
 
+    [InlineArray(4)]
+    private struct Byte4Buffer
+    {
+        private byte _element0;
+    }
+
+    [InlineArray(IdentifierByteCount)]
+    private struct Byte12Buffer
+    {
+        private byte _element0;
+    }
+
+    [InlineArray(16)]
+    private struct Byte16Buffer
+    {
+        private byte _element0;
+    }
+
     [InlineArray(LevelIndexEntryByteCount)]
     private struct Byte24Buffer
+    {
+        private byte _element0;
+    }
+
+    [InlineArray(UastcDfdByteCount)]
+    private struct Byte44Buffer
     {
         private byte _element0;
     }

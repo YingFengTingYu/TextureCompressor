@@ -381,6 +381,39 @@ public sealed class PvrCodecTests
     }
 
     [Fact]
+    public void EncodeBasisUUastcWritesReadablePvr()
+    {
+        var source = new ArrayBitmap<Rgba8UNorm>(
+            4,
+            4,
+            Enumerable.Repeat(new Rgba8UNorm(12, 34, 56, 78), 16).ToArray());
+
+        var pvr = PvrCodec.Encode(source, new PvrEncodingOptions
+        {
+            TextureFormat = TextureFormats.RgbaBasisUastcLdr4x4UNorm
+        });
+        var texture = PvrCodec.Read(pvr);
+        var decoded = PvrCodec.Decode(pvr);
+
+        AssertHeader(
+            pvr,
+            expectedPixelFormat: (uint)PvrPixelFormat.BasisUUastc,
+            colourSpace: 1,
+            channelType: 0,
+            width: 4,
+            height: 4);
+        Assert.Equal(52 + BasisUastcLdr4x4TextureCoder.BytesPerBlock, pvr.Length);
+        Assert.Equal(TextureFormats.RgbaBasisUastcLdr4x4UNorm, texture.Texture.Format);
+        Assert.All(decoded.Pixels, pixel =>
+        {
+            Assert.Equal(12, pixel.Red);
+            Assert.Equal(34, pixel.Green);
+            Assert.Equal(56, pixel.Blue);
+            Assert.Equal(78, pixel.Alpha);
+        });
+    }
+
+    [Fact]
     public void ReadKnownImgicPixelFormatThrows()
     {
         var pvr = CreateHeader(pixelFormat: (uint)PvrPixelFormat.ImgicR8G8B8A8_8X8, colourSpace: 0, channelType: 0, width: 4, height: 4);

@@ -284,6 +284,64 @@ public sealed class KtxCodecTests
     }
 
     [Fact]
+    public void EncodeVersion2BasisUastcWritesReadableKtx2()
+    {
+        var source = new ArrayBitmap<Rgba8UNorm>(
+            4,
+            4,
+            Enumerable.Repeat(new Rgba8UNorm(20, 40, 60, 200), 16).ToArray());
+
+        var ktx = KtxCodec.Encode(source, new KtxEncodingOptions
+        {
+            Version = KtxVersion.Version2,
+            TextureFormat = TextureFormats.RgbaBasisUastcLdr4x4UNorm
+        });
+        var texture = KtxCodec.Read(ktx);
+        var decoded = KtxCodec.Decode(ktx);
+
+        AssertHeaderV2(
+            ktx,
+            KtxVkFormat.Undefined,
+            width: 4,
+            height: 4,
+            levelSize: BasisUastcLdr4x4TextureCoder.BytesPerBlock,
+            dfdSize: 44,
+            levelOffset: 160);
+        Assert.Equal(166, ktx[116]);
+        Assert.Equal(3, ktx[135] & 0x0f);
+        Assert.Equal(0u, BinaryPrimitives.ReadUInt32LittleEndian(ktx.AsSpan(56, 4)));
+        Assert.Equal(0u, BinaryPrimitives.ReadUInt32LittleEndian(ktx.AsSpan(60, 4)));
+        Assert.Equal(TextureFormats.RgbaBasisUastcLdr4x4UNorm, texture.Texture.Format);
+        Assert.Equal(KtxVkFormat.Undefined, texture.VkFormat);
+        Assert.All(decoded.Pixels, pixel =>
+        {
+            Assert.Equal(20, pixel.Red);
+            Assert.Equal(40, pixel.Green);
+            Assert.Equal(60, pixel.Blue);
+            Assert.Equal(200, pixel.Alpha);
+        });
+    }
+
+    [Fact]
+    public void ReadVersion2SwizzledBasisUastcIsRejected()
+    {
+        var source = new ArrayBitmap<Rgba8UNorm>(
+            4,
+            4,
+            Enumerable.Repeat(new Rgba8UNorm(20, 40, 60, 200), 16).ToArray());
+        var ktx = KtxCodec.Encode(source, new KtxEncodingOptions
+        {
+            Version = KtxVersion.Version2,
+            TextureFormat = TextureFormats.RgbaBasisUastcLdr4x4UNorm
+        });
+        var dfdOffset = checked((int)BinaryPrimitives.ReadUInt32LittleEndian(ktx.AsSpan(48, 4)));
+        const int sampleChannelTypeOffset = 4 + 24 + 3;
+        ktx[dfdOffset + sampleChannelTypeOffset] = 4;
+
+        Assert.Throws<NotSupportedException>(() => KtxCodec.Read(ktx));
+    }
+
+    [Fact]
     public void WriteVersion2MipMapChainWritesReadableKtx2()
     {
         var texture = new KtxTexture(
@@ -482,7 +540,9 @@ public sealed class KtxCodecTests
         int height,
         ulong levelSize,
         ulong? uncompressedLevelSize = null,
-        KtxSupercompressionScheme supercompressionScheme = KtxSupercompressionScheme.None)
+        KtxSupercompressionScheme supercompressionScheme = KtxSupercompressionScheme.None,
+        uint dfdSize = 24,
+        ulong levelOffset = 128)
     {
         Assert.Equal(new byte[] { 0xab, 0x4b, 0x54, 0x58, 0x20, 0x32, 0x30, 0xbb, 0x0d, 0x0a, 0x1a, 0x0a }, ktx[..12]);
         Assert.Equal((uint)vkFormat, BinaryPrimitives.ReadUInt32LittleEndian(ktx.AsSpan(12, 4)));
@@ -494,12 +554,12 @@ public sealed class KtxCodecTests
         Assert.Equal(1u, BinaryPrimitives.ReadUInt32LittleEndian(ktx.AsSpan(40, 4)));
         Assert.Equal((uint)supercompressionScheme, BinaryPrimitives.ReadUInt32LittleEndian(ktx.AsSpan(44, 4)));
         Assert.Equal(104u, BinaryPrimitives.ReadUInt32LittleEndian(ktx.AsSpan(48, 4)));
-        Assert.Equal(24u, BinaryPrimitives.ReadUInt32LittleEndian(ktx.AsSpan(52, 4)));
-        Assert.Equal(128ul, BinaryPrimitives.ReadUInt64LittleEndian(ktx.AsSpan(80, 8)));
+        Assert.Equal(dfdSize, BinaryPrimitives.ReadUInt32LittleEndian(ktx.AsSpan(52, 4)));
+        Assert.Equal(levelOffset, BinaryPrimitives.ReadUInt64LittleEndian(ktx.AsSpan(80, 8)));
         Assert.Equal(levelSize, BinaryPrimitives.ReadUInt64LittleEndian(ktx.AsSpan(88, 8)));
         Assert.Equal(uncompressedLevelSize ?? levelSize, BinaryPrimitives.ReadUInt64LittleEndian(ktx.AsSpan(96, 8)));
-        Assert.Equal(24u, BinaryPrimitives.ReadUInt32LittleEndian(ktx.AsSpan(104, 4)));
-        Assert.Equal(128 + (int)levelSize, ktx.Length);
+        Assert.Equal(dfdSize, BinaryPrimitives.ReadUInt32LittleEndian(ktx.AsSpan(104, 4)));
+        Assert.Equal((int)(levelOffset + levelSize), ktx.Length);
     }
 
     private static byte[] CreateHeader(KtxGlFormat glInternalFormat, int width, int height, uint mipMapLevels = 1)

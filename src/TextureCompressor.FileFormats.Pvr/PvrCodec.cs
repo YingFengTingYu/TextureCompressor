@@ -1460,6 +1460,8 @@ public static class PvrCodec
         Add(TextureFormats.RgbPvrtcII8BppFloat, (uint)PvrPixelFormat.PvrtcIIHdr8Bpp, PvrColourSpace.Linear, PvrChannelType.SignedFloat);
 
         Add(TextureFormats.RgbEtc1UNorm, (uint)PvrPixelFormat.Etc1, PvrColourSpace.Linear, PvrChannelType.UnsignedByteNorm);
+        Add(TextureFormats.RgbaBasisUastcLdr4x4UNorm, (uint)PvrPixelFormat.BasisUUastc, PvrColourSpace.Srgb, PvrChannelType.UnsignedByteNorm);
+        Add(TextureFormats.RgbaBasisUastcLdr4x4UNorm, (uint)PvrPixelFormat.BasisUUastc, PvrColourSpace.Linear, PvrChannelType.UnsignedByteNorm);
         Add(TextureFormats.RgbEtc2UNorm, (uint)PvrPixelFormat.Etc2Rgb, PvrColourSpace.Linear, PvrChannelType.UnsignedByteNorm);
         Add(TextureFormats.RgbEtc2Srgb, (uint)PvrPixelFormat.Etc2Rgb, PvrColourSpace.Srgb, PvrChannelType.UnsignedByteNorm);
         Add(TextureFormats.RgbA1Etc2UNorm, (uint)PvrPixelFormat.Etc2RgbA1, PvrColourSpace.Linear, PvrChannelType.UnsignedByteNorm);

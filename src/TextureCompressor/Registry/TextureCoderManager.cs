@@ -391,6 +391,12 @@ public sealed class TextureCoderManager
             return true;
         }
 
+        if (BasisUastcLdr4x4TextureCoder.IsSupported(format))
+        {
+            coder = new BasisUastcLdr4x4TextureCoder(format);
+            return true;
+        }
+
         if (EtcTextureCoder.IsSupported(format))
         {
             coder = new EtcTextureCoder(format);
