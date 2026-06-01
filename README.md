@@ -24,6 +24,7 @@ TextureCompressor is a .NET texture codec library for converting bitmap data to 
 README only lists the major supported families. See [docs/texture-format-support.en.md](docs/texture-format-support.en.md) for the full support list.
 
 - Compressed textures: S3TC / DXT / BC1-BC3, RGTC / LATC / ATI, BPTC / BC6H / BC7, ETC / EAC, ASTC 2D, ATC, PVRTC, and FXT1.
+- Basis formats: raw Basis ETC1S payload encode/decode is implemented (I-frame only, no built-in managed texture-coder path yet), and Basis UASTC LDR 4x4 is available as a built-in managed format and is also readable/writable through KTX/PVR containers.
 - Uncompressed and non-block-compressed textures: sequential pixels, alpha/luminance/intensity, packed formats, paletted/indexed formats, YUV, depth/stencil, XR/RGBM/RGBD, and related layouts.
 
 ## Project Layout

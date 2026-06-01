@@ -87,6 +87,12 @@
         - `R11EacSNorm`
         - `Rg11EacUNorm`
         - `Rg11EacSNorm`
+- Basis Universal
+    - ETC1S 原始负载（BasisLZ）
+        - `RgbaBasisEtc1sUNorm`
+    - UASTC LDR 4x4
+        - `RgbaBasisUastcLdr4x4UNorm`
+        - `RgbaBasisUastcLdr4x4Srgb`
 - ASTC 2D
     - RGBA ASTC 4x4
         - `RgbaAstc4x4UNorm`

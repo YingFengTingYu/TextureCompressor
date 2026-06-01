@@ -22,6 +22,7 @@ TextureCompressor 是一个面向 .NET 的纹理编解码库，用于把普通�
 README 只列主要支持的大类。完整支持列表见 [docs/texture-format-support.zh-CN.md](docs/texture-format-support.zh-CN.md)。
 
 - 压缩纹理：S3TC / DXT / BC1-BC3、RGTC / LATC / ATI、BPTC / BC6H / BC7、ETC / EAC、ASTC 2D、ATC、PVRTC、FXT1。
+- Basis 格式：已实现 Basis ETC1S 原始 payload 的编码/解码（仅 I-frame，尚无内置 managed texture-coder 入口），并且 Basis UASTC LDR 4x4 已作为内置格式支持，可在 KTX/PVR 容器中读写。
 - 未压缩和非块压缩纹理：顺序像素、Alpha/Luminance/Intensity、打包格式、调色板/索引格式、YUV、深度/模板、XR/RGBM/RGBD 等。
 
 ## 项目结构
