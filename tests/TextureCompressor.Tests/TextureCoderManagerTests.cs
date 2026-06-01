@@ -53,7 +53,7 @@ public sealed class TextureCoderManagerTests
         var manager = new TextureCoderManager();
         var disposed = new List<int>();
 
-        using (TextureCoderManager.Combine(
+        using (manager.Combine(
             new TestRegistration(() => disposed.Add(1)),
             new TestRegistration(() => disposed.Add(2))))
         {
@@ -67,7 +67,7 @@ public sealed class TextureCoderManagerTests
     {
         var manager = new TextureCoderManager();
         var disposeCount = 0;
-        var registration = TextureCoderManager.Combine(new TestRegistration(() => disposeCount++));
+        var registration = manager.Combine(new TestRegistration(() => disposeCount++));
 
         registration.Dispose();
         registration.Dispose();

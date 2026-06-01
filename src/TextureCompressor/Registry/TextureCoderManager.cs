@@ -95,10 +95,10 @@ public sealed class TextureCoderManager
         return Combine(registrations);
     }
 
-    public static IDisposable Combine(params ReadOnlySpan<IDisposable> registrations) =>
+    public IDisposable Combine(params ReadOnlySpan<IDisposable> registrations) =>
         new CompositeRegistration(registrations);
 
-    public static IDisposable Combine(IEnumerable<IDisposable> registrations)
+    public IDisposable Combine(IEnumerable<IDisposable> registrations)
     {
         ArgumentNullException.ThrowIfNull(registrations);
 
