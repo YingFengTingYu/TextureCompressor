@@ -10,6 +10,11 @@ public sealed class KtxTexture : ITextureFile
     {
     }
 
+    public KtxTexture(TextureFormat format, int width, int height, int depth, byte[] payload)
+        : this(new TextureImage(format, width, height, depth, payload), glType: null, glFormat: null, glInternalFormat: null, glBaseInternalFormat: null, vkFormat: null)
+    {
+    }
+
     public KtxTexture(
         TextureFormat format,
         int width,

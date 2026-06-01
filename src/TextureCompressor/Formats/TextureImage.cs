@@ -7,8 +7,18 @@ public class TextureImage
     {
     }
 
+    public TextureImage(TextureFormat format, int width, int height, int depth, byte[] payload)
+        : this(format, width, height, depth, payload, "Texture")
+    {
+    }
+
     protected TextureImage(TextureFormat format, int width, int height, byte[] payload, string textureDescription)
-        : this(format, [new TextureSubresource(0, 0, 0, width, height, payload)], arrayLayerCount: 1, faceCount: 1, textureDescription)
+        : this(format, width, height, depth: 1, payload, textureDescription)
+    {
+    }
+
+    protected TextureImage(TextureFormat format, int width, int height, int depth, byte[] payload, string textureDescription)
+        : this(format, [new TextureSubresource(0, 0, 0, width, height, depth, payload)], arrayLayerCount: 1, faceCount: 1, textureDescription)
     {
     }
 
@@ -43,6 +53,8 @@ public class TextureImage
     public int Width => Subresources[0].Width;
 
     public int Height => Subresources[0].Height;
+
+    public int Depth => Subresources[0].Depth;
 
     public IReadOnlyList<TextureSubresource> Subresources { get; }
 
@@ -123,15 +135,20 @@ public class TextureImage
     }
 
     public static int GetFullMipLevelCount(int width, int height)
+        => GetFullMipLevelCount(width, height, depth: 1);
+
+    public static int GetFullMipLevelCount(int width, int height, int depth)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(width);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(height);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(depth);
 
         var count = 1;
-        while (width > 1 || height > 1)
+        while (width > 1 || height > 1 || depth > 1)
         {
             width = Math.Max(1, width >> 1);
             height = Math.Max(1, height >> 1);
+            depth = Math.Max(1, depth >> 1);
             count++;
         }
 
@@ -174,7 +191,7 @@ public class TextureImage
             throw new ArgumentException($"{textureDescription} texture is missing mip level 0 for array layer 0 face 0.", nameof(subresources));
         }
 
-        var fullMipLevelCount = GetFullMipLevelCount(baseSubresource.Width, baseSubresource.Height);
+        var fullMipLevelCount = GetFullMipLevelCount(baseSubresource.Width, baseSubresource.Height, baseSubresource.Depth);
         if (mipLevelCount > fullMipLevelCount)
         {
             throw new ArgumentException($"{textureDescription} mip level count exceeds the full mip chain for the base dimensions.", nameof(subresources));
@@ -208,10 +225,11 @@ public class TextureImage
 
             var expectedWidth = GetMipDimension(baseSubresource.Width, subresource.MipLevel);
             var expectedHeight = GetMipDimension(baseSubresource.Height, subresource.MipLevel);
-            if (subresource.Width != expectedWidth || subresource.Height != expectedHeight)
+            var expectedDepth = GetMipDimension(baseSubresource.Depth, subresource.MipLevel);
+            if (subresource.Width != expectedWidth || subresource.Height != expectedHeight || subresource.Depth != expectedDepth)
             {
                 throw new ArgumentException(
-                    $"{textureDescription} mip level {subresource.MipLevel} is {subresource.Width}x{subresource.Height}, but {expectedWidth}x{expectedHeight} was expected.",
+                    $"{textureDescription} mip level {subresource.MipLevel} is {subresource.Width}x{subresource.Height}x{subresource.Depth}, but {expectedWidth}x{expectedHeight}x{expectedDepth} was expected.",
                     nameof(subresources));
             }
 

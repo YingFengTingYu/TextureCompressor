@@ -33,6 +33,22 @@ public sealed class PvrCodecTests
     }
 
     [Fact]
+    public void WriteVolumeTextureWritesReadablePvr()
+    {
+        var payload = Enumerable.Range(0, 2 * 2 * 2 * 4).Select(value => (byte)value).ToArray();
+        var texture = new PvrTexture(TextureFormats.Rgba8UNorm, width: 2, height: 2, depth: 2, payload);
+
+        var pvr = PvrCodec.Write(texture);
+        var read = PvrCodec.Read(pvr);
+        var decoded = PvrCodec.DecodeVolume<Rgba8UNorm>(pvr);
+
+        AssertHeader(pvr, expectedPixelFormat: 0x0808080861626772, colourSpace: 0, channelType: 0, width: 2, height: 2, depth: 2);
+        Assert.Equal(2, read.Texture.Depth);
+        Assert.Equal(payload, read.Texture.Payload);
+        Assert.Equal(8, decoded.PixelSpan.Length);
+    }
+
+    [Fact]
     public void EncodeWithDefaultOptionsWritesVersion3()
     {
         var source = new ArrayBitmap<Rgba8UNorm>(1, 1, [new Rgba8UNorm(1, 2, 3, 4)]);
@@ -708,6 +724,7 @@ public sealed class PvrCodecTests
         uint channelType,
         int width,
         int height,
+        uint depth = 1,
         uint mipMapCount = 1,
         uint faceCount = 1,
         uint surfaceCount = 1)
@@ -718,7 +735,7 @@ public sealed class PvrCodecTests
         Assert.Equal(channelType, BinaryPrimitives.ReadUInt32LittleEndian(pvr.AsSpan(20, 4)));
         Assert.Equal((uint)height, BinaryPrimitives.ReadUInt32LittleEndian(pvr.AsSpan(24, 4)));
         Assert.Equal((uint)width, BinaryPrimitives.ReadUInt32LittleEndian(pvr.AsSpan(28, 4)));
-        Assert.Equal(1u, BinaryPrimitives.ReadUInt32LittleEndian(pvr.AsSpan(32, 4)));
+        Assert.Equal(depth, BinaryPrimitives.ReadUInt32LittleEndian(pvr.AsSpan(32, 4)));
         Assert.Equal(surfaceCount, BinaryPrimitives.ReadUInt32LittleEndian(pvr.AsSpan(36, 4)));
         Assert.Equal(faceCount, BinaryPrimitives.ReadUInt32LittleEndian(pvr.AsSpan(40, 4)));
         Assert.Equal(mipMapCount, BinaryPrimitives.ReadUInt32LittleEndian(pvr.AsSpan(44, 4)));

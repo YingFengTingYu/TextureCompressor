@@ -10,6 +10,11 @@ public sealed class DdsTexture : ITextureFile
     {
     }
 
+    public DdsTexture(TextureFormat format, int width, int height, int depth, byte[] payload)
+        : this(new TextureImage(format, width, height, depth, payload), DdsHeaderKind.Dxt10, dxgiFormat: null, legacyPixelFormat: null, DdsAlphaMode.Unknown)
+    {
+    }
+
     public DdsTexture(
         TextureFormat format,
         int width,

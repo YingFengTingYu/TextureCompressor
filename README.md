@@ -601,7 +601,7 @@ DdsCodec.Write(texture, "texture.dds");
 ## Current Limitations
 
 - File-format helpers currently focus on 2D textures.
-- DDS, KTX v1/v2, and PVR v3 support explicit mip-map chains, texture arrays, and complete cube maps. DDS legacy headers cannot write texture arrays. ASTC mip-map chains, legacy PVR v1/v2 mip-map chains/cube maps/texture arrays, and 3D textures are not supported yet.
+- DDS, KTX v1/v2, and PVR v3 support explicit mip-map chains, texture arrays, complete cube maps, and single 3D textures. DDS legacy headers cannot write texture arrays. ASTC supports single 2D/3D texture files but not mip-map chains. Legacy PVR v1/v2 mip-map chains, cube maps, texture arrays, and 3D textures are not supported yet.
 - PNG supports common static PNG files. Animated PNG is not supported.
 - JPEG supports baseline JPEG. Progressive JPEG is not supported.
 - GIF reads the first image frame. Animation frame sequences are not emitted as animation.

@@ -598,8 +598,7 @@ DdsCodec.Write(texture, "texture.dds");
 
 ## 当前限制
 
-- 文件格式读写目前主要面向 2D texture。
-- DDS、KTX v1/v2、PVR v3 支持显式 mip-map chain、texture array 和完整 cube map。DDS legacy header 不能写入 texture array。ASTC mip-map chain、旧版 PVR v1/v2 mip-map chain/cube map/texture array、3D texture 暂未支持。
+- DDS、KTX v1/v2、PVR v3 支持显式 mip-map chain、texture array、完整 cube map 和单个 3D texture。DDS legacy header 不能写入 texture array。ASTC 支持单个 2D/3D texture 文件，但不支持 mip-map chain。旧版 PVR v1/v2 mip-map chain、cube map、texture array 和 3D texture 暂未支持。
 - PNG 支持常见静态 PNG；Animated PNG 不支持。
 - JPEG 支持 baseline JPEG；progressive JPEG 不支持。
 - GIF 读取首个图像帧；动画帧序列不作为动画输出。

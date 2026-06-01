@@ -15,6 +15,16 @@ public sealed class PvrTexture : ITextureFile
     {
     }
 
+    public PvrTexture(TextureFormat format, int width, int height, int depth, byte[] payload)
+        : this(format, width, height, depth, payload, [])
+    {
+    }
+
+    public PvrTexture(TextureFormat format, int width, int height, int depth, byte[] payload, IReadOnlyList<PvrMetadata> metadata)
+        : this(new TextureImage(format, width, height, depth, payload), metadata)
+    {
+    }
+
     public PvrTexture(TextureFormat format, IReadOnlyList<TextureSubresource> subresources, int faceCount)
         : this(new TextureImage(format, subresources, faceCount))
     {

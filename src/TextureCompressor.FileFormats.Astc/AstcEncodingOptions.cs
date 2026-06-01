@@ -11,4 +11,6 @@ public sealed class AstcEncodingOptions : IFileFormatOptions
     public int BlockWidth { get; init; } = 4;
 
     public int BlockHeight { get; init; } = 4;
+
+    public int? BlockDepth { get; init; }
 }

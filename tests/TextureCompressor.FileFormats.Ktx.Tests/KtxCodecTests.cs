@@ -40,6 +40,25 @@ public sealed class KtxCodecTests
         Assert.Equal(source.PixelSpan.ToArray(), decoded.PixelSpan.ToArray());
     }
 
+    [Theory]
+    [InlineData(KtxVersion.Version1)]
+    [InlineData(KtxVersion.Version2)]
+    public void WriteVolumeTextureWritesReadableKtx(KtxVersion version)
+    {
+        var payload = Enumerable.Range(0, 2 * 2 * 2 * 4).Select(value => (byte)value).ToArray();
+        var texture = new KtxTexture(TextureFormats.Rgba8UNorm, width: 2, height: 2, depth: 2, payload);
+
+        var ktx = KtxCodec.Write(texture, new KtxEncodingOptions { Version = version });
+        var read = KtxCodec.Read(ktx);
+        var decoded = KtxCodec.DecodeVolume<Rgba8UNorm>(ktx);
+
+        var depthOffset = version == KtxVersion.Version1 ? 44 : 28;
+        Assert.Equal(2u, BinaryPrimitives.ReadUInt32LittleEndian(ktx.AsSpan(depthOffset, 4)));
+        Assert.Equal(2, read.Texture.Depth);
+        Assert.Equal(payload, read.Texture.Payload);
+        Assert.Equal(8, decoded.PixelSpan.Length);
+    }
+
     [Fact]
     public void EncodeWithDefaultFormatAndSrgbWritesRgba8Srgb()
     {

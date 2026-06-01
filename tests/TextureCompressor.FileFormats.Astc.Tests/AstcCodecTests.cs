@@ -45,6 +45,26 @@ public sealed class AstcCodecTests
     }
 
     [Fact]
+    public void EncodeVolumeWritesReadableAstc3D()
+    {
+        var color = new Rgba8UNorm(64, 128, 255, 255);
+        var source = new ArrayVolumeBitmap<Rgba8UNorm>(
+            3,
+            3,
+            3,
+            Enumerable.Repeat(color, 27).ToArray());
+
+        var astc = AstcCodec.Encode(source, new AstcEncodingOptions { TextureFormat = TextureFormats.RgbaAstc3x3x3UNorm });
+        var texture = AstcCodec.Read(astc);
+        var decoded = AstcCodec.DecodeVolume(astc);
+
+        AssertHeader(astc, blockWidth: 3, blockHeight: 3, blockDepth: 3, width: 3, height: 3, depth: 3, payloadSize: 16);
+        Assert.Equal(TextureFormats.RgbaAstc3x3x3UNorm, texture.Format);
+        Assert.Equal(3, texture.Depth);
+        Assert.Equal(source.PixelSpan.ToArray(), decoded.PixelSpan.ToArray());
+    }
+
+    [Fact]
     public void ReadWithProfileOptionSelectsSrgbFormat()
     {
         var astc = CreateAstc(blockWidth: 5, blockHeight: 4, width: 5, height: 4, new byte[16]);
@@ -82,6 +102,14 @@ public sealed class AstcCodecTests
     }
 
     [Fact]
+    public void WriteRejects2DFormatWithVolumeDepth()
+    {
+        var texture = new AstcTexture(TextureFormats.RgbaAstc4x4UNorm, 4, 4, 2, new byte[32]);
+
+        Assert.Throws<ArgumentException>(() => AstcCodec.Write(texture));
+    }
+
+    [Fact]
     public void ReadUnsupportedFootprintThrows()
     {
         var astc = CreateAstc(blockWidth: 3, blockHeight: 3, width: 3, height: 3, new byte[16]);
@@ -90,22 +118,28 @@ public sealed class AstcCodecTests
     }
 
     [Fact]
-    public void Read3DTextureThrows()
+    public void Read3DTextureSelectsVolumeFormat()
     {
         var astc = CreateAstc(blockWidth: 4, blockHeight: 4, width: 4, height: 4, payload: new byte[16], blockDepth: 4, depth: 4);
 
-        Assert.Throws<NotSupportedException>(() => AstcCodec.Read(astc));
+        var texture = AstcCodec.Read(astc);
+
+        Assert.Equal(TextureFormats.RgbaAstc4x4x4UNorm, texture.Format);
+        Assert.Equal(4, texture.Depth);
     }
 
     private static void AssertHeader(byte[] astc, int blockWidth, int blockHeight, int width, int height, int payloadSize)
+        => AssertHeader(astc, blockWidth, blockHeight, blockDepth: 1, width, height, depth: 1, payloadSize);
+
+    private static void AssertHeader(byte[] astc, int blockWidth, int blockHeight, int blockDepth, int width, int height, int depth, int payloadSize)
     {
         Assert.Equal([0x13, 0xAB, 0xA1, 0x5C], astc.AsSpan(0, 4).ToArray());
         Assert.Equal((byte)blockWidth, astc[4]);
         Assert.Equal((byte)blockHeight, astc[5]);
-        Assert.Equal(1, astc[6]);
+        Assert.Equal((byte)blockDepth, astc[6]);
         Assert.Equal(width, ReadUInt24(astc.AsSpan(7, 3)));
         Assert.Equal(height, ReadUInt24(astc.AsSpan(10, 3)));
-        Assert.Equal(1, ReadUInt24(astc.AsSpan(13, 3)));
+        Assert.Equal(depth, ReadUInt24(astc.AsSpan(13, 3)));
         Assert.Equal(16 + payloadSize, astc.Length);
     }
 

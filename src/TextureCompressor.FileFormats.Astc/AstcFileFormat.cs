@@ -20,7 +20,7 @@ public sealed class AstcFileFormat : ITextureFileFormat
     {
         ValidateSingleImage(texture);
         ValidateEncodingOptions(texture, GetEncodingOptions(options));
-        AstcCodec.Write(new AstcTexture(texture.Format, texture.Width, texture.Height, texture.Payload), stream);
+        AstcCodec.Write(new AstcTexture(texture.Format, texture.Width, texture.Height, texture.Depth, texture.Payload), stream);
     }
 
     private static AstcReadOptions? GetReadOptions(IFileFormatOptions? options) =>
@@ -43,7 +43,7 @@ public sealed class AstcFileFormat : ITextureFileFormat
     {
         if (texture.MipLevelCount != 1 || texture.ArrayLayerCount != 1 || texture.FaceCount != 1)
         {
-            throw new NotSupportedException("ASTC files support only one 2D texture subresource.");
+            throw new NotSupportedException("ASTC files support only one texture subresource.");
         }
     }
 

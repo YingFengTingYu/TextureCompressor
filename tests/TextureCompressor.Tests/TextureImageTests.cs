@@ -24,6 +24,23 @@ public sealed class TextureImageTests
     }
 
     [Fact]
+    public void VolumeSubresourcesTrackDepthMipChain()
+    {
+        var subresources = new[]
+        {
+            new TextureSubresource(0, arrayLayer: 0, faceIndex: 0, 4, 4, 4, new byte[4 * 4 * 4 * 4]),
+            new TextureSubresource(1, arrayLayer: 0, faceIndex: 0, 2, 2, 2, new byte[2 * 2 * 2 * 4]),
+            new TextureSubresource(2, arrayLayer: 0, faceIndex: 0, 1, 1, 1, new byte[4])
+        };
+
+        var image = new TextureImage(TextureFormats.Rgba8UNorm, subresources, faceCount: 1);
+
+        Assert.Equal(4, image.Depth);
+        Assert.Equal(3, image.MipLevelCount);
+        Assert.Equal(new[] { 4, 2, 1 }, image.Subresources.Select(static subresource => subresource.Depth));
+    }
+
+    [Fact]
     public void SubresourceConstructorCreatesMipChain()
     {
         var payload0 = new byte[] { 1 };

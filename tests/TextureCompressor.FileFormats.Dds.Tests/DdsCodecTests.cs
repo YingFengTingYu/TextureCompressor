@@ -33,6 +33,25 @@ public sealed class DdsCodecTests
     }
 
     [Fact]
+    public void WriteVolumeTextureWritesReadableDx10Dds()
+    {
+        var payload = Enumerable.Range(0, 2 * 2 * 2 * 4).Select(value => (byte)value).ToArray();
+        var texture = new DdsTexture(TextureFormats.Rgba8UNorm, width: 2, height: 2, depth: 2, payload);
+
+        var dds = DdsCodec.Write(texture);
+        var read = DdsCodec.Read(dds);
+        var decoded = DdsCodec.DecodeVolume<Rgba8UNorm>(dds);
+
+        Assert.Equal(0x0080100fu, BinaryPrimitives.ReadUInt32LittleEndian(dds.AsSpan(8, 4)));
+        Assert.Equal(2u, BinaryPrimitives.ReadUInt32LittleEndian(dds.AsSpan(24, 4)));
+        Assert.Equal(0x00200000u, BinaryPrimitives.ReadUInt32LittleEndian(dds.AsSpan(112, 4)));
+        Assert.Equal(4u, BinaryPrimitives.ReadUInt32LittleEndian(dds.AsSpan(132, 4)));
+        Assert.Equal(2, read.Texture.Depth);
+        Assert.Equal(payload, read.Texture.Payload);
+        Assert.Equal(8, decoded.PixelSpan.Length);
+    }
+
+    [Fact]
     public void EncodeWithLegacyHeaderWritesOrdinaryDdsHeader()
     {
         var source = new ArrayBitmap<Rgba8UNorm>(
