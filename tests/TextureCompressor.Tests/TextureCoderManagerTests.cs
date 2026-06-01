@@ -48,6 +48,34 @@ public sealed class TextureCoderManagerTests
     }
 
     [Fact]
+    public void CombineDisposesRegistrationsInReverseOrder()
+    {
+        var manager = new TextureCoderManager();
+        var disposed = new List<int>();
+
+        using (TextureCoderManager.Combine(
+            new TestRegistration(() => disposed.Add(1)),
+            new TestRegistration(() => disposed.Add(2))))
+        {
+        }
+
+        Assert.Equal([2, 1], disposed);
+    }
+
+    [Fact]
+    public void CombineDisposesOnlyOnce()
+    {
+        var manager = new TextureCoderManager();
+        var disposeCount = 0;
+        var registration = TextureCoderManager.Combine(new TestRegistration(() => disposeCount++));
+
+        registration.Dispose();
+        registration.Dispose();
+
+        Assert.Equal(1, disposeCount);
+    }
+
+    [Fact]
     public void GlobalManagerFindsSequentialUncompressedCoder()
     {
         var coder = TextureCoderManager.Global.GetCoder(TextureFormats.Rgba8UNorm);
@@ -2336,6 +2364,16 @@ public sealed class TextureCoderManagerTests
         }
 
         public int GetEncodedByteCount(int width, int height) => 0;
+    }
+
+    private sealed class TestRegistration(Action dispose) : IDisposable
+    {
+        private Action? _dispose = dispose;
+
+        public void Dispose()
+        {
+            Interlocked.Exchange(ref _dispose, null)?.Invoke();
+        }
     }
 
     public static TheoryData<TextureFormat> PackedUNormFormats() => new()

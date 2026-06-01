@@ -53,7 +53,7 @@ public sealed class TextureCoderManager
             throw;
         }
 
-        return new CompositeRegistration(registrations);
+        return Combine(registrations);
     }
 
     public IDisposable Register3D(TextureFormat format, ITextureCoder3D coder)
@@ -91,6 +91,16 @@ public sealed class TextureCoderManager
 
             throw;
         }
+
+        return Combine(registrations);
+    }
+
+    public static IDisposable Combine(params ReadOnlySpan<IDisposable> registrations) =>
+        new CompositeRegistration(registrations);
+
+    public static IDisposable Combine(IEnumerable<IDisposable> registrations)
+    {
+        ArgumentNullException.ThrowIfNull(registrations);
 
         return new CompositeRegistration(registrations);
     }
@@ -454,6 +464,16 @@ public sealed class TextureCoderManager
     private sealed class CompositeRegistration(IReadOnlyList<IDisposable> registrations) : IDisposable
     {
         private IReadOnlyList<IDisposable>? _registrations = registrations ?? throw new ArgumentNullException(nameof(registrations));
+
+        public CompositeRegistration(ReadOnlySpan<IDisposable> registrations)
+            : this((IReadOnlyList<IDisposable>)[.. registrations])
+        {
+        }
+
+        public CompositeRegistration(IEnumerable<IDisposable> registrations)
+            : this((IReadOnlyList<IDisposable>)[.. registrations])
+        {
+        }
 
         public void Dispose()
         {
