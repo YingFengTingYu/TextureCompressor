@@ -46,6 +46,8 @@ public enum PvrPixelFormat : uint
     Astc10X10 = 38,
     Astc12X10 = 39,
     Astc12X12 = 40,
+    BasisUEtc1s = 51,
+    BasisUUastc = 52,
     Rgbm = 53,
     Rgbd = 54,
     PvrtcIHdr6Bpp = 55,

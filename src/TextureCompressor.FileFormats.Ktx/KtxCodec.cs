@@ -17,6 +17,9 @@ public static class KtxCodec
     private const int IdentifierByteCount = 12;
     private const int LevelIndexEntryByteCount = 24;
     private const int BasicDfdByteCount = 24;
+    private const int BasisLzHeaderByteCount = 20;
+    private const int BasisLzImageDescByteCount = 20;
+    private const uint BasisLzImageFlagIsPFrame = 0x02;
     private const uint LittleEndianMarker = 0x04030201;
     private const uint BigEndianMarker = 0x01020304;
 
@@ -500,6 +503,15 @@ public static class KtxCodec
                 BinaryPrimitives.ReadUInt64LittleEndian(levelBuffer.Slice(16, 8)));
         }
 
+        if (ktxHeader.SupercompressionScheme == KtxSupercompressionScheme.BasisLz)
+        {
+            return ReadV2BasisLzEtc1s(
+                stream,
+                ktxHeader,
+                levelIndexes,
+                checked((ulong)(HeaderV2ByteCount + (LevelIndexEntryByteCount * mipLevelCount))));
+        }
+
         var format = GetTextureFormat(ktxHeader.VkFormat, isSrgb: IsSrgb(ktxHeader.VkFormat));
         var coder = depth == 1 ? TextureCoderManager.Global.GetCoder(format) : null;
         var coder3D = depth == 1 ? null : TextureCoderManager.Global.GetCoder3D(format);
@@ -556,6 +568,229 @@ public static class KtxCodec
             glInternalFormat: null,
             glBaseInternalFormat: null,
             ktxHeader.VkFormat);
+    }
+
+    private static KtxTexture ReadV2BasisLzEtc1s(
+        Stream stream,
+        KtxHeaderV2 ktxHeader,
+        IReadOnlyList<KtxLevelIndex> levelIndexes,
+        ulong currentOffset)
+    {
+        if (ktxHeader.VkFormat != KtxVkFormat.Undefined)
+        {
+            throw new InvalidDataException("KTX2 BasisLZ files must use VK_FORMAT_UNDEFINED.");
+        }
+
+        var depth = GetTextureDepth(ktxHeader.PixelDepth);
+        if (depth != 1)
+        {
+            throw new NotSupportedException("KTX2 BasisLZ 3D textures are not supported yet.");
+        }
+
+        var mipLevelCount = GetMipLevelCount(ktxHeader.LevelCount, ktxHeader.Width, ktxHeader.Height, depth, "KTX2");
+        var arrayLayerCount = GetArrayLayerCount(ktxHeader.LayerCount, "KTX2");
+        var faceCount = GetFaceCount(ktxHeader.FaceCount, "KTX2");
+        ValidateTextureShape(depth, arrayLayerCount, faceCount, "KTX2");
+
+        var imageCount = checked(mipLevelCount * arrayLayerCount * faceCount);
+        if (ktxHeader.SgdByteOffset == 0 || ktxHeader.SgdByteLength == 0)
+        {
+            throw new InvalidDataException("KTX2 BasisLZ supercompression global data is missing.");
+        }
+
+        if (ktxHeader.SgdByteLength > int.MaxValue)
+        {
+            throw new InvalidDataException("KTX2 BasisLZ supercompression global data is outside the supported range.");
+        }
+
+        foreach (var level in levelIndexes)
+        {
+            if (level.UncompressedByteLength != 0)
+            {
+                throw new InvalidDataException("KTX2 BasisLZ levels must have an uncompressed byte length of 0.");
+            }
+        }
+
+        SkipToOffset(stream, ktxHeader.SgdByteOffset, currentOffset);
+        currentOffset = ktxHeader.SgdByteOffset;
+
+        var globalDataBytes = new byte[checked((int)ktxHeader.SgdByteLength)];
+        ReadExactly(stream, globalDataBytes);
+        currentOffset = checked(currentOffset + ktxHeader.SgdByteLength);
+        var globalData = ReadBasisLzGlobalData(globalDataBytes, imageCount);
+
+        var subresources = new List<TextureSubresource>(imageCount);
+        var imageDescIndex = 0;
+        for (var mipLevel = 0; mipLevel < mipLevelCount; mipLevel++)
+        {
+            var level = levelIndexes[mipLevel];
+            if (level.ByteLength > int.MaxValue)
+            {
+                throw new InvalidDataException("KTX2 BasisLZ level payload is outside the supported range.");
+            }
+
+            SkipToOffset(stream, level.ByteOffset, currentOffset);
+            currentOffset = level.ByteOffset;
+
+            var levelPayload = new byte[checked((int)level.ByteLength)];
+            ReadExactly(stream, levelPayload);
+            currentOffset = checked(currentOffset + level.ByteLength);
+
+            var width = TextureImage.GetMipDimension(ktxHeader.Width, mipLevel);
+            var height = TextureImage.GetMipDimension(ktxHeader.Height, mipLevel);
+            for (var arrayLayer = 0; arrayLayer < arrayLayerCount; arrayLayer++)
+            {
+                for (var face = 0; face < faceCount; face++)
+                {
+                    var imageDesc = globalData.ImageDescs[imageDescIndex++];
+                    var bitmap = DecodeBasisLzEtc1sImage(globalData, levelPayload, imageDesc, width, height);
+                    subresources.Add(new TextureSubresource(
+                        mipLevel,
+                        arrayLayer,
+                        face,
+                        width,
+                        height,
+                        CopyRgba8Pixels(bitmap)));
+                }
+            }
+        }
+
+        return new KtxTexture(
+            TextureFormats.Rgba8UNorm,
+            subresources,
+            arrayLayerCount,
+            faceCount,
+            glType: null,
+            glFormat: null,
+            glInternalFormat: null,
+            glBaseInternalFormat: null,
+            vkFormat: ktxHeader.VkFormat);
+    }
+
+    private static KtxBasisLzGlobalData ReadBasisLzGlobalData(ReadOnlySpan<byte> data, int imageCount)
+    {
+        var imageDescBytes = checked(imageCount * BasisLzImageDescByteCount);
+        if (data.Length < BasisLzHeaderByteCount + imageDescBytes)
+        {
+            throw new InvalidDataException("KTX2 BasisLZ supercompression global data is truncated.");
+        }
+
+        var endpointCount = BinaryPrimitives.ReadUInt16LittleEndian(data);
+        var selectorCount = BinaryPrimitives.ReadUInt16LittleEndian(data.Slice(2, 2));
+        var endpointByteLength = ReadBasisLzDataLength(data.Slice(4, 4), "endpoint");
+        var selectorByteLength = ReadBasisLzDataLength(data.Slice(8, 4), "selector");
+        var tableByteLength = ReadBasisLzDataLength(data.Slice(12, 4), "Huffman table");
+        var extendedByteLength = BinaryPrimitives.ReadUInt32LittleEndian(data.Slice(16, 4));
+        if (extendedByteLength != 0)
+        {
+            throw new NotSupportedException("KTX2 BasisLZ extended data is not supported for ETC1S textures.");
+        }
+
+        var expectedByteLength = checked(BasisLzHeaderByteCount + imageDescBytes + endpointByteLength + selectorByteLength + tableByteLength);
+        if (data.Length != expectedByteLength)
+        {
+            throw new InvalidDataException($"KTX2 BasisLZ supercompression global data is {data.Length} bytes, but {expectedByteLength} bytes were expected.");
+        }
+
+        var imageDescs = new KtxBasisLzImageDesc[imageCount];
+        var offset = BasisLzHeaderByteCount;
+        for (var i = 0; i < imageDescs.Length; i++)
+        {
+            var imageDesc = data.Slice(offset, BasisLzImageDescByteCount);
+            var imageFlags = BinaryPrimitives.ReadUInt32LittleEndian(imageDesc);
+            if ((imageFlags & ~BasisLzImageFlagIsPFrame) != 0)
+            {
+                throw new InvalidDataException("KTX2 BasisLZ image descriptor contains unsupported flags.");
+            }
+
+            imageDescs[i] = new KtxBasisLzImageDesc(
+                imageFlags,
+                BinaryPrimitives.ReadUInt32LittleEndian(imageDesc.Slice(4, 4)),
+                BinaryPrimitives.ReadUInt32LittleEndian(imageDesc.Slice(8, 4)),
+                BinaryPrimitives.ReadUInt32LittleEndian(imageDesc.Slice(12, 4)),
+                BinaryPrimitives.ReadUInt32LittleEndian(imageDesc.Slice(16, 4)));
+            offset = checked(offset + BasisLzImageDescByteCount);
+        }
+
+        var endpointData = data.Slice(offset, endpointByteLength).ToArray();
+        offset = checked(offset + endpointByteLength);
+        var selectorData = data.Slice(offset, selectorByteLength).ToArray();
+        offset = checked(offset + selectorByteLength);
+        var tableData = data.Slice(offset, tableByteLength).ToArray();
+
+        return new KtxBasisLzGlobalData(endpointCount, selectorCount, endpointData, selectorData, tableData, imageDescs);
+    }
+
+    private static int ReadBasisLzDataLength(ReadOnlySpan<byte> source, string sectionName)
+    {
+        var value = BinaryPrimitives.ReadUInt32LittleEndian(source);
+        if (value == 0 || value > int.MaxValue)
+        {
+            throw new InvalidDataException($"KTX2 BasisLZ {sectionName} data length is outside the supported range.");
+        }
+
+        return (int)value;
+    }
+
+    private static ArrayBitmap<Rgba8UNorm> DecodeBasisLzEtc1sImage(
+        KtxBasisLzGlobalData globalData,
+        ReadOnlySpan<byte> levelPayload,
+        KtxBasisLzImageDesc imageDesc,
+        int width,
+        int height)
+    {
+        if (imageDesc.IsPFrame)
+        {
+            throw new NotSupportedException("KTX2 BasisLZ P-frame images are not supported yet.");
+        }
+
+        var rgbSlice = SliceBasisLzLevelPayload(levelPayload, imageDesc.RgbSliceByteOffset, imageDesc.RgbSliceByteLength, "RGB");
+        var alphaSlice = imageDesc.AlphaSliceByteLength == 0
+            ? default
+            : SliceBasisLzLevelPayload(levelPayload, imageDesc.AlphaSliceByteOffset, imageDesc.AlphaSliceByteLength, "alpha");
+
+        var bitmap = new ArrayBitmap<Rgba8UNorm>(width, height);
+        var rawPayload = new BasisEtc1sRawPayload(
+            globalData.EndpointCount,
+            globalData.EndpointData,
+            globalData.SelectorCount,
+            globalData.SelectorData,
+            globalData.TableData,
+            rgbSlice,
+            alphaSlice);
+        BasisEtc1sTextureCoder.Decode(rawPayload, bitmap.AsView());
+        return bitmap;
+    }
+
+    private static ReadOnlySpan<byte> SliceBasisLzLevelPayload(ReadOnlySpan<byte> levelPayload, uint byteOffset, uint byteLength, string sliceName)
+    {
+        if (byteLength == 0)
+        {
+            throw new InvalidDataException($"KTX2 BasisLZ {sliceName} slice byte length must not be zero.");
+        }
+
+        var end = checked((ulong)byteOffset + byteLength);
+        if (end > (ulong)levelPayload.Length)
+        {
+            throw new InvalidDataException($"KTX2 BasisLZ {sliceName} slice points outside its mip level payload.");
+        }
+
+        return levelPayload.Slice(checked((int)byteOffset), checked((int)byteLength));
+    }
+
+    private static byte[] CopyRgba8Pixels(ArrayBitmap<Rgba8UNorm> bitmap)
+    {
+        var result = new byte[checked(bitmap.PixelSpan.Length * 4)];
+        var offset = 0;
+        foreach (var pixel in bitmap.PixelSpan)
+        {
+            result[offset++] = pixel.Red;
+            result[offset++] = pixel.Green;
+            result[offset++] = pixel.Blue;
+            result[offset++] = pixel.Alpha;
+        }
+
+        return result;
     }
 
     private static void WriteV2(KtxTexture texture, Stream stream, KtxEncodingOptions? options)
@@ -727,9 +962,14 @@ public static class KtxCodec
 
     private static void ValidateHeader(KtxHeaderV2 header)
     {
-        if (header.VkFormat == KtxVkFormat.Undefined)
+        if (header.VkFormat == KtxVkFormat.Undefined && header.SupercompressionScheme != KtxSupercompressionScheme.BasisLz)
         {
             throw new NotSupportedException("KTX2 Basis Universal and VK_FORMAT_UNDEFINED files are not supported.");
+        }
+
+        if (header.VkFormat != KtxVkFormat.Undefined && header.SupercompressionScheme == KtxSupercompressionScheme.BasisLz)
+        {
+            throw new InvalidDataException("KTX2 BasisLZ files must use VK_FORMAT_UNDEFINED.");
         }
 
         if (header.Height == 0)
@@ -742,13 +982,9 @@ public static class KtxCodec
             throw new NotSupportedException("KTX2 partial cube maps are not supported.");
         }
 
-        if (header.SupercompressionScheme is KtxSupercompressionScheme.BasisLz)
-        {
-            throw new NotSupportedException("KTX2 BasisLZ supercompression is not supported.");
-        }
-
         if (header.SupercompressionScheme is not (
             KtxSupercompressionScheme.None
+            or KtxSupercompressionScheme.BasisLz
             or KtxSupercompressionScheme.Zstandard
             or KtxSupercompressionScheme.Zlib))
         {
@@ -765,7 +1001,14 @@ public static class KtxCodec
             throw new InvalidDataException("KTX2 key/value data offset is missing.");
         }
 
-        if (header.SgdByteLength != 0)
+        if (header.SupercompressionScheme == KtxSupercompressionScheme.BasisLz)
+        {
+            if (header.SgdByteOffset == 0 || header.SgdByteLength == 0)
+            {
+                throw new InvalidDataException("KTX2 BasisLZ supercompression global data is missing.");
+            }
+        }
+        else if (header.SgdByteLength != 0)
         {
             throw new NotSupportedException("KTX2 supercompression global data is not supported.");
         }
@@ -1502,6 +1745,24 @@ public static class KtxCodec
         ulong SgdByteLength);
 
     private readonly record struct KtxLevelIndex(ulong ByteOffset, ulong ByteLength, ulong UncompressedByteLength);
+
+    private readonly record struct KtxBasisLzGlobalData(
+        int EndpointCount,
+        int SelectorCount,
+        byte[] EndpointData,
+        byte[] SelectorData,
+        byte[] TableData,
+        KtxBasisLzImageDesc[] ImageDescs);
+
+    private readonly record struct KtxBasisLzImageDesc(
+        uint ImageFlags,
+        uint RgbSliceByteOffset,
+        uint RgbSliceByteLength,
+        uint AlphaSliceByteOffset,
+        uint AlphaSliceByteLength)
+    {
+        public bool IsPFrame => (ImageFlags & BasisLzImageFlagIsPFrame) != 0;
+    }
 
     private readonly record struct KtxFormatDescriptor(
         uint GlType,

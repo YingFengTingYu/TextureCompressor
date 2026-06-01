@@ -352,9 +352,32 @@ public sealed class PvrCodecTests
     [Fact]
     public void ReadUnsupportedPixelFormatThrows()
     {
-        var pvr = CreateHeader(pixelFormat: 51, colourSpace: 0, channelType: 0, width: 4, height: 4);
+        var pvr = CreateHeader(pixelFormat: 999, colourSpace: 0, channelType: 0, width: 4, height: 4);
 
         Assert.Throws<NotSupportedException>(() => PvrCodec.Read(pvr));
+    }
+
+    [Fact]
+    public void ReadBasisUEtc1sDecodesToRgba8()
+    {
+        var source = new ArrayBitmap<Rgba8UNorm>(
+            4,
+            4,
+            Enumerable.Range(0, 16)
+                .Select(value => new Rgba8UNorm((byte)(16 + value * 7), (byte)(32 + value * 5), (byte)(48 + value * 3), (byte)(255 - value * 4)))
+                .ToArray());
+        var basis = BasisEtc1sTextureCoder.Encode(source.AsView());
+        var expected = new ArrayBitmap<Rgba8UNorm>(4, 4);
+        BasisEtc1sTextureCoder.Decode(basis.AsRawPayload(), expected.AsView());
+
+        var pvr = CreateBasisUEtc1sPvr(width: 4, height: 4, basis);
+        var texture = PvrCodec.Read(pvr);
+        var decoded = PvrCodec.Decode(pvr);
+
+        AssertHeader(pvr, expectedPixelFormat: (uint)PvrPixelFormat.BasisUEtc1s, colourSpace: 0, channelType: 0, width: 4, height: 4);
+        Assert.Equal(TextureFormats.Rgba8UNorm, texture.Texture.Format);
+        Assert.Equal(CopyRgba8Pixels(expected), texture.Texture.Payload);
+        Assert.Equal(expected.PixelSpan.ToArray(), decoded.PixelSpan.ToArray());
     }
 
     [Fact]
@@ -800,6 +823,54 @@ public sealed class PvrCodecTests
         return pvr;
     }
 
+    private static byte[] CreateBasisUEtc1sPvr(int width, int height, BasisEtc1sEncodedPayload basis)
+    {
+        var payloadLength = checked(basis.RgbSliceData.Length + basis.AlphaSliceData.Length);
+        var payload = new byte[payloadLength];
+        basis.RgbSliceData.Span.CopyTo(payload);
+        basis.AlphaSliceData.Span.CopyTo(payload.AsSpan(basis.RgbSliceData.Length));
+
+        var sgdLength = checked(20 + 20 + basis.EndpointData.Length + basis.SelectorData.Length + basis.TablesData.Length);
+        var sgd = new byte[sgdLength];
+        BinaryPrimitives.WriteUInt16LittleEndian(sgd.AsSpan(0, 2), checked((ushort)basis.EndpointCount));
+        BinaryPrimitives.WriteUInt16LittleEndian(sgd.AsSpan(2, 2), checked((ushort)basis.SelectorCount));
+        BinaryPrimitives.WriteUInt32LittleEndian(sgd.AsSpan(4, 4), checked((uint)basis.EndpointData.Length));
+        BinaryPrimitives.WriteUInt32LittleEndian(sgd.AsSpan(8, 4), checked((uint)basis.SelectorData.Length));
+        BinaryPrimitives.WriteUInt32LittleEndian(sgd.AsSpan(12, 4), checked((uint)basis.TablesData.Length));
+        BinaryPrimitives.WriteUInt32LittleEndian(sgd.AsSpan(20, 4), 0);
+        BinaryPrimitives.WriteUInt32LittleEndian(sgd.AsSpan(24, 4), 0);
+        BinaryPrimitives.WriteUInt32LittleEndian(sgd.AsSpan(28, 4), checked((uint)basis.RgbSliceData.Length));
+        BinaryPrimitives.WriteUInt32LittleEndian(sgd.AsSpan(32, 4), checked((uint)basis.RgbSliceData.Length));
+        BinaryPrimitives.WriteUInt32LittleEndian(sgd.AsSpan(36, 4), checked((uint)basis.AlphaSliceData.Length));
+
+        var offset = 40;
+        basis.EndpointData.Span.CopyTo(sgd.AsSpan(offset));
+        offset = checked(offset + basis.EndpointData.Length);
+        basis.SelectorData.Span.CopyTo(sgd.AsSpan(offset));
+        offset = checked(offset + basis.SelectorData.Length);
+        basis.TablesData.Span.CopyTo(sgd.AsSpan(offset));
+
+        var metadataLength = checked(12 + sgd.Length);
+        var pvr = new byte[checked(52 + metadataLength + payload.Length)];
+        BinaryPrimitives.WriteUInt32LittleEndian(pvr.AsSpan(0, 4), 0x03525650);
+        BinaryPrimitives.WriteUInt64LittleEndian(pvr.AsSpan(8, 8), (uint)PvrPixelFormat.BasisUEtc1s);
+        BinaryPrimitives.WriteUInt32LittleEndian(pvr.AsSpan(24, 4), checked((uint)height));
+        BinaryPrimitives.WriteUInt32LittleEndian(pvr.AsSpan(28, 4), checked((uint)width));
+        BinaryPrimitives.WriteUInt32LittleEndian(pvr.AsSpan(32, 4), 1);
+        BinaryPrimitives.WriteUInt32LittleEndian(pvr.AsSpan(36, 4), 1);
+        BinaryPrimitives.WriteUInt32LittleEndian(pvr.AsSpan(40, 4), 1);
+        BinaryPrimitives.WriteUInt32LittleEndian(pvr.AsSpan(44, 4), 1);
+        BinaryPrimitives.WriteUInt32LittleEndian(pvr.AsSpan(48, 4), checked((uint)metadataLength));
+
+        offset = 52;
+        BinaryPrimitives.WriteUInt32LittleEndian(pvr.AsSpan(offset, 4), 0x03525650);
+        BinaryPrimitives.WriteUInt32LittleEndian(pvr.AsSpan(offset + 4, 4), 7);
+        BinaryPrimitives.WriteUInt32LittleEndian(pvr.AsSpan(offset + 8, 4), checked((uint)sgd.Length));
+        sgd.CopyTo(pvr.AsSpan(offset + 12));
+        payload.CopyTo(pvr.AsSpan(52 + metadataLength));
+        return pvr;
+    }
+
     private static byte[] CreateLegacyHeader(
         uint headerSize,
         uint pixelType,
@@ -836,6 +907,21 @@ public sealed class PvrCodecTests
 
     private static int GetEncodedByteCount(TextureFormat format, int width, int height) =>
         TextureCoderManager.Global.GetCoder(format).GetEncodedByteCount(width, height);
+
+    private static byte[] CopyRgba8Pixels(ArrayBitmap<Rgba8UNorm> bitmap)
+    {
+        var result = new byte[checked(bitmap.PixelSpan.Length * 4)];
+        var offset = 0;
+        foreach (var pixel in bitmap.PixelSpan)
+        {
+            result[offset++] = pixel.Red;
+            result[offset++] = pixel.Green;
+            result[offset++] = pixel.Blue;
+            result[offset++] = pixel.Alpha;
+        }
+
+        return result;
+    }
 
     private static TextureSubresource[] CreateCubeSubresources(int width, int height, int mipLevelCount)
     {

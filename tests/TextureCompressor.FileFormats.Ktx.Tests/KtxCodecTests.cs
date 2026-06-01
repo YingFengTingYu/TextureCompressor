@@ -1,5 +1,6 @@
 ﻿using System.Buffers.Binary;
 using TextureCompressor.Bitmaps;
+using TextureCompressor.Codecs;
 using TextureCompressor.Colors;
 using TextureCompressor.FileFormats.Ktx;
 using TextureCompressor.Formats;
@@ -260,6 +261,29 @@ public sealed class KtxCodecTests
     }
 
     [Fact]
+    public void ReadVersion2BasisLzEtc1sDecodesToRgba8()
+    {
+        var source = new ArrayBitmap<Rgba8UNorm>(
+            4,
+            4,
+            Enumerable.Range(0, 16)
+                .Select(value => new Rgba8UNorm((byte)(16 + value * 5), (byte)(32 + value * 7), (byte)(48 + value * 3), (byte)(255 - value * 4)))
+                .ToArray());
+        var basis = BasisEtc1sTextureCoder.Encode(source.AsView());
+        var expected = new ArrayBitmap<Rgba8UNorm>(4, 4);
+        BasisEtc1sTextureCoder.Decode(basis.AsRawPayload(), expected.AsView());
+
+        var ktx = CreateBasisLzKtx2(width: 4, height: 4, basis);
+        var texture = KtxCodec.Read(ktx);
+        var decoded = KtxCodec.Decode(ktx);
+
+        Assert.Equal(TextureFormats.Rgba8UNorm, texture.Texture.Format);
+        Assert.Equal(KtxVkFormat.Undefined, texture.VkFormat);
+        Assert.Equal(CopyRgba8Pixels(expected), texture.Texture.Payload);
+        Assert.Equal(expected.PixelSpan.ToArray(), decoded.PixelSpan.ToArray());
+    }
+
+    [Fact]
     public void WriteVersion2MipMapChainWritesReadableKtx2()
     {
         var texture = new KtxTexture(
@@ -361,7 +385,7 @@ public sealed class KtxCodecTests
     {
         var ktx = CreateHeaderV2(KtxVkFormat.R8G8B8A8UNorm, width: 1, height: 1, supercompressionScheme: 1);
 
-        Assert.Throws<NotSupportedException>(() => KtxCodec.Read(ktx));
+        Assert.Throws<InvalidDataException>(() => KtxCodec.Read(ktx));
     }
 
     [Fact]
@@ -519,6 +543,74 @@ public sealed class KtxCodecTests
         BinaryPrimitives.WriteUInt64LittleEndian(ktx.AsSpan(96, 8), checked((ulong)(width * height * 4)));
         BinaryPrimitives.WriteUInt32LittleEndian(ktx.AsSpan(104, 4), 24);
         return ktx;
+    }
+
+    private static byte[] CreateBasisLzKtx2(int width, int height, BasisEtc1sEncodedPayload basis)
+    {
+        var levelPayloadLength = checked(basis.RgbSliceData.Length + basis.AlphaSliceData.Length);
+        var levelPayload = new byte[levelPayloadLength];
+        basis.RgbSliceData.Span.CopyTo(levelPayload);
+        basis.AlphaSliceData.Span.CopyTo(levelPayload.AsSpan(basis.RgbSliceData.Length));
+
+        var sgdLength = checked(20 + 20 + basis.EndpointData.Length + basis.SelectorData.Length + basis.TablesData.Length);
+        var sgd = new byte[sgdLength];
+        BinaryPrimitives.WriteUInt16LittleEndian(sgd.AsSpan(0, 2), checked((ushort)basis.EndpointCount));
+        BinaryPrimitives.WriteUInt16LittleEndian(sgd.AsSpan(2, 2), checked((ushort)basis.SelectorCount));
+        BinaryPrimitives.WriteUInt32LittleEndian(sgd.AsSpan(4, 4), checked((uint)basis.EndpointData.Length));
+        BinaryPrimitives.WriteUInt32LittleEndian(sgd.AsSpan(8, 4), checked((uint)basis.SelectorData.Length));
+        BinaryPrimitives.WriteUInt32LittleEndian(sgd.AsSpan(12, 4), checked((uint)basis.TablesData.Length));
+        BinaryPrimitives.WriteUInt32LittleEndian(sgd.AsSpan(20, 4), 0);
+        BinaryPrimitives.WriteUInt32LittleEndian(sgd.AsSpan(24, 4), 0);
+        BinaryPrimitives.WriteUInt32LittleEndian(sgd.AsSpan(28, 4), checked((uint)basis.RgbSliceData.Length));
+        BinaryPrimitives.WriteUInt32LittleEndian(sgd.AsSpan(32, 4), checked((uint)basis.RgbSliceData.Length));
+        BinaryPrimitives.WriteUInt32LittleEndian(sgd.AsSpan(36, 4), checked((uint)basis.AlphaSliceData.Length));
+
+        var offset = 40;
+        basis.EndpointData.Span.CopyTo(sgd.AsSpan(offset));
+        offset = checked(offset + basis.EndpointData.Length);
+        basis.SelectorData.Span.CopyTo(sgd.AsSpan(offset));
+        offset = checked(offset + basis.SelectorData.Length);
+        basis.TablesData.Span.CopyTo(sgd.AsSpan(offset));
+
+        const int dfdOffset = 104;
+        const int dfdLength = 24;
+        var sgdOffset = dfdOffset + dfdLength;
+        var levelOffset = sgdOffset + sgd.Length;
+        var ktx = new byte[checked(levelOffset + levelPayload.Length)];
+        new byte[] { 0xab, 0x4b, 0x54, 0x58, 0x20, 0x32, 0x30, 0xbb, 0x0d, 0x0a, 0x1a, 0x0a }.CopyTo(ktx, 0);
+        BinaryPrimitives.WriteUInt32LittleEndian(ktx.AsSpan(12, 4), (uint)KtxVkFormat.Undefined);
+        BinaryPrimitives.WriteUInt32LittleEndian(ktx.AsSpan(16, 4), 1);
+        BinaryPrimitives.WriteUInt32LittleEndian(ktx.AsSpan(20, 4), checked((uint)width));
+        BinaryPrimitives.WriteUInt32LittleEndian(ktx.AsSpan(24, 4), checked((uint)height));
+        BinaryPrimitives.WriteUInt32LittleEndian(ktx.AsSpan(36, 4), 1);
+        BinaryPrimitives.WriteUInt32LittleEndian(ktx.AsSpan(40, 4), 1);
+        BinaryPrimitives.WriteUInt32LittleEndian(ktx.AsSpan(44, 4), (uint)KtxSupercompressionScheme.BasisLz);
+        BinaryPrimitives.WriteUInt32LittleEndian(ktx.AsSpan(48, 4), dfdOffset);
+        BinaryPrimitives.WriteUInt32LittleEndian(ktx.AsSpan(52, 4), dfdLength);
+        BinaryPrimitives.WriteUInt64LittleEndian(ktx.AsSpan(64, 8), checked((ulong)sgdOffset));
+        BinaryPrimitives.WriteUInt64LittleEndian(ktx.AsSpan(72, 8), checked((ulong)sgd.Length));
+        BinaryPrimitives.WriteUInt64LittleEndian(ktx.AsSpan(80, 8), checked((ulong)levelOffset));
+        BinaryPrimitives.WriteUInt64LittleEndian(ktx.AsSpan(88, 8), checked((ulong)levelPayload.Length));
+        BinaryPrimitives.WriteUInt64LittleEndian(ktx.AsSpan(96, 8), 0);
+        BinaryPrimitives.WriteUInt32LittleEndian(ktx.AsSpan(dfdOffset, 4), dfdLength);
+        sgd.CopyTo(ktx.AsSpan(sgdOffset));
+        levelPayload.CopyTo(ktx.AsSpan(levelOffset));
+        return ktx;
+    }
+
+    private static byte[] CopyRgba8Pixels(ArrayBitmap<Rgba8UNorm> bitmap)
+    {
+        var result = new byte[checked(bitmap.PixelSpan.Length * 4)];
+        var offset = 0;
+        foreach (var pixel in bitmap.PixelSpan)
+        {
+            result[offset++] = pixel.Red;
+            result[offset++] = pixel.Green;
+            result[offset++] = pixel.Blue;
+            result[offset++] = pixel.Alpha;
+        }
+
+        return result;
     }
 
     private static TextureSubresource[] CreateCubeSubresources(int width, int height, int mipLevelCount)

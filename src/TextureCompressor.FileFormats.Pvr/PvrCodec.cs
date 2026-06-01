@@ -23,6 +23,10 @@ public static class PvrCodec
     private const uint LegacyFlagHasAlpha = 1 << 15;
     private const uint LegacyFlagVerticalFlip = 1 << 16;
     private const uint LegacySupportedFlags = LegacyPixelTypeMask | LegacyFlagHasAlpha;
+    private const int BasisLzHeaderByteCount = 20;
+    private const int BasisLzImageDescByteCount = 20;
+    private const uint BasisLzImageFlagIsPFrame = 0x02;
+    private const uint MetadataKeySupercompressionGlobalData = 7;
 
     private static readonly Lazy<Mappings> SFormatMappings = new(CreateFormatMappings);
 
@@ -48,6 +52,11 @@ public static class PvrCodec
         var metadata = header.ContainerVersion == 3
             ? ReadMetadata(stream, checked((int)header.MetadataSize))
             : [];
+        if (header.ContainerVersion == 3 && header.PixelFormat == (uint)PvrPixelFormat.BasisUEtc1s)
+        {
+            return ReadBasisUEtc1s(stream, header, metadata);
+        }
+
         var format = header.ContainerVersion == 3
             ? GetTextureFormat(header.PixelFormat, header.ColourSpace, header.ChannelType)
             : GetLegacyTextureFormat(
@@ -664,6 +673,258 @@ public static class PvrCodec
         }
 
         return subresources;
+    }
+
+    private static PvrTexture ReadBasisUEtc1s(Stream stream, PvrHeader header, IReadOnlyList<PvrMetadata> metadata)
+    {
+        if (header.Depth != 1)
+        {
+            throw new NotSupportedException("PVR BasisU ETC1S 3D textures are not supported yet.");
+        }
+
+        if (header.ChannelType != (uint)PvrChannelType.UnsignedByteNorm)
+        {
+            throw new NotSupportedException("PVR BasisU ETC1S textures must use unsigned byte normalized channel data.");
+        }
+
+        var format = header.ColourSpace switch
+        {
+            (uint)PvrColourSpace.Linear => TextureFormats.Rgba8UNorm,
+            (uint)PvrColourSpace.Srgb => TextureFormats.Rgba8Srgb,
+            _ => throw new NotSupportedException($"Unsupported PVR BasisU ETC1S colour space {header.ColourSpace}.")
+        };
+
+        var mipLevelCount = GetMipLevelCount(header);
+        ValidateMipLevelCount(header.Width, header.Height, header.Depth, mipLevelCount);
+
+        var imageCount = checked(mipLevelCount * header.SurfaceCount * header.FaceCount);
+        var globalData = ReadBasisLzGlobalData(metadata, imageCount);
+        var payload = ReadRemaining(stream);
+
+        var subresources = new List<TextureSubresource>(imageCount);
+        var payloadOffset = 0;
+        var imageDescIndex = 0;
+        for (var mipLevel = 0; mipLevel < mipLevelCount; mipLevel++)
+        {
+            var width = TextureImage.GetMipDimension(header.Width, mipLevel);
+            var height = TextureImage.GetMipDimension(header.Height, mipLevel);
+            for (var arrayLayer = 0; arrayLayer < header.SurfaceCount; arrayLayer++)
+            {
+                for (var face = 0; face < header.FaceCount; face++)
+                {
+                    var imageDesc = globalData.ImageDescs[imageDescIndex++];
+                    var imagePayloadByteCount = GetBasisLzImagePayloadByteCount(imageDesc);
+                    if (imagePayloadByteCount > payload.Length - payloadOffset)
+                    {
+                        throw new InvalidDataException("PVR BasisU ETC1S texture payload is truncated.");
+                    }
+
+                    var imagePayload = payload.AsSpan(payloadOffset, imagePayloadByteCount);
+                    payloadOffset = checked(payloadOffset + imagePayloadByteCount);
+
+                    var bitmap = DecodeBasisLzEtc1sImage(globalData, imagePayload, imageDesc, width, height);
+                    subresources.Add(new TextureSubresource(
+                        mipLevel,
+                        arrayLayer,
+                        face,
+                        width,
+                        height,
+                        CopyRgba8Pixels(bitmap)));
+                }
+            }
+        }
+
+        if (payloadOffset != payload.Length)
+        {
+            throw new InvalidDataException("PVR BasisU ETC1S texture payload has trailing bytes.");
+        }
+
+        return new PvrTexture(format, subresources, header.SurfaceCount, header.FaceCount, metadata);
+    }
+
+    private static byte[] ReadRemaining(Stream stream)
+    {
+        using var payload = new MemoryStream();
+        stream.CopyTo(payload);
+        return payload.ToArray();
+    }
+
+    private static PvrBasisLzGlobalData ReadBasisLzGlobalData(IReadOnlyList<PvrMetadata> metadata, int imageCount)
+    {
+        PvrMetadata? globalDataMetadata = null;
+        foreach (var item in metadata)
+        {
+            if (item.DevFourCC != Version || item.Key != MetadataKeySupercompressionGlobalData)
+            {
+                continue;
+            }
+
+            if (globalDataMetadata is not null)
+            {
+                throw new InvalidDataException("PVR BasisU ETC1S contains multiple supercompression global data metadata blocks.");
+            }
+
+            globalDataMetadata = item;
+        }
+
+        if (globalDataMetadata is null)
+        {
+            throw new InvalidDataException("PVR BasisU ETC1S supercompression global data metadata is missing.");
+        }
+
+        return ReadBasisLzGlobalData(globalDataMetadata.Data, imageCount);
+    }
+
+    private static PvrBasisLzGlobalData ReadBasisLzGlobalData(ReadOnlySpan<byte> data, int imageCount)
+    {
+        var imageDescBytes = checked(imageCount * BasisLzImageDescByteCount);
+        if (data.Length < BasisLzHeaderByteCount + imageDescBytes)
+        {
+            throw new InvalidDataException("PVR BasisU ETC1S supercompression global data is truncated.");
+        }
+
+        var endpointCount = BinaryPrimitives.ReadUInt16LittleEndian(data);
+        var selectorCount = BinaryPrimitives.ReadUInt16LittleEndian(data.Slice(2, 2));
+        var endpointByteLength = ReadBasisLzDataLength(data.Slice(4, 4), "endpoint");
+        var selectorByteLength = ReadBasisLzDataLength(data.Slice(8, 4), "selector");
+        var tableByteLength = ReadBasisLzDataLength(data.Slice(12, 4), "Huffman table");
+        var extendedByteLength = BinaryPrimitives.ReadUInt32LittleEndian(data.Slice(16, 4));
+        if (extendedByteLength != 0)
+        {
+            throw new NotSupportedException("PVR BasisU ETC1S extended data is not supported.");
+        }
+
+        var expectedByteLength = checked(BasisLzHeaderByteCount + imageDescBytes + endpointByteLength + selectorByteLength + tableByteLength);
+        if (data.Length != expectedByteLength)
+        {
+            throw new InvalidDataException($"PVR BasisU ETC1S supercompression global data is {data.Length} bytes, but {expectedByteLength} bytes were expected.");
+        }
+
+        var imageDescs = new PvrBasisLzImageDesc[imageCount];
+        var offset = BasisLzHeaderByteCount;
+        for (var i = 0; i < imageDescs.Length; i++)
+        {
+            var imageDesc = data.Slice(offset, BasisLzImageDescByteCount);
+            var imageFlags = BinaryPrimitives.ReadUInt32LittleEndian(imageDesc);
+            if ((imageFlags & ~BasisLzImageFlagIsPFrame) != 0)
+            {
+                throw new InvalidDataException("PVR BasisU ETC1S image descriptor contains unsupported flags.");
+            }
+
+            imageDescs[i] = new PvrBasisLzImageDesc(
+                imageFlags,
+                BinaryPrimitives.ReadUInt32LittleEndian(imageDesc.Slice(4, 4)),
+                BinaryPrimitives.ReadUInt32LittleEndian(imageDesc.Slice(8, 4)),
+                BinaryPrimitives.ReadUInt32LittleEndian(imageDesc.Slice(12, 4)),
+                BinaryPrimitives.ReadUInt32LittleEndian(imageDesc.Slice(16, 4)));
+            offset = checked(offset + BasisLzImageDescByteCount);
+        }
+
+        var endpointData = data.Slice(offset, endpointByteLength).ToArray();
+        offset = checked(offset + endpointByteLength);
+        var selectorData = data.Slice(offset, selectorByteLength).ToArray();
+        offset = checked(offset + selectorByteLength);
+        var tableData = data.Slice(offset, tableByteLength).ToArray();
+
+        return new PvrBasisLzGlobalData(endpointCount, selectorCount, endpointData, selectorData, tableData, imageDescs);
+    }
+
+    private static int ReadBasisLzDataLength(ReadOnlySpan<byte> source, string sectionName)
+    {
+        var value = BinaryPrimitives.ReadUInt32LittleEndian(source);
+        if (value == 0 || value > int.MaxValue)
+        {
+            throw new InvalidDataException($"PVR BasisU ETC1S {sectionName} data length is outside the supported range.");
+        }
+
+        return (int)value;
+    }
+
+    private static int GetBasisLzImagePayloadByteCount(PvrBasisLzImageDesc imageDesc)
+    {
+        var byteCount = GetBasisLzSliceEnd(imageDesc.RgbSliceByteOffset, imageDesc.RgbSliceByteLength, "RGB");
+        if (imageDesc.AlphaSliceByteLength != 0)
+        {
+            byteCount = Math.Max(byteCount, GetBasisLzSliceEnd(imageDesc.AlphaSliceByteOffset, imageDesc.AlphaSliceByteLength, "alpha"));
+        }
+
+        if (byteCount > int.MaxValue)
+        {
+            throw new InvalidDataException("PVR BasisU ETC1S image payload is outside the supported range.");
+        }
+
+        return checked((int)byteCount);
+    }
+
+    private static ulong GetBasisLzSliceEnd(uint byteOffset, uint byteLength, string sliceName)
+    {
+        if (byteLength == 0)
+        {
+            throw new InvalidDataException($"PVR BasisU ETC1S {sliceName} slice byte length must not be zero.");
+        }
+
+        return checked((ulong)byteOffset + byteLength);
+    }
+
+    private static ArrayBitmap<Rgba8UNorm> DecodeBasisLzEtc1sImage(
+        PvrBasisLzGlobalData globalData,
+        ReadOnlySpan<byte> imagePayload,
+        PvrBasisLzImageDesc imageDesc,
+        int width,
+        int height)
+    {
+        if (imageDesc.IsPFrame)
+        {
+            throw new NotSupportedException("PVR BasisU ETC1S P-frame images are not supported yet.");
+        }
+
+        var rgbSlice = SliceBasisLzImagePayload(imagePayload, imageDesc.RgbSliceByteOffset, imageDesc.RgbSliceByteLength, "RGB");
+        var alphaSlice = imageDesc.AlphaSliceByteLength == 0
+            ? default
+            : SliceBasisLzImagePayload(imagePayload, imageDesc.AlphaSliceByteOffset, imageDesc.AlphaSliceByteLength, "alpha");
+
+        var bitmap = new ArrayBitmap<Rgba8UNorm>(width, height);
+        var rawPayload = new BasisEtc1sRawPayload(
+            globalData.EndpointCount,
+            globalData.EndpointData,
+            globalData.SelectorCount,
+            globalData.SelectorData,
+            globalData.TableData,
+            rgbSlice,
+            alphaSlice);
+        BasisEtc1sTextureCoder.Decode(rawPayload, bitmap.AsView());
+        return bitmap;
+    }
+
+    private static ReadOnlySpan<byte> SliceBasisLzImagePayload(ReadOnlySpan<byte> imagePayload, uint byteOffset, uint byteLength, string sliceName)
+    {
+        if (byteLength == 0)
+        {
+            throw new InvalidDataException($"PVR BasisU ETC1S {sliceName} slice byte length must not be zero.");
+        }
+
+        var end = checked((ulong)byteOffset + byteLength);
+        if (end > (ulong)imagePayload.Length)
+        {
+            throw new InvalidDataException($"PVR BasisU ETC1S {sliceName} slice points outside its image payload.");
+        }
+
+        return imagePayload.Slice(checked((int)byteOffset), checked((int)byteLength));
+    }
+
+    private static byte[] CopyRgba8Pixels(ArrayBitmap<Rgba8UNorm> bitmap)
+    {
+        var result = new byte[checked(bitmap.PixelSpan.Length * 4)];
+        var offset = 0;
+        foreach (var pixel in bitmap.PixelSpan)
+        {
+            result[offset++] = pixel.Red;
+            result[offset++] = pixel.Green;
+            result[offset++] = pixel.Blue;
+            result[offset++] = pixel.Alpha;
+        }
+
+        return result;
     }
 
     private static TextureSubresource[] EncodeMipSubresources<TPixel>(IReadOnlyList<IBitmap<TPixel>> mipLevels, ITextureCoder coder)
@@ -1560,6 +1821,24 @@ public static class PvrCodec
         uint LegacyGreenMask,
         uint LegacyBlueMask,
         uint LegacyAlphaMask);
+
+    private readonly record struct PvrBasisLzGlobalData(
+        int EndpointCount,
+        int SelectorCount,
+        byte[] EndpointData,
+        byte[] SelectorData,
+        byte[] TableData,
+        PvrBasisLzImageDesc[] ImageDescs);
+
+    private readonly record struct PvrBasisLzImageDesc(
+        uint ImageFlags,
+        uint RgbSliceByteOffset,
+        uint RgbSliceByteLength,
+        uint AlphaSliceByteOffset,
+        uint AlphaSliceByteLength)
+    {
+        public bool IsPFrame => (ImageFlags & BasisLzImageFlagIsPFrame) != 0;
+    }
 
     private readonly record struct PvrFormatDescriptor(ulong PixelFormat, uint ColourSpace, uint ChannelType);
 
