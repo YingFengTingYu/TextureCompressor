@@ -29,7 +29,11 @@ public sealed class BasisUastcLdr4x4TextureCoder : IPitchTextureCoder
     private const int InterpolatedRgbaModeEncodedBitCount = 5;
     private const int InterpolatedRgbaHintBitCount = 23;
 
-    private static readonly TextureFormat[] SSupportedFormats = [TextureFormats.RgbaBasisUastcLdr4x4UNorm];
+    private static readonly TextureFormat[] SSupportedFormats =
+    [
+        TextureFormats.RgbaBasisUastcLdr4x4UNorm,
+        TextureFormats.RgbaBasisUastcLdr4x4Srgb
+    ];
 
     public BasisUastcLdr4x4TextureCoder()
         : this(TextureFormats.RgbaBasisUastcLdr4x4UNorm)
@@ -50,7 +54,9 @@ public sealed class BasisUastcLdr4x4TextureCoder : IPitchTextureCoder
 
     public static ReadOnlySpan<TextureFormat> SupportedFormats => SSupportedFormats;
 
-    public static bool IsSupported(TextureFormat format) => format == TextureFormats.RgbaBasisUastcLdr4x4UNorm;
+    public static bool IsSupported(TextureFormat format) =>
+        format == TextureFormats.RgbaBasisUastcLdr4x4UNorm
+        || format == TextureFormats.RgbaBasisUastcLdr4x4Srgb;
 
     public int GetDefaultPitch(int width) => Format.GetRowByteCount(width);
 
@@ -74,6 +80,7 @@ public sealed class BasisUastcLdr4x4TextureCoder : IPitchTextureCoder
 
         var blockCountX = GetBlockCount(destination.Width);
         var blockCountY = GetBlockCount(destination.Height);
+        var srgb = Format.ValueKind == TextureValueKind.Srgb;
 
         if (TextureCodingParallel.ShouldParallelize(blockCountX, blockCountY))
         {
@@ -95,7 +102,7 @@ public sealed class BasisUastcLdr4x4TextureCoder : IPitchTextureCoder
                             new Span<TPixel>((void*)destinationAddress, pixelCount),
                             width,
                             height);
-                        DecodeBlockRow(localSource, localDestination, rowPitch, blockCountX, blockY);
+                        DecodeBlockRow(localSource, localDestination, rowPitch, blockCountX, blockY, srgb);
                     });
                 }
             }
@@ -105,7 +112,7 @@ public sealed class BasisUastcLdr4x4TextureCoder : IPitchTextureCoder
 
         for (var blockY = 0; blockY < blockCountY; blockY++)
         {
-            DecodeBlockRow(source, destination, rowPitch, blockCountX, blockY);
+            DecodeBlockRow(source, destination, rowPitch, blockCountX, blockY, srgb);
         }
     }
 
@@ -116,6 +123,7 @@ public sealed class BasisUastcLdr4x4TextureCoder : IPitchTextureCoder
 
         var blockCountX = GetBlockCount(source.Width);
         var blockCountY = GetBlockCount(source.Height);
+        var srgb = Format.ValueKind == TextureValueKind.Srgb;
 
         if (TextureCodingParallel.ShouldParallelize(blockCountX, blockCountY))
         {
@@ -137,7 +145,7 @@ public sealed class BasisUastcLdr4x4TextureCoder : IPitchTextureCoder
                             width,
                             height);
                         var localDestination = new Span<byte>((void*)destinationAddress, destinationLength);
-                        EncodeBlockRow(localSource, localDestination, rowPitch, blockCountX, blockY);
+                        EncodeBlockRow(localSource, localDestination, rowPitch, blockCountX, blockY, srgb);
                     });
                 }
             }
@@ -147,7 +155,7 @@ public sealed class BasisUastcLdr4x4TextureCoder : IPitchTextureCoder
 
         for (var blockY = 0; blockY < blockCountY; blockY++)
         {
-            EncodeBlockRow(source, destination, rowPitch, blockCountX, blockY);
+            EncodeBlockRow(source, destination, rowPitch, blockCountX, blockY, srgb);
         }
     }
 
@@ -156,7 +164,8 @@ public sealed class BasisUastcLdr4x4TextureCoder : IPitchTextureCoder
         BitmapView<TPixel> destination,
         int rowPitch,
         int blockCountX,
-        int blockY)
+        int blockY,
+        bool srgb)
         where TPixel : unmanaged, IPixel<TPixel>
     {
         var blockPixelsStorage = new Rgba8UNormTexelBlock();
@@ -165,6 +174,10 @@ public sealed class BasisUastcLdr4x4TextureCoder : IPitchTextureCoder
         for (var blockX = 0; blockX < blockCountX; blockX++)
         {
             DecodeBlock(source.Slice(blockOffset, BytesPerBlock), blockPixels);
+            if (srgb)
+            {
+                DecodeSrgbColors(blockPixels);
+            }
 
             var xCount = Math.Min(BlockWidth, destination.Width - (blockX * BlockWidth));
             var yCount = Math.Min(BlockHeight, destination.Height - (blockY * BlockHeight));
@@ -186,7 +199,8 @@ public sealed class BasisUastcLdr4x4TextureCoder : IPitchTextureCoder
         Span<byte> destination,
         int rowPitch,
         int blockCountX,
-        int blockY)
+        int blockY,
+        bool srgb)
         where TPixel : unmanaged, IPixel<TPixel>
     {
         var blockPixelsStorage = new Rgba8UNormTexelBlock();
@@ -195,6 +209,11 @@ public sealed class BasisUastcLdr4x4TextureCoder : IPitchTextureCoder
         for (var blockX = 0; blockX < blockCountX; blockX++)
         {
             LoadBlock(source, blockX, blockY, blockPixels);
+            if (srgb)
+            {
+                EncodeSrgbColors(blockPixels);
+            }
+
             EncodeBlock(blockPixels, destination.Slice(blockOffset, BytesPerBlock));
             blockOffset = checked(blockOffset + BytesPerBlock);
         }
@@ -396,6 +415,26 @@ public sealed class BasisUastcLdr4x4TextureCoder : IPitchTextureCoder
         + Squared(actual.Green - expected.Green)
         + Squared(actual.Blue - expected.Blue)
         + Squared(actual.Alpha - expected.Alpha);
+
+    private static void DecodeSrgbColors(Span<Rgba8UNorm> block)
+    {
+        for (var i = 0; i < TexelsPerBlock; i++)
+        {
+            block[i].Red = RgbaColorConversions.Srgb8ToLinearUNorm8(block[i].Red);
+            block[i].Green = RgbaColorConversions.Srgb8ToLinearUNorm8(block[i].Green);
+            block[i].Blue = RgbaColorConversions.Srgb8ToLinearUNorm8(block[i].Blue);
+        }
+    }
+
+    private static void EncodeSrgbColors(Span<Rgba8UNorm> block)
+    {
+        for (var i = 0; i < TexelsPerBlock; i++)
+        {
+            block[i].Red = RgbaColorConversions.LinearUNorm8ToSrgb8(block[i].Red);
+            block[i].Green = RgbaColorConversions.LinearUNorm8ToSrgb8(block[i].Green);
+            block[i].Blue = RgbaColorConversions.LinearUNorm8ToSrgb8(block[i].Blue);
+        }
+    }
 
     private static long Squared(int value) => (long)value * value;
 

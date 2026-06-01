@@ -1821,6 +1821,9 @@ public static class TextureFormats
     public static readonly TextureFormat RgbaBasisUastcLdr4x4UNorm =
         TextureFormat.BlockCompressed("RGBA_BASIS_UASTC_LDR_4X4_UNORM", TextureComponents.Rgba, TextureValueKind.UNorm, 8, 8, 8, 8, 4, 4, 128);
 
+    public static readonly TextureFormat RgbaBasisUastcLdr4x4Srgb =
+        TextureFormat.BlockCompressed("RGBA_BASIS_UASTC_LDR_4X4_SRGB", TextureComponents.Rgba, TextureValueKind.Srgb, 8, 8, 8, 8, 4, 4, 128);
+
     public static readonly TextureFormat RgbaAstc5x4UNorm =
         Astc("RGBA_ASTC_5X4_UNORM", TextureValueKind.UNorm, 5, 4, 8);
 

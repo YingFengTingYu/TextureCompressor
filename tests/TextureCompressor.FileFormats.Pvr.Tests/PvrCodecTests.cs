@@ -398,7 +398,7 @@ public sealed class PvrCodecTests
         AssertHeader(
             pvr,
             expectedPixelFormat: (uint)PvrPixelFormat.BasisUUastc,
-            colourSpace: 1,
+            colourSpace: 0,
             channelType: 0,
             width: 4,
             height: 4);

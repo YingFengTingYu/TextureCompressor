@@ -20,8 +20,52 @@ public sealed class BasisUastcLdr4x4TextureCoderTests
         var coder = TextureCompressor.Registry.TextureCoderManager.Global.GetCoder(TextureFormats.RgbaBasisUastcLdr4x4UNorm);
 
         Assert.True(BasisUastcLdr4x4TextureCoder.IsSupported(TextureFormats.RgbaBasisUastcLdr4x4UNorm));
+        Assert.True(BasisUastcLdr4x4TextureCoder.IsSupported(TextureFormats.RgbaBasisUastcLdr4x4Srgb));
         Assert.IsType<BasisUastcLdr4x4TextureCoder>(coder);
         Assert.IsAssignableFrom<IPitchTextureCoder>(coder);
+    }
+
+    [Fact]
+    public void SrgbFormatConvertsStorageToLinearOnDecode()
+    {
+        var payload = CreateSolidColorPayload(188, 149, 99, 77);
+        var coder = new BasisUastcLdr4x4TextureCoder(TextureFormats.RgbaBasisUastcLdr4x4Srgb);
+        var bitmap = new ArrayBitmap<Rgba8UNorm>(4, 4);
+
+        coder.Decode(payload, bitmap.AsView(), coder.GetDefaultPitch(bitmap.Width));
+
+        Assert.All(bitmap.Pixels, pixel =>
+        {
+            Assert.Equal(RgbaColorConversions.Srgb8ToLinearUNorm8(188), pixel.Red);
+            Assert.Equal(RgbaColorConversions.Srgb8ToLinearUNorm8(149), pixel.Green);
+            Assert.Equal(RgbaColorConversions.Srgb8ToLinearUNorm8(99), pixel.Blue);
+            Assert.Equal(77, pixel.Alpha);
+        });
+    }
+
+    [Fact]
+    public void SrgbFormatConvertsLinearToStorageOnEncode()
+    {
+        var source = new ArrayBitmap<Rgba8UNorm>(
+            4,
+            4,
+            Enumerable.Repeat(new Rgba8UNorm(128, 64, 32, 77), 16).ToArray());
+        var coder = new BasisUastcLdr4x4TextureCoder(TextureFormats.RgbaBasisUastcLdr4x4Srgb);
+        var rowPitch = coder.GetDefaultPitch(source.Width);
+        var payload = new byte[coder.GetEncodedByteCount(source.Width, source.Height, rowPitch)];
+        var decodedStorage = new ArrayBitmap<Rgba8UNorm>(4, 4);
+
+        coder.Encode(source.AsView(), payload, rowPitch);
+        new BasisUastcLdr4x4TextureCoder(TextureFormats.RgbaBasisUastcLdr4x4UNorm)
+            .Decode(payload, decodedStorage.AsView(), rowPitch);
+
+        Assert.All(decodedStorage.Pixels, pixel =>
+        {
+            Assert.Equal(RgbaColorConversions.LinearUNorm8ToSrgb8(128), pixel.Red);
+            Assert.Equal(RgbaColorConversions.LinearUNorm8ToSrgb8(64), pixel.Green);
+            Assert.Equal(RgbaColorConversions.LinearUNorm8ToSrgb8(32), pixel.Blue);
+            Assert.Equal(77, pixel.Alpha);
+        });
     }
 
     [Theory]
