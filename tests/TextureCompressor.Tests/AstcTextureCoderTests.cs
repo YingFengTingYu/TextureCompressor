@@ -381,6 +381,119 @@ public sealed class AstcTextureCoderTests
         Assert.Equal(color, decoded.Pixels[0]);
     }
 
+    [Theory]
+    [MemberData(nameof(Astc3DUNormFormats))]
+    public void EncodeLdr3DSolidBlockRoundTripsEveryFootprint(TextureFormat format)
+    {
+        var color = new Rgba8UNorm(0x22, 0x44, 0x88, 0xCC);
+        var source = new ArrayVolumeBitmap<Rgba8UNorm>(1, 1, 1, [color]);
+        var decoded = new ArrayVolumeBitmap<Rgba8UNorm>(1, 1, 1);
+        var coder = new AstcTextureCoder(format);
+        var rowPitch = coder.GetDefaultPitch(source.Width);
+        var slicePitch = coder.GetDefaultSlicePitch(source.Width, source.Height, rowPitch);
+        var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, source.Depth, rowPitch, slicePitch)];
+
+        coder.Encode(source.AsView(), encoded, rowPitch, slicePitch);
+        coder.Decode(encoded, decoded.AsView(), rowPitch, slicePitch);
+
+        Assert.Equal(color, decoded.Pixels[0]);
+    }
+
+    [Fact]
+    public void EncodeLdr3DGradientProducesLegalVolumeBlock()
+    {
+        var source = new ArrayVolumeBitmap<Rgba8UNorm>(3, 3, 3);
+        for (var z = 0; z < source.Depth; z++)
+        {
+            for (var y = 0; y < source.Height; y++)
+            {
+                for (var x = 0; x < source.Width; x++)
+                {
+                    var value = (byte)Math.Round(((x + y + z) / 6.0) * 255.0);
+                    source.Pixels[(z * source.Width * source.Height) + (y * source.Width) + x] = new Rgba8UNorm(value, value, value, 255);
+                }
+            }
+        }
+
+        var decoded = new ArrayVolumeBitmap<Rgba8UNorm>(3, 3, 3);
+        var coder = new AstcTextureCoder(TextureFormats.RgbaAstc3x3x3UNorm);
+        var rowPitch = coder.GetDefaultPitch(source.Width);
+        var slicePitch = coder.GetDefaultSlicePitch(source.Width, source.Height, rowPitch);
+        var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, source.Depth, rowPitch, slicePitch)];
+
+        coder.Encode(source.AsView(), encoded, rowPitch, slicePitch);
+        coder.Decode(encoded, decoded.AsView(), rowPitch, slicePitch);
+
+        Assert.NotEqual(new Rgba8UNorm(255, 0, 255, 255), decoded.Pixels[0]);
+        Assert.True(decoded.Pixels[0].Red < decoded.Pixels[^1].Red);
+    }
+
+    [Theory]
+    [MemberData(nameof(Astc3DUNormFormats))]
+    public void EncodeLdr3DGradientProducesLegalBlockForEveryFootprint(TextureFormat format)
+    {
+        var source = new ArrayVolumeBitmap<Rgba8UNorm>(format.BlockWidth, format.BlockHeight, format.BlockDepth);
+        var divisor = Math.Max(1, source.Width + source.Height + source.Depth - 3);
+        for (var z = 0; z < source.Depth; z++)
+        {
+            for (var y = 0; y < source.Height; y++)
+            {
+                for (var x = 0; x < source.Width; x++)
+                {
+                    var value = (byte)Math.Round(((x + y + z) / (double)divisor) * 255.0);
+                    source.Pixels[(z * source.Width * source.Height) + (y * source.Width) + x] = new Rgba8UNorm(value, value, value, 255);
+                }
+            }
+        }
+
+        var decoded = new ArrayVolumeBitmap<Rgba8UNorm>(source.Width, source.Height, source.Depth);
+        var coder = new AstcTextureCoder(format);
+        var rowPitch = coder.GetDefaultPitch(source.Width);
+        var slicePitch = coder.GetDefaultSlicePitch(source.Width, source.Height, rowPitch);
+        var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, source.Depth, rowPitch, slicePitch)];
+
+        coder.Encode(source.AsView(), encoded, rowPitch, slicePitch);
+        coder.Decode(encoded, decoded.AsView(), rowPitch, slicePitch);
+
+        Assert.NotEqual(new Rgba8UNorm(255, 0, 255, 255), decoded.Pixels[0]);
+        Assert.True(decoded.Pixels[0].Red < decoded.Pixels[^1].Red);
+    }
+
+    [Fact]
+    public void EncodeLdr3DHonorsSlicePitch()
+    {
+        var rowPitch = 16;
+        var slicePitch = 32;
+        var red = new Rgba8UNorm(255, 0, 0, 255);
+        var green = new Rgba8UNorm(0, 255, 0, 255);
+        var source = new ArrayVolumeBitmap<Rgba8UNorm>(2, 2, 4);
+        for (var z = 0; z < source.Depth; z++)
+        {
+            var color = z < 3 ? red : green;
+            for (var i = z * source.Width * source.Height; i < (z + 1) * source.Width * source.Height; i++)
+            {
+                source.Pixels[i] = color;
+            }
+        }
+
+        var encoded = new byte[slicePitch * 2];
+        Array.Fill(encoded, (byte)0xCD);
+        var decoded = new ArrayVolumeBitmap<Rgba8UNorm>(2, 2, 4);
+        var coder = new AstcTextureCoder(TextureFormats.RgbaAstc3x3x3UNorm);
+
+        coder.Encode(source.AsView(), encoded, rowPitch, slicePitch);
+        coder.Decode(encoded, decoded.AsView(), rowPitch, slicePitch);
+
+        for (var z = 0; z < 3; z++)
+        {
+            Assert.All(decoded.AsView().GetSliceSpan(z).ToArray(), pixel => Assert.Equal(red, pixel));
+        }
+
+        Assert.All(decoded.AsView().GetSliceSpan(3).ToArray(), pixel => Assert.Equal(green, pixel));
+        Assert.All(encoded.AsSpan(16, 16).ToArray(), value => Assert.Equal(0xCD, value));
+        Assert.All(encoded.AsSpan(48, 16).ToArray(), value => Assert.Equal(0xCD, value));
+    }
+
     [Fact]
     public void EncodeLdrGradientRoundTripsFastWeightGrid()
     {
@@ -569,6 +682,24 @@ public sealed class AstcTextureCoderTests
 
         coder.Encode(source.AsView(), encoded, coder.GetDefaultPitch(source.Width));
         coder.Decode(encoded, decoded.AsView(), coder.GetDefaultPitch(decoded.Width));
+
+        Assert.Equal(color, decoded.Pixels[0]);
+    }
+
+    [Theory]
+    [MemberData(nameof(Astc3DFloatFormats))]
+    public void EncodeHdr3DSolidBlockRoundTripsEveryFootprint(TextureFormat format)
+    {
+        var color = new Rgba16Float((Half)0.25f, (Half)2f, (Half)8f, (Half)1f);
+        var source = new ArrayVolumeBitmap<Rgba16Float>(1, 1, 1, [color]);
+        var decoded = new ArrayVolumeBitmap<Rgba16Float>(1, 1, 1);
+        var coder = new AstcTextureCoder(format);
+        var rowPitch = coder.GetDefaultPitch(source.Width);
+        var slicePitch = coder.GetDefaultSlicePitch(source.Width, source.Height, rowPitch);
+        var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, source.Depth, rowPitch, slicePitch)];
+
+        coder.Encode(source.AsView(), encoded, rowPitch, slicePitch);
+        coder.Decode(encoded, decoded.AsView(), rowPitch, slicePitch);
 
         Assert.Equal(color, decoded.Pixels[0]);
     }
