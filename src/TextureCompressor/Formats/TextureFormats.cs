@@ -1932,6 +1932,96 @@ public static class TextureFormats
     public static readonly TextureFormat RgbaAstc12x12Float =
         Astc("RGBA_ASTC_12X12_FLOAT", TextureValueKind.Float, 12, 12, 16);
 
+    public static readonly TextureFormat RgbaAstc3x3x3UNorm =
+        Astc3D("RGBA_ASTC_3X3X3_UNORM", TextureValueKind.UNorm, 3, 3, 3, 8);
+
+    public static readonly TextureFormat RgbaAstc3x3x3Srgb =
+        Astc3D("RGBA_ASTC_3X3X3_SRGB", TextureValueKind.Srgb, 3, 3, 3, 8);
+
+    public static readonly TextureFormat RgbaAstc3x3x3Float =
+        Astc3D("RGBA_ASTC_3X3X3_FLOAT", TextureValueKind.Float, 3, 3, 3, 16);
+
+    public static readonly TextureFormat RgbaAstc4x3x3UNorm =
+        Astc3D("RGBA_ASTC_4X3X3_UNORM", TextureValueKind.UNorm, 4, 3, 3, 8);
+
+    public static readonly TextureFormat RgbaAstc4x3x3Srgb =
+        Astc3D("RGBA_ASTC_4X3X3_SRGB", TextureValueKind.Srgb, 4, 3, 3, 8);
+
+    public static readonly TextureFormat RgbaAstc4x3x3Float =
+        Astc3D("RGBA_ASTC_4X3X3_FLOAT", TextureValueKind.Float, 4, 3, 3, 16);
+
+    public static readonly TextureFormat RgbaAstc4x4x3UNorm =
+        Astc3D("RGBA_ASTC_4X4X3_UNORM", TextureValueKind.UNorm, 4, 4, 3, 8);
+
+    public static readonly TextureFormat RgbaAstc4x4x3Srgb =
+        Astc3D("RGBA_ASTC_4X4X3_SRGB", TextureValueKind.Srgb, 4, 4, 3, 8);
+
+    public static readonly TextureFormat RgbaAstc4x4x3Float =
+        Astc3D("RGBA_ASTC_4X4X3_FLOAT", TextureValueKind.Float, 4, 4, 3, 16);
+
+    public static readonly TextureFormat RgbaAstc4x4x4UNorm =
+        Astc3D("RGBA_ASTC_4X4X4_UNORM", TextureValueKind.UNorm, 4, 4, 4, 8);
+
+    public static readonly TextureFormat RgbaAstc4x4x4Srgb =
+        Astc3D("RGBA_ASTC_4X4X4_SRGB", TextureValueKind.Srgb, 4, 4, 4, 8);
+
+    public static readonly TextureFormat RgbaAstc4x4x4Float =
+        Astc3D("RGBA_ASTC_4X4X4_FLOAT", TextureValueKind.Float, 4, 4, 4, 16);
+
+    public static readonly TextureFormat RgbaAstc5x4x4UNorm =
+        Astc3D("RGBA_ASTC_5X4X4_UNORM", TextureValueKind.UNorm, 5, 4, 4, 8);
+
+    public static readonly TextureFormat RgbaAstc5x4x4Srgb =
+        Astc3D("RGBA_ASTC_5X4X4_SRGB", TextureValueKind.Srgb, 5, 4, 4, 8);
+
+    public static readonly TextureFormat RgbaAstc5x4x4Float =
+        Astc3D("RGBA_ASTC_5X4X4_FLOAT", TextureValueKind.Float, 5, 4, 4, 16);
+
+    public static readonly TextureFormat RgbaAstc5x5x4UNorm =
+        Astc3D("RGBA_ASTC_5X5X4_UNORM", TextureValueKind.UNorm, 5, 5, 4, 8);
+
+    public static readonly TextureFormat RgbaAstc5x5x4Srgb =
+        Astc3D("RGBA_ASTC_5X5X4_SRGB", TextureValueKind.Srgb, 5, 5, 4, 8);
+
+    public static readonly TextureFormat RgbaAstc5x5x4Float =
+        Astc3D("RGBA_ASTC_5X5X4_FLOAT", TextureValueKind.Float, 5, 5, 4, 16);
+
+    public static readonly TextureFormat RgbaAstc5x5x5UNorm =
+        Astc3D("RGBA_ASTC_5X5X5_UNORM", TextureValueKind.UNorm, 5, 5, 5, 8);
+
+    public static readonly TextureFormat RgbaAstc5x5x5Srgb =
+        Astc3D("RGBA_ASTC_5X5X5_SRGB", TextureValueKind.Srgb, 5, 5, 5, 8);
+
+    public static readonly TextureFormat RgbaAstc5x5x5Float =
+        Astc3D("RGBA_ASTC_5X5X5_FLOAT", TextureValueKind.Float, 5, 5, 5, 16);
+
+    public static readonly TextureFormat RgbaAstc6x5x5UNorm =
+        Astc3D("RGBA_ASTC_6X5X5_UNORM", TextureValueKind.UNorm, 6, 5, 5, 8);
+
+    public static readonly TextureFormat RgbaAstc6x5x5Srgb =
+        Astc3D("RGBA_ASTC_6X5X5_SRGB", TextureValueKind.Srgb, 6, 5, 5, 8);
+
+    public static readonly TextureFormat RgbaAstc6x5x5Float =
+        Astc3D("RGBA_ASTC_6X5X5_FLOAT", TextureValueKind.Float, 6, 5, 5, 16);
+
+    public static readonly TextureFormat RgbaAstc6x6x5UNorm =
+        Astc3D("RGBA_ASTC_6X6X5_UNORM", TextureValueKind.UNorm, 6, 6, 5, 8);
+
+    public static readonly TextureFormat RgbaAstc6x6x5Srgb =
+        Astc3D("RGBA_ASTC_6X6X5_SRGB", TextureValueKind.Srgb, 6, 6, 5, 8);
+
+    public static readonly TextureFormat RgbaAstc6x6x5Float =
+        Astc3D("RGBA_ASTC_6X6X5_FLOAT", TextureValueKind.Float, 6, 6, 5, 16);
+
+    public static readonly TextureFormat RgbaAstc6x6x6UNorm =
+        Astc3D("RGBA_ASTC_6X6X6_UNORM", TextureValueKind.UNorm, 6, 6, 6, 8);
+
+    public static readonly TextureFormat RgbaAstc6x6x6Srgb =
+        Astc3D("RGBA_ASTC_6X6X6_SRGB", TextureValueKind.Srgb, 6, 6, 6, 8);
+
+    public static readonly TextureFormat RgbaAstc6x6x6Float =
+        Astc3D("RGBA_ASTC_6X6X6_FLOAT", TextureValueKind.Float, 6, 6, 6, 16);
+
     private static TextureFormat DepthComponent(string name, TextureValueKind valueKind, int bits) =>
         TextureFormat.Uncompressed(name, TextureComponents.Depth, valueKind, bits);
 
@@ -2069,6 +2159,20 @@ public static class TextureFormats
             bitsPerChannel,
             blockWidth,
             blockHeight,
+            128);
+
+    private static TextureFormat Astc3D(string name, TextureValueKind valueKind, int blockWidth, int blockHeight, int blockDepth, int bitsPerChannel) =>
+        TextureFormat.BlockCompressed(
+            name,
+            TextureComponents.Rgba,
+            valueKind,
+            bitsPerChannel,
+            bitsPerChannel,
+            bitsPerChannel,
+            bitsPerChannel,
+            blockWidth,
+            blockHeight,
+            blockDepth,
             128);
 
     private static TextureFormat PackedYuva444(string name, int yBits, int uBits, int vBits, int alphaBits, int bitsPerBlock) => new(

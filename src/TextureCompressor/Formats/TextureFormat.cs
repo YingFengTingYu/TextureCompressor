@@ -156,6 +156,33 @@ public readonly record struct TextureFormat(
             bitsPerBlock,
             SizeMode: sizeMode);
 
+    public static TextureFormat BlockCompressed(
+        string name,
+        TextureComponents components,
+        TextureValueKind valueKind,
+        int redBits,
+        int greenBits,
+        int blueBits,
+        int alphaBits,
+        int blockWidth,
+        int blockHeight,
+        int blockDepth,
+        int bitsPerBlock,
+        TexturePayloadSizeMode sizeMode = TexturePayloadSizeMode.Default) => new(
+            name,
+            TextureFormatKind.BlockCompressed,
+            components,
+            valueKind,
+            redBits,
+            greenBits,
+            blueBits,
+            alphaBits,
+            blockWidth,
+            blockHeight,
+            bitsPerBlock,
+            BlockDepth: blockDepth,
+            SizeMode: sizeMode);
+
     private void ValidateLayout()
     {
         if (BlockWidth <= 0 || BlockHeight <= 0 || BlockDepth <= 0 || BitsPerBlock <= 0 || HeaderByteCount < 0)
