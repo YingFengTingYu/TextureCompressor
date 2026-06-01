@@ -30,6 +30,28 @@ public sealed class AstcTextureCoderTests
         Assert.Equal(32, TextureFormats.RgbaAstc12x12UNorm.GetRowByteCount(13));
     }
 
+    [Fact]
+    public void GlobalManagerFindsNativeAstc3DTextureCoder()
+    {
+        var coder = TextureCoderManager.Global.GetCoder3D(TextureFormats.RgbaAstc3x3x3UNorm);
+
+        Assert.True(AstcTextureCoder.IsSupported(TextureFormats.RgbaAstc3x3x3UNorm));
+        Assert.IsType<AstcTextureCoder>(coder);
+        Assert.IsAssignableFrom<IPitchTextureCoder3D>(coder);
+    }
+
+    [Fact]
+    public void Astc3DByteCountUsesVolumeFootprintBlocks()
+    {
+        var coder = new AstcTextureCoder(TextureFormats.RgbaAstc3x3x3UNorm);
+        var rowPitch = coder.GetDefaultPitch(width: 4);
+        var slicePitch = coder.GetDefaultSlicePitch(width: 4, height: 4, rowPitch);
+
+        Assert.Equal(32, rowPitch);
+        Assert.Equal(64, slicePitch);
+        Assert.Equal(128, coder.GetEncodedByteCount(width: 4, height: 4, depth: 4, rowPitch, slicePitch));
+    }
+
     [Theory]
     [MemberData(nameof(AstcUNormFormats))]
     public void DecodeLdrVoidExtentSupportsEveryFootprint(TextureFormat format)
@@ -48,6 +70,74 @@ public sealed class AstcTextureCoderTests
         Assert.Equal(new Rgba8UNorm(0x22, 0x44, 0x88, 0xCC), decoded.Pixels[0]);
     }
 
+    [Fact]
+    public void DecodeLdr3DVoidExtentFillsClippedVolume()
+    {
+        var encoded = CreateVoidExtentBlock(
+            hdr: false,
+            red: 0x2200,
+            green: 0x4400,
+            blue: 0x8800,
+            alpha: 0xCC00);
+        var decoded = new ArrayVolumeBitmap<Rgba8UNorm>(2, 2, 3);
+        var coder = new AstcTextureCoder(TextureFormats.RgbaAstc3x3x3UNorm);
+
+        coder.Decode(encoded, decoded.AsView(), coder.GetDefaultPitch(decoded.Width), coder.GetDefaultSlicePitch(decoded.Width, decoded.Height));
+
+        Assert.All(decoded.Pixels, pixel => Assert.Equal(new Rgba8UNorm(0x22, 0x44, 0x88, 0xCC), pixel));
+    }
+
+    [Theory]
+    [MemberData(nameof(Astc3DUNormFormats))]
+    public void DecodeLdr3DVoidExtentSupportsEveryFootprint(TextureFormat format)
+    {
+        var encoded = CreateVoidExtentBlock(
+            hdr: false,
+            red: 0x2200,
+            green: 0x4400,
+            blue: 0x8800,
+            alpha: 0xCC00);
+        var decoded = new ArrayVolumeBitmap<Rgba8UNorm>(1, 1, 1);
+        var coder = new AstcTextureCoder(format);
+
+        coder.Decode(encoded, decoded.AsView(), coder.GetDefaultPitch(decoded.Width), coder.GetDefaultSlicePitch(decoded.Width, decoded.Height));
+
+        Assert.Equal(new Rgba8UNorm(0x22, 0x44, 0x88, 0xCC), decoded.Pixels[0]);
+    }
+
+    [Fact]
+    public void DecodeLdr3DVoidExtentUsesBlockDepthStrides()
+    {
+        var red = CreateVoidExtentBlock(hdr: false, red: 0xFF00, green: 0x0000, blue: 0x0000, alpha: 0xFF00);
+        var green = CreateVoidExtentBlock(hdr: false, red: 0x0000, green: 0xFF00, blue: 0x0000, alpha: 0xFF00);
+        var encoded = new byte[32];
+        red.CopyTo(encoded.AsSpan(0, 16));
+        green.CopyTo(encoded.AsSpan(16, 16));
+        var decoded = new ArrayVolumeBitmap<Rgba8UNorm>(2, 2, 4);
+        var coder = new AstcTextureCoder(TextureFormats.RgbaAstc3x3x3UNorm);
+
+        coder.Decode(encoded, decoded.AsView(), coder.GetDefaultPitch(decoded.Width), coder.GetDefaultSlicePitch(decoded.Width, decoded.Height));
+
+        for (var z = 0; z < 3; z++)
+        {
+            Assert.All(decoded.AsView().GetSliceSpan(z).ToArray(), pixel => Assert.Equal(new Rgba8UNorm(255, 0, 0, 255), pixel));
+        }
+
+        Assert.All(decoded.AsView().GetSliceSpan(3).ToArray(), pixel => Assert.Equal(new Rgba8UNorm(0, 255, 0, 255), pixel));
+    }
+
+    [Fact]
+    public void DecodeLdr3DOrdinaryBlockUses3DWeightGrid()
+    {
+        var encoded = CreateSinglePartition3DLumaBlock(0x10, 0xE0, quantizedWeight: 3);
+        var decoded = new ArrayVolumeBitmap<Rgba8UNorm>(3, 3, 3);
+        var coder = new AstcTextureCoder(TextureFormats.RgbaAstc3x3x3UNorm);
+
+        coder.Decode(encoded, decoded.AsView(), coder.GetDefaultPitch(decoded.Width), coder.GetDefaultSlicePitch(decoded.Width, decoded.Height));
+
+        Assert.All(decoded.Pixels, pixel => Assert.Equal(new Rgba8UNorm(0xE0, 0xE0, 0xE0, 255), pixel));
+    }
+
     [Theory]
     [MemberData(nameof(AstcFloatFormats))]
     public void DecodeHdrVoidExtentSupportsEveryFootprint(TextureFormat format)
@@ -62,6 +152,24 @@ public sealed class AstcTextureCoderTests
         var coder = new AstcTextureCoder(format);
 
         coder.Decode(encoded, decoded.AsView(), coder.GetDefaultPitch(decoded.Width));
+
+        Assert.Equal(new Rgba16Float((Half)0.25f, (Half)0.5f, (Half)2f, (Half)1f), decoded.Pixels[0]);
+    }
+
+    [Theory]
+    [MemberData(nameof(Astc3DFloatFormats))]
+    public void DecodeHdr3DVoidExtentSupportsEveryFootprint(TextureFormat format)
+    {
+        var encoded = CreateVoidExtentBlock(
+            hdr: true,
+            red: BitConverter.HalfToUInt16Bits((Half)0.25f),
+            green: BitConverter.HalfToUInt16Bits((Half)0.5f),
+            blue: BitConverter.HalfToUInt16Bits((Half)2f),
+            alpha: BitConverter.HalfToUInt16Bits((Half)1f));
+        var decoded = new ArrayVolumeBitmap<Rgba16Float>(1, 1, 1);
+        var coder = new AstcTextureCoder(format);
+
+        coder.Decode(encoded, decoded.AsView(), coder.GetDefaultPitch(decoded.Width), coder.GetDefaultSlicePitch(decoded.Width, decoded.Height));
 
         Assert.Equal(new Rgba16Float((Half)0.25f, (Half)0.5f, (Half)2f, (Half)1f), decoded.Pixels[0]);
     }
@@ -613,6 +721,24 @@ public sealed class AstcTextureCoderTests
         TextureFormats.RgbaAstc12x12Float
     };
 
+    public static TheoryData<TextureFormat> Astc3DUNormFormats() => Astc3DFormats(TextureValueKind.UNorm);
+
+    public static TheoryData<TextureFormat> Astc3DFloatFormats() => Astc3DFormats(TextureValueKind.Float);
+
+    private static TheoryData<TextureFormat> Astc3DFormats(TextureValueKind valueKind)
+    {
+        var formats = new TheoryData<TextureFormat>();
+        foreach (var format in AstcTextureCoder.SupportedFormats)
+        {
+            if (format.BlockDepth > 1 && format.ValueKind == valueKind)
+            {
+                formats.Add(format);
+            }
+        }
+
+        return formats;
+    }
+
     public static TheoryData<TextureCompressionLevel> AstcCompressionModes() => new()
     {
         TextureCompressionLevel.Fast,
@@ -738,6 +864,25 @@ public sealed class AstcTextureCoderTests
         return block;
     }
 
+    private static byte[] CreateSinglePartition3DLumaBlock(byte endpoint0, byte endpoint1, int quantizedWeight)
+    {
+        UInt128 bits = 0;
+
+        // 3x3x3 weight grid, 2-bit weight range, single partition, CEM 0 (luminance direct).
+        bits |= 166;
+        bits |= (UInt128)endpoint0 << 17;
+        bits |= (UInt128)endpoint1 << 25;
+
+        UInt128 weightStream = 0;
+        for (var i = 0; i < 27; i++)
+        {
+            weightStream |= (UInt128)(quantizedWeight & 3) << (i * 2);
+        }
+
+        bits |= ReverseLowBits(weightStream, 54) << (128 - 54);
+        return WriteBlock(bits);
+    }
+
     private static byte[] CreateSinglePartitionHdrLumaBlock(byte endpoint0, byte endpoint1)
     {
         UInt128 bits = 0;
@@ -832,6 +977,17 @@ public sealed class AstcTextureCoderTests
         value = ((value & 0x00FF00FF00FF00FFUL) << 8) | ((value >> 8) & 0x00FF00FF00FF00FFUL);
         value = ((value & 0x0000FFFF0000FFFFUL) << 16) | ((value >> 16) & 0x0000FFFF0000FFFFUL);
         return (value << 32) | (value >> 32);
+    }
+
+    private static UInt128 ReverseLowBits(UInt128 value, int bitCount)
+    {
+        var result = UInt128.Zero;
+        for (var i = 0; i < bitCount; i++)
+        {
+            result = (result << 1) | ((value >> i) & UInt128.One);
+        }
+
+        return result;
     }
 
     private static byte Srgb8ToLinearUNorm8(byte value)

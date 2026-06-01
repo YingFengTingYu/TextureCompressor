@@ -8,12 +8,15 @@ using TextureCompressor.Utilities;
 
 namespace TextureCompressor.Codecs;
 
-public sealed class AstcTextureCoder : IPitchTextureCoder
+public sealed class AstcTextureCoder : IPitchTextureCoder, IPitchTextureCoder3D
 {
     private const int BytesPerBlock = 16;
     private const int MaxBlockWidth = 12;
     private const int MaxBlockHeight = 12;
-    private const int MaxTexelsPerBlock = MaxBlockWidth * MaxBlockHeight;
+    private const int Max3DBlockWidth = 6;
+    private const int Max3DBlockHeight = 6;
+    private const int Max3DBlockDepth = 6;
+    private const int MaxTexelsPerBlock = Max3DBlockWidth * Max3DBlockHeight * Max3DBlockDepth;
     private const int MaxWeightValues = 64;
     private const ushort LnsOne = 0x7800;
 
@@ -22,48 +25,78 @@ public sealed class AstcTextureCoder : IPitchTextureCoder
 
     private static readonly AstcFormatInfo[] SSupportedFormatInfo =
     [
-        new(TextureFormats.RgbaAstc4x4UNorm, 4, 4, AstcTransfer.Ldr),
-        new(TextureFormats.RgbaAstc4x4Srgb, 4, 4, AstcTransfer.Srgb),
-        new(TextureFormats.RgbaAstc4x4Float, 4, 4, AstcTransfer.Hdr),
-        new(TextureFormats.RgbaAstc5x4UNorm, 5, 4, AstcTransfer.Ldr),
-        new(TextureFormats.RgbaAstc5x4Srgb, 5, 4, AstcTransfer.Srgb),
-        new(TextureFormats.RgbaAstc5x4Float, 5, 4, AstcTransfer.Hdr),
-        new(TextureFormats.RgbaAstc5x5UNorm, 5, 5, AstcTransfer.Ldr),
-        new(TextureFormats.RgbaAstc5x5Srgb, 5, 5, AstcTransfer.Srgb),
-        new(TextureFormats.RgbaAstc5x5Float, 5, 5, AstcTransfer.Hdr),
-        new(TextureFormats.RgbaAstc6x5UNorm, 6, 5, AstcTransfer.Ldr),
-        new(TextureFormats.RgbaAstc6x5Srgb, 6, 5, AstcTransfer.Srgb),
-        new(TextureFormats.RgbaAstc6x5Float, 6, 5, AstcTransfer.Hdr),
-        new(TextureFormats.RgbaAstc6x6UNorm, 6, 6, AstcTransfer.Ldr),
-        new(TextureFormats.RgbaAstc6x6Srgb, 6, 6, AstcTransfer.Srgb),
-        new(TextureFormats.RgbaAstc6x6Float, 6, 6, AstcTransfer.Hdr),
-        new(TextureFormats.RgbaAstc8x5UNorm, 8, 5, AstcTransfer.Ldr),
-        new(TextureFormats.RgbaAstc8x5Srgb, 8, 5, AstcTransfer.Srgb),
-        new(TextureFormats.RgbaAstc8x5Float, 8, 5, AstcTransfer.Hdr),
-        new(TextureFormats.RgbaAstc8x6UNorm, 8, 6, AstcTransfer.Ldr),
-        new(TextureFormats.RgbaAstc8x6Srgb, 8, 6, AstcTransfer.Srgb),
-        new(TextureFormats.RgbaAstc8x6Float, 8, 6, AstcTransfer.Hdr),
-        new(TextureFormats.RgbaAstc8x8UNorm, 8, 8, AstcTransfer.Ldr),
-        new(TextureFormats.RgbaAstc8x8Srgb, 8, 8, AstcTransfer.Srgb),
-        new(TextureFormats.RgbaAstc8x8Float, 8, 8, AstcTransfer.Hdr),
-        new(TextureFormats.RgbaAstc10x5UNorm, 10, 5, AstcTransfer.Ldr),
-        new(TextureFormats.RgbaAstc10x5Srgb, 10, 5, AstcTransfer.Srgb),
-        new(TextureFormats.RgbaAstc10x5Float, 10, 5, AstcTransfer.Hdr),
-        new(TextureFormats.RgbaAstc10x6UNorm, 10, 6, AstcTransfer.Ldr),
-        new(TextureFormats.RgbaAstc10x6Srgb, 10, 6, AstcTransfer.Srgb),
-        new(TextureFormats.RgbaAstc10x6Float, 10, 6, AstcTransfer.Hdr),
-        new(TextureFormats.RgbaAstc10x8UNorm, 10, 8, AstcTransfer.Ldr),
-        new(TextureFormats.RgbaAstc10x8Srgb, 10, 8, AstcTransfer.Srgb),
-        new(TextureFormats.RgbaAstc10x8Float, 10, 8, AstcTransfer.Hdr),
-        new(TextureFormats.RgbaAstc10x10UNorm, 10, 10, AstcTransfer.Ldr),
-        new(TextureFormats.RgbaAstc10x10Srgb, 10, 10, AstcTransfer.Srgb),
-        new(TextureFormats.RgbaAstc10x10Float, 10, 10, AstcTransfer.Hdr),
-        new(TextureFormats.RgbaAstc12x10UNorm, 12, 10, AstcTransfer.Ldr),
-        new(TextureFormats.RgbaAstc12x10Srgb, 12, 10, AstcTransfer.Srgb),
-        new(TextureFormats.RgbaAstc12x10Float, 12, 10, AstcTransfer.Hdr),
-        new(TextureFormats.RgbaAstc12x12UNorm, 12, 12, AstcTransfer.Ldr),
-        new(TextureFormats.RgbaAstc12x12Srgb, 12, 12, AstcTransfer.Srgb),
-        new(TextureFormats.RgbaAstc12x12Float, 12, 12, AstcTransfer.Hdr)
+        new(TextureFormats.RgbaAstc4x4UNorm, 4, 4, 1, AstcTransfer.Ldr),
+        new(TextureFormats.RgbaAstc4x4Srgb, 4, 4, 1, AstcTransfer.Srgb),
+        new(TextureFormats.RgbaAstc4x4Float, 4, 4, 1, AstcTransfer.Hdr),
+        new(TextureFormats.RgbaAstc5x4UNorm, 5, 4, 1, AstcTransfer.Ldr),
+        new(TextureFormats.RgbaAstc5x4Srgb, 5, 4, 1, AstcTransfer.Srgb),
+        new(TextureFormats.RgbaAstc5x4Float, 5, 4, 1, AstcTransfer.Hdr),
+        new(TextureFormats.RgbaAstc5x5UNorm, 5, 5, 1, AstcTransfer.Ldr),
+        new(TextureFormats.RgbaAstc5x5Srgb, 5, 5, 1, AstcTransfer.Srgb),
+        new(TextureFormats.RgbaAstc5x5Float, 5, 5, 1, AstcTransfer.Hdr),
+        new(TextureFormats.RgbaAstc6x5UNorm, 6, 5, 1, AstcTransfer.Ldr),
+        new(TextureFormats.RgbaAstc6x5Srgb, 6, 5, 1, AstcTransfer.Srgb),
+        new(TextureFormats.RgbaAstc6x5Float, 6, 5, 1, AstcTransfer.Hdr),
+        new(TextureFormats.RgbaAstc6x6UNorm, 6, 6, 1, AstcTransfer.Ldr),
+        new(TextureFormats.RgbaAstc6x6Srgb, 6, 6, 1, AstcTransfer.Srgb),
+        new(TextureFormats.RgbaAstc6x6Float, 6, 6, 1, AstcTransfer.Hdr),
+        new(TextureFormats.RgbaAstc8x5UNorm, 8, 5, 1, AstcTransfer.Ldr),
+        new(TextureFormats.RgbaAstc8x5Srgb, 8, 5, 1, AstcTransfer.Srgb),
+        new(TextureFormats.RgbaAstc8x5Float, 8, 5, 1, AstcTransfer.Hdr),
+        new(TextureFormats.RgbaAstc8x6UNorm, 8, 6, 1, AstcTransfer.Ldr),
+        new(TextureFormats.RgbaAstc8x6Srgb, 8, 6, 1, AstcTransfer.Srgb),
+        new(TextureFormats.RgbaAstc8x6Float, 8, 6, 1, AstcTransfer.Hdr),
+        new(TextureFormats.RgbaAstc8x8UNorm, 8, 8, 1, AstcTransfer.Ldr),
+        new(TextureFormats.RgbaAstc8x8Srgb, 8, 8, 1, AstcTransfer.Srgb),
+        new(TextureFormats.RgbaAstc8x8Float, 8, 8, 1, AstcTransfer.Hdr),
+        new(TextureFormats.RgbaAstc10x5UNorm, 10, 5, 1, AstcTransfer.Ldr),
+        new(TextureFormats.RgbaAstc10x5Srgb, 10, 5, 1, AstcTransfer.Srgb),
+        new(TextureFormats.RgbaAstc10x5Float, 10, 5, 1, AstcTransfer.Hdr),
+        new(TextureFormats.RgbaAstc10x6UNorm, 10, 6, 1, AstcTransfer.Ldr),
+        new(TextureFormats.RgbaAstc10x6Srgb, 10, 6, 1, AstcTransfer.Srgb),
+        new(TextureFormats.RgbaAstc10x6Float, 10, 6, 1, AstcTransfer.Hdr),
+        new(TextureFormats.RgbaAstc10x8UNorm, 10, 8, 1, AstcTransfer.Ldr),
+        new(TextureFormats.RgbaAstc10x8Srgb, 10, 8, 1, AstcTransfer.Srgb),
+        new(TextureFormats.RgbaAstc10x8Float, 10, 8, 1, AstcTransfer.Hdr),
+        new(TextureFormats.RgbaAstc10x10UNorm, 10, 10, 1, AstcTransfer.Ldr),
+        new(TextureFormats.RgbaAstc10x10Srgb, 10, 10, 1, AstcTransfer.Srgb),
+        new(TextureFormats.RgbaAstc10x10Float, 10, 10, 1, AstcTransfer.Hdr),
+        new(TextureFormats.RgbaAstc12x10UNorm, 12, 10, 1, AstcTransfer.Ldr),
+        new(TextureFormats.RgbaAstc12x10Srgb, 12, 10, 1, AstcTransfer.Srgb),
+        new(TextureFormats.RgbaAstc12x10Float, 12, 10, 1, AstcTransfer.Hdr),
+        new(TextureFormats.RgbaAstc12x12UNorm, 12, 12, 1, AstcTransfer.Ldr),
+        new(TextureFormats.RgbaAstc12x12Srgb, 12, 12, 1, AstcTransfer.Srgb),
+        new(TextureFormats.RgbaAstc12x12Float, 12, 12, 1, AstcTransfer.Hdr),
+        new(TextureFormats.RgbaAstc3x3x3UNorm, 3, 3, 3, AstcTransfer.Ldr),
+        new(TextureFormats.RgbaAstc3x3x3Srgb, 3, 3, 3, AstcTransfer.Srgb),
+        new(TextureFormats.RgbaAstc3x3x3Float, 3, 3, 3, AstcTransfer.Hdr),
+        new(TextureFormats.RgbaAstc4x3x3UNorm, 4, 3, 3, AstcTransfer.Ldr),
+        new(TextureFormats.RgbaAstc4x3x3Srgb, 4, 3, 3, AstcTransfer.Srgb),
+        new(TextureFormats.RgbaAstc4x3x3Float, 4, 3, 3, AstcTransfer.Hdr),
+        new(TextureFormats.RgbaAstc4x4x3UNorm, 4, 4, 3, AstcTransfer.Ldr),
+        new(TextureFormats.RgbaAstc4x4x3Srgb, 4, 4, 3, AstcTransfer.Srgb),
+        new(TextureFormats.RgbaAstc4x4x3Float, 4, 4, 3, AstcTransfer.Hdr),
+        new(TextureFormats.RgbaAstc4x4x4UNorm, 4, 4, 4, AstcTransfer.Ldr),
+        new(TextureFormats.RgbaAstc4x4x4Srgb, 4, 4, 4, AstcTransfer.Srgb),
+        new(TextureFormats.RgbaAstc4x4x4Float, 4, 4, 4, AstcTransfer.Hdr),
+        new(TextureFormats.RgbaAstc5x4x4UNorm, 5, 4, 4, AstcTransfer.Ldr),
+        new(TextureFormats.RgbaAstc5x4x4Srgb, 5, 4, 4, AstcTransfer.Srgb),
+        new(TextureFormats.RgbaAstc5x4x4Float, 5, 4, 4, AstcTransfer.Hdr),
+        new(TextureFormats.RgbaAstc5x5x4UNorm, 5, 5, 4, AstcTransfer.Ldr),
+        new(TextureFormats.RgbaAstc5x5x4Srgb, 5, 5, 4, AstcTransfer.Srgb),
+        new(TextureFormats.RgbaAstc5x5x4Float, 5, 5, 4, AstcTransfer.Hdr),
+        new(TextureFormats.RgbaAstc5x5x5UNorm, 5, 5, 5, AstcTransfer.Ldr),
+        new(TextureFormats.RgbaAstc5x5x5Srgb, 5, 5, 5, AstcTransfer.Srgb),
+        new(TextureFormats.RgbaAstc5x5x5Float, 5, 5, 5, AstcTransfer.Hdr),
+        new(TextureFormats.RgbaAstc6x5x5UNorm, 6, 5, 5, AstcTransfer.Ldr),
+        new(TextureFormats.RgbaAstc6x5x5Srgb, 6, 5, 5, AstcTransfer.Srgb),
+        new(TextureFormats.RgbaAstc6x5x5Float, 6, 5, 5, AstcTransfer.Hdr),
+        new(TextureFormats.RgbaAstc6x6x5UNorm, 6, 6, 5, AstcTransfer.Ldr),
+        new(TextureFormats.RgbaAstc6x6x5Srgb, 6, 6, 5, AstcTransfer.Srgb),
+        new(TextureFormats.RgbaAstc6x6x5Float, 6, 6, 5, AstcTransfer.Hdr),
+        new(TextureFormats.RgbaAstc6x6x6UNorm, 6, 6, 6, AstcTransfer.Ldr),
+        new(TextureFormats.RgbaAstc6x6x6Srgb, 6, 6, 6, AstcTransfer.Srgb),
+        new(TextureFormats.RgbaAstc6x6x6Float, 6, 6, 6, AstcTransfer.Hdr)
     ];
 
     private static readonly TextureFormat[] SSupportedFormats = CreateSupportedFormats();
@@ -71,6 +104,7 @@ public sealed class AstcTextureCoder : IPitchTextureCoder
     private readonly AstcTransfer _transfer;
     private readonly int _blockWidth;
     private readonly int _blockHeight;
+    private readonly int _blockDepth;
     private readonly TextureCompressionOptions _options;
 
     public AstcTextureCoder(TextureFormat format, TextureCompressionOptions? options = null)
@@ -84,6 +118,7 @@ public sealed class AstcTextureCoder : IPitchTextureCoder
         _transfer = info.Transfer;
         _blockWidth = info.BlockWidth;
         _blockHeight = info.BlockHeight;
+        _blockDepth = info.BlockDepth;
         _options = options ?? new TextureCompressionOptions();
     }
 
@@ -97,6 +132,7 @@ public sealed class AstcTextureCoder : IPitchTextureCoder
 
     public int GetEncodedByteCount(int width, int height, int rowPitch)
     {
+        Validate2DFormat();
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(height);
 
         var rowByteCount = GetDefaultPitch(width);
@@ -111,6 +147,7 @@ public sealed class AstcTextureCoder : IPitchTextureCoder
     public void Decode<TPixel>(ReadOnlySpan<byte> source, BitmapView<TPixel> destination, int rowPitch)
         where TPixel : unmanaged, IPixel<TPixel>
     {
+        Validate2DFormat();
         ValidateSourceLength(destination.Width, destination.Height, source, rowPitch);
         DecodeByTransfer(source, destination, rowPitch);
     }
@@ -118,8 +155,67 @@ public sealed class AstcTextureCoder : IPitchTextureCoder
     public void Encode<TPixel>(BitmapView<TPixel> source, Span<byte> destination, int rowPitch)
         where TPixel : unmanaged, IPixel<TPixel>
     {
+        Validate2DFormat();
         ValidateDestinationLength(source.Width, source.Height, destination, rowPitch);
         EncodeByTransfer(source, destination, rowPitch);
+    }
+
+    public int GetDefaultSlicePitch(int width, int height, int rowPitch)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(height);
+
+        var rowByteCount = GetDefaultPitch(width);
+        if (rowPitch < rowByteCount)
+        {
+            throw new ArgumentOutOfRangeException(nameof(rowPitch), "Row pitch must be at least the packed block-row byte count.");
+        }
+
+        return checked(rowPitch * GetBlockCount(height, _blockHeight));
+    }
+
+    public int GetDefaultSlicePitch(int width, int height) =>
+        GetDefaultSlicePitch(width, height, GetDefaultPitch(width));
+
+    public int GetEncodedByteCount(int width, int height, int depth, int rowPitch, int slicePitch)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(depth);
+
+        var sliceByteCount = GetDefaultSlicePitch(width, height, rowPitch);
+        if (slicePitch < sliceByteCount)
+        {
+            throw new ArgumentOutOfRangeException(nameof(slicePitch), "Slice pitch must be at least the packed block-slice byte count.");
+        }
+
+        return checked(slicePitch * GetBlockCount(depth, _blockDepth));
+    }
+
+    public void Decode<TPixel>(ReadOnlySpan<byte> source, VolumeBitmapView<TPixel> destination, int rowPitch, int slicePitch)
+        where TPixel : unmanaged, IPixel<TPixel>
+    {
+        ValidateSourceLength(destination.Width, destination.Height, destination.Depth, source, rowPitch, slicePitch);
+        DecodeByTransfer(source, destination, rowPitch, slicePitch);
+    }
+
+    public void Encode<TPixel>(VolumeBitmapView<TPixel> source, Span<byte> destination, int rowPitch, int slicePitch)
+        where TPixel : unmanaged, IPixel<TPixel>
+    {
+        if (_blockDepth != 1)
+        {
+            throw new NotSupportedException("Native ASTC 3D encoding is not supported yet.");
+        }
+
+        var sliceByteCount = GetEncodedByteCount(source.Width, source.Height, rowPitch);
+        if (slicePitch < sliceByteCount)
+        {
+            throw new ArgumentOutOfRangeException(nameof(slicePitch), "Slice pitch must be at least the encoded 2D slice byte count.");
+        }
+
+        ValidateDestinationLength(source.Width, source.Height, source.Depth, destination, rowPitch, slicePitch);
+        for (var z = 0; z < source.Depth; z++)
+        {
+            var sliceOffset = checked(z * slicePitch);
+            Encode(source.GetSliceView(z), destination.Slice(sliceOffset, slicePitch), rowPitch);
+        }
     }
 
     private void DecodeByTransfer<TPixel>(ReadOnlySpan<byte> source, BitmapView<TPixel> destination, int rowPitch)
@@ -135,6 +231,25 @@ public sealed class AstcTextureCoder : IPitchTextureCoder
                 return;
             case AstcTransfer.Hdr:
                 DecodeFloat<TPixel, AstcHdrTransfer>(source, destination, rowPitch);
+                return;
+            default:
+                throw CreateUnsupportedFormatException(Format);
+        }
+    }
+
+    private void DecodeByTransfer<TPixel>(ReadOnlySpan<byte> source, VolumeBitmapView<TPixel> destination, int rowPitch, int slicePitch)
+        where TPixel : unmanaged, IPixel<TPixel>
+    {
+        switch (_transfer)
+        {
+            case AstcTransfer.Ldr:
+                DecodeUNorm<TPixel, AstcLdrTransfer>(source, destination, rowPitch, slicePitch);
+                return;
+            case AstcTransfer.Srgb:
+                DecodeUNorm<TPixel, AstcSrgbTransfer>(source, destination, rowPitch, slicePitch);
+                return;
+            case AstcTransfer.Hdr:
+                DecodeFloat<TPixel, AstcHdrTransfer>(source, destination, rowPitch, slicePitch);
                 return;
             default:
                 throw CreateUnsupportedFormatException(Format);
@@ -180,6 +295,36 @@ public sealed class AstcTextureCoder : IPitchTextureCoder
             }
 
             rowOffset = checked(rowOffset + rowPitch);
+        }
+    }
+
+    private void DecodeUNorm<TPixel, TTransfer>(ReadOnlySpan<byte> source, VolumeBitmapView<TPixel> destination, int rowPitch, int slicePitch)
+        where TPixel : unmanaged, IPixel<TPixel>
+        where TTransfer : IAstcUNormTransfer
+    {
+        var blockCountX = GetBlockCount(destination.Width, _blockWidth);
+        var blockCountY = GetBlockCount(destination.Height, _blockHeight);
+        var blockCountZ = GetBlockCount(destination.Depth, _blockDepth);
+        var block = new Rgba8UNormTexelBlock();
+
+        var sliceOffset = 0;
+        for (var blockZ = 0; blockZ < blockCountZ; blockZ++)
+        {
+            var rowOffset = sliceOffset;
+            for (var blockY = 0; blockY < blockCountY; blockY++)
+            {
+                var blockOffset = rowOffset;
+                for (var blockX = 0; blockX < blockCountX; blockX++)
+                {
+                    TTransfer.DecodeBlock(source.Slice(blockOffset, BytesPerBlock), _blockWidth, _blockHeight, _blockDepth, block);
+                    StoreUNormBlock(block, blockX, blockY, blockZ, destination);
+                    blockOffset = checked(blockOffset + BytesPerBlock);
+                }
+
+                rowOffset = checked(rowOffset + rowPitch);
+            }
+
+            sliceOffset = checked(sliceOffset + slicePitch);
         }
     }
 
@@ -272,6 +417,36 @@ public sealed class AstcTextureCoder : IPitchTextureCoder
         }
     }
 
+    private void DecodeFloat<TPixel, TTransfer>(ReadOnlySpan<byte> source, VolumeBitmapView<TPixel> destination, int rowPitch, int slicePitch)
+        where TPixel : unmanaged, IPixel<TPixel>
+        where TTransfer : IAstcFloatTransfer
+    {
+        var blockCountX = GetBlockCount(destination.Width, _blockWidth);
+        var blockCountY = GetBlockCount(destination.Height, _blockHeight);
+        var blockCountZ = GetBlockCount(destination.Depth, _blockDepth);
+        var block = new Rgba16FloatTexelBlock();
+
+        var sliceOffset = 0;
+        for (var blockZ = 0; blockZ < blockCountZ; blockZ++)
+        {
+            var rowOffset = sliceOffset;
+            for (var blockY = 0; blockY < blockCountY; blockY++)
+            {
+                var blockOffset = rowOffset;
+                for (var blockX = 0; blockX < blockCountX; blockX++)
+                {
+                    TTransfer.DecodeBlock(source.Slice(blockOffset, BytesPerBlock), _blockWidth, _blockHeight, _blockDepth, block);
+                    StoreFloatBlock(block, blockX, blockY, blockZ, destination);
+                    blockOffset = checked(blockOffset + BytesPerBlock);
+                }
+
+                rowOffset = checked(rowOffset + rowPitch);
+            }
+
+            sliceOffset = checked(sliceOffset + slicePitch);
+        }
+    }
+
     private void EncodeUNorm<TPixel, TTransfer>(BitmapView<TPixel> source, Span<byte> destination, int rowPitch)
         where TPixel : unmanaged, IPixel<TPixel>
         where TTransfer : IAstcUNormTransfer
@@ -342,12 +517,16 @@ public sealed class AstcTextureCoder : IPitchTextureCoder
     {
         static abstract void DecodeBlock(ReadOnlySpan<byte> source, int blockWidth, int blockHeight, Span<Rgba8UNorm> destination);
 
+        static abstract void DecodeBlock(ReadOnlySpan<byte> source, int blockWidth, int blockHeight, int blockDepth, Span<Rgba8UNorm> destination);
+
         static abstract void EncodeBlock(ReadOnlySpan<Rgba8UNorm> source, int blockWidth, int blockHeight, TextureCompressionLevel compressionMode, Span<byte> destination);
     }
 
     private interface IAstcFloatTransfer
     {
         static abstract void DecodeBlock(ReadOnlySpan<byte> source, int blockWidth, int blockHeight, Span<Rgba16Float> destination);
+
+        static abstract void DecodeBlock(ReadOnlySpan<byte> source, int blockWidth, int blockHeight, int blockDepth, Span<Rgba16Float> destination);
 
         static abstract void EncodeBlock(ReadOnlySpan<Rgba16Float> source, int blockWidth, int blockHeight, TextureCompressionLevel compressionMode, Span<byte> destination);
     }
@@ -356,6 +535,9 @@ public sealed class AstcTextureCoder : IPitchTextureCoder
     {
         public static void DecodeBlock(ReadOnlySpan<byte> source, int blockWidth, int blockHeight, Span<Rgba8UNorm> destination) =>
             DecodeLdrBlock(source, blockWidth, blockHeight, srgb: false, destination);
+
+        public static void DecodeBlock(ReadOnlySpan<byte> source, int blockWidth, int blockHeight, int blockDepth, Span<Rgba8UNorm> destination) =>
+            DecodeLdrBlock(source, blockWidth, blockHeight, blockDepth, srgb: false, destination);
 
         public static void EncodeBlock(ReadOnlySpan<Rgba8UNorm> source, int blockWidth, int blockHeight, TextureCompressionLevel compressionMode, Span<byte> destination) =>
             EncodeLdrBlock(source, blockWidth, blockHeight, srgb: false, compressionMode, destination);
@@ -366,6 +548,9 @@ public sealed class AstcTextureCoder : IPitchTextureCoder
         public static void DecodeBlock(ReadOnlySpan<byte> source, int blockWidth, int blockHeight, Span<Rgba8UNorm> destination) =>
             DecodeLdrBlock(source, blockWidth, blockHeight, srgb: true, destination);
 
+        public static void DecodeBlock(ReadOnlySpan<byte> source, int blockWidth, int blockHeight, int blockDepth, Span<Rgba8UNorm> destination) =>
+            DecodeLdrBlock(source, blockWidth, blockHeight, blockDepth, srgb: true, destination);
+
         public static void EncodeBlock(ReadOnlySpan<Rgba8UNorm> source, int blockWidth, int blockHeight, TextureCompressionLevel compressionMode, Span<byte> destination) =>
             EncodeLdrBlock(source, blockWidth, blockHeight, srgb: true, compressionMode, destination);
     }
@@ -375,16 +560,24 @@ public sealed class AstcTextureCoder : IPitchTextureCoder
         public static void DecodeBlock(ReadOnlySpan<byte> source, int blockWidth, int blockHeight, Span<Rgba16Float> destination) =>
             DecodeHdrBlock(source, blockWidth, blockHeight, destination);
 
+        public static void DecodeBlock(ReadOnlySpan<byte> source, int blockWidth, int blockHeight, int blockDepth, Span<Rgba16Float> destination) =>
+            DecodeHdrBlock(source, blockWidth, blockHeight, blockDepth, destination);
+
         public static void EncodeBlock(ReadOnlySpan<Rgba16Float> source, int blockWidth, int blockHeight, TextureCompressionLevel compressionMode, Span<byte> destination) =>
             EncodeHdrBlock(source, blockWidth, blockHeight, compressionMode, destination);
     }
 
     private static void DecodeLdrBlock(ReadOnlySpan<byte> source, int blockWidth, int blockHeight, bool srgb, Span<Rgba8UNorm> destination)
     {
+        DecodeLdrBlock(source, blockWidth, blockHeight, blockDepth: 1, srgb, destination);
+    }
+
+    private static void DecodeLdrBlock(ReadOnlySpan<byte> source, int blockWidth, int blockHeight, int blockDepth, bool srgb, Span<Rgba8UNorm> destination)
+    {
         var bits = ReadBlockBits(source);
-        if (!TryDecodeBlockInfo(bits, blockWidth, blockHeight, out var info))
+        if (!TryDecodeBlockInfo(bits, blockWidth, blockHeight, blockDepth, out var info))
         {
-            FillUNormBlock(destination, blockWidth, blockHeight, ErrorUNorm);
+            FillUNormBlock(destination, blockWidth, blockHeight, blockDepth, ErrorUNorm);
             return;
         }
 
@@ -392,50 +585,59 @@ public sealed class AstcTextureCoder : IPitchTextureCoder
         {
             if (info.VoidExtentIsHdr)
             {
-                FillUNormBlock(destination, blockWidth, blockHeight, ErrorUNorm);
+                FillUNormBlock(destination, blockWidth, blockHeight, blockDepth, ErrorUNorm);
                 return;
             }
 
             var color = ReadVoidExtentUNorm(source, srgb);
-            FillUNormBlock(destination, blockWidth, blockHeight, color);
+            FillUNormBlock(destination, blockWidth, blockHeight, blockDepth, color);
             return;
         }
 
         var endpoints = new InlineArray4<AstcEndpointPair>();
         if (!DecodeEndpointPairs(bits, info, endpoints))
         {
-            FillUNormBlock(destination, blockWidth, blockHeight, ErrorUNorm);
+            FillUNormBlock(destination, blockWidth, blockHeight, blockDepth, ErrorUNorm);
             return;
         }
 
         var weights0 = new IntTexelBlock();
         var weights1 = new IntTexelBlock();
-        if (!DecodeWeights(bits, info, blockWidth, blockHeight, weights0, weights1))
+        if (!DecodeWeights(bits, info, blockWidth, blockHeight, blockDepth, weights0, weights1))
         {
-            FillUNormBlock(destination, blockWidth, blockHeight, ErrorUNorm);
+            FillUNormBlock(destination, blockWidth, blockHeight, blockDepth, ErrorUNorm);
             return;
         }
 
-        for (var y = 0; y < blockHeight; y++)
+        var texelIndex = 0;
+        for (var z = 0; z < blockDepth; z++)
         {
-            for (var x = 0; x < blockWidth; x++)
+            for (var y = 0; y < blockHeight; y++)
             {
-                var texelIndex = (y * blockWidth) + x;
-                var partition = GetPartitionIndex(info.PartitionCount, info.PartitionIndex, x, y, blockWidth, blockHeight);
-                var endpoint = endpoints[partition];
-                destination[texelIndex] = endpoint.RgbHdr || endpoint.AlphaHdr
-                    ? ErrorUNorm
-                    : DecodeLdrTexel(endpoint, weights0[texelIndex], GetDualPlaneWeight(info, weights0, weights1, texelIndex, 0), GetDualPlaneWeight(info, weights0, weights1, texelIndex, 1), GetDualPlaneWeight(info, weights0, weights1, texelIndex, 2), GetDualPlaneWeight(info, weights0, weights1, texelIndex, 3), srgb);
+                for (var x = 0; x < blockWidth; x++)
+                {
+                    var partition = GetPartitionIndex(info.PartitionCount, info.PartitionIndex, x, y, z, blockWidth, blockHeight, blockDepth);
+                    var endpoint = endpoints[partition];
+                    destination[texelIndex] = endpoint.RgbHdr || endpoint.AlphaHdr
+                        ? ErrorUNorm
+                        : DecodeLdrTexel(endpoint, weights0[texelIndex], GetDualPlaneWeight(info, weights0, weights1, texelIndex, 0), GetDualPlaneWeight(info, weights0, weights1, texelIndex, 1), GetDualPlaneWeight(info, weights0, weights1, texelIndex, 2), GetDualPlaneWeight(info, weights0, weights1, texelIndex, 3), srgb);
+                    texelIndex++;
+                }
             }
         }
     }
 
     private static void DecodeHdrBlock(ReadOnlySpan<byte> source, int blockWidth, int blockHeight, Span<Rgba16Float> destination)
     {
+        DecodeHdrBlock(source, blockWidth, blockHeight, blockDepth: 1, destination);
+    }
+
+    private static void DecodeHdrBlock(ReadOnlySpan<byte> source, int blockWidth, int blockHeight, int blockDepth, Span<Rgba16Float> destination)
+    {
         var bits = ReadBlockBits(source);
-        if (!TryDecodeBlockInfo(bits, blockWidth, blockHeight, out var info))
+        if (!TryDecodeBlockInfo(bits, blockWidth, blockHeight, blockDepth, out var info))
         {
-            FillFloatBlock(destination, blockWidth, blockHeight, ErrorFloat);
+            FillFloatBlock(destination, blockWidth, blockHeight, blockDepth, ErrorFloat);
             return;
         }
 
@@ -444,38 +646,42 @@ public sealed class AstcTextureCoder : IPitchTextureCoder
             var color = info.VoidExtentIsHdr
                 ? ReadVoidExtentFloat(source)
                 : ReadVoidExtentUNormAsFloat(source);
-            FillFloatBlock(destination, blockWidth, blockHeight, color);
+            FillFloatBlock(destination, blockWidth, blockHeight, blockDepth, color);
             return;
         }
 
         var endpoints = new InlineArray4<AstcEndpointPair>();
         if (!DecodeEndpointPairs(bits, info, endpoints))
         {
-            FillFloatBlock(destination, blockWidth, blockHeight, ErrorFloat);
+            FillFloatBlock(destination, blockWidth, blockHeight, blockDepth, ErrorFloat);
             return;
         }
 
         var weights0 = new IntTexelBlock();
         var weights1 = new IntTexelBlock();
-        if (!DecodeWeights(bits, info, blockWidth, blockHeight, weights0, weights1))
+        if (!DecodeWeights(bits, info, blockWidth, blockHeight, blockDepth, weights0, weights1))
         {
-            FillFloatBlock(destination, blockWidth, blockHeight, ErrorFloat);
+            FillFloatBlock(destination, blockWidth, blockHeight, blockDepth, ErrorFloat);
             return;
         }
 
-        for (var y = 0; y < blockHeight; y++)
+        var texelIndex = 0;
+        for (var z = 0; z < blockDepth; z++)
         {
-            for (var x = 0; x < blockWidth; x++)
+            for (var y = 0; y < blockHeight; y++)
             {
-                var texelIndex = (y * blockWidth) + x;
-                var partition = GetPartitionIndex(info.PartitionCount, info.PartitionIndex, x, y, blockWidth, blockHeight);
-                var endpoint = endpoints[partition];
-                destination[texelIndex] = DecodeHdrTexel(
-                    endpoint,
-                    GetDualPlaneWeight(info, weights0, weights1, texelIndex, 0),
-                    GetDualPlaneWeight(info, weights0, weights1, texelIndex, 1),
-                    GetDualPlaneWeight(info, weights0, weights1, texelIndex, 2),
-                    GetDualPlaneWeight(info, weights0, weights1, texelIndex, 3));
+                for (var x = 0; x < blockWidth; x++)
+                {
+                    var partition = GetPartitionIndex(info.PartitionCount, info.PartitionIndex, x, y, z, blockWidth, blockHeight, blockDepth);
+                    var endpoint = endpoints[partition];
+                    destination[texelIndex] = DecodeHdrTexel(
+                        endpoint,
+                        GetDualPlaneWeight(info, weights0, weights1, texelIndex, 0),
+                        GetDualPlaneWeight(info, weights0, weights1, texelIndex, 1),
+                        GetDualPlaneWeight(info, weights0, weights1, texelIndex, 2),
+                        GetDualPlaneWeight(info, weights0, weights1, texelIndex, 3));
+                    texelIndex++;
+                }
             }
         }
     }
@@ -4197,9 +4403,9 @@ public sealed class AstcTextureCoder : IPitchTextureCoder
         return true;
     }
 
-    private static bool DecodeWeights(UInt128 bits, AstcBlockInfo info, int blockWidth, int blockHeight, Span<int> texelWeights0, Span<int> texelWeights1)
+    private static bool DecodeWeights(UInt128 bits, AstcBlockInfo info, int blockWidth, int blockHeight, int blockDepth, Span<int> texelWeights0, Span<int> texelWeights1)
     {
-        var gridSize = info.WeightWidth * info.WeightHeight;
+        var gridSize = info.WeightWidth * info.WeightHeight * info.WeightDepth;
         var rawWeightCount = info.DualPlane ? gridSize * 2 : gridSize;
         if (rawWeightCount > MaxWeightValues)
         {
@@ -4227,16 +4433,36 @@ public sealed class AstcTextureCoder : IPitchTextureCoder
             }
         }
 
-        InfillWeights(gridWeights0, info.WeightWidth, info.WeightHeight, blockWidth, blockHeight, texelWeights0);
+        InfillWeights(gridWeights0, info.WeightWidth, info.WeightHeight, info.WeightDepth, blockWidth, blockHeight, blockDepth, texelWeights0);
         if (info.DualPlane)
         {
-            InfillWeights(gridWeights1, info.WeightWidth, info.WeightHeight, blockWidth, blockHeight, texelWeights1);
+            InfillWeights(gridWeights1, info.WeightWidth, info.WeightHeight, info.WeightDepth, blockWidth, blockHeight, blockDepth, texelWeights1);
         }
 
         return true;
     }
 
-    private static void InfillWeights(ReadOnlySpan<int> gridWeights, int gridWidth, int gridHeight, int blockWidth, int blockHeight, Span<int> texelWeights)
+    private static void InfillWeights(ReadOnlySpan<int> gridWeights, int gridWidth, int gridHeight, int gridDepth, int blockWidth, int blockHeight, int blockDepth, Span<int> texelWeights)
+    {
+        if (gridDepth == 1)
+        {
+            InfillWeights2D(gridWeights, gridWidth, gridHeight, blockWidth, blockHeight, texelWeights);
+            return;
+        }
+
+        if (gridWidth == blockWidth && gridHeight == blockHeight && gridDepth == blockDepth)
+        {
+            gridWeights[..(blockWidth * blockHeight * blockDepth)].CopyTo(texelWeights);
+            return;
+        }
+
+        InfillWeights3D(gridWeights, gridWidth, gridHeight, gridDepth, blockWidth, blockHeight, blockDepth, texelWeights);
+    }
+
+    private static void InfillWeights(ReadOnlySpan<int> gridWeights, int gridWidth, int gridHeight, int blockWidth, int blockHeight, Span<int> texelWeights) =>
+        InfillWeights2D(gridWeights, gridWidth, gridHeight, blockWidth, blockHeight, texelWeights);
+
+    private static void InfillWeights2D(ReadOnlySpan<int> gridWeights, int gridWidth, int gridHeight, int blockWidth, int blockHeight, Span<int> texelWeights)
     {
         if (gridWidth == blockWidth && gridHeight == blockHeight)
         {
@@ -4280,29 +4506,167 @@ public sealed class AstcTextureCoder : IPitchTextureCoder
         }
     }
 
+    private static void InfillWeights3D(
+        ReadOnlySpan<int> gridWeights,
+        int gridWidth,
+        int gridHeight,
+        int gridDepth,
+        int blockWidth,
+        int blockHeight,
+        int blockDepth,
+        Span<int> texelWeights)
+    {
+        var ds = (1024 + (blockWidth / 2)) / (blockWidth - 1);
+        var dt = (1024 + (blockHeight / 2)) / (blockHeight - 1);
+        var dp = (1024 + (blockDepth / 2)) / (blockDepth - 1);
+        var gridSlice = gridWidth * gridHeight;
+        var texelIndex = 0;
+
+        for (var z = 0; z < blockDepth; z++)
+        {
+            var cp = dp * z;
+            var gp = ((cp * (gridDepth - 1)) + 32) >> 6;
+            var jp = gp >> 4;
+            var fp = gp & 0xF;
+
+            for (var y = 0; y < blockHeight; y++)
+            {
+                var ct = dt * y;
+                var gt = ((ct * (gridHeight - 1)) + 32) >> 6;
+                var jt = gt >> 4;
+                var ft = gt & 0xF;
+
+                for (var x = 0; x < blockWidth; x++)
+                {
+                    var cs = ds * x;
+                    var gs = ((cs * (gridWidth - 1)) + 32) >> 6;
+                    var js = gs >> 4;
+                    var fs = gs & 0xF;
+
+                    var qweight0 = (jp * gridSlice) + (jt * gridWidth) + js;
+                    var n = gridWidth;
+                    int s1;
+                    int s2;
+                    int w0;
+                    int w1;
+                    int w2;
+                    int w3;
+                    switch (((fs > ft ? 1 : 0) << 2) + ((ft > fp ? 1 : 0) << 1) + (fs > fp ? 1 : 0))
+                    {
+                        case 7:
+                            s1 = 1;
+                            s2 = n;
+                            w0 = 16 - fs;
+                            w1 = fs - ft;
+                            w2 = ft - fp;
+                            w3 = fp;
+                            break;
+                        case 3:
+                            s1 = n;
+                            s2 = 1;
+                            w0 = 16 - ft;
+                            w1 = ft - fs;
+                            w2 = fs - fp;
+                            w3 = fp;
+                            break;
+                        case 5:
+                            s1 = 1;
+                            s2 = gridSlice;
+                            w0 = 16 - fs;
+                            w1 = fs - fp;
+                            w2 = fp - ft;
+                            w3 = ft;
+                            break;
+                        case 4:
+                            s1 = gridSlice;
+                            s2 = 1;
+                            w0 = 16 - fp;
+                            w1 = fp - fs;
+                            w2 = fs - ft;
+                            w3 = ft;
+                            break;
+                        case 2:
+                            s1 = n;
+                            s2 = gridSlice;
+                            w0 = 16 - ft;
+                            w1 = ft - fp;
+                            w2 = fp - fs;
+                            w3 = fs;
+                            break;
+                        default:
+                            s1 = gridSlice;
+                            s2 = n;
+                            w0 = 16 - fp;
+                            w1 = fp - ft;
+                            w2 = ft - fs;
+                            w3 = fs;
+                            break;
+                    }
+
+                    var qweight1 = qweight0 + s1;
+                    var qweight2 = qweight1 + s2;
+                    var qweight3 = qweight0 + gridSlice + gridWidth + 1;
+                    var weight = (8
+                        + (GetGridWeight3D(gridWeights, gridWidth, gridHeight, gridDepth, qweight0) * w0)
+                        + (GetGridWeight3D(gridWeights, gridWidth, gridHeight, gridDepth, qweight1) * w1)
+                        + (GetGridWeight3D(gridWeights, gridWidth, gridHeight, gridDepth, qweight2) * w2)
+                        + (GetGridWeight3D(gridWeights, gridWidth, gridHeight, gridDepth, qweight3) * w3)) >> 4;
+
+                    texelWeights[texelIndex++] = weight;
+                }
+            }
+        }
+    }
+
     private static int GetGridWeight(ReadOnlySpan<int> gridWeights, int gridWidth, int gridHeight, int x, int y) =>
         x >= gridWidth || y >= gridHeight ? 0 : gridWeights[(y * gridWidth) + x];
 
-    private static bool TryDecodeBlockInfo(UInt128 bits, int blockWidth, int blockHeight, out AstcBlockInfo info)
+    private static int GetGridWeight3D(ReadOnlySpan<int> gridWeights, int gridWidth, int gridHeight, int gridDepth, int index)
+    {
+        var gridSize = gridWidth * gridHeight * gridDepth;
+        return (uint)index >= (uint)gridSize ? 0 : gridWeights[index];
+    }
+
+    private static bool TryDecodeBlockInfo(UInt128 bits, int blockWidth, int blockHeight, int blockDepth, out AstcBlockInfo info)
     {
         var lowBits = (ulong)bits;
         if ((lowBits & 0x1FFUL) == 0x1FC)
         {
-            if (GetBits(bits, 10, 2) != 0x3)
+            if (blockDepth == 1)
             {
-                info = default;
-                return false;
-            }
+                if (GetBits(bits, 10, 2) != 0x3)
+                {
+                    info = default;
+                    return false;
+                }
 
-            var lowS = (int)GetBits(bits, 12, 13);
-            var highS = (int)GetBits(bits, 25, 13);
-            var lowT = (int)GetBits(bits, 38, 13);
-            var highT = (int)GetBits(bits, 51, 13);
-            var allOnes = lowS == 0x1FFF && highS == 0x1FFF && lowT == 0x1FFF && highT == 0x1FFF;
-            if (!allOnes && (lowS >= highS || lowT >= highT))
+                var lowS = (int)GetBits(bits, 12, 13);
+                var highS = (int)GetBits(bits, 25, 13);
+                var lowT = (int)GetBits(bits, 38, 13);
+                var highT = (int)GetBits(bits, 51, 13);
+                var allOnes = lowS == 0x1FFF && highS == 0x1FFF && lowT == 0x1FFF && highT == 0x1FFF;
+                if (!allOnes && (lowS >= highS || lowT >= highT))
+                {
+                    info = default;
+                    return false;
+                }
+            }
+            else
             {
-                info = default;
-                return false;
+                var lowS = (int)GetBits(bits, 10, 9);
+                var highS = (int)GetBits(bits, 19, 9);
+                var lowT = (int)GetBits(bits, 28, 9);
+                var highT = (int)GetBits(bits, 37, 9);
+                var lowR = (int)GetBits(bits, 46, 9);
+                var highR = (int)GetBits(bits, 55, 9);
+                var allOnes = lowS == 0x1FF && highS == 0x1FF
+                    && lowT == 0x1FF && highT == 0x1FF
+                    && lowR == 0x1FF && highR == 0x1FF;
+                if (!allOnes && (lowS >= highS || lowT >= highT || lowR >= highR))
+                {
+                    info = default;
+                    return false;
+                }
             }
 
             info = new AstcBlockInfo
@@ -4313,13 +4677,13 @@ public sealed class AstcTextureCoder : IPitchTextureCoder
             return true;
         }
 
-        if (!TryDecodeWeightGrid(lowBits, out var weightWidth, out var weightHeight, out var weightRange, out var widthA6HeightB6))
+        if (!TryDecodeWeightGrid(lowBits, blockDepth, out var weightWidth, out var weightHeight, out var weightDepth, out var weightRange, out var widthA6HeightB6))
         {
             info = default;
             return false;
         }
 
-        if (weightWidth > blockWidth || weightHeight > blockHeight)
+        if (weightWidth > blockWidth || weightHeight > blockHeight || weightDepth > blockDepth)
         {
             info = default;
             return false;
@@ -4327,7 +4691,7 @@ public sealed class AstcTextureCoder : IPitchTextureCoder
 
         var dualPlane = !widthA6HeightB6 && ((lowBits >> 10) & 1) != 0;
         var partitionCount = 1 + (int)((lowBits >> 11) & 0x3);
-        var weightValueCount = weightWidth * weightHeight * (dualPlane ? 2 : 1);
+        var weightValueCount = weightWidth * weightHeight * weightDepth * (dualPlane ? 2 : 1);
         if (weightValueCount > MaxWeightValues || (dualPlane && partitionCount == 4))
         {
             info = default;
@@ -4367,6 +4731,7 @@ public sealed class AstcTextureCoder : IPitchTextureCoder
         {
             WeightWidth = weightWidth,
             WeightHeight = weightHeight,
+            WeightDepth = weightDepth,
             WeightRange = weightRange,
             WeightBitCount = weightBitCount,
             PartitionCount = partitionCount,
@@ -4385,8 +4750,14 @@ public sealed class AstcTextureCoder : IPitchTextureCoder
         return true;
     }
 
-    private static bool TryDecodeWeightGrid(ulong lowBits, out int width, out int height, out int range, out bool widthA6HeightB6)
+    private static bool TryDecodeWeightGrid(ulong lowBits, int blockDepth, out int width, out int height, out int depth, out int range, out bool widthA6HeightB6)
     {
+        if (blockDepth != 1)
+        {
+            return TryDecodeWeightGrid3D(lowBits, out width, out height, out depth, out range, out widthA6HeightB6);
+        }
+
+        depth = 1;
         widthA6HeightB6 = false;
         uint rangeSelector;
 
@@ -4476,6 +4847,95 @@ public sealed class AstcTextureCoder : IPitchTextureCoder
             }
 
             rangeSelector = (uint)(((lowBits >> 4) & 1) | (((lowBits >> 2) & 0x3) << 1));
+        }
+
+        var highPrecision = widthA6HeightB6 ? 0u : (uint)((lowBits >> 9) & 1);
+        range = GetWeightRange((int)((highPrecision << 3) | rangeSelector));
+        return range > 0;
+    }
+
+    private static bool TryDecodeWeightGrid(ulong lowBits, out int width, out int height, out int range, out bool widthA6HeightB6) =>
+        TryDecodeWeightGrid(lowBits, blockDepth: 1, out width, out height, out _, out range, out widthA6HeightB6);
+
+    private static bool TryDecodeWeightGrid3D(ulong lowBits, out int width, out int height, out int depth, out int range, out bool widthA6HeightB6)
+    {
+        widthA6HeightB6 = false;
+        uint rangeSelector;
+
+        if ((lowBits & 0x3) != 0)
+        {
+            var a = (int)((lowBits >> 5) & 0x3);
+            var b = (int)((lowBits >> 7) & 0x3);
+            var c = (int)((lowBits >> 2) & 0x3);
+            width = a + 2;
+            height = b + 2;
+            depth = c + 2;
+            rangeSelector = (uint)(((lowBits >> 4) & 1) | ((lowBits & 0x3) << 1));
+        }
+        else
+        {
+            var modeBits = (int)((lowBits >> 2) & 0x3);
+            if (modeBits == 0)
+            {
+                width = 0;
+                height = 0;
+                depth = 0;
+                range = 0;
+                return false;
+            }
+
+            var a = (int)((lowBits >> 5) & 0x3);
+            var b = (int)((lowBits >> 9) & 0x3);
+            var d = (int)((lowBits >> 7) & 0x3);
+            if (d != 3)
+            {
+                widthA6HeightB6 = true;
+            }
+
+            switch (d)
+            {
+                case 0:
+                    width = 6;
+                    height = b + 2;
+                    depth = a + 2;
+                    break;
+                case 1:
+                    width = a + 2;
+                    height = 6;
+                    depth = b + 2;
+                    break;
+                case 2:
+                    width = a + 2;
+                    height = b + 2;
+                    depth = 6;
+                    break;
+                default:
+                    width = 2;
+                    height = 2;
+                    depth = 2;
+                    switch (a)
+                    {
+                        case 0:
+                            width = 6;
+                            break;
+                        case 1:
+                            height = 6;
+                            break;
+                        case 2:
+                            depth = 6;
+                            break;
+                        default:
+                            width = 0;
+                            height = 0;
+                            depth = 0;
+                            range = 0;
+                            return false;
+                    }
+
+                    break;
+            }
+
+            rangeSelector = (uint)(((lowBits >> 4) & 1) | ((lowBits >> 2) & 0x3) << 1);
         }
 
         var highPrecision = widthA6HeightB6 ? 0u : (uint)((lowBits >> 9) & 1);
@@ -5194,15 +5654,21 @@ public sealed class AstcTextureCoder : IPitchTextureCoder
 
     private static int GetPartitionIndex(int partitionCount, int partitionSeed, int x, int y, int blockWidth, int blockHeight)
     {
+        return GetPartitionIndex(partitionCount, partitionSeed, x, y, z: 0, blockWidth, blockHeight, blockDepth: 1);
+    }
+
+    private static int GetPartitionIndex(int partitionCount, int partitionSeed, int x, int y, int z, int blockWidth, int blockHeight, int blockDepth)
+    {
         if (partitionCount <= 1)
         {
             return 0;
         }
 
-        if (blockWidth * blockHeight < 31)
+        if (blockWidth * blockHeight * blockDepth < 32)
         {
             x <<= 1;
             y <<= 1;
+            z <<= 1;
         }
 
         var random = ScramblePartitionSeed(partitionSeed, partitionCount);
@@ -5252,10 +5718,10 @@ public sealed class AstcTextureCoder : IPitchTextureCoder
         seed[10] >>= shift3;
         seed[11] >>= shift3;
 
-        var a = (int)((seed[0] * (uint)x) + (seed[1] * (uint)y) + (random >> 14)) & 0x3F;
-        var b = (int)((seed[2] * (uint)x) + (seed[3] * (uint)y) + (random >> 10)) & 0x3F;
-        var c = (int)((seed[4] * (uint)x) + (seed[5] * (uint)y) + (random >> 6)) & 0x3F;
-        var d = (int)((seed[6] * (uint)x) + (seed[7] * (uint)y) + (random >> 2)) & 0x3F;
+        var a = (int)((seed[0] * (uint)x) + (seed[1] * (uint)y) + (seed[10] * (uint)z) + (random >> 14)) & 0x3F;
+        var b = (int)((seed[2] * (uint)x) + (seed[3] * (uint)y) + (seed[11] * (uint)z) + (random >> 10)) & 0x3F;
+        var c = (int)((seed[4] * (uint)x) + (seed[5] * (uint)y) + (seed[8] * (uint)z) + (random >> 6)) & 0x3F;
+        var d = (int)((seed[6] * (uint)x) + (seed[7] * (uint)y) + (seed[9] * (uint)z) + (random >> 2)) & 0x3F;
 
         if (partitionCount <= 3)
         {
@@ -5435,6 +5901,45 @@ public sealed class AstcTextureCoder : IPitchTextureCoder
         }
     }
 
+    private void StoreUNormBlock<TPixel>(ReadOnlySpan<Rgba8UNorm> block, int blockX, int blockY, int blockZ, VolumeBitmapView<TPixel> destination)
+        where TPixel : unmanaged, IPixel<TPixel>
+    {
+        var originX = blockX * _blockWidth;
+        var originY = blockY * _blockHeight;
+        var originZ = blockZ * _blockDepth;
+        for (var z = 0; z < _blockDepth; z++)
+        {
+            var destinationZ = originZ + z;
+            if (destinationZ >= destination.Depth)
+            {
+                break;
+            }
+
+            var blockSliceOffset = z * _blockWidth * _blockHeight;
+            for (var y = 0; y < _blockHeight; y++)
+            {
+                var destinationY = originY + y;
+                if (destinationY >= destination.Height)
+                {
+                    break;
+                }
+
+                var destinationRow = destination.GetRowSpan(destinationY, destinationZ);
+                var blockRowOffset = blockSliceOffset + (y * _blockWidth);
+                for (var x = 0; x < _blockWidth; x++)
+                {
+                    var destinationX = originX + x;
+                    if (destinationX >= destination.Width)
+                    {
+                        break;
+                    }
+
+                    destinationRow[destinationX] = TPixel.FromRgba8UNorm(block[blockRowOffset + x]);
+                }
+            }
+        }
+    }
+
     private void StoreFloatBlock<TPixel>(ReadOnlySpan<Rgba16Float> block, int blockX, int blockY, BitmapView<TPixel> destination)
         where TPixel : unmanaged, IPixel<TPixel>
     {
@@ -5462,9 +5967,53 @@ public sealed class AstcTextureCoder : IPitchTextureCoder
         }
     }
 
+    private void StoreFloatBlock<TPixel>(ReadOnlySpan<Rgba16Float> block, int blockX, int blockY, int blockZ, VolumeBitmapView<TPixel> destination)
+        where TPixel : unmanaged, IPixel<TPixel>
+    {
+        var originX = blockX * _blockWidth;
+        var originY = blockY * _blockHeight;
+        var originZ = blockZ * _blockDepth;
+        for (var z = 0; z < _blockDepth; z++)
+        {
+            var destinationZ = originZ + z;
+            if (destinationZ >= destination.Depth)
+            {
+                break;
+            }
+
+            var blockSliceOffset = z * _blockWidth * _blockHeight;
+            for (var y = 0; y < _blockHeight; y++)
+            {
+                var destinationY = originY + y;
+                if (destinationY >= destination.Height)
+                {
+                    break;
+                }
+
+                var destinationRow = destination.GetRowSpan(destinationY, destinationZ);
+                var blockRowOffset = blockSliceOffset + (y * _blockWidth);
+                for (var x = 0; x < _blockWidth; x++)
+                {
+                    var destinationX = originX + x;
+                    if (destinationX >= destination.Width)
+                    {
+                        break;
+                    }
+
+                    destinationRow[destinationX] = TPixel.FromRgba16Float(block[blockRowOffset + x]);
+                }
+            }
+        }
+    }
+
     private static void FillUNormBlock(Span<Rgba8UNorm> destination, int blockWidth, int blockHeight, Rgba8UNorm color)
     {
-        for (var i = 0; i < blockWidth * blockHeight; i++)
+        FillUNormBlock(destination, blockWidth, blockHeight, blockDepth: 1, color);
+    }
+
+    private static void FillUNormBlock(Span<Rgba8UNorm> destination, int blockWidth, int blockHeight, int blockDepth, Rgba8UNorm color)
+    {
+        for (var i = 0; i < blockWidth * blockHeight * blockDepth; i++)
         {
             destination[i] = color;
         }
@@ -5472,7 +6021,12 @@ public sealed class AstcTextureCoder : IPitchTextureCoder
 
     private static void FillFloatBlock(Span<Rgba16Float> destination, int blockWidth, int blockHeight, Rgba16Float color)
     {
-        for (var i = 0; i < blockWidth * blockHeight; i++)
+        FillFloatBlock(destination, blockWidth, blockHeight, blockDepth: 1, color);
+    }
+
+    private static void FillFloatBlock(Span<Rgba16Float> destination, int blockWidth, int blockHeight, int blockDepth, Rgba16Float color)
+    {
+        for (var i = 0; i < blockWidth * blockHeight * blockDepth; i++)
         {
             destination[i] = color;
         }
@@ -5487,12 +6041,38 @@ public sealed class AstcTextureCoder : IPitchTextureCoder
         }
     }
 
+    private void ValidateSourceLength(int width, int height, int depth, ReadOnlySpan<byte> source, int rowPitch, int slicePitch)
+    {
+        var requiredBytes = GetEncodedByteCount(width, height, depth, rowPitch, slicePitch);
+        if (source.Length < requiredBytes)
+        {
+            throw new ArgumentException("Source span is too small for the encoded ASTC texture.", nameof(source));
+        }
+    }
+
     private void ValidateDestinationLength(int width, int height, Span<byte> destination, int rowPitch)
     {
         var requiredBytes = GetEncodedByteCount(width, height, rowPitch);
         if (destination.Length < requiredBytes)
         {
             throw new ArgumentException("Destination span is too small for the encoded ASTC texture.", nameof(destination));
+        }
+    }
+
+    private void ValidateDestinationLength(int width, int height, int depth, Span<byte> destination, int rowPitch, int slicePitch)
+    {
+        var requiredBytes = GetEncodedByteCount(width, height, depth, rowPitch, slicePitch);
+        if (destination.Length < requiredBytes)
+        {
+            throw new ArgumentException("Destination span is too small for the encoded ASTC texture.", nameof(destination));
+        }
+    }
+
+    private void Validate2DFormat()
+    {
+        if (_blockDepth != 1)
+        {
+            throw new NotSupportedException("ASTC 3D formats require the 3D texture coder APIs.");
         }
     }
 
@@ -5557,7 +6137,7 @@ public sealed class AstcTextureCoder : IPitchTextureCoder
         Quints
     }
 
-    private readonly record struct AstcFormatInfo(TextureFormat Format, int BlockWidth, int BlockHeight, AstcTransfer Transfer);
+    private readonly record struct AstcFormatInfo(TextureFormat Format, int BlockWidth, int BlockHeight, int BlockDepth, AstcTransfer Transfer);
 
     private readonly record struct AstcLdrEncodingResult(UInt128 Bits, long Error);
 
@@ -5581,6 +6161,7 @@ public sealed class AstcTextureCoder : IPitchTextureCoder
         public bool VoidExtentIsHdr;
         public int WeightWidth;
         public int WeightHeight;
+        public int WeightDepth;
         public int WeightRange;
         public int WeightBitCount;
         public int PartitionCount;
