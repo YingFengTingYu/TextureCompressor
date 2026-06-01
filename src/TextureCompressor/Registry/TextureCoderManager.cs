@@ -10,7 +10,9 @@ public sealed class TextureCoderManager
     private static readonly Lazy<TextureCoderManager> SGlobal = new(() => new TextureCoderManager());
 
     private readonly Dictionary<TextureFormat, ITextureCoder> _builtInCoders = [];
+    private readonly Dictionary<TextureFormat, ITextureCoder3D> _builtInCoders3D = [];
     private readonly List<CoderEntry> _coders = [];
+    private readonly List<Coder3DEntry> _coders3D = [];
     private readonly Lock _sync = new();
 
     public static TextureCoderManager Global => SGlobal.Value;
@@ -39,6 +41,45 @@ public sealed class TextureCoderManager
             foreach (var format in formats)
             {
                 registrations.Add(Register(format, coderFactory(format)));
+            }
+        }
+        catch
+        {
+            foreach (var registration in registrations)
+            {
+                registration.Dispose();
+            }
+
+            throw;
+        }
+
+        return new CompositeRegistration(registrations);
+    }
+
+    public IDisposable Register3D(TextureFormat format, ITextureCoder3D coder)
+    {
+        ArgumentNullException.ThrowIfNull(coder);
+
+        var entry = new Coder3DEntry(format, coder);
+        lock (_sync)
+        {
+            _coders3D.Add(entry);
+        }
+
+        return new Registration3D(this, entry);
+    }
+
+    public IDisposable Register3D(IEnumerable<TextureFormat> formats, Func<TextureFormat, ITextureCoder3D> coderFactory)
+    {
+        ArgumentNullException.ThrowIfNull(formats);
+        ArgumentNullException.ThrowIfNull(coderFactory);
+
+        var registrations = new List<IDisposable>();
+        try
+        {
+            foreach (var format in formats)
+            {
+                registrations.Add(Register3D(format, coderFactory(format)));
             }
         }
         catch
@@ -95,6 +136,52 @@ public sealed class TextureCoderManager
 
     public bool TryGetCoder3D(TextureFormat format, [NotNullWhen(true)] out ITextureCoder3D? coder)
     {
+        lock (_sync)
+        {
+            if (TryGetRegisteredCoder3D(format, out coder))
+            {
+                return true;
+            }
+
+            if (TryGetRegisteredCoder(format, out var registeredTextureCoder))
+            {
+                if (registeredTextureCoder is ITextureCoder3D registeredTextureCoder3D)
+                {
+                    coder = registeredTextureCoder3D;
+                    return true;
+                }
+
+                coder = registeredTextureCoder is IPitchTextureCoder registeredPitchTextureCoder
+                    ? new PitchTextureArrayCoder(registeredPitchTextureCoder)
+                    : new TextureArrayCoder(registeredTextureCoder);
+                return true;
+            }
+
+            if (_builtInCoders3D.TryGetValue(format, out coder))
+            {
+                return true;
+            }
+        }
+
+        if (TryCreateBuiltInCoder3D(format, out var builtInCoder3D))
+        {
+            lock (_sync)
+            {
+                if (TryGetRegisteredCoder3D(format, out coder))
+                {
+                    return true;
+                }
+
+                if (!_builtInCoders3D.TryGetValue(format, out coder))
+                {
+                    _builtInCoders3D.Add(format, builtInCoder3D);
+                    coder = builtInCoder3D;
+                }
+
+                return true;
+            }
+        }
+
         if (!TryGetCoder(format, out var textureCoder))
         {
             coder = null;
@@ -126,11 +213,35 @@ public sealed class TextureCoderManager
         }
     }
 
+    private void Unregister(Coder3DEntry entry)
+    {
+        lock (_sync)
+        {
+            _coders3D.Remove(entry);
+        }
+    }
+
     private bool TryGetRegisteredCoder(TextureFormat format, [NotNullWhen(true)] out ITextureCoder? coder)
     {
         for (var i = _coders.Count - 1; i >= 0; i--)
         {
             var entry = _coders[i];
+            if (entry.Format == format)
+            {
+                coder = entry.Coder;
+                return true;
+            }
+        }
+
+        coder = null;
+        return false;
+    }
+
+    private bool TryGetRegisteredCoder3D(TextureFormat format, [NotNullWhen(true)] out ITextureCoder3D? coder)
+    {
+        for (var i = _coders3D.Count - 1; i >= 0; i--)
+        {
+            var entry = _coders3D[i];
             if (entry.Format == format)
             {
                 coder = entry.Coder;
@@ -292,6 +403,18 @@ public sealed class TextureCoderManager
         return false;
     }
 
+    private static bool TryCreateBuiltInCoder3D(TextureFormat format, [NotNullWhen(true)] out ITextureCoder3D? coder)
+    {
+        if (Astc3DTextureCoder.IsSupported(format))
+        {
+            coder = new Astc3DTextureCoder(format);
+            return true;
+        }
+
+        coder = null;
+        return false;
+    }
+
     private sealed class CoderEntry(TextureFormat format, ITextureCoder coder)
     {
         public TextureFormat Format { get; } = format;
@@ -299,7 +422,25 @@ public sealed class TextureCoderManager
         public ITextureCoder Coder { get; } = coder;
     }
 
+    private sealed class Coder3DEntry(TextureFormat format, ITextureCoder3D coder)
+    {
+        public TextureFormat Format { get; } = format;
+
+        public ITextureCoder3D Coder { get; } = coder;
+    }
+
     private sealed class Registration(TextureCoderManager manager, CoderEntry entry) : IDisposable
+    {
+        private TextureCoderManager? _manager = manager;
+
+        public void Dispose()
+        {
+            var manager = Interlocked.Exchange(ref _manager, null);
+            manager?.Unregister(entry);
+        }
+    }
+
+    private sealed class Registration3D(TextureCoderManager manager, Coder3DEntry entry) : IDisposable
     {
         private TextureCoderManager? _manager = manager;
 

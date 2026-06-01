@@ -55,8 +55,13 @@ internal static class TextureCompressionRegistrationFactory
             return coders.Register(format, new PvrtcTextureCoder(format, options));
         }
 
-        return AstcTextureCoder.IsSupported(format)
-            ? coders.Register(format, new AstcTextureCoder(format, options))
+        if (AstcTextureCoder.IsSupported(format))
+        {
+            return coders.Register(format, new AstcTextureCoder(format, options));
+        }
+
+        return Astc3DTextureCoder.IsSupported(format)
+            ? coders.Register3D(format, new Astc3DTextureCoder(format, options))
             : null;
     }
 }

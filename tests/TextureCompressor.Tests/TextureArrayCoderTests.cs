@@ -75,7 +75,7 @@ public sealed class TextureArrayCoderTests
     {
         var manager = new TextureCoderManager();
         var registered = new ExplicitTextureCoder3D(TextureFormats.Rgba8UNorm);
-        using var registration = manager.Register(TextureFormats.Rgba8UNorm, registered);
+        using var registration = manager.Register3D(TextureFormats.Rgba8UNorm, registered);
 
         var coder = manager.GetCoder3D(TextureFormats.Rgba8UNorm);
 
@@ -173,19 +173,9 @@ public sealed class TextureArrayCoderTests
         public int GetEncodedByteCount(int width, int height) => checked(width * height);
     }
 
-    private sealed class ExplicitTextureCoder3D(TextureFormat format) : ITextureCoder, ITextureCoder3D
+    private sealed class ExplicitTextureCoder3D(TextureFormat format) : ITextureCoder3D
     {
         public TextureFormat Format { get; } = format;
-
-        public void Decode<TPixel>(ReadOnlySpan<byte> source, BitmapView<TPixel> destination)
-            where TPixel : unmanaged, IPixel<TPixel> =>
-            throw new NotSupportedException();
-
-        public void Encode<TPixel>(BitmapView<TPixel> source, Span<byte> destination)
-            where TPixel : unmanaged, IPixel<TPixel> =>
-            throw new NotSupportedException();
-
-        public int GetEncodedByteCount(int width, int height) => 0;
 
         public void Decode<TPixel>(ReadOnlySpan<byte> source, VolumeBitmapView<TPixel> destination)
             where TPixel : unmanaged, IPixel<TPixel> =>

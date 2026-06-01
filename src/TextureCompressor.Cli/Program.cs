@@ -2143,8 +2143,13 @@ internal static class Cli
             return TextureCoderManager.Global.Register(format, new PvrtcTextureCoder(format, options));
         }
 
-        return AstcTextureCoder.IsSupported(format)
-            ? TextureCoderManager.Global.Register(format, new AstcTextureCoder(format, options))
+        if (AstcTextureCoder.IsSupported(format))
+        {
+            return TextureCoderManager.Global.Register(format, new AstcTextureCoder(format, options));
+        }
+
+        return Astc3DTextureCoder.IsSupported(format)
+            ? TextureCoderManager.Global.Register3D(format, new Astc3DTextureCoder(format, options))
             : null;
     }
 

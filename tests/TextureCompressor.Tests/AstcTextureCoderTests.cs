@@ -18,6 +18,7 @@ public sealed class AstcTextureCoderTests
 
         Assert.True(AstcTextureCoder.IsSupported(format));
         Assert.IsType<AstcTextureCoder>(coder);
+        Assert.IsNotAssignableFrom<ITextureCoder3D>(coder);
     }
 
     [Fact]
@@ -35,15 +36,30 @@ public sealed class AstcTextureCoderTests
     {
         var coder = TextureCoderManager.Global.GetCoder3D(TextureFormats.RgbaAstc3x3x3UNorm);
 
-        Assert.True(AstcTextureCoder.IsSupported(TextureFormats.RgbaAstc3x3x3UNorm));
-        Assert.IsType<AstcTextureCoder>(coder);
+        Assert.False(AstcTextureCoder.IsSupported(TextureFormats.RgbaAstc3x3x3UNorm));
+        Assert.True(Astc3DTextureCoder.IsSupported(TextureFormats.RgbaAstc3x3x3UNorm));
+        Assert.IsType<Astc3DTextureCoder>(coder);
         Assert.IsAssignableFrom<IPitchTextureCoder3D>(coder);
+        Assert.IsNotAssignableFrom<ITextureCoder>(coder);
+    }
+
+    [Fact]
+    public void GlobalManagerDoesNotReturnAstc3DFormatsAs2DCoders()
+    {
+        Assert.False(TextureCoderManager.Global.TryGetCoder(TextureFormats.RgbaAstc3x3x3UNorm, out _));
+    }
+
+    [Fact]
+    public void AstcCodersRejectOppositeDimensionFormats()
+    {
+        Assert.Throws<NotSupportedException>(() => new AstcTextureCoder(TextureFormats.RgbaAstc3x3x3UNorm));
+        Assert.Throws<NotSupportedException>(() => new Astc3DTextureCoder(TextureFormats.RgbaAstc4x4UNorm));
     }
 
     [Fact]
     public void Astc3DByteCountUsesVolumeFootprintBlocks()
     {
-        var coder = new AstcTextureCoder(TextureFormats.RgbaAstc3x3x3UNorm);
+        var coder = new Astc3DTextureCoder(TextureFormats.RgbaAstc3x3x3UNorm);
         var rowPitch = coder.GetDefaultPitch(width: 4);
         var slicePitch = coder.GetDefaultSlicePitch(width: 4, height: 4, rowPitch);
 
@@ -80,7 +96,7 @@ public sealed class AstcTextureCoderTests
             blue: 0x8800,
             alpha: 0xCC00);
         var decoded = new ArrayVolumeBitmap<Rgba8UNorm>(2, 2, 3);
-        var coder = new AstcTextureCoder(TextureFormats.RgbaAstc3x3x3UNorm);
+        var coder = new Astc3DTextureCoder(TextureFormats.RgbaAstc3x3x3UNorm);
 
         coder.Decode(encoded, decoded.AsView(), coder.GetDefaultPitch(decoded.Width), coder.GetDefaultSlicePitch(decoded.Width, decoded.Height));
 
@@ -98,7 +114,7 @@ public sealed class AstcTextureCoderTests
             blue: 0x8800,
             alpha: 0xCC00);
         var decoded = new ArrayVolumeBitmap<Rgba8UNorm>(1, 1, 1);
-        var coder = new AstcTextureCoder(format);
+        var coder = new Astc3DTextureCoder(format);
 
         coder.Decode(encoded, decoded.AsView(), coder.GetDefaultPitch(decoded.Width), coder.GetDefaultSlicePitch(decoded.Width, decoded.Height));
 
@@ -114,7 +130,7 @@ public sealed class AstcTextureCoderTests
         red.CopyTo(encoded.AsSpan(0, 16));
         green.CopyTo(encoded.AsSpan(16, 16));
         var decoded = new ArrayVolumeBitmap<Rgba8UNorm>(2, 2, 4);
-        var coder = new AstcTextureCoder(TextureFormats.RgbaAstc3x3x3UNorm);
+        var coder = new Astc3DTextureCoder(TextureFormats.RgbaAstc3x3x3UNorm);
 
         coder.Decode(encoded, decoded.AsView(), coder.GetDefaultPitch(decoded.Width), coder.GetDefaultSlicePitch(decoded.Width, decoded.Height));
 
@@ -131,7 +147,7 @@ public sealed class AstcTextureCoderTests
     {
         var encoded = CreateSinglePartition3DLumaBlock(0x10, 0xE0, quantizedWeight: 3);
         var decoded = new ArrayVolumeBitmap<Rgba8UNorm>(3, 3, 3);
-        var coder = new AstcTextureCoder(TextureFormats.RgbaAstc3x3x3UNorm);
+        var coder = new Astc3DTextureCoder(TextureFormats.RgbaAstc3x3x3UNorm);
 
         coder.Decode(encoded, decoded.AsView(), coder.GetDefaultPitch(decoded.Width), coder.GetDefaultSlicePitch(decoded.Width, decoded.Height));
 
@@ -167,7 +183,7 @@ public sealed class AstcTextureCoderTests
             blue: BitConverter.HalfToUInt16Bits((Half)2f),
             alpha: BitConverter.HalfToUInt16Bits((Half)1f));
         var decoded = new ArrayVolumeBitmap<Rgba16Float>(1, 1, 1);
-        var coder = new AstcTextureCoder(format);
+        var coder = new Astc3DTextureCoder(format);
 
         coder.Decode(encoded, decoded.AsView(), coder.GetDefaultPitch(decoded.Width), coder.GetDefaultSlicePitch(decoded.Width, decoded.Height));
 
@@ -388,7 +404,7 @@ public sealed class AstcTextureCoderTests
         var color = new Rgba8UNorm(0x22, 0x44, 0x88, 0xCC);
         var source = new ArrayVolumeBitmap<Rgba8UNorm>(1, 1, 1, [color]);
         var decoded = new ArrayVolumeBitmap<Rgba8UNorm>(1, 1, 1);
-        var coder = new AstcTextureCoder(format);
+        var coder = new Astc3DTextureCoder(format);
         var rowPitch = coder.GetDefaultPitch(source.Width);
         var slicePitch = coder.GetDefaultSlicePitch(source.Width, source.Height, rowPitch);
         var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, source.Depth, rowPitch, slicePitch)];
@@ -416,7 +432,7 @@ public sealed class AstcTextureCoderTests
         }
 
         var decoded = new ArrayVolumeBitmap<Rgba8UNorm>(3, 3, 3);
-        var coder = new AstcTextureCoder(TextureFormats.RgbaAstc3x3x3UNorm);
+        var coder = new Astc3DTextureCoder(TextureFormats.RgbaAstc3x3x3UNorm);
         var rowPitch = coder.GetDefaultPitch(source.Width);
         var slicePitch = coder.GetDefaultSlicePitch(source.Width, source.Height, rowPitch);
         var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, source.Depth, rowPitch, slicePitch)];
@@ -447,7 +463,7 @@ public sealed class AstcTextureCoderTests
         }
 
         var decoded = new ArrayVolumeBitmap<Rgba8UNorm>(source.Width, source.Height, source.Depth);
-        var coder = new AstcTextureCoder(format);
+        var coder = new Astc3DTextureCoder(format);
         var rowPitch = coder.GetDefaultPitch(source.Width);
         var slicePitch = coder.GetDefaultSlicePitch(source.Width, source.Height, rowPitch);
         var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, source.Depth, rowPitch, slicePitch)];
@@ -479,7 +495,7 @@ public sealed class AstcTextureCoderTests
         var encoded = new byte[slicePitch * 2];
         Array.Fill(encoded, (byte)0xCD);
         var decoded = new ArrayVolumeBitmap<Rgba8UNorm>(2, 2, 4);
-        var coder = new AstcTextureCoder(TextureFormats.RgbaAstc3x3x3UNorm);
+        var coder = new Astc3DTextureCoder(TextureFormats.RgbaAstc3x3x3UNorm);
 
         coder.Encode(source.AsView(), encoded, rowPitch, slicePitch);
         coder.Decode(encoded, decoded.AsView(), rowPitch, slicePitch);
@@ -693,7 +709,7 @@ public sealed class AstcTextureCoderTests
         var color = new Rgba16Float((Half)0.25f, (Half)2f, (Half)8f, (Half)1f);
         var source = new ArrayVolumeBitmap<Rgba16Float>(1, 1, 1, [color]);
         var decoded = new ArrayVolumeBitmap<Rgba16Float>(1, 1, 1);
-        var coder = new AstcTextureCoder(format);
+        var coder = new Astc3DTextureCoder(format);
         var rowPitch = coder.GetDefaultPitch(source.Width);
         var slicePitch = coder.GetDefaultSlicePitch(source.Width, source.Height, rowPitch);
         var encoded = new byte[coder.GetEncodedByteCount(source.Width, source.Height, source.Depth, rowPitch, slicePitch)];
@@ -859,9 +875,9 @@ public sealed class AstcTextureCoderTests
     private static TheoryData<TextureFormat> Astc3DFormats(TextureValueKind valueKind)
     {
         var formats = new TheoryData<TextureFormat>();
-        foreach (var format in AstcTextureCoder.SupportedFormats)
+        foreach (var format in Astc3DTextureCoder.SupportedFormats)
         {
-            if (format.BlockDepth > 1 && format.ValueKind == valueKind)
+            if (format.ValueKind == valueKind)
             {
                 formats.Add(format);
             }

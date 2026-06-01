@@ -8,7 +8,81 @@ using TextureCompressor.Utilities;
 
 namespace TextureCompressor.Codecs;
 
-public sealed class AstcTextureCoder : IPitchTextureCoder, IPitchTextureCoder3D
+public sealed class AstcTextureCoder : IPitchTextureCoder
+{
+    private readonly AstcTextureCoding _coding;
+
+    public AstcTextureCoder(TextureFormat format, TextureCompressionOptions? options = null)
+    {
+        if (!AstcTextureCoding.IsSupported2D(format))
+        {
+            throw new NotSupportedException($"Texture format '{format.Name}' is not a supported ASTC 2D format.");
+        }
+
+        _coding = new AstcTextureCoding(format, options);
+    }
+
+    public TextureFormat Format => _coding.Format;
+
+    public static ReadOnlySpan<TextureFormat> SupportedFormats => AstcTextureCoding.Supported2DFormats;
+
+    public static bool IsSupported(TextureFormat format) => AstcTextureCoding.IsSupported2D(format);
+
+    public int GetDefaultPitch(int width) => _coding.GetDefaultPitch(width);
+
+    public int GetEncodedByteCount(int width, int height, int rowPitch) =>
+        _coding.GetEncodedByteCount(width, height, rowPitch);
+
+    public void Decode<TPixel>(ReadOnlySpan<byte> source, BitmapView<TPixel> destination, int rowPitch)
+        where TPixel : unmanaged, IPixel<TPixel> =>
+        _coding.Decode(source, destination, rowPitch);
+
+    public void Encode<TPixel>(BitmapView<TPixel> source, Span<byte> destination, int rowPitch)
+        where TPixel : unmanaged, IPixel<TPixel> =>
+        _coding.Encode(source, destination, rowPitch);
+}
+
+public sealed class Astc3DTextureCoder : IPitchTextureCoder3D
+{
+    private readonly AstcTextureCoding _coding;
+
+    public Astc3DTextureCoder(TextureFormat format, TextureCompressionOptions? options = null)
+    {
+        if (!AstcTextureCoding.IsSupported3D(format))
+        {
+            throw new NotSupportedException($"Texture format '{format.Name}' is not a supported ASTC 3D format.");
+        }
+
+        _coding = new AstcTextureCoding(format, options);
+    }
+
+    public TextureFormat Format => _coding.Format;
+
+    public static ReadOnlySpan<TextureFormat> SupportedFormats => AstcTextureCoding.Supported3DFormats;
+
+    public static bool IsSupported(TextureFormat format) => AstcTextureCoding.IsSupported3D(format);
+
+    public int GetDefaultPitch(int width) => _coding.GetDefaultPitch(width);
+
+    public int GetDefaultSlicePitch(int width, int height, int rowPitch) =>
+        _coding.GetDefaultSlicePitch(width, height, rowPitch);
+
+    public int GetDefaultSlicePitch(int width, int height) =>
+        _coding.GetDefaultSlicePitch(width, height);
+
+    public int GetEncodedByteCount(int width, int height, int depth, int rowPitch, int slicePitch) =>
+        _coding.GetEncodedByteCount(width, height, depth, rowPitch, slicePitch);
+
+    public void Decode<TPixel>(ReadOnlySpan<byte> source, VolumeBitmapView<TPixel> destination, int rowPitch, int slicePitch)
+        where TPixel : unmanaged, IPixel<TPixel> =>
+        _coding.Decode(source, destination, rowPitch, slicePitch);
+
+    public void Encode<TPixel>(VolumeBitmapView<TPixel> source, Span<byte> destination, int rowPitch, int slicePitch)
+        where TPixel : unmanaged, IPixel<TPixel> =>
+        _coding.Encode(source, destination, rowPitch, slicePitch);
+}
+
+internal sealed class AstcTextureCoding
 {
     private const int BytesPerBlock = 16;
     private const int MaxBlockWidth = 12;
@@ -99,7 +173,9 @@ public sealed class AstcTextureCoder : IPitchTextureCoder, IPitchTextureCoder3D
         new(TextureFormats.RgbaAstc6x6x6Float, 6, 6, 6, AstcTransfer.Hdr)
     ];
 
-    private static readonly TextureFormat[] SSupportedFormats = CreateSupportedFormats();
+    private static readonly TextureFormat[] SSupportedFormats = CreateSupportedFormats(static _ => true);
+    private static readonly TextureFormat[] SSupported2DFormats = CreateSupportedFormats(static info => info.BlockDepth == 1);
+    private static readonly TextureFormat[] SSupported3DFormats = CreateSupportedFormats(static info => info.BlockDepth > 1);
 
     private readonly AstcTransfer _transfer;
     private readonly int _blockWidth;
@@ -107,7 +183,7 @@ public sealed class AstcTextureCoder : IPitchTextureCoder, IPitchTextureCoder3D
     private readonly int _blockDepth;
     private readonly TextureCompressionOptions _options;
 
-    public AstcTextureCoder(TextureFormat format, TextureCompressionOptions? options = null)
+    public AstcTextureCoding(TextureFormat format, TextureCompressionOptions? options = null)
     {
         if (!TryGetFormatInfo(format, out var info))
         {
@@ -127,6 +203,16 @@ public sealed class AstcTextureCoder : IPitchTextureCoder, IPitchTextureCoder3D
     public static ReadOnlySpan<TextureFormat> SupportedFormats => SSupportedFormats;
 
     public static bool IsSupported(TextureFormat format) => TryGetTransfer(format, out _);
+
+    public static ReadOnlySpan<TextureFormat> Supported2DFormats => SSupported2DFormats;
+
+    public static ReadOnlySpan<TextureFormat> Supported3DFormats => SSupported3DFormats;
+
+    public static bool IsSupported2D(TextureFormat format) =>
+        TryGetFormatInfo(format, out var info) && info.BlockDepth == 1;
+
+    public static bool IsSupported3D(TextureFormat format) =>
+        TryGetFormatInfo(format, out var info) && info.BlockDepth > 1;
 
     public int GetDefaultPitch(int width) => Format.GetRowByteCount(width);
 
@@ -6903,15 +6989,18 @@ public sealed class AstcTextureCoder : IPitchTextureCoder, IPitchTextureCoder3D
         return false;
     }
 
-    private static TextureFormat[] CreateSupportedFormats()
+    private static TextureFormat[] CreateSupportedFormats(Func<AstcFormatInfo, bool> predicate)
     {
-        var formats = new TextureFormat[SSupportedFormatInfo.Length];
-        for (var i = 0; i < formats.Length; i++)
+        var formats = new List<TextureFormat>(SSupportedFormatInfo.Length);
+        foreach (var info in SSupportedFormatInfo)
         {
-            formats[i] = SSupportedFormatInfo[i].Format;
+            if (predicate(info))
+            {
+                formats.Add(info.Format);
+            }
         }
 
-        return formats;
+        return [.. formats];
     }
 
     private static NotSupportedException CreateUnsupportedFormatException(TextureFormat format) =>
