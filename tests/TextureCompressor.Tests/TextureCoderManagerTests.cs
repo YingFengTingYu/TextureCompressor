@@ -109,6 +109,16 @@ public sealed class TextureCoderManagerTests
         Assert.IsType<PackedFloatTextureCoder>(coder);
     }
 
+    [Theory]
+    [MemberData(nameof(BasisEtc1sFormats))]
+    public void GlobalManagerFindsBasisEtc1sCoder(TextureFormat format)
+    {
+        var coder = TextureCoderManager.Global.GetCoder(format);
+
+        Assert.IsType<BasisEtc1sTextureCoder>(coder);
+        Assert.IsAssignableFrom<IBasisEtc1sTextureCoder>(coder);
+    }
+
     [Fact]
     public void GlobalManagerFindsPackedIntegerCoder()
     {
@@ -2731,4 +2741,9 @@ public sealed class TextureCoderManagerTests
         TextureFormats.Bgra32SInt
     };
 
+    public static TheoryData<TextureFormat> BasisEtc1sFormats() => new()
+    {
+        TextureFormats.RgbaBasisEtc1sUNorm,
+        TextureFormats.RgbaBasisEtc1sSrgb
+    };
 }

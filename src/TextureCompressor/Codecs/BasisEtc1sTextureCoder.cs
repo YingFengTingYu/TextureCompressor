@@ -11,11 +11,27 @@ namespace TextureCompressor.Codecs;
 /// Container formats such as .basis and KTX2 should parse their own headers and pass the ETC1S
 /// codebooks, Huffman tables, and slice data to this codec.
 /// </remarks>
-public static class BasisEtc1sTextureCoder
+public sealed class BasisEtc1sTextureCoder : IBasisEtc1sTextureCoder
 {
-    public static TextureFormat Format => TextureFormats.RgbaBasisEtc1sUNorm;
+    private readonly TextureFormat _format;
+    private readonly bool _srgb;
 
-    public static TextureFormat SrgbFormat => TextureFormats.RgbaBasisEtc1sSrgb;
+    public BasisEtc1sTextureCoder(TextureFormat format)
+    {
+        if (!IsSupported(format))
+        {
+            throw new NotSupportedException($"Texture format '{format.Name}' is not a supported Basis ETC1S format.");
+        }
+
+        _format = format;
+        _srgb = format.ValueKind == TextureValueKind.Srgb;
+    }
+
+    TextureFormat ITextureCoder.Format => _format;
+
+    public static bool IsSupported(TextureFormat format) =>
+        format == TextureFormats.RgbaBasisEtc1sUNorm
+        || format == TextureFormats.RgbaBasisEtc1sSrgb;
 
     public static void Decode<TPixel>(BasisEtc1sRawPayload source, BitmapView<TPixel> destination)
         where TPixel : unmanaged, IPixel<TPixel> =>
@@ -54,6 +70,12 @@ public static class BasisEtc1sTextureCoder
     public static BasisEtc1sEncodedPayload Encode<TPixel>(BitmapView<TPixel> source, bool srgb)
         where TPixel : unmanaged, IPixel<TPixel> =>
         EncodeBasisEtc1s(source, srgb);
+
+    void IBasisEtc1sTextureCoder.Decode<TPixel>(BasisEtc1sRawPayload source, BitmapView<TPixel> destination) =>
+        Decode(source, destination, _srgb);
+
+    BasisEtc1sEncodedPayload IBasisEtc1sTextureCoder.Encode<TPixel>(BitmapView<TPixel> source) =>
+        Encode(source, _srgb);
 
     private const int BlockWidth = 4;
     private const int BlockHeight = 4;
@@ -1483,131 +1505,4 @@ public static class BasisEtc1sTextureCoder
     }
 
     private readonly record struct BasisHuffmanCode(int Code, int Length);
-}
-
-/// <summary>
-/// Encoded BasisLZ/ETC1S data produced by <see cref="BasisEtc1sTextureCoder"/>.
-/// </summary>
-public sealed class BasisEtc1sEncodedPayload
-{
-    public BasisEtc1sEncodedPayload(
-        int endpointCount,
-        ReadOnlyMemory<byte> endpointData,
-        int selectorCount,
-        ReadOnlyMemory<byte> selectorData,
-        ReadOnlyMemory<byte> tablesData,
-        ReadOnlyMemory<byte> rgbSliceData,
-        ReadOnlyMemory<byte> alphaSliceData = default,
-        bool isPFrame = false)
-    {
-        _ = new BasisEtc1sRawPayload(
-            endpointCount,
-            endpointData.Span,
-            selectorCount,
-            selectorData.Span,
-            tablesData.Span,
-            rgbSliceData.Span,
-            alphaSliceData.Span,
-            isPFrame);
-
-        EndpointCount = endpointCount;
-        EndpointData = endpointData;
-        SelectorCount = selectorCount;
-        SelectorData = selectorData;
-        TablesData = tablesData;
-        RgbSliceData = rgbSliceData;
-        AlphaSliceData = alphaSliceData;
-        IsPFrame = isPFrame;
-    }
-
-    public int EndpointCount { get; }
-
-    public ReadOnlyMemory<byte> EndpointData { get; }
-
-    public int SelectorCount { get; }
-
-    public ReadOnlyMemory<byte> SelectorData { get; }
-
-    public ReadOnlyMemory<byte> TablesData { get; }
-
-    public ReadOnlyMemory<byte> RgbSliceData { get; }
-
-    public ReadOnlyMemory<byte> AlphaSliceData { get; }
-
-    public bool IsPFrame { get; }
-
-    public BasisEtc1sRawPayload AsRawPayload() => new(
-        EndpointCount,
-        EndpointData.Span,
-        SelectorCount,
-        SelectorData.Span,
-        TablesData.Span,
-        RgbSliceData.Span,
-        AlphaSliceData.Span,
-        IsPFrame);
-}
-
-/// <summary>
-/// Raw BasisLZ/ETC1S data for a single already-selected image level.
-/// </summary>
-public readonly ref struct BasisEtc1sRawPayload
-{
-    public BasisEtc1sRawPayload(
-        int endpointCount,
-        ReadOnlySpan<byte> endpointData,
-        int selectorCount,
-        ReadOnlySpan<byte> selectorData,
-        ReadOnlySpan<byte> tablesData,
-        ReadOnlySpan<byte> rgbSliceData,
-        ReadOnlySpan<byte> alphaSliceData = default,
-        bool isPFrame = false)
-    {
-        ArgumentOutOfRangeException.ThrowIfNegative(endpointCount);
-        ArgumentOutOfRangeException.ThrowIfNegative(selectorCount);
-
-        if (endpointData.IsEmpty)
-        {
-            throw new ArgumentException("Basis ETC1S endpoint data cannot be empty.", nameof(endpointData));
-        }
-
-        if (selectorData.IsEmpty)
-        {
-            throw new ArgumentException("Basis ETC1S selector data cannot be empty.", nameof(selectorData));
-        }
-
-        if (tablesData.IsEmpty)
-        {
-            throw new ArgumentException("Basis ETC1S Huffman table data cannot be empty.", nameof(tablesData));
-        }
-
-        if (rgbSliceData.IsEmpty)
-        {
-            throw new ArgumentException("Basis ETC1S RGB slice data cannot be empty.", nameof(rgbSliceData));
-        }
-
-        EndpointCount = endpointCount;
-        EndpointData = endpointData;
-        SelectorCount = selectorCount;
-        SelectorData = selectorData;
-        TablesData = tablesData;
-        RgbSliceData = rgbSliceData;
-        AlphaSliceData = alphaSliceData;
-        IsPFrame = isPFrame;
-    }
-
-    public int EndpointCount { get; }
-
-    public ReadOnlySpan<byte> EndpointData { get; }
-
-    public int SelectorCount { get; }
-
-    public ReadOnlySpan<byte> SelectorData { get; }
-
-    public ReadOnlySpan<byte> TablesData { get; }
-
-    public ReadOnlySpan<byte> RgbSliceData { get; }
-
-    public ReadOnlySpan<byte> AlphaSliceData { get; }
-
-    public bool IsPFrame { get; }
 }

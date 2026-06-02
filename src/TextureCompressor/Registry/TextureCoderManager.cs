@@ -397,6 +397,12 @@ public sealed class TextureCoderManager
             return true;
         }
 
+        if (BasisEtc1sTextureCoder.IsSupported(format))
+        {
+            coder = new BasisEtc1sTextureCoder(format);
+            return true;
+        }
+
         if (EtcTextureCoder.IsSupported(format))
         {
             coder = new EtcTextureCoder(format);

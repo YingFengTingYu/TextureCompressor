@@ -7,10 +7,43 @@ namespace TextureCompressor.Codecs.Tests;
 public sealed class BasisEtc1sTextureCoderTests
 {
     [Fact]
-    public void FormatIsBasisEtc1s()
+    public void FixedLengthTextureCoderMethodsPointToBasisEtc1sInterface()
     {
-        Assert.Equal(TextureFormats.RgbaBasisEtc1sUNorm, BasisEtc1sTextureCoder.Format);
-        Assert.Equal(TextureFormats.RgbaBasisEtc1sSrgb, BasisEtc1sTextureCoder.SrgbFormat);
+        ITextureCoder coder = new BasisEtc1sTextureCoder(TextureFormats.RgbaBasisEtc1sUNorm);
+        var source = new ArrayBitmap<Rgba8UNorm>(4, 4);
+        var destination = new ArrayBitmap<Rgba8UNorm>(4, 4);
+        var encoded = new byte[8];
+
+        var countException = Assert.Throws<NotSupportedException>(() => coder.GetEncodedByteCount(4, 4));
+        var encodeException = Assert.Throws<NotSupportedException>(() => coder.Encode(source.AsView(), encoded));
+        var decodeException = Assert.Throws<NotSupportedException>(() => coder.Decode(encoded, destination.AsView()));
+
+        Assert.Contains(nameof(IBasisEtc1sTextureCoder), countException.Message);
+        Assert.Contains(nameof(IBasisEtc1sTextureCoder), encodeException.Message);
+        Assert.Contains(nameof(IBasisEtc1sTextureCoder), decodeException.Message);
+    }
+
+    [Fact]
+    public void BasisEtc1sInterfaceEncodesAndDecodesVariableLengthPayload()
+    {
+        IBasisEtc1sTextureCoder coder = new BasisEtc1sTextureCoder(TextureFormats.RgbaBasisEtc1sUNorm);
+        var source = new ArrayBitmap<Rgba8UNorm>(
+            4,
+            4,
+            Enumerable.Repeat(new Rgba8UNorm(120, 64, 220, 180), 16).ToArray());
+        var decoded = new ArrayBitmap<Rgba8UNorm>(4, 4);
+
+        var payload = coder.Encode(source.AsView());
+        coder.Decode(payload.AsRawPayload(), decoded.AsView());
+
+        Assert.False(payload.RgbSliceData.IsEmpty);
+        Assert.All(decoded.Pixels, pixel =>
+        {
+            Assert.InRange(pixel.Red, 112, 128);
+            Assert.InRange(pixel.Green, 56, 72);
+            Assert.InRange(pixel.Blue, 212, 228);
+            Assert.InRange(pixel.Alpha, 172, 188);
+        });
     }
 
     [Fact]
