@@ -1,4 +1,5 @@
 ﻿using TextureCompressor.Bitmaps;
+using TextureCompressor.Codecs;
 using TextureCompressor.Codecs.BasisUniversal;
 using TextureCompressor.Colors;
 using TextureCompressor.Formats;
@@ -21,11 +22,15 @@ public sealed class BasisUniversalTextureCoderTests
 
         using (manager.RegisterBasisUniversalCoders(SFastOptions))
         {
+            Assert.IsType<BasisUniversalEtc1sTextureCoder>(manager.GetCoder(TextureFormats.RgbaBasisEtc1sUNorm));
+            Assert.IsType<BasisUniversalTextureCoder>(manager.GetCoder(TextureFormats.RgbaBasisUastcLdr4x4UNorm));
             Assert.IsType<BasisUniversalTextureCoder>(manager.GetCoder(TextureFormats.RgbaEtc2EacUNorm));
             Assert.IsType<BasisUniversalTextureCoder>(manager.GetCoder(TextureFormats.Bc7UNorm));
             Assert.IsType<BasisUniversalTextureCoder>(manager.GetCoder(TextureFormats.RgbaAstc4x4UNorm));
         }
 
+        Assert.IsNotType<BasisUniversalEtc1sTextureCoder>(manager.GetCoder(TextureFormats.RgbaBasisEtc1sUNorm));
+        Assert.IsNotType<BasisUniversalTextureCoder>(manager.GetCoder(TextureFormats.RgbaBasisUastcLdr4x4UNorm));
         Assert.IsNotType<BasisUniversalTextureCoder>(manager.GetCoder(TextureFormats.RgbaEtc2EacUNorm));
     }
 
@@ -41,6 +46,20 @@ public sealed class BasisUniversalTextureCoderTests
         }
 
         Assert.IsNotType<BasisUniversalTextureCoder>(manager.GetCoder(TextureFormats.Bc7UNorm));
+    }
+
+    [Fact]
+    public void RegisterBasisUniversalCoderRegistersBasisEtc1sFormat()
+    {
+        var manager = new TextureCoderManager();
+
+        using (manager.RegisterBasisUniversalCoder(TextureFormats.RgbaBasisEtc1sUNorm, SFastOptions))
+        {
+            Assert.IsType<BasisUniversalEtc1sTextureCoder>(manager.GetCoder(TextureFormats.RgbaBasisEtc1sUNorm));
+            Assert.IsNotType<BasisUniversalTextureCoder>(manager.GetCoder(TextureFormats.Bc7UNorm));
+        }
+
+        Assert.IsNotType<BasisUniversalEtc1sTextureCoder>(manager.GetCoder(TextureFormats.RgbaBasisEtc1sUNorm));
     }
 
     [Fact]
@@ -77,12 +96,41 @@ public sealed class BasisUniversalTextureCoderTests
     }
 
     [Fact]
-    public void SupportsOnlyBasisUniversalTranscoderTargetsWithBuiltInDecoders()
+    public void SupportsBasisUniversalTranscoderTargetsAndRawUastc()
     {
         Assert.Contains(TextureFormats.Bc7UNorm, BasisUniversalTextureCoder.SupportedFormats.ToArray());
+        Assert.Contains(TextureFormats.RgbaBasisUastcLdr4x4UNorm, BasisUniversalTextureCoder.SupportedFormats.ToArray());
         Assert.Contains(TextureFormats.RgbaPvrtcII4BppUNorm, BasisUniversalTextureCoder.SupportedFormats.ToArray());
+        Assert.DoesNotContain(TextureFormats.RgbaBasisEtc1sUNorm, BasisUniversalTextureCoder.SupportedFormats.ToArray());
         Assert.DoesNotContain(TextureFormats.Bc6HUFloat, BasisUniversalTextureCoder.SupportedFormats.ToArray());
         Assert.DoesNotContain(TextureFormats.RgbaPvrtcI2BppUNorm, BasisUniversalTextureCoder.SupportedFormats.ToArray());
+    }
+
+    [Fact]
+    public void RegistrationSupportsBasisUniversalTranscoderAndRawBasisFormats()
+    {
+        Assert.Contains(TextureFormats.Bc7UNorm, BasisUniversalRegistration.SupportedFormats.ToArray());
+        Assert.Contains(TextureFormats.RgbaBasisEtc1sUNorm, BasisUniversalRegistration.SupportedFormats.ToArray());
+        Assert.Contains(TextureFormats.RgbaBasisEtc1sSrgb, BasisUniversalRegistration.SupportedFormats.ToArray());
+        Assert.Contains(TextureFormats.RgbaBasisUastcLdr4x4UNorm, BasisUniversalRegistration.SupportedFormats.ToArray());
+        Assert.Contains(TextureFormats.RgbaBasisUastcLdr4x4Srgb, BasisUniversalRegistration.SupportedFormats.ToArray());
+    }
+
+    [Fact]
+    public void BasisUniversalEtc1sInterfaceEncodesAndDecodesWithExternalCodec()
+    {
+        IBasisEtc1sTextureCoder coder = new BasisUniversalEtc1sTextureCoder(TextureFormats.RgbaBasisEtc1sUNorm, SFastOptions);
+        var source = CreateSource(4, 4);
+        var decoded = new ArrayBitmap<Rgba8UNorm>(4, 4);
+
+        var payload = coder.Encode(source.AsView());
+        coder.Decode(payload.AsRawPayload(), decoded.AsView());
+
+        Assert.False(payload.EndpointData.IsEmpty);
+        Assert.False(payload.SelectorData.IsEmpty);
+        Assert.False(payload.TablesData.IsEmpty);
+        Assert.False(payload.RgbSliceData.IsEmpty);
+        Assert.Contains(decoded.Pixels, pixel => pixel.Red != 0 || pixel.Green != 0 || pixel.Blue != 0);
     }
 
     public static TheoryData<TextureFormat> RepresentativeFormats() => new()
@@ -96,6 +144,7 @@ public sealed class BasisUniversalTextureCoderTests
         TextureFormats.RgbaPvrtcII4BppUNorm,
         TextureFormats.RgbFxt1UNorm,
         TextureFormats.AtcRgbaInterpolatedAlpha,
+        TextureFormats.RgbaBasisUastcLdr4x4UNorm,
         TextureFormats.RgbaAstc4x4UNorm,
         TextureFormats.RgbaAstc8x8Srgb
     };

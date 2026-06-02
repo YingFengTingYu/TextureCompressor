@@ -485,7 +485,7 @@ var bitmap = AstcCodec.Decode("texture.astc", new AstcReadOptions
 
 - `TextureCompressor.Codecs.BCnEncoder`：基于 BCnEncoder.Net，面向 BC1/BC2/BC3/BC4/BC5/BC6H/BC7 相关格式。
 - `TextureCompressor.Codecs.AstcEnc`：基于 AstcEncoderCSharp，面向 ASTC 2D 相关格式。
-- `TextureCompressor.Codecs.BasisUniversal`：基于 BasisUniversal.NET，面向 ETC/EAC、BC/DXT、PVRTC、FXT1、ATC、部分 ASTC LDR 相关格式。
+- `TextureCompressor.Codecs.BasisUniversal`：基于 BasisUniversal.NET，面向 Basis ETC1S/UASTC、ETC/EAC、BC/DXT、PVRTC、FXT1、ATC、部分 ASTC LDR 相关格式。
 - `TextureCompressor.Codecs.DirectXTex`：基于 DirectXTex，面向 BC1-BC7、DXT、RGTC/ATI、BPTC 相关格式。
 - `TextureCompressor.Codecs.PVRTexLib`：基于 PVRTexLib.NET，面向 ETC/EAC、PVRTC、BC/DXT、ASTC 相关格式。
 

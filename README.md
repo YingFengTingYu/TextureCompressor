@@ -487,7 +487,7 @@ Available third-party encoder adapters:
 
 - `TextureCompressor.Codecs.BCnEncoder`: based on BCnEncoder.Net, targeting BC1/BC2/BC3/BC4/BC5/BC6H/BC7-related formats.
 - `TextureCompressor.Codecs.AstcEnc`: based on AstcEncoderCSharp, targeting ASTC 2D formats.
-- `TextureCompressor.Codecs.BasisUniversal`: based on BasisUniversal.NET, targeting ETC/EAC, BC/DXT, PVRTC, FXT1, ATC, and some ASTC LDR formats.
+- `TextureCompressor.Codecs.BasisUniversal`: based on BasisUniversal.NET, targeting Basis ETC1S/UASTC, ETC/EAC, BC/DXT, PVRTC, FXT1, ATC, and some ASTC LDR formats.
 - `TextureCompressor.Codecs.DirectXTex`: based on DirectXTex, targeting BC1-BC7, DXT, RGTC/ATI, and BPTC formats.
 - `TextureCompressor.Codecs.PVRTexLib`: based on PVRTexLib.NET, targeting ETC/EAC, PVRTC, BC/DXT, and ASTC formats.
 
