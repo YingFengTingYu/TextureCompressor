@@ -59,11 +59,12 @@ public sealed class BasisUniversalEtc1sTextureCoder : IBasisEtc1sTextureCoder
             throw new InvalidOperationException($"BasisUniversal.NET opened '{info.BasisTextureFormat}', but ETC1S was expected.");
         }
 
-        var rgba32 = new byte[checked(destination.Width * destination.Height * 4)];
-        var bytesWritten = texture.TranscodeImageLevel(rgba32, TranscoderTextureFormat.Rgba32, decodeFlags: _options.DecodeFlags);
-        if (bytesWritten != rgba32.Length)
+        var transcoded = texture.TranscodeImageLevel(TranscoderTextureFormat.Rgba32, decodeFlags: _options.DecodeFlags);
+        var rgba32 = transcoded.Data;
+        var expectedLength = checked(destination.Width * destination.Height * 4);
+        if (rgba32.Length != expectedLength)
         {
-            throw new InvalidOperationException($"BasisUniversal.NET wrote {bytesWritten} RGBA bytes; expected {rgba32.Length}.");
+            throw new InvalidOperationException($"BasisUniversal.NET wrote {rgba32.Length} RGBA bytes; expected {expectedLength}.");
         }
 
         CopyFromRgba32(rgba32, destination);

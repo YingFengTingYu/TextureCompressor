@@ -7,7 +7,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="BasisUniversal.NET" Version="1.0.0-preview.3" />
+    <PackageReference Include="BasisUniversal.NET" Version="1.0.0" />
   </ItemGroup>
 
   <ItemGroup>

@@ -21,7 +21,7 @@ encoder, native runtime, CLI, or test packages.
 | Package | Version | Declared license | Project URL | Referenced by | Usage |
 | --- | --- | --- | --- | --- | --- |
 | AstcEncoderCSharp | 5.4.4 | MIT | https://github.com/Ash39/Astc-Encoder-csharp | TextureCompressor.Codecs.AstcEnc | Optional ASTC encoder adapter. |
-| BasisUniversal.NET | 1.0.0-preview.3 | Apache-2.0 | https://github.com/YingFengTingYu/BasisUniversal.NET | TextureCompressor.Codecs.BasisUniversal | Optional Basis Universal encoder/transcoder adapter. |
+| BasisUniversal.NET | 1.0.0 | Apache-2.0 | https://github.com/YingFengTingYu/BasisUniversal.NET | TextureCompressor.Codecs.BasisUniversal | Optional Basis Universal encoder/transcoder adapter. |
 | BCnEncoder.Net | 2.3.0 | MIT OR Unlicense | https://github.com/Nominom/BCnEncoder.NET | TextureCompressor.Codecs.BCnEncoder | Optional BCn encoder adapter. |
 | Hexa.NET.DirectXTex | 2.0.4 | MIT | https://github.com/HexaEngine/Hexa.NET.DirectXTex | TextureCompressor.Codecs.DirectXTex | Optional DirectXTex encoder adapter. |
 | Microsoft.CodeAnalysis.CSharp | 5.3.0 | MIT | https://github.com/dotnet/roslyn | TextureCompressor.SourceGenerators | Source generator support. |
@@ -37,8 +37,8 @@ encoder, native runtime, CLI, or test packages.
 
 | Package | Version | Declared license | Project URL | Pulled by |
 | --- | --- | --- | --- | --- |
-| BasisUniversal.Native | 1.0.0-preview.3 | Apache-2.0 | https://github.com/YingFengTingYu/BasisUniversal.NET | BasisUniversal.NET |
-| BasisUniversal.NET.LowLevel | 1.0.0-preview.3 | Apache-2.0 | https://github.com/YingFengTingYu/BasisUniversal.NET | BasisUniversal.NET |
+| BasisUniversal.Native | 1.0.0 | Apache-2.0 | https://github.com/YingFengTingYu/BasisUniversal.NET | BasisUniversal.NET |
+| BasisUniversal.NET.LowLevel | 1.0.0 | Apache-2.0 | https://github.com/YingFengTingYu/BasisUniversal.NET | BasisUniversal.NET |
 | CommunityToolkit.HighPerformance | 8.4.0 | MIT | https://github.com/CommunityToolkit/dotnet | BCnEncoder.Net |
 | HexaGen.Runtime | 1.1.16 | MIT | https://github.com/JunaMeinhold/HexaGen | Hexa.NET.DirectXTex |
 | HexaGen.Runtime.COM | 1.1.9 | MIT | https://github.com/JunaMeinhold/HexaGen | Hexa.NET.DirectXTex |

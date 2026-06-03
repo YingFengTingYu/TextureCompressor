@@ -184,18 +184,17 @@ public sealed class BasisUniversalTextureCoder : IPitchTextureCoder
                 $"Basis texture format '{texture.Info.BasisTextureFormat}' cannot transcode to '{_mapping.TranscoderFormat}'.");
         }
 
-        var packed = new byte[Format.GetByteCount(source.Width, source.Height)];
-        var bytesWritten = texture.TranscodeImageLevel(
-            packed,
+        var transcoded = texture.TranscodeImageLevel(
             _mapping.TranscoderFormat,
             levelIndex: 0,
             layerIndex: 0,
             faceIndex: 0,
-            _options.DecodeFlags);
-
-        if (bytesWritten != packed.Length)
+            decodeFlags: _options.DecodeFlags);
+        var packed = transcoded.Data;
+        var expectedLength = Format.GetByteCount(source.Width, source.Height);
+        if (packed.Length != expectedLength)
         {
-            throw new InvalidOperationException($"BasisUniversal.NET wrote {bytesWritten} bytes; expected {packed.Length}.");
+            throw new InvalidOperationException($"BasisUniversal.NET wrote {packed.Length} bytes; expected {expectedLength}.");
         }
 
         CopyPackedRowsToDestination(packed, source.Width, source.Height, destination, rowPitch);
@@ -234,11 +233,12 @@ public sealed class BasisUniversalTextureCoder : IPitchTextureCoder
             throw new InvalidOperationException($"BasisUniversal.NET opened '{info.BasisTextureFormat}', but UASTC LDR 4x4 was expected.");
         }
 
-        var rgba32 = new byte[checked(destination.Width * destination.Height * 4)];
-        var bytesWritten = texture.TranscodeImageLevel(rgba32, TranscoderTextureFormat.Rgba32, decodeFlags: _options.DecodeFlags);
-        if (bytesWritten != rgba32.Length)
+        var transcoded = texture.TranscodeImageLevel(TranscoderTextureFormat.Rgba32, decodeFlags: _options.DecodeFlags);
+        var rgba32 = transcoded.Data;
+        var expectedLength = checked(destination.Width * destination.Height * 4);
+        if (rgba32.Length != expectedLength)
         {
-            throw new InvalidOperationException($"BasisUniversal.NET wrote {bytesWritten} RGBA bytes; expected {rgba32.Length}.");
+            throw new InvalidOperationException($"BasisUniversal.NET wrote {rgba32.Length} RGBA bytes; expected {expectedLength}.");
         }
 
         CopyFromRgba32(rgba32, destination);
