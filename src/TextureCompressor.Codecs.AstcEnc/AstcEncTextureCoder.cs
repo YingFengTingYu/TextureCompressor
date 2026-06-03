@@ -98,7 +98,7 @@ public sealed class AstcEncTextureCoder : IPitchTextureCoder
             dimY = checked((uint)source.Height),
             dimZ = 1,
             dataType = AstcencType.AstcencTypeU8,
-            data = rgba
+            data = [rgba]
         };
 
         Check(Astcenc.AstcencCompressImage(context.Handle, ref image, SSwizzle, destination, 0));
@@ -114,7 +114,7 @@ public sealed class AstcEncTextureCoder : IPitchTextureCoder
             dimY = checked((uint)source.Height),
             dimZ = 1,
             dataType = AstcencType.AstcencTypeF32,
-            data = MemoryMarshal.AsBytes(rgba.AsSpan())
+            data = [MemoryMarshal.AsBytes(rgba.AsSpan()).ToArray()]
         };
 
         Check(Astcenc.AstcencCompressImage(context.Handle, ref image, SSwizzle, destination, 0));
@@ -130,7 +130,7 @@ public sealed class AstcEncTextureCoder : IPitchTextureCoder
             dimY = checked((uint)destination.Height),
             dimZ = 1,
             dataType = AstcencType.AstcencTypeU8,
-            data = rgba
+            data = [rgba]
         };
 
         Check(Astcenc.AstcencDecompressImage(context.Handle, source.ToArray(), ref image, SSwizzle, 0));
@@ -141,19 +141,21 @@ public sealed class AstcEncTextureCoder : IPitchTextureCoder
         where TPixel : unmanaged, IPixel<TPixel>
     {
         var rgba = new Rgba32Float[checked(destination.Width * destination.Height)];
+        var rgbaBytes = new byte[MemoryMarshal.AsBytes(rgba.AsSpan()).Length];
         var image = new AstcencImage
         {
             dimX = checked((uint)destination.Width),
             dimY = checked((uint)destination.Height),
             dimZ = 1,
             dataType = AstcencType.AstcencTypeF32,
-            data = MemoryMarshal.AsBytes(rgba.AsSpan())
+            data = [rgbaBytes]
         };
 
         Check(Astcenc.AstcencDecompressImage(context.Handle, source.ToArray(), ref image, SSwizzle, 0));
+        var decoded = MemoryMarshal.Cast<byte, Rgba32Float>(rgbaBytes);
         for (var i = 0; i < rgba.Length; i++)
         {
-            destination.Pixels[i] = TPixel.FromRgba32Float(rgba[i]);
+            destination.Pixels[i] = TPixel.FromRgba32Float(decoded[i]);
         }
     }
 

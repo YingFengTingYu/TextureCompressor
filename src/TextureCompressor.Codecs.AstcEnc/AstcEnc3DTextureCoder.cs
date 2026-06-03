@@ -1,5 +1,4 @@
 using System.Runtime.InteropServices;
-using System.Reflection;
 using AstcEncoder;
 using TextureCompressor.Bitmaps;
 using TextureCompressor.Colors;
@@ -10,10 +9,6 @@ namespace TextureCompressor.Codecs.AstcEnc;
 public sealed unsafe class AstcEnc3DTextureCoder : IPitchTextureCoder3D
 {
     private static readonly TextureFormat[] SSupportedFormats = Astc3DTextureCoder.SupportedFormats.ToArray();
-    private static readonly FieldInfo SContextHandleField =
-        typeof(AstcencContext).GetField("internal_context", BindingFlags.NonPublic | BindingFlags.Instance)
-        ?? throw new MissingFieldException(typeof(AstcencContext).FullName, "internal_context");
-    private static readonly Lazy<NativeAstcEncApi> SNativeApi = new(LoadNativeApi);
     private static readonly AstcencSwizzle SSwizzle = new()
     {
         r = AstcencSwz.AstcencSwzR,
@@ -114,48 +109,42 @@ public sealed unsafe class AstcEnc3DTextureCoder : IPitchTextureCoder3D
         where TPixel : unmanaged, IPixel<TPixel>
     {
         var rgba = CopyToRgba8(source);
-        var image = new AstcencImage
-        {
-            dimX = checked((uint)source.Width),
-            dimY = checked((uint)source.Height),
-            dimZ = checked((uint)source.Depth),
-            dataType = AstcencType.AstcencTypeU8,
-            data = rgba
-        };
-
-        CompressImage(context.Handle, ref image, destination);
+        CompressImage(
+            context.Handle,
+            checked((uint)source.Width),
+            checked((uint)source.Height),
+            checked((uint)source.Depth),
+            AstcencType.AstcencTypeU8,
+            rgba,
+            destination);
     }
 
     private void EncodeFloat<TPixel>(VolumeBitmapView<TPixel> source, Span<byte> destination, AstcEncContext context)
         where TPixel : unmanaged, IPixel<TPixel>
     {
         var rgba = CopyToRgba32Float(source);
-        var image = new AstcencImage
-        {
-            dimX = checked((uint)source.Width),
-            dimY = checked((uint)source.Height),
-            dimZ = checked((uint)source.Depth),
-            dataType = AstcencType.AstcencTypeF32,
-            data = MemoryMarshal.AsBytes(rgba.AsSpan())
-        };
-
-        CompressImage(context.Handle, ref image, destination);
+        CompressImage(
+            context.Handle,
+            checked((uint)source.Width),
+            checked((uint)source.Height),
+            checked((uint)source.Depth),
+            AstcencType.AstcencTypeF32,
+            MemoryMarshal.AsBytes(rgba.AsSpan()),
+            destination);
     }
 
     private void DecodeUnorm<TPixel>(ReadOnlySpan<byte> source, VolumeBitmapView<TPixel> destination, AstcEncContext context)
         where TPixel : unmanaged, IPixel<TPixel>
     {
         var rgba = new byte[checked(destination.Width * destination.Height * destination.Depth * 4)];
-        var image = new AstcencImage
-        {
-            dimX = checked((uint)destination.Width),
-            dimY = checked((uint)destination.Height),
-            dimZ = checked((uint)destination.Depth),
-            dataType = AstcencType.AstcencTypeU8,
-            data = rgba
-        };
-
-        DecompressImage(context.Handle, source, ref image);
+        DecompressImage(
+            context.Handle,
+            source,
+            checked((uint)destination.Width),
+            checked((uint)destination.Height),
+            checked((uint)destination.Depth),
+            AstcencType.AstcencTypeU8,
+            rgba);
         CopyFromRgba8(rgba, destination);
     }
 
@@ -163,16 +152,14 @@ public sealed unsafe class AstcEnc3DTextureCoder : IPitchTextureCoder3D
         where TPixel : unmanaged, IPixel<TPixel>
     {
         var rgba = new Rgba32Float[checked(destination.Width * destination.Height * destination.Depth)];
-        var image = new AstcencImage
-        {
-            dimX = checked((uint)destination.Width),
-            dimY = checked((uint)destination.Height),
-            dimZ = checked((uint)destination.Depth),
-            dataType = AstcencType.AstcencTypeF32,
-            data = MemoryMarshal.AsBytes(rgba.AsSpan())
-        };
-
-        DecompressImage(context.Handle, source, ref image);
+        DecompressImage(
+            context.Handle,
+            source,
+            checked((uint)destination.Width),
+            checked((uint)destination.Height),
+            checked((uint)destination.Depth),
+            AstcencType.AstcencTypeF32,
+            MemoryMarshal.AsBytes(rgba.AsSpan()));
         for (var i = 0; i < rgba.Length; i++)
         {
             destination.Pixels[i] = TPixel.FromRgba32Float(rgba[i]);
@@ -209,66 +196,71 @@ public sealed unsafe class AstcEnc3DTextureCoder : IPitchTextureCoder3D
     private AstcencFlags GetEncodeFlags() =>
         GetCommonFlags();
 
-    private static void CompressImage(AstcencContext context, ref AstcencImage image, Span<byte> destination)
+    private static void CompressImage(
+        AstcencContext context,
+        uint width,
+        uint height,
+        uint depth,
+        AstcencType dataType,
+        Span<byte> imageData,
+        Span<byte> destination)
     {
-        fixed (byte* imagePtr = image.data)
-        fixed (byte* destinationPtr = destination)
+        fixed (byte* imagePtr = imageData)
         {
-            var slicePointers = stackalloc void*[checked((int)image.dimZ)];
-            FillSlicePointers(slicePointers, imagePtr, image);
+            var slicePointers = stackalloc byte*[checked((int)depth)];
+            FillSlicePointers(slicePointers, imagePtr, width, height, depth, dataType);
 
-            var nativeImage = new AstcencImageNative
+            var nativeImage = new AstcencImageUnmanaged
             {
-                dimX = image.dimX,
-                dimY = image.dimY,
-                dimZ = image.dimZ,
-                dataType = image.dataType,
+                dimX = width,
+                dimY = height,
+                dimZ = depth,
+                dataType = dataType,
                 data = slicePointers
             };
-            var swizzle = SSwizzle;
 
-            Check(SNativeApi.Value.CompressImage(
-                GetContextHandle(context),
-                &nativeImage,
-                &swizzle,
-                destinationPtr,
-                checked((UIntPtr)destination.Length),
-                threadIndex: 0));
+            Check(Astcenc.AstcencCompressImage(context, ref nativeImage, SSwizzle, destination, 0));
         }
     }
 
-    private static void DecompressImage(AstcencContext context, ReadOnlySpan<byte> source, ref AstcencImage image)
+    private static void DecompressImage(
+        AstcencContext context,
+        ReadOnlySpan<byte> source,
+        uint width,
+        uint height,
+        uint depth,
+        AstcencType dataType,
+        Span<byte> imageData)
     {
-        fixed (byte* sourcePtr = source)
-        fixed (byte* imagePtr = image.data)
+        var sourceCopy = source.ToArray();
+        fixed (byte* imagePtr = imageData)
         {
-            var slicePointers = stackalloc void*[checked((int)image.dimZ)];
-            FillSlicePointers(slicePointers, imagePtr, image);
+            var slicePointers = stackalloc byte*[checked((int)depth)];
+            FillSlicePointers(slicePointers, imagePtr, width, height, depth, dataType);
 
-            var nativeImage = new AstcencImageNative
+            var nativeImage = new AstcencImageUnmanaged
             {
-                dimX = image.dimX,
-                dimY = image.dimY,
-                dimZ = image.dimZ,
-                dataType = image.dataType,
+                dimX = width,
+                dimY = height,
+                dimZ = depth,
+                dataType = dataType,
                 data = slicePointers
             };
-            var swizzle = SSwizzle;
 
-            Check(SNativeApi.Value.DecompressImage(
-                GetContextHandle(context),
-                sourcePtr,
-                checked((UIntPtr)source.Length),
-                &nativeImage,
-                &swizzle,
-                threadIndex: 0));
+            Check(Astcenc.AstcencDecompressImage(context, sourceCopy, ref nativeImage, SSwizzle, 0));
         }
     }
 
-    private static void FillSlicePointers(void** slicePointers, byte* imageData, AstcencImage image)
+    private static void FillSlicePointers(
+        byte** slicePointers,
+        byte* imageData,
+        uint width,
+        uint height,
+        uint depth,
+        AstcencType dataType)
     {
-        var sliceByteCount = checked((nuint)image.dimX * (nuint)image.dimY * GetBytesPerPixel(image.dataType));
-        for (var z = 0; z < image.dimZ; z++)
+        var sliceByteCount = checked((nuint)width * (nuint)height * GetBytesPerPixel(dataType));
+        for (var z = 0; z < depth; z++)
         {
             slicePointers[z] = imageData + checked((nint)(sliceByteCount * (nuint)z));
         }
@@ -281,24 +273,6 @@ public sealed unsafe class AstcEnc3DTextureCoder : IPitchTextureCoder3D
         AstcencType.AstcencTypeF32 => 16,
         _ => throw new ArgumentOutOfRangeException(nameof(type), type, null)
     };
-
-    private static IntPtr GetContextHandle(AstcencContext context) =>
-        (IntPtr)(SContextHandleField.GetValue(context) ?? IntPtr.Zero);
-
-    private static NativeAstcEncApi LoadNativeApi()
-    {
-        var libraryNameProperty = typeof(Astcenc).GetProperty("AstcencLibraryName", BindingFlags.NonPublic | BindingFlags.Static)
-            ?? throw new MissingMemberException(typeof(Astcenc).FullName, "AstcencLibraryName");
-        var libraryName = (string?)libraryNameProperty.GetValue(null)
-            ?? throw new InvalidOperationException("AstcEncoderCSharp did not resolve an astcenc native library name.");
-        var library = NativeLibrary.Load(libraryName, typeof(Astcenc).Assembly, searchPath: null);
-
-        return new NativeAstcEncApi(
-            Marshal.GetDelegateForFunctionPointer<AstcencCompressImageDelegate>(
-                NativeLibrary.GetExport(library, "astcenc_compress_image")),
-            Marshal.GetDelegateForFunctionPointer<AstcencDecompressImageDelegate>(
-                NativeLibrary.GetExport(library, "astcenc_decompress_image")));
-    }
 
     private byte[] CopyToPackedBlocks(ReadOnlySpan<byte> source, int width, int height, int depth, int rowPitch, int slicePitch)
     {
@@ -435,37 +409,6 @@ public sealed unsafe class AstcEnc3DTextureCoder : IPitchTextureCoder3D
         }
     }
 
-    private readonly record struct NativeAstcEncApi(
-        AstcencCompressImageDelegate CompressImage,
-        AstcencDecompressImageDelegate DecompressImage);
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct AstcencImageNative
-    {
-        public uint dimX;
-        public uint dimY;
-        public uint dimZ;
-        public AstcencType dataType;
-        public void** data;
-    }
-
-    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-    private delegate AstcencError AstcencCompressImageDelegate(
-        IntPtr context,
-        AstcencImageNative* image,
-        AstcencSwizzle* swizzle,
-        byte* dataOut,
-        UIntPtr dataLen,
-        uint threadIndex);
-
-    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-    private delegate AstcencError AstcencDecompressImageDelegate(
-        IntPtr context,
-        byte* data,
-        UIntPtr dataLen,
-        AstcencImageNative* imageOut,
-        AstcencSwizzle* swizzle,
-        uint threadIndex);
 
     private sealed class AstcEncContext(AstcencContext handle) : IDisposable
     {
