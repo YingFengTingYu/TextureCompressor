@@ -29,6 +29,35 @@ public sealed class FxtcTextureCoderTests
         { TextureFormats.RgbaFxt1UNorm, TextureCompressionLevel.Exhaustive }
     };
 
+    // Mesa texcompress_fxt1.c (a998e492): each mode field decoded in raster order.
+    // Mesa scales 5/6-bit endpoints to the nearest byte; 3DFX specifies bit replication.
+    [Theory]
+    [InlineData("7f9748cc4fa2db424a50562a9ae7770e", "AAAAAAAAAABTV4r/hJCp/4SQqf+EkKn/hJCp/7XJx/+1ycf/tcnH/52tuP+drbj/a3OZ/2tzmf+drbj/na24/2tzmf+1ycf/AAAAAAAAAADO5tb/na24/7XJx/+EkKn/a3OZ/2tzmf/O5tb/U1eK/1NXiv9rc5n/na24/7XJx/8=")]
+    [InlineData("efc9abde4db3e4101cd276d2f4909d24", "AAAAAIFH1f8AAAAAbkXL/25Fy/9uRcv/W0LC/yE6pf9uRcv/AAAAAEc/uP+BR9X/ND2v/yE6pf8AAAAAITql/5RK3v9bQsL/AAAAAJRK3v9HP7j/Rz+4/1tCwv9bQsL/bkXL/5RK3v9uRcv/gUfV/wAAAABuRcv/bkXL/5RK3v8=")]
+    [InlineData("c32f874764ace0e3b5774dc3bef65656", "Y629/+/vrf/v763/Y629/+/vrf8Ipdb/tb3e/wil1v9jrb3/Y629/7W93v/v763/7++t/2Otvf+1vd7/tb3e/2Otvf8Ipdb/7++t/7W93v/v763/7++t/7W93v9jrb3/Y629/wil1v/v763/CKXW/2Otvf/v763/tb3e/2Otvf8=")]
+    [InlineData("8df4a28abe4f8cb8eaa46fae62c93872", "cDeMR70x/3NKOlIxlzTFXZdCxVi9Mf9zvTH/c5dCxVhKOlIxcDeMR70x/3O9Mf9zvTH/c70x/3NKY1IhcFKMPJc0xV1KOlIxlzTFXZc0xV1KY1IhvTH/c0pjUiGXQsVYlzTFXZc0xV1KOlIxlzTFXUpjUiGXQsVYvTH/c5dCxVg=")]
+    [InlineData("fb3d13add7fa4c585844a996c15ce49e", "AAAAAFpRlP8AAAAAAAAAAAAAAADqxyD/6scg/wAAAABzMKz/AAAAAAAAAACMEMX/78oQ/+/KEP8AAAAAAAAAAAAAAACMEMX/czCs/4wQxf/mxTH/AAAAAObFMf/qxyD/czCs/wAAAABaUZT/WlGU/+bFMf/vyhD/6scg/+rHIP8=")]
+    [InlineData("2b3c0fcfcabef4e3b0d6cc5987c0d7be", "AAAAAGPnzv9j587/ra2E/++q9//vqvf/AITv/wAAAACtrYT/AAAAAAAAAACtrYT/76r3/wAAAAAAAAAA76r3/wAAAAAAAAAAra2E/62thP8AhO//d5fz/wAAAAAAAAAAAAAAAAAAAACtrYT/AAAAAAAAAAAAhO//76r3/wAAAAA=")]
+    [InlineData("f741b9b4a66a9d67087c824577ca39c9", "EMIh/69DN/8QwiH/EMIh/350nP9ocsb/fnSc/350nP+vQzf//wRC//8EQv+vQzf/fnSc/350nP9+dJz/aHLG/69DN/9ggyz/EMIh/2CDLP9ocsb/lHVz/2hyxv9+dJz//wRC/69DN/8QwiH/YIMs/5R1c/9ocsb/fnSc/2hyxv8=")]
+    [InlineData("45c6f556b9a073692c0e1da4c028aef9", "Vkyc/1ZMnP8ZjGP/Vkyc/2+RTv+cXYz/AAAAAJxdjP+UDNb/Vkyc/xmMY/8AAAAAQsUQ/0LFEP+cXYz/nF2M/1ZMnP9WTJz/AAAAAAAAAAAAAAAAQsUQ/wAAAABvkU7/lAzW/1ZMnP9WTJz/Vkyc/2+RTv+cXYz/nF2M/2+RTv8=")]
+    public void DecodesReferenceBlocksWithinEndpointRounding(string blockHex, string rgbaBase64)
+    {
+        var data = Convert.FromHexString(blockHex);
+        var expected = Convert.FromBase64String(rgbaBase64);
+        foreach (var format in new[] { TextureFormats.RgbFxt1UNorm, TextureFormats.RgbaFxt1UNorm })
+        {
+            ITextureCoder coder = new FxtcTextureCoder(format);
+            var output = new ArrayBitmap<Rgba8UNorm>(8, 4);
+            coder.Decode(data, output.AsView());
+            var actual = System.Runtime.InteropServices.MemoryMarshal.AsBytes(output.PixelSpan);
+            for (var i = 0; i < actual.Length; i++)
+            {
+                var reference = format == TextureFormats.RgbFxt1UNorm && i % 4 == 3 ? 255 : expected[i];
+                Assert.InRange(Math.Abs(actual[i] - reference), 0, 1);
+            }
+        }
+    }
+
     [Theory]
     [MemberData(nameof(Fxt1Formats))]
     public void GlobalManagerFindsFxtcTextureCoders(TextureFormat format)
@@ -151,7 +180,7 @@ public sealed class FxtcTextureCoderTests
         coder.Decode(block, decoded.AsView(), coder.GetDefaultPitch(decoded.Width));
 
         Assert.Equal(new Rgba8UNorm(255, 0, 0), decoded.Pixels[0]);
-        Assert.Equal(new Rgba8UNorm(128, 0, 128), decoded.Pixels[1]);
+        Assert.Equal(new Rgba8UNorm(127, 0, 127), decoded.Pixels[1]);
         Assert.Equal(new Rgba8UNorm(0, 0, 255), decoded.Pixels[2]);
         Assert.Equal(new Rgba8UNorm(0, 0, 0, 0), decoded.Pixels[3]);
         Assert.Equal(new Rgba8UNorm(0, 255, 0), decoded.Pixels[4]);

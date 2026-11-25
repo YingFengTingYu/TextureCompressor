@@ -1933,7 +1933,9 @@ public sealed class FxtcTextureCoder : IPitchTextureCoder
         palette[0] = color0;
         if (alphaMode)
         {
-            palette[1] = Interpolate(color0, color1, 1, 1, 2, includeAlpha: false);
+            // CC_MIXED with alpha truncates the midpoint. The opaque palette uses rounded thirds.
+            palette[1] = new Rgba8UNorm((byte)((color0.Red + color1.Red) / 2),
+                (byte)((color0.Green + color1.Green) / 2), (byte)((color0.Blue + color1.Blue) / 2));
             palette[2] = color1;
             palette[3] = default;
             return;
