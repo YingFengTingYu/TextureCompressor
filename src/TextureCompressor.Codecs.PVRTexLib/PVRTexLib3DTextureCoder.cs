@@ -210,6 +210,15 @@ public sealed unsafe class PVRTexLib3DTextureCoder : IPitchTextureCoder3D
         where TPixel : unmanaged, IPixel<TPixel>
     {
         ValidateDestinationLength(source.Width, source.Height, source.Depth, destination, rowPitch, slicePitch);
+        if (_options.Etc2InputIsPremultiplied && _mapping.PixelFormat == PVRTexLibPixelFormat.ETC2_RGBA)
+        {
+            var sliceCoder = new PVRTexLibTextureCoder(Format, _options);
+            for (int z = 0; z < source.Depth; z++)
+            {
+                sliceCoder.Encode(source.GetSliceView(z), destination.Slice(z * slicePitch, slicePitch), rowPitch);
+            }
+            return;
+        }
         EncodeCore(source, destination, rowPitch, slicePitch);
     }
 

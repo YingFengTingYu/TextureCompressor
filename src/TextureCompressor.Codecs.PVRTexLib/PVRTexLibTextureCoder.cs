@@ -193,6 +193,12 @@ public sealed unsafe class PVRTexLibTextureCoder : IPitchTextureCoder
 
                 fixed (Rgba8UNorm* ptr = rgba8)
                 {
+                    if (_options.Etc2InputIsPremultiplied && _mapping.PixelFormat == PVRTexLibPixelFormat.ETC2_RGBA
+                        && Array.Exists(rgba8, static pixel => pixel.Alpha != 255))
+                    {
+                        EncodePremultipliedEtc2(ptr, source.Width, source.Height, destination, rowPitch);
+                        return;
+                    }
                     TranscodeAndCopy(SRgba8PixelFormat, source.Width, source.Height, PVRTexLibVariableType.UnsignedByteNorm, ptr, destination, rowPitch);
                     return;
                 }
@@ -311,6 +317,44 @@ public sealed unsafe class PVRTexLibTextureCoder : IPitchTextureCoder
             _mapping.ChannelType,
             preMultiplied: false);
 
+    private void EncodePremultipliedEtc2(Rgba8UNorm* data, int width, int height,
+        Span<byte> destination, int rowPitch)
+    {
+        // PVRTexLib 5.6 can encode transparent black with nonzero RGB in ETC2_RGBA,
+        // even when the input header marks it as premultiplied. Premultiplied blending
+        // adds that RGB directly to the background, producing a bright fringe.
+        // ETC2_RGB fits the caller's already-premultiplied colors independently of alpha.
+        using var header = new PVRTextureHeader(SRgba8PixelFormat, (uint)width, (uint)height, 1, 1, 1, 1,
+            PVRTexLibColourSpace.Linear, PVRTexLibVariableType.UnsignedByteNorm, preMultiplied: true);
+        using var color = new PVRTexture(header, data);
+        var space = GetColourSpace(Format);
+        Transcode(color, (ulong)PVRTexLibPixelFormat.ETC2_RGB, _mapping.ChannelType, space);
+        var colorBytes = GetPayload(color, Format.GetByteCount(width, height) / 2);
+
+        // Reuse the encoder's temporary pixel buffer for the alpha pass. Only the EAC
+        // alpha bytes from this pass are used, so its RGB input can be constant black.
+        var pixels = new Span<Rgba8UNorm>(data, checked(width * height));
+        for (int i = 0; i < pixels.Length; i++)
+        {
+            pixels[i] = new Rgba8UNorm(0, 0, 0, pixels[i].Alpha);
+        }
+        using var alpha = new PVRTexture(header, data);
+        Transcode(alpha, (ulong)PVRTexLibPixelFormat.ETC2_RGBA, _mapping.ChannelType, space);
+        var alphaBytes = GetPayload(alpha, Format.GetByteCount(width, height));
+        // Each 4x4 ETC2_RGBA block stores 8 bytes of EAC alpha followed by 8 bytes of ETC2 RGB.
+        int rowBytes = GetDefaultPitch(width);
+        for (int row = 0; row < alphaBytes.Length / rowBytes; row++)
+        {
+            var output = destination.Slice(row * rowPitch, rowBytes);
+            for (int x = 0; x < rowBytes; x += 16)
+            {
+                int offset = row * rowBytes + x;
+                alphaBytes.Slice(offset, 8).CopyTo(output[x..]);
+                colorBytes.Slice(offset / 2, 8).CopyTo(output[(x + 8)..]);
+            }
+        }
+    }
+
     private void TranscodeAndCopy(
         ulong pixelFormat,
         int width,
@@ -334,14 +378,18 @@ public sealed unsafe class PVRTexLibTextureCoder : IPitchTextureCoder
         using var texture = new PVRTexture(header, data);
         Transcode(texture, (ulong)_mapping.PixelFormat, _mapping.ChannelType, GetColourSpace(Format));
 
-        var packedSize = Format.GetByteCount(width, height);
+        CopyPackedRowsToDestination(GetPayload(texture, Format.GetByteCount(width, height)), width, height, destination, rowPitch);
+    }
+
+    private static ReadOnlySpan<byte> GetPayload(PVRTexture texture, int packedSize)
+    {
         var textureData = texture.GetTextureDataConstPointer(0, arrayMember: 0, faceNumber: 0, ZSlice: 0);
         if (textureData is null || texture.GetTextureDataSize(0, allSurfaces: false, allFaces: false) < (ulong)packedSize)
         {
             throw new InvalidOperationException("PVRTexLib returned an empty or incomplete texture payload.");
         }
 
-        CopyPackedRowsToDestination(new ReadOnlySpan<byte>(textureData, packedSize), width, height, destination, rowPitch);
+        return new ReadOnlySpan<byte>(textureData, packedSize);
     }
 
     private byte[] CopyToPackedRows(ReadOnlySpan<byte> source, int width, int height, int rowPitch)

@@ -526,6 +526,22 @@ using TextureCompressor.Registry;
 using var registration = TextureCoderManager.Global.RegisterBCnEncoderCoder(TextureFormats.Bc7UNorm);
 ```
 
+下面的注册方式适用于资源管线已经将 RGB 乘过 Alpha 的 ETC2 RGBA 像素。
+
+```csharp
+using var registration = TextureCoderManager.Global.RegisterPVRTexLibCoder(
+    TextureFormats.RgbaEtc2EacUNorm,
+    new PVRTexLibCompressorOptions
+    {
+        // 输入已经预乘。例如原像素 R=200、A=128，传给 Encode 时 R 已是 100。
+        Etc2InputIsPremultiplied = true
+    });
+```
+
+直接传入直通 Alpha 像素（如上例中 R 仍为 200）时，保留默认值 `false`。目标为 sRGB 时，先在线性 RGB 上预乘，再进行 sRGB 编码。
+启用此选项后，含透明度的图像会多做一次编码，将 RGB 与 Alpha 分开拟合，以减少透明边缘的亮块。
+原始 ETC2 数据块不记录预乘标志。这条路径解码出的 RGB 已经预乘，绘制时使用源因子 `One`、目标因子 `OneMinusSrcAlpha`。若再乘一次 Alpha，半透明边缘会变暗。
+
 ## CLI 工具
 
 `TextureCompressor.Cli` 是开发用命令行工具，可以查询格式、查看容器元数据、转换容器并输出质量指标：

@@ -931,11 +931,21 @@ public sealed class EtcTextureCoder : IPitchTextureCoder
         Span<byte> destination)
     {
         var alpha = new IntBlock();
+        var first = source[0].Alpha;
+        var constant = true;
         for (var i = 0; i < TexelsPerBlock; i++)
         {
             alpha[i] = source[i].Alpha;
+            constant &= alpha[i] == first;
         }
 
+        if (constant)
+        {
+            // ETC2 alpha8 with a zero multiplier reconstructs the base byte exactly.
+            destination.Clear();
+            destination[0] = first;
+            return;
+        }
         EncodeEacBlock(ref alpha, EacBlockKind.Alpha8, compressionMode, destination);
     }
 

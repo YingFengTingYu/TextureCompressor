@@ -21,6 +21,59 @@ public sealed unsafe class EtcTextureCoderPvrtTexLibTests
 
     [Theory]
     [MemberData(nameof(ColorEtcFormats))]
+    public void DecodeIndependentColorBlocksMatchesPvrtTexLib(TextureFormat format)
+    {
+        const int size = 64;
+        var bytes = new byte[format.GetByteCount(size, size)];
+        new Random(743119).NextBytes(bytes);
+        if (format == TextureFormats.RgbEtc1UNorm)
+        {
+            for (int i = 0; i < bytes.Length; i += 8)
+            {
+                if ((bytes[i + 3] & 2) == 0) continue;
+                for (int c = 0; c < 3; c++)
+                {
+                    // ETC1 differential endpoints must remain in the 5-bit range.
+                    int channel = bytes[i + c];
+                    bytes[i + c] = (byte)(((4 + (channel >> 3) % 25) << 3) | (channel & 7));
+                }
+            }
+        }
+        var actual = new ArrayBitmap<Rgba8UNorm>(size, size);
+        ITextureCoder coder = new EtcTextureCoder(format);
+        coder.Decode(bytes, actual.AsView());
+        var expected = DecodeColorWithPvrtTexLib(format, size, size, bytes);
+        AssertRgba8Near(expected, actual.Pixels, format, format.ValueKind == TextureValueKind.Srgb ? 1 : 0);
+    }
+
+    [Theory]
+    [InlineData(nameof(TextureFormats.R11EacUNorm))]
+    [InlineData(nameof(TextureFormats.R11EacSNorm))]
+    [InlineData(nameof(TextureFormats.Rg11EacUNorm))]
+    [InlineData(nameof(TextureFormats.Rg11EacSNorm))]
+    public void DecodeIndependentEacBlocksMatchesPvrtTexLib(string formatName)
+    {
+        const int size = 64;
+        var format = GetFormat(formatName);
+        var bytes = new byte[format.GetByteCount(size, size)];
+        new Random(967133).NextBytes(bytes);
+        ITextureCoder coder = new EtcTextureCoder(format);
+        if (format.ValueKind == TextureValueKind.SNorm)
+        {
+            var actual = new ArrayBitmap<Rgba16SNorm>(size, size);
+            coder.Decode(bytes, actual.AsView());
+            AssertRgba16SNormNear(DecodeSignedEacWithPvrtTexLib(format, size, size, bytes), actual.Pixels, format);
+        }
+        else
+        {
+            var actual = new ArrayBitmap<Rgba16UNorm>(size, size);
+            coder.Decode(bytes, actual.AsView());
+            AssertRgba16UNormNear(DecodeUnsignedEacWithPvrtTexLib(format, size, size, bytes), actual.Pixels, format);
+        }
+    }
+
+    [Theory]
+    [MemberData(nameof(ColorEtcFormats))]
     public void DecodePvrtTexLibColorPayloadMatchesPvrtTexLib(TextureFormat format)
     {
         var source = CreateColorSource(format, Width, Height);

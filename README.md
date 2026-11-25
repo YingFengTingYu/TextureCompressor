@@ -528,6 +528,23 @@ using TextureCompressor.Registry;
 using var registration = TextureCoderManager.Global.RegisterBCnEncoderCoder(TextureFormats.Bc7UNorm);
 ```
 
+If your asset pipeline already multiplies RGB by alpha, register the PVRTexLib ETC2 RGBA encoder this way.
+
+```csharp
+using var registration = TextureCoderManager.Global.RegisterPVRTexLibCoder(
+    TextureFormats.RgbaEtc2EacUNorm,
+    new PVRTexLibCompressorOptions
+    {
+        // Input is already premultiplied. A pixel with straight R=200 and A=128 reaches Encode with R=100.
+        Etc2InputIsPremultiplied = true
+    });
+```
+
+Keep the default `false` for straight-alpha input (R is still 200 in the example). For sRGB output, premultiply in linear RGB before the sRGB transfer.
+Enabling the option adds an encoding pass for images with transparency so RGB and alpha can be fitted separately to reduce bright fringes.
+Raw ETC2 blocks carry no premultiplication flag. Blend the decoded premultiplied RGB using source factor `One` and destination factor
+`OneMinusSrcAlpha`. Multiplying by alpha again darkens translucent edges.
+
 ## CLI Tool
 
 `TextureCompressor.Cli` is a development command-line tool for format search, container metadata inspection, conversion, and quality metric output:
