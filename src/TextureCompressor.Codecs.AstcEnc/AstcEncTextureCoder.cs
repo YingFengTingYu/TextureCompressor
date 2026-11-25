@@ -91,7 +91,7 @@ public sealed class AstcEncTextureCoder : IPitchTextureCoder
     private void EncodeUnorm<TPixel>(BitmapView<TPixel> source, Span<byte> destination, AstcEncContext context)
         where TPixel : unmanaged, IPixel<TPixel>
     {
-        var rgba = CopyToRgba8(source);
+        var rgba = CopyToRgba8(source.Pixels, Format.ValueKind == TextureValueKind.Srgb);
         var image = new AstcencImage
         {
             dimX = checked((uint)source.Width),
@@ -134,7 +134,7 @@ public sealed class AstcEncTextureCoder : IPitchTextureCoder
         };
 
         Check(Astcenc.AstcencDecompressImage(context.Handle, source.ToArray(), ref image, SSwizzle, 0));
-        CopyFromRgba8(rgba, destination);
+        CopyFromRgba8(rgba, destination.Pixels, Format.ValueKind == TextureValueKind.Srgb);
     }
 
     private void DecodeFloat<TPixel>(ReadOnlySpan<byte> source, BitmapView<TPixel> destination, AstcEncContext context)
@@ -260,21 +260,16 @@ public sealed class AstcEncTextureCoder : IPitchTextureCoder
     private int GetBlockRowCount(int width, int height) =>
         checked(Format.GetByteCount(width, height) / Format.GetRowByteCount(width));
 
-    private static byte[] CopyToRgba8<TPixel>(BitmapView<TPixel> source)
+    internal static byte[] CopyToRgba8<TPixel>(ReadOnlySpan<TPixel> pixels, bool srgb)
         where TPixel : unmanaged, IPixel<TPixel>
     {
-        var result = new byte[checked(source.Width * source.Height * 4)];
-        var offset = 0;
-        foreach (var pixel in source.Pixels)
+        var data = new byte[checked(pixels.Length * 4)];
+        var storage = MemoryMarshal.Cast<byte, Rgba8UNorm>(data.AsSpan());
+        for (var i = 0; i < pixels.Length; i++)
         {
-            var rgba = TPixel.ToRgba8UNorm(pixel);
-            result[offset++] = rgba.Red;
-            result[offset++] = rgba.Green;
-            result[offset++] = rgba.Blue;
-            result[offset++] = rgba.Alpha;
+            storage[i] = srgb ? RgbaColorConversions.ToSrgbStorage(pixels[i]) : TPixel.ToRgba8UNorm(pixels[i]);
         }
-
-        return result;
+        return data;
     }
 
     private static Rgba32Float[] CopyToRgba32Float<TPixel>(BitmapView<TPixel> source)
@@ -289,17 +284,13 @@ public sealed class AstcEncTextureCoder : IPitchTextureCoder
         return result;
     }
 
-    private static void CopyFromRgba8<TPixel>(ReadOnlySpan<byte> source, BitmapView<TPixel> destination)
+    internal static void CopyFromRgba8<TPixel>(ReadOnlySpan<byte> source, Span<TPixel> pixels, bool srgb)
         where TPixel : unmanaged, IPixel<TPixel>
     {
-        var offset = 0;
-        for (var i = 0; i < destination.Pixels.Length; i++)
+        var storage = MemoryMarshal.Cast<byte, Rgba8UNorm>(source);
+        for (var i = 0; i < pixels.Length; i++)
         {
-            destination.Pixels[i] = TPixel.FromRgba8UNorm(new Rgba8UNorm(
-                source[offset++],
-                source[offset++],
-                source[offset++],
-                source[offset++]));
+            pixels[i] = srgb ? RgbaColorConversions.FromSrgbStorage<TPixel>(storage[i]) : TPixel.FromRgba8UNorm(storage[i]);
         }
     }
 

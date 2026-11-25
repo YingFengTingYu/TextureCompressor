@@ -108,7 +108,7 @@ public sealed unsafe class AstcEnc3DTextureCoder : IPitchTextureCoder3D
     private void EncodeUnorm<TPixel>(VolumeBitmapView<TPixel> source, Span<byte> destination, AstcEncContext context)
         where TPixel : unmanaged, IPixel<TPixel>
     {
-        var rgba = CopyToRgba8(source);
+        var rgba = AstcEncTextureCoder.CopyToRgba8(source.Pixels, Format.ValueKind == TextureValueKind.Srgb);
         CompressImage(
             context.Handle,
             checked((uint)source.Width),
@@ -145,7 +145,7 @@ public sealed unsafe class AstcEnc3DTextureCoder : IPitchTextureCoder3D
             checked((uint)destination.Depth),
             AstcencType.AstcencTypeU8,
             rgba);
-        CopyFromRgba8(rgba, destination);
+        AstcEncTextureCoder.CopyFromRgba8(rgba, destination.Pixels, Format.ValueKind == TextureValueKind.Srgb);
     }
 
     private void DecodeFloat<TPixel>(ReadOnlySpan<byte> source, VolumeBitmapView<TPixel> destination, AstcEncContext context)
@@ -351,23 +351,6 @@ public sealed unsafe class AstcEnc3DTextureCoder : IPitchTextureCoder3D
         return checked((value + blockSize - 1) / blockSize);
     }
 
-    private static byte[] CopyToRgba8<TPixel>(VolumeBitmapView<TPixel> source)
-        where TPixel : unmanaged, IPixel<TPixel>
-    {
-        var result = new byte[checked(source.Width * source.Height * source.Depth * 4)];
-        var offset = 0;
-        foreach (var pixel in source.Pixels)
-        {
-            var rgba = TPixel.ToRgba8UNorm(pixel);
-            result[offset++] = rgba.Red;
-            result[offset++] = rgba.Green;
-            result[offset++] = rgba.Blue;
-            result[offset++] = rgba.Alpha;
-        }
-
-        return result;
-    }
-
     private static Rgba32Float[] CopyToRgba32Float<TPixel>(VolumeBitmapView<TPixel> source)
         where TPixel : unmanaged, IPixel<TPixel>
     {
@@ -378,20 +361,6 @@ public sealed unsafe class AstcEnc3DTextureCoder : IPitchTextureCoder3D
         }
 
         return result;
-    }
-
-    private static void CopyFromRgba8<TPixel>(ReadOnlySpan<byte> source, VolumeBitmapView<TPixel> destination)
-        where TPixel : unmanaged, IPixel<TPixel>
-    {
-        var offset = 0;
-        for (var i = 0; i < destination.Pixels.Length; i++)
-        {
-            destination.Pixels[i] = TPixel.FromRgba8UNorm(new Rgba8UNorm(
-                source[offset++],
-                source[offset++],
-                source[offset++],
-                source[offset++]));
-        }
     }
 
     private static AstcencProfile GetProfile(TextureFormat format) => format.ValueKind switch

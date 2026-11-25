@@ -376,9 +376,9 @@ public static class RgbaColorConversions
         return Math.Max(value / (double)long.MaxValue, -1d);
     }
 
-    // Quantize RGB in sRGB storage space. An intermediate linear byte loses shadow detail
-    // that float pixels can represent. Alpha always uses linear UNORM.
-    internal static Rgba8UNorm ToSrgbStorage<TPixel>(TPixel pixel) where TPixel : unmanaged, IPixel<TPixel>
+    /// <summary>Encodes linear pixel RGB as sRGB bytes and alpha as linear UNORM8.
+    /// Converting directly preserves shadow detail from high-precision pixels.</summary>
+    public static Rgba8UNorm ToSrgbStorage<TPixel>(TPixel pixel) where TPixel : unmanaged, IPixel<TPixel>
     {
         if (typeof(TPixel) == typeof(Rgba8UNorm))
         {
@@ -391,7 +391,8 @@ public static class RgbaColorConversions
             LinearFloatToSrgb8(linear.Blue), FloatToUNorm8(linear.Alpha));
     }
 
-    internal static TPixel FromSrgbStorage<TPixel>(Rgba8UNorm pixel) where TPixel : unmanaged, IPixel<TPixel>
+    /// <summary>Decodes sRGB bytes into the pixel's linear colour space, preserving linear alpha.</summary>
+    public static TPixel FromSrgbStorage<TPixel>(Rgba8UNorm pixel) where TPixel : unmanaged, IPixel<TPixel>
     {
         if (typeof(TPixel) == typeof(Rgba8UNorm))
             return TPixel.FromRgba8UNorm(new(Srgb8ToLinearUNorm8(pixel.Red),

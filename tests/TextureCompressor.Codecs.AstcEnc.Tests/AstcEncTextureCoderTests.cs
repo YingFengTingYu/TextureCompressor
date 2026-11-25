@@ -14,6 +14,49 @@ public sealed class AstcEncTextureCoderTests
         Quality = Astcenc.AstcencPreFastest
     };
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void SrgbStorageMatchesManagedAcrossEncodersAndDecoders(bool volume)
+    {
+        var color = new Rgba32Float(2f / (255 * 12.92f), 0.21586f, 1, 128 / 255f);
+        var expected = RgbaColorConversions.FromSrgbStorage<Rgba32Float>(new(2, 128, 255, 128));
+        if (volume)
+        {
+            var format = TextureFormats.RgbaAstc3x3x3Srgb;
+            ITextureCoder3D[] coders = [new Astc3DTextureCoder(format), new AstcEnc3DTextureCoder(format)];
+            var pixels = new ArrayVolumeBitmap<Rgba32Float>(4, 4, 4);
+            foreach (var encoder in coders)
+            {
+                Array.Fill(pixels.Pixels, color);
+                var data = new byte[encoder.GetEncodedByteCount(4, 4, 4)];
+                encoder.Encode(pixels.AsView(), data);
+                foreach (var decoder in coders)
+                {
+                    decoder.Decode(data, pixels.AsView());
+                    Assert.All(pixels.Pixels, p => Assert.Equal(expected, p));
+                }
+            }
+        }
+        else
+        {
+            var format = TextureFormats.RgbaAstc4x4Srgb;
+            ITextureCoder[] coders = [new AstcTextureCoder(format), new AstcEncTextureCoder(format)];
+            var pixels = new ArrayBitmap<Rgba32Float>(4, 4);
+            foreach (var encoder in coders)
+            {
+                Array.Fill(pixels.Pixels, color);
+                var data = new byte[encoder.GetEncodedByteCount(4, 4)];
+                encoder.Encode(pixels.AsView(), data);
+                foreach (var decoder in coders)
+                {
+                    decoder.Decode(data, pixels.AsView());
+                    Assert.All(pixels.Pixels, p => Assert.Equal(expected, p));
+                }
+            }
+        }
+    }
+
     [Fact]
     public void RegisterAstcEncCodersOverridesManagerUntilDisposed()
     {
