@@ -61,5 +61,8 @@ public sealed class PvrTexture : ITextureFile
 
     public TextureImage Texture { get; }
 
+    /// <summary>True when the PVR v3 header declares that stored RGB is already multiplied by alpha.</summary>
+    public bool IsPremultiplied { get; init; }
+
     public IReadOnlyList<PvrMetadata> Metadata { get; }
 }

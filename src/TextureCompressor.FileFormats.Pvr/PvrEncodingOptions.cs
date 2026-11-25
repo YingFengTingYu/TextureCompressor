@@ -19,5 +19,11 @@ public sealed class PvrEncodingOptions : IFileFormatOptions
 
     public bool IsSrgb { get; init; }
 
+    /// <summary>
+    /// Sets the PVR v3 premultiplied-alpha flag. The caller supplies pixels in the declared
+    /// representation. Null preserves the flag of a PvrTexture passed to Write.
+    /// </summary>
+    public bool? IsPremultiplied { get; init; }
+
     public int Version { get; init; } = 3;
 }

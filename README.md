@@ -542,6 +542,8 @@ using var registration = TextureCoderManager.Global.RegisterPVRTexLibCoder(
 
 Keep the default `false` for straight-alpha input (R is still 200 in the example). For sRGB output, premultiply in linear RGB before the sRGB transfer.
 Enabling the option adds an encoding pass for images with transparency so RGB and alpha can be fitted separately to reduce bright fringes.
+For a PVR v3 file, set `PvrEncodingOptions.IsPremultiplied = true` to label pixels that are already premultiplied. `PvrCodec.Read` exposes the flag on `PvrTexture.IsPremultiplied`, and `PvrCodec.Write` preserves it. The flag describes the pixels without changing RGB or alpha.
+
 Raw ETC2 blocks carry no premultiplication flag. Blend the decoded premultiplied RGB using source factor `One` and destination factor
 `OneMinusSrcAlpha`. Multiplying by alpha again darkens translucent edges.
 

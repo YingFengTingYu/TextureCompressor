@@ -11,6 +11,34 @@ namespace TextureCompressor.FileFormats.Pvr.Tests;
 public sealed class PvrCodecTests
 {
     [Fact]
+    public void PremultipliedHeaderSurvivesReadWriteWithoutChangingPixelValues()
+    {
+        var source = new ArrayBitmap<Rgba8UNorm>(1, 1, [new(100, 50, 10, 128)]);
+        var pvr = PvrCodec.Encode(source, new PvrEncodingOptions { IsPremultiplied = true });
+        Assert.Equal(2u, BinaryPrimitives.ReadUInt32LittleEndian(pvr.AsSpan(4)));
+        var texture = PvrCodec.Read(pvr);
+        Assert.True(texture.IsPremultiplied);
+        Assert.Equal(source.Pixels, PvrCodec.Decode(pvr).Pixels);
+        Assert.Equal(pvr, PvrCodec.Write(texture));
+        Assert.False(PvrCodec.Read(PvrCodec.Write(texture, new PvrEncodingOptions { IsPremultiplied = false })).IsPremultiplied);
+        Assert.Throws<NotSupportedException>(() => PvrCodec.Write(texture, new PvrEncodingOptions { Version = 2 }));
+        BinaryPrimitives.WriteUInt32LittleEndian(pvr.AsSpan(4), 3);
+        Assert.Throws<NotSupportedException>(() => PvrCodec.Read(pvr));
+    }
+
+    [Fact]
+    public void BasisEtc1sPreservesPremultipliedFlagDuringDecode()
+    {
+        var pvr = PvrCodec.Encode(new ArrayBitmap<Rgba8UNorm>(4, 4), new PvrEncodingOptions
+        {
+            TextureFormat = TextureFormats.RgbaBasisEtc1sUNorm,
+            IsPremultiplied = true
+        });
+        Assert.Equal(2u, BinaryPrimitives.ReadUInt32LittleEndian(pvr.AsSpan(4)));
+        Assert.True(PvrCodec.Read(pvr).IsPremultiplied);
+    }
+
+    [Fact]
     public void EncodeRgba8WritesReadablePvr()
     {
         var source = new ArrayBitmap<Rgba8UNorm>(

@@ -12,6 +12,7 @@ public static class PvrCodec
 {
     private const int HeaderByteCount = 52;
     private const uint Version = 0x03525650;
+    private const uint PremultipliedFlag = 0x02;
     private const uint LegacyHeaderV1ByteCount = 44;
     private const uint LegacyHeaderV2ByteCount = 52;
     private const uint LegacyIdentifierV2 = 0x21525650;
@@ -81,7 +82,10 @@ public static class PvrCodec
 
         var subresources = ReadSubresources(stream, coder, coder3D, header.Width, header.Height, header.Depth, mipLevelCount, header.SurfaceCount, header.FaceCount);
 
-        return new PvrTexture(format, subresources, header.SurfaceCount, header.FaceCount, metadata);
+        return new PvrTexture(format, subresources, header.SurfaceCount, header.FaceCount, metadata)
+        {
+            IsPremultiplied = header.ContainerVersion == 3 && (header.Flags & PremultipliedFlag) != 0
+        };
     }
 
     public static ArrayBitmap<Rgba8UNorm> Decode(string path)
@@ -375,6 +379,11 @@ public static class PvrCodec
 
         var version = GetEncodingVersion(options);
         ValidateEncodingVersion(version);
+        var isPremultiplied = options?.IsPremultiplied ?? texture.IsPremultiplied;
+        if (version != 3 && isPremultiplied)
+        {
+            throw new NotSupportedException("The premultiplied-alpha flag requires PVR v3.");
+        }
 
         var coder = texture.Texture.Depth == 1 ? TextureCoderManager.Global.GetCoder(texture.Texture.Format) : null;
         var coder3D = texture.Texture.Depth == 1 ? null : TextureCoderManager.Global.GetCoder3D(texture.Texture.Format);
@@ -388,7 +397,7 @@ public static class PvrCodec
             WriteHeader(stream, new PvrHeader(
                 ContainerVersion: 3,
                 descriptor.PixelFormat,
-                Flags: 0,
+                Flags: isPremultiplied ? PremultipliedFlag : 0,
                 descriptor.ColourSpace,
                 descriptor.ChannelType,
                 texture.Texture.Height,
@@ -602,7 +611,7 @@ public static class PvrCodec
             return;
         }
 
-        if (header.Flags != 0)
+        if ((header.Flags & ~PremultipliedFlag) != 0)
         {
             throw new NotSupportedException($"PVR texture flags 0x{header.Flags:x8} are not supported.");
         }
@@ -751,7 +760,10 @@ public static class PvrCodec
             throw new InvalidDataException("PVR BasisU ETC1S texture payload has trailing bytes.");
         }
 
-        return new PvrTexture(format, subresources, header.SurfaceCount, header.FaceCount, metadata);
+        return new PvrTexture(format, subresources, header.SurfaceCount, header.FaceCount, metadata)
+        {
+            IsPremultiplied = header.ContainerVersion == 3 && (header.Flags & PremultipliedFlag) != 0
+        };
     }
 
     private static byte[] ReadRemaining(Stream stream)
@@ -931,7 +943,7 @@ public static class PvrCodec
         WriteHeader(stream, new PvrHeader(
             ContainerVersion: 3,
             descriptor.PixelFormat,
-            Flags: 0,
+            Flags: options?.IsPremultiplied == true ? PremultipliedFlag : 0,
             descriptor.ColourSpace,
             descriptor.ChannelType,
             bitmap.Height,

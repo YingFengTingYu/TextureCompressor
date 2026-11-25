@@ -540,6 +540,8 @@ using var registration = TextureCoderManager.Global.RegisterPVRTexLibCoder(
 
 直接传入直通 Alpha 像素（如上例中 R 仍为 200）时，保留默认值 `false`。目标为 sRGB 时，先在线性 RGB 上预乘，再进行 sRGB 编码。
 启用此选项后，含透明度的图像会多做一次编码，将 RGB 与 Alpha 分开拟合，以减少透明边缘的亮块。
+写入 PVR v3 时，可用 `PvrEncodingOptions.IsPremultiplied = true` 标记已经预乘的像素。`PvrCodec.Read` 将标记读入 `PvrTexture.IsPremultiplied`，再次调用 `PvrCodec.Write` 会保留该值。这个标记只描述像素，读写时不会再次乘以 Alpha。
+
 原始 ETC2 数据块不记录预乘标志。这条路径解码出的 RGB 已经预乘，绘制时使用源因子 `One`、目标因子 `OneMinusSrcAlpha`。若再乘一次 Alpha，半透明边缘会变暗。
 
 ## CLI 工具
