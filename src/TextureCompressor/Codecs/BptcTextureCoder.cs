@@ -362,28 +362,11 @@ public sealed class BptcTextureCoder : IPitchTextureCoder
 
     private readonly struct Bc7SrgbTransfer : IBc7Transfer
     {
-        public static Rgba8UNorm ToStorage<TPixel>(TPixel pixel) where TPixel : unmanaged, IPixel<TPixel>
-        {
-            if (typeof(TPixel) == typeof(Rgba8UNorm))
-            {
-                var c = TPixel.ToRgba8UNorm(pixel);
-                return new(RgbaColorConversions.LinearUNorm8ToSrgb8(c.Red), RgbaColorConversions.LinearUNorm8ToSrgb8(c.Green),
-                    RgbaColorConversions.LinearUNorm8ToSrgb8(c.Blue), c.Alpha);
-            }
-            var linear = TPixel.ToRgba32Float(pixel);
-            return new(RgbaColorConversions.LinearFloatToSrgb8(linear.Red), RgbaColorConversions.LinearFloatToSrgb8(linear.Green),
-                RgbaColorConversions.LinearFloatToSrgb8(linear.Blue), RgbaColorConversions.FloatToUNorm8(linear.Alpha));
-        }
+        public static Rgba8UNorm ToStorage<TPixel>(TPixel pixel) where TPixel : unmanaged, IPixel<TPixel> =>
+            RgbaColorConversions.ToSrgbStorage(pixel);
 
-        public static TPixel FromStorage<TPixel>(Rgba8UNorm pixel) where TPixel : unmanaged, IPixel<TPixel>
-        {
-            if (typeof(TPixel) == typeof(Rgba8UNorm))
-                return TPixel.FromRgba8UNorm(new(RgbaColorConversions.Srgb8ToLinearUNorm8(pixel.Red),
-                    RgbaColorConversions.Srgb8ToLinearUNorm8(pixel.Green), RgbaColorConversions.Srgb8ToLinearUNorm8(pixel.Blue), pixel.Alpha));
-            return TPixel.FromRgba32Float(new(RgbaColorConversions.Srgb8ToLinearFloat(pixel.Red),
-                RgbaColorConversions.Srgb8ToLinearFloat(pixel.Green), RgbaColorConversions.Srgb8ToLinearFloat(pixel.Blue),
-                RgbaColorConversions.UNorm8ToFloat(pixel.Alpha)));
-        }
+        public static TPixel FromStorage<TPixel>(Rgba8UNorm pixel) where TPixel : unmanaged, IPixel<TPixel> =>
+            RgbaColorConversions.FromSrgbStorage<TPixel>(pixel);
     }
 
     private static void DecodeBc6HBlock(ReadOnlySpan<byte> source, bool signed, Span<Rgba32Float> destination)

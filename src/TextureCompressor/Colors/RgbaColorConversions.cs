@@ -376,6 +376,31 @@ public static class RgbaColorConversions
         return Math.Max(value / (double)long.MaxValue, -1d);
     }
 
+    // Quantize RGB in sRGB storage space. An intermediate linear byte loses shadow detail
+    // that float pixels can represent. Alpha always uses linear UNORM.
+    internal static Rgba8UNorm ToSrgbStorage<TPixel>(TPixel pixel) where TPixel : unmanaged, IPixel<TPixel>
+    {
+        if (typeof(TPixel) == typeof(Rgba8UNorm))
+        {
+            var c = TPixel.ToRgba8UNorm(pixel);
+            return new(LinearUNorm8ToSrgb8(c.Red), LinearUNorm8ToSrgb8(c.Green),
+                LinearUNorm8ToSrgb8(c.Blue), c.Alpha);
+        }
+        var linear = TPixel.ToRgba32Float(pixel);
+        return new(LinearFloatToSrgb8(linear.Red), LinearFloatToSrgb8(linear.Green),
+            LinearFloatToSrgb8(linear.Blue), FloatToUNorm8(linear.Alpha));
+    }
+
+    internal static TPixel FromSrgbStorage<TPixel>(Rgba8UNorm pixel) where TPixel : unmanaged, IPixel<TPixel>
+    {
+        if (typeof(TPixel) == typeof(Rgba8UNorm))
+            return TPixel.FromRgba8UNorm(new(Srgb8ToLinearUNorm8(pixel.Red),
+                Srgb8ToLinearUNorm8(pixel.Green), Srgb8ToLinearUNorm8(pixel.Blue), pixel.Alpha));
+        return TPixel.FromRgba32Float(new(Srgb8ToLinearFloat(pixel.Red),
+            Srgb8ToLinearFloat(pixel.Green), Srgb8ToLinearFloat(pixel.Blue),
+            UNorm8ToFloat(pixel.Alpha)));
+    }
+
     public static float Srgb8ToLinearFloat(byte value)
     {
         var srgb = UNorm8ToFloat(value);

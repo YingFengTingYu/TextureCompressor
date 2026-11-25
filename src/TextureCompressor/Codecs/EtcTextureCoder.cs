@@ -125,19 +125,19 @@ public sealed class EtcTextureCoder : IPitchTextureCoder
                 DecodeColor<TPixel, RgbEtc2Transfer>(source, destination, rowPitch);
                 return;
             case EtcTransfer.RgbEtc2Srgb:
-                DecodeColor<TPixel, RgbEtc2SrgbTransfer>(source, destination, rowPitch);
+                DecodeColor<TPixel, RgbEtc2Transfer>(source, destination, rowPitch, srgb: true);
                 return;
             case EtcTransfer.RgbA1Etc2UNorm:
                 DecodeColor<TPixel, RgbA1Etc2Transfer>(source, destination, rowPitch);
                 return;
             case EtcTransfer.RgbA1Etc2Srgb:
-                DecodeColor<TPixel, RgbA1Etc2SrgbTransfer>(source, destination, rowPitch);
+                DecodeColor<TPixel, RgbA1Etc2Transfer>(source, destination, rowPitch, srgb: true);
                 return;
             case EtcTransfer.RgbaEtc2EacUNorm:
                 DecodeColor<TPixel, RgbaEtc2EacTransfer>(source, destination, rowPitch);
                 return;
             case EtcTransfer.RgbaEtc2EacSrgb:
-                DecodeColor<TPixel, RgbaEtc2EacSrgbTransfer>(source, destination, rowPitch);
+                DecodeColor<TPixel, RgbaEtc2EacTransfer>(source, destination, rowPitch, srgb: true);
                 return;
             case EtcTransfer.R11EacUNorm:
                 DecodeUnsignedEac<TPixel, R11EacTransfer>(source, destination, rowPitch);
@@ -168,19 +168,19 @@ public sealed class EtcTextureCoder : IPitchTextureCoder
                 EncodeColor<TPixel, RgbEtc2Transfer>(source, destination, rowPitch, _options.CompressionMode);
                 return;
             case EtcTransfer.RgbEtc2Srgb:
-                EncodeColor<TPixel, RgbEtc2SrgbTransfer>(source, destination, rowPitch, _options.CompressionMode);
+                EncodeColor<TPixel, RgbEtc2Transfer>(source, destination, rowPitch, _options.CompressionMode, srgb: true);
                 return;
             case EtcTransfer.RgbA1Etc2UNorm:
                 EncodeColor<TPixel, RgbA1Etc2Transfer>(source, destination, rowPitch, _options.CompressionMode);
                 return;
             case EtcTransfer.RgbA1Etc2Srgb:
-                EncodeColor<TPixel, RgbA1Etc2SrgbTransfer>(source, destination, rowPitch, _options.CompressionMode);
+                EncodeColor<TPixel, RgbA1Etc2Transfer>(source, destination, rowPitch, _options.CompressionMode, srgb: true);
                 return;
             case EtcTransfer.RgbaEtc2EacUNorm:
                 EncodeColor<TPixel, RgbaEtc2EacTransfer>(source, destination, rowPitch, _options.CompressionMode);
                 return;
             case EtcTransfer.RgbaEtc2EacSrgb:
-                EncodeColor<TPixel, RgbaEtc2EacSrgbTransfer>(source, destination, rowPitch, _options.CompressionMode);
+                EncodeColor<TPixel, RgbaEtc2EacTransfer>(source, destination, rowPitch, _options.CompressionMode, srgb: true);
                 return;
             case EtcTransfer.R11EacUNorm:
                 EncodeUnsignedEac<TPixel, R11EacTransfer>(source, destination, rowPitch, _options.CompressionMode);
@@ -210,7 +210,7 @@ public sealed class EtcTextureCoder : IPitchTextureCoder
         EncodeEacBlock(ref targets, EacBlockKind.Unsigned11, TextureCompressionLevel.Fast, destination);
     }
 
-    private static void DecodeColor<TPixel, TTransfer>(ReadOnlySpan<byte> source, BitmapView<TPixel> destination, int rowPitch)
+    private static void DecodeColor<TPixel, TTransfer>(ReadOnlySpan<byte> source, BitmapView<TPixel> destination, int rowPitch, bool srgb = false)
         where TPixel : unmanaged, IPixel<TPixel>
         where TTransfer : IEtcColorTransfer
     {
@@ -225,7 +225,7 @@ public sealed class EtcTextureCoder : IPitchTextureCoder
             for (var blockX = 0; blockX < blockCountX; blockX++)
             {
                 TTransfer.DecodeBlock(source.Slice(blockOffset, TTransfer.BytesPerBlock), block);
-                StoreBlock(block, blockX, blockY, destination);
+                StoreBlock(block, blockX, blockY, destination, srgb);
                 blockOffset = checked(blockOffset + TTransfer.BytesPerBlock);
             }
 
@@ -237,7 +237,8 @@ public sealed class EtcTextureCoder : IPitchTextureCoder
         BitmapView<TPixel> source,
         Span<byte> destination,
         int rowPitch,
-        TextureCompressionLevel compressionMode)
+        TextureCompressionLevel compressionMode,
+        bool srgb = false)
         where TPixel : unmanaged, IPixel<TPixel>
         where TTransfer : IEtcColorTransfer
     {
@@ -269,7 +270,7 @@ public sealed class EtcTextureCoder : IPitchTextureCoder
                         var blockOffset = checked(blockY * rowPitch);
                         for (var blockX = 0; blockX < blockCountX; blockX++)
                         {
-                            LoadBlock(localSource, blockX, blockY, block);
+                            LoadBlock(localSource, blockX, blockY, block, srgb);
                             TTransfer.EncodeBlock(
                                 block,
                                 localDestination.Slice(blockOffset, TTransfer.BytesPerBlock),
@@ -291,7 +292,7 @@ public sealed class EtcTextureCoder : IPitchTextureCoder
             var blockOffset = rowOffset;
             for (var blockX = 0; blockX < blockCountX; blockX++)
             {
-                LoadBlock(source, blockX, blockY, block);
+                LoadBlock(source, blockX, blockY, block, srgb);
                 TTransfer.EncodeBlock(block, destination.Slice(blockOffset, TTransfer.BytesPerBlock), compressionMode);
                 blockOffset = checked(blockOffset + TTransfer.BytesPerBlock);
             }
@@ -511,20 +512,6 @@ public sealed class EtcTextureCoder : IPitchTextureCoder
             EncodeEtcColorBlock(source, punchthrough: false, etc2: true, compressionMode, destination);
     }
 
-    private readonly struct RgbEtc2SrgbTransfer : IEtcColorTransfer
-    {
-        public static int BytesPerBlock => 8;
-
-        public static void DecodeBlock(ReadOnlySpan<byte> source, Span<Rgba8UNorm> destination)
-        {
-            DecodeEtcColorBlock(source, etc2: true, punchthrough: false, destination);
-            DecodeSrgbColors(destination);
-        }
-
-        public static void EncodeBlock(ReadOnlySpan<Rgba8UNorm> source, Span<byte> destination, TextureCompressionLevel compressionMode) =>
-            EncodeSrgbEtcColorBlock(source, punchthrough: false, compressionMode, destination);
-    }
-
     private readonly struct RgbA1Etc2Transfer : IEtcColorTransfer
     {
         public static int BytesPerBlock => 8;
@@ -536,40 +523,15 @@ public sealed class EtcTextureCoder : IPitchTextureCoder
             EncodeEtcColorBlock(source, punchthrough: true, etc2: true, compressionMode, destination);
     }
 
-    private readonly struct RgbA1Etc2SrgbTransfer : IEtcColorTransfer
-    {
-        public static int BytesPerBlock => 8;
-
-        public static void DecodeBlock(ReadOnlySpan<byte> source, Span<Rgba8UNorm> destination)
-        {
-            DecodeEtcColorBlock(source, etc2: true, punchthrough: true, destination);
-            DecodeSrgbColors(destination);
-        }
-
-        public static void EncodeBlock(ReadOnlySpan<Rgba8UNorm> source, Span<byte> destination, TextureCompressionLevel compressionMode) =>
-            EncodeSrgbEtcColorBlock(source, punchthrough: true, compressionMode, destination);
-    }
-
     private readonly struct RgbaEtc2EacTransfer : IEtcColorTransfer
     {
         public static int BytesPerBlock => 16;
 
         public static void DecodeBlock(ReadOnlySpan<byte> source, Span<Rgba8UNorm> destination) =>
-            DecodeEtc2RgbaBlock(source, srgb: false, destination);
+            DecodeEtc2RgbaBlock(source, destination);
 
         public static void EncodeBlock(ReadOnlySpan<Rgba8UNorm> source, Span<byte> destination, TextureCompressionLevel compressionMode) =>
-            EncodeEtc2RgbaBlock(source, srgb: false, compressionMode, destination);
-    }
-
-    private readonly struct RgbaEtc2EacSrgbTransfer : IEtcColorTransfer
-    {
-        public static int BytesPerBlock => 16;
-
-        public static void DecodeBlock(ReadOnlySpan<byte> source, Span<Rgba8UNorm> destination) =>
-            DecodeEtc2RgbaBlock(source, srgb: true, destination);
-
-        public static void EncodeBlock(ReadOnlySpan<Rgba8UNorm> source, Span<byte> destination, TextureCompressionLevel compressionMode) =>
-            EncodeEtc2RgbaBlock(source, srgb: true, compressionMode, destination);
+            EncodeEtc2RgbaBlock(source, compressionMode, destination);
     }
 
     private interface IUnsignedEacTransfer
@@ -634,30 +596,18 @@ public sealed class EtcTextureCoder : IPitchTextureCoder
             EncodeSignedEacRgBlock(source, compressionMode, destination);
     }
 
-    private static void DecodeEtc2RgbaBlock(ReadOnlySpan<byte> source, bool srgb, Span<Rgba8UNorm> destination)
+    private static void DecodeEtc2RgbaBlock(ReadOnlySpan<byte> source, Span<Rgba8UNorm> destination)
     {
         DecodeEtcColorBlock(source[8..], etc2: true, punchthrough: false, destination);
-        if (srgb)
-        {
-            DecodeSrgbColors(destination);
-        }
-
         DecodeEtc2AlphaBlock(source[..8], destination);
     }
 
     private static void EncodeEtc2RgbaBlock(
         ReadOnlySpan<Rgba8UNorm> source,
-        bool srgb,
         TextureCompressionLevel compressionMode,
         Span<byte> destination)
     {
         EncodeEtc2AlphaBlock(source, compressionMode, destination[..8]);
-        if (srgb)
-        {
-            EncodeSrgbEtcColorBlock(source, punchthrough: false, compressionMode, destination[8..]);
-            return;
-        }
-
         EncodeEtcColorBlock(source, punchthrough: false, etc2: true, compressionMode, destination[8..]);
     }
 
@@ -1077,17 +1027,6 @@ public sealed class EtcTextureCoder : IPitchTextureCoder
 
         EncodeEacBlock(ref red, EacBlockKind.Signed11, compressionMode, destination[..8]);
         EncodeEacBlock(ref green, EacBlockKind.Signed11, compressionMode, destination[8..]);
-    }
-
-    private static void EncodeSrgbEtcColorBlock(
-        ReadOnlySpan<Rgba8UNorm> source,
-        bool punchthrough,
-        TextureCompressionLevel compressionMode,
-        Span<byte> destination)
-    {
-        Span<Rgba8UNorm> srgbBlock = stackalloc Rgba8UNorm[TexelsPerBlock];
-        EncodeSrgbColors(source, srgbBlock);
-        EncodeEtcColorBlock(srgbBlock, punchthrough, etc2: true, compressionMode, destination);
     }
 
     private static void EncodeEtcColorBlock(
@@ -3065,28 +3004,6 @@ public sealed class EtcTextureCoder : IPitchTextureCoder
         }
     }
 
-    private static void DecodeSrgbColors(Span<Rgba8UNorm> block)
-    {
-        for (var i = 0; i < TexelsPerBlock; i++)
-        {
-            block[i].Red = RgbaColorConversions.Srgb8ToLinearUNorm8(block[i].Red);
-            block[i].Green = RgbaColorConversions.Srgb8ToLinearUNorm8(block[i].Green);
-            block[i].Blue = RgbaColorConversions.Srgb8ToLinearUNorm8(block[i].Blue);
-        }
-    }
-
-    private static void EncodeSrgbColors(ReadOnlySpan<Rgba8UNorm> source, Span<Rgba8UNorm> destination)
-    {
-        for (var i = 0; i < TexelsPerBlock; i++)
-        {
-            destination[i] = new Rgba8UNorm(
-                RgbaColorConversions.LinearUNorm8ToSrgb8(source[i].Red),
-                RgbaColorConversions.LinearUNorm8ToSrgb8(source[i].Green),
-                RgbaColorConversions.LinearUNorm8ToSrgb8(source[i].Blue),
-                source[i].Alpha);
-        }
-    }
-
     private static EtcColorEncoding BestEncoding(EtcColorEncoding left, EtcColorEncoding right) =>
         left.Error <= right.Error ? left : right;
 
@@ -3125,7 +3042,8 @@ public sealed class EtcTextureCoder : IPitchTextureCoder
         BitmapView<TPixel> source,
         int blockX,
         int blockY,
-        Span<Rgba8UNorm> destination)
+        Span<Rgba8UNorm> destination,
+        bool srgb)
         where TPixel : unmanaged, IPixel<TPixel>
     {
         var originX = blockX * BlockSize;
@@ -3139,7 +3057,8 @@ public sealed class EtcTextureCoder : IPitchTextureCoder
             var sourceX = originX;
             for (var x = 0; x < BlockSize; x++)
             {
-                destination[blockOffset++] = TPixel.ToRgba8UNorm(sourceRow[Math.Min(sourceX, lastSourceX)]);
+                var pixel = sourceRow[Math.Min(sourceX, lastSourceX)];
+                destination[blockOffset++] = srgb ? RgbaColorConversions.ToSrgbStorage(pixel) : TPixel.ToRgba8UNorm(pixel);
                 sourceX++;
             }
         }
@@ -3197,7 +3116,8 @@ public sealed class EtcTextureCoder : IPitchTextureCoder
         ReadOnlySpan<Rgba8UNorm> block,
         int blockX,
         int blockY,
-        BitmapView<TPixel> destination)
+        BitmapView<TPixel> destination,
+        bool srgb)
         where TPixel : unmanaged, IPixel<TPixel>
     {
         var originX = blockX * BlockSize;
@@ -3221,7 +3141,8 @@ public sealed class EtcTextureCoder : IPitchTextureCoder
                     break;
                 }
 
-                destinationRow[destinationX] = TPixel.FromRgba8UNorm(block[rowBlockOffset++]);
+                var color = block[rowBlockOffset++];
+                destinationRow[destinationX] = srgb ? RgbaColorConversions.FromSrgbStorage<TPixel>(color) : TPixel.FromRgba8UNorm(color);
                 destinationX++;
             }
 

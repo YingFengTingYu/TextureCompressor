@@ -142,7 +142,9 @@ public sealed class PvrtcTextureCoder : ITextureCoder
             var pixels = destination.Pixels;
             for (var i = 0; i < colorSpan.Length; i++)
             {
-                pixels[i] = TPixel.FromRgba8UNorm(DecodeStorageColor(colorSpan[i], decodeSrgb));
+                pixels[i] = decodeSrgb
+                    ? RgbaColorConversions.FromSrgbStorage<TPixel>(colorSpan[i])
+                    : TPixel.FromRgba8UNorm(colorSpan[i]);
             }
         }
         finally
@@ -215,7 +217,13 @@ public sealed class PvrtcTextureCoder : ITextureCoder
             var pixels = source.Pixels;
             for (var i = 0; i < colorSpan.Length; i++)
             {
-                colorSpan[i] = EncodeStorageColor(TPixel.ToRgba8UNorm(pixels[i]), encodeSrgb, hasAlpha);
+                var color = encodeSrgb ? RgbaColorConversions.ToSrgbStorage(pixels[i]) : TPixel.ToRgba8UNorm(pixels[i]);
+                if (!hasAlpha)
+                {
+                    color.Alpha = byte.MaxValue;
+                }
+
+                colorSpan[i] = color;
             }
 
             EncodeFromRgba8Storage(info, source.Width, source.Height, colorSpan, destination, _options.CompressionMode);
@@ -484,10 +492,6 @@ public sealed class PvrtcTextureCoder : ITextureCoder
             destination[i] = EncodeStorageColor(source[i], encodeSrgb, hasAlpha);
         }
     }
-
-    private static Rgba8UNorm DecodeStorageColor(Rgba8UNorm color, bool decodeSrgb) => decodeSrgb
-        ? new Rgba8UNorm(DecodeSrgb(color.Red), DecodeSrgb(color.Green), DecodeSrgb(color.Blue), color.Alpha)
-        : color;
 
     private static Rgba8UNorm EncodeStorageColor(Rgba8UNorm color, bool encodeSrgb, bool hasAlpha) => encodeSrgb
         ? new Rgba8UNorm(

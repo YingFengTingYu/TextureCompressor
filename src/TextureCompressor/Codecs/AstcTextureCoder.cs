@@ -312,10 +312,10 @@ internal sealed class AstcTextureCoding
         switch (_transfer)
         {
             case AstcTransfer.Ldr:
-                DecodeUNorm<TPixel, AstcLdrTransfer>(source, destination, rowPitch);
+                DecodeUNorm(source, destination, rowPitch, srgb: false);
                 return;
             case AstcTransfer.Srgb:
-                DecodeUNorm<TPixel, AstcSrgbTransfer>(source, destination, rowPitch);
+                DecodeUNorm(source, destination, rowPitch, srgb: true);
                 return;
             case AstcTransfer.Hdr:
                 DecodeFloat<TPixel, AstcHdrTransfer>(source, destination, rowPitch);
@@ -331,10 +331,10 @@ internal sealed class AstcTextureCoding
         switch (_transfer)
         {
             case AstcTransfer.Ldr:
-                DecodeUNorm<TPixel, AstcLdrTransfer>(source, destination, rowPitch, slicePitch);
+                DecodeUNorm(source, destination, rowPitch, slicePitch, srgb: false);
                 return;
             case AstcTransfer.Srgb:
-                DecodeUNorm<TPixel, AstcSrgbTransfer>(source, destination, rowPitch, slicePitch);
+                DecodeUNorm(source, destination, rowPitch, slicePitch, srgb: true);
                 return;
             case AstcTransfer.Hdr:
                 DecodeFloat<TPixel, AstcHdrTransfer>(source, destination, rowPitch, slicePitch);
@@ -350,10 +350,10 @@ internal sealed class AstcTextureCoding
         switch (_transfer)
         {
             case AstcTransfer.Ldr:
-                EncodeUNorm<TPixel, AstcLdrTransfer>(source, destination, rowPitch);
+                EncodeUNorm(source, destination, rowPitch, srgb: false);
                 return;
             case AstcTransfer.Srgb:
-                EncodeUNorm<TPixel, AstcSrgbTransfer>(source, destination, rowPitch);
+                EncodeUNorm(source, destination, rowPitch, srgb: true);
                 return;
             case AstcTransfer.Hdr:
                 EncodeFloat<TPixel, AstcHdrTransfer>(source, destination, rowPitch);
@@ -369,10 +369,10 @@ internal sealed class AstcTextureCoding
         switch (_transfer)
         {
             case AstcTransfer.Ldr:
-                EncodeUNorm<TPixel, AstcLdrTransfer>(source, destination, rowPitch, slicePitch);
+                EncodeUNorm(source, destination, rowPitch, slicePitch, srgb: false);
                 return;
             case AstcTransfer.Srgb:
-                EncodeUNorm<TPixel, AstcSrgbTransfer>(source, destination, rowPitch, slicePitch);
+                EncodeUNorm(source, destination, rowPitch, slicePitch, srgb: true);
                 return;
             case AstcTransfer.Hdr:
                 EncodeFloat<TPixel, AstcHdrTransfer>(source, destination, rowPitch, slicePitch);
@@ -382,9 +382,8 @@ internal sealed class AstcTextureCoding
         }
     }
 
-    private void DecodeUNorm<TPixel, TTransfer>(ReadOnlySpan<byte> source, BitmapView<TPixel> destination, int rowPitch)
+    private void DecodeUNorm<TPixel>(ReadOnlySpan<byte> source, BitmapView<TPixel> destination, int rowPitch, bool srgb)
         where TPixel : unmanaged, IPixel<TPixel>
-        where TTransfer : IAstcUNormTransfer
     {
         var blockCountX = GetBlockCount(destination.Width, _blockWidth);
         var blockCountY = GetBlockCount(destination.Height, _blockHeight);
@@ -396,8 +395,8 @@ internal sealed class AstcTextureCoding
             var blockOffset = rowOffset;
             for (var blockX = 0; blockX < blockCountX; blockX++)
             {
-                TTransfer.DecodeBlock(source.Slice(blockOffset, BytesPerBlock), _blockWidth, _blockHeight, block);
-                StoreUNormBlock(block, blockX, blockY, destination);
+                DecodeLdrBlock(source.Slice(blockOffset, BytesPerBlock), _blockWidth, _blockHeight, srgb, block);
+                StoreUNormBlock(block, blockX, blockY, destination, srgb);
                 blockOffset = checked(blockOffset + BytesPerBlock);
             }
 
@@ -405,9 +404,8 @@ internal sealed class AstcTextureCoding
         }
     }
 
-    private void DecodeUNorm<TPixel, TTransfer>(ReadOnlySpan<byte> source, VolumeBitmapView<TPixel> destination, int rowPitch, int slicePitch)
+    private void DecodeUNorm<TPixel>(ReadOnlySpan<byte> source, VolumeBitmapView<TPixel> destination, int rowPitch, int slicePitch, bool srgb)
         where TPixel : unmanaged, IPixel<TPixel>
-        where TTransfer : IAstcUNormTransfer
     {
         var blockCountX = GetBlockCount(destination.Width, _blockWidth);
         var blockCountY = GetBlockCount(destination.Height, _blockHeight);
@@ -423,8 +421,8 @@ internal sealed class AstcTextureCoding
                 var blockOffset = rowOffset;
                 for (var blockX = 0; blockX < blockCountX; blockX++)
                 {
-                    TTransfer.DecodeBlock(source.Slice(blockOffset, BytesPerBlock), _blockWidth, _blockHeight, _blockDepth, block);
-                    StoreUNormBlock(block, blockX, blockY, blockZ, destination);
+                    DecodeLdrBlock(source.Slice(blockOffset, BytesPerBlock), _blockWidth, _blockHeight, _blockDepth, srgb, block);
+                    StoreUNormBlock(block, blockX, blockY, blockZ, destination, srgb);
                     blockOffset = checked(blockOffset + BytesPerBlock);
                 }
 
@@ -554,9 +552,8 @@ internal sealed class AstcTextureCoding
         }
     }
 
-    private void EncodeUNorm<TPixel, TTransfer>(BitmapView<TPixel> source, Span<byte> destination, int rowPitch)
+    private void EncodeUNorm<TPixel>(BitmapView<TPixel> source, Span<byte> destination, int rowPitch, bool srgb)
         where TPixel : unmanaged, IPixel<TPixel>
-        where TTransfer : IAstcUNormTransfer
     {
         var blockCountX = GetBlockCount(source.Width, _blockWidth);
         var blockCountY = GetBlockCount(source.Height, _blockHeight);
@@ -587,8 +584,8 @@ internal sealed class AstcTextureCoding
                         var blockOffset = checked(blockY * rowPitch);
                         for (var blockX = 0; blockX < blockCountX; blockX++)
                         {
-                            LoadUNormBlock(localSource, blockX, blockY, block);
-                            TTransfer.EncodeBlock(
+                            LoadUNormBlock(localSource, blockX, blockY, block, srgb);
+                            EncodeLdrBlock(
                                 block,
                                 _blockWidth,
                                 _blockHeight,
@@ -611,8 +608,8 @@ internal sealed class AstcTextureCoding
             var blockOffset = rowOffset;
             for (var blockX = 0; blockX < blockCountX; blockX++)
             {
-                LoadUNormBlock(source, blockX, blockY, block);
-                TTransfer.EncodeBlock(block, _blockWidth, _blockHeight, compressionMode, destination.Slice(blockOffset, BytesPerBlock));
+                LoadUNormBlock(source, blockX, blockY, block, srgb);
+                EncodeLdrBlock(block, _blockWidth, _blockHeight, compressionMode, destination.Slice(blockOffset, BytesPerBlock));
                 blockOffset = checked(blockOffset + BytesPerBlock);
             }
 
@@ -620,9 +617,8 @@ internal sealed class AstcTextureCoding
         }
     }
 
-    private void EncodeUNorm<TPixel, TTransfer>(VolumeBitmapView<TPixel> source, Span<byte> destination, int rowPitch, int slicePitch)
+    private void EncodeUNorm<TPixel>(VolumeBitmapView<TPixel> source, Span<byte> destination, int rowPitch, int slicePitch, bool srgb)
         where TPixel : unmanaged, IPixel<TPixel>
-        where TTransfer : IAstcUNormTransfer
     {
         var blockCountX = GetBlockCount(source.Width, _blockWidth);
         var blockCountY = GetBlockCount(source.Height, _blockHeight);
@@ -639,8 +635,8 @@ internal sealed class AstcTextureCoding
                 var blockOffset = rowOffset;
                 for (var blockX = 0; blockX < blockCountX; blockX++)
                 {
-                    LoadUNormBlock(source, blockX, blockY, blockZ, block);
-                    TTransfer.EncodeBlock(
+                    LoadUNormBlock(source, blockX, blockY, blockZ, block, srgb);
+                    EncodeLdrBlock(
                         block,
                         _blockWidth,
                         _blockHeight,
@@ -694,17 +690,6 @@ internal sealed class AstcTextureCoding
         }
     }
 
-    private interface IAstcUNormTransfer
-    {
-        static abstract void DecodeBlock(ReadOnlySpan<byte> source, int blockWidth, int blockHeight, Span<Rgba8UNorm> destination);
-
-        static abstract void DecodeBlock(ReadOnlySpan<byte> source, int blockWidth, int blockHeight, int blockDepth, Span<Rgba8UNorm> destination);
-
-        static abstract void EncodeBlock(ReadOnlySpan<Rgba8UNorm> source, int blockWidth, int blockHeight, TextureCompressionLevel compressionMode, Span<byte> destination);
-
-        static abstract void EncodeBlock(ReadOnlySpan<Rgba8UNorm> source, int blockWidth, int blockHeight, int blockDepth, TextureCompressionLevel compressionMode, Span<byte> destination);
-    }
-
     private interface IAstcFloatTransfer
     {
         static abstract void DecodeBlock(ReadOnlySpan<byte> source, int blockWidth, int blockHeight, Span<Rgba16Float> destination);
@@ -714,36 +699,6 @@ internal sealed class AstcTextureCoding
         static abstract void EncodeBlock(ReadOnlySpan<Rgba16Float> source, int blockWidth, int blockHeight, TextureCompressionLevel compressionMode, Span<byte> destination);
 
         static abstract void EncodeBlock(ReadOnlySpan<Rgba16Float> source, int blockWidth, int blockHeight, int blockDepth, TextureCompressionLevel compressionMode, Span<byte> destination);
-    }
-
-    private readonly struct AstcLdrTransfer : IAstcUNormTransfer
-    {
-        public static void DecodeBlock(ReadOnlySpan<byte> source, int blockWidth, int blockHeight, Span<Rgba8UNorm> destination) =>
-            DecodeLdrBlock(source, blockWidth, blockHeight, srgb: false, destination);
-
-        public static void DecodeBlock(ReadOnlySpan<byte> source, int blockWidth, int blockHeight, int blockDepth, Span<Rgba8UNorm> destination) =>
-            DecodeLdrBlock(source, blockWidth, blockHeight, blockDepth, srgb: false, destination);
-
-        public static void EncodeBlock(ReadOnlySpan<Rgba8UNorm> source, int blockWidth, int blockHeight, TextureCompressionLevel compressionMode, Span<byte> destination) =>
-            EncodeLdrBlock(source, blockWidth, blockHeight, srgb: false, compressionMode, destination);
-
-        public static void EncodeBlock(ReadOnlySpan<Rgba8UNorm> source, int blockWidth, int blockHeight, int blockDepth, TextureCompressionLevel compressionMode, Span<byte> destination) =>
-            EncodeLdrBlock(source, blockWidth, blockHeight, blockDepth, srgb: false, compressionMode, destination);
-    }
-
-    private readonly struct AstcSrgbTransfer : IAstcUNormTransfer
-    {
-        public static void DecodeBlock(ReadOnlySpan<byte> source, int blockWidth, int blockHeight, Span<Rgba8UNorm> destination) =>
-            DecodeLdrBlock(source, blockWidth, blockHeight, srgb: true, destination);
-
-        public static void DecodeBlock(ReadOnlySpan<byte> source, int blockWidth, int blockHeight, int blockDepth, Span<Rgba8UNorm> destination) =>
-            DecodeLdrBlock(source, blockWidth, blockHeight, blockDepth, srgb: true, destination);
-
-        public static void EncodeBlock(ReadOnlySpan<Rgba8UNorm> source, int blockWidth, int blockHeight, TextureCompressionLevel compressionMode, Span<byte> destination) =>
-            EncodeLdrBlock(source, blockWidth, blockHeight, srgb: true, compressionMode, destination);
-
-        public static void EncodeBlock(ReadOnlySpan<Rgba8UNorm> source, int blockWidth, int blockHeight, int blockDepth, TextureCompressionLevel compressionMode, Span<byte> destination) =>
-            EncodeLdrBlock(source, blockWidth, blockHeight, blockDepth, srgb: true, compressionMode, destination);
     }
 
     private readonly struct AstcHdrTransfer : IAstcFloatTransfer
@@ -783,7 +738,7 @@ internal sealed class AstcTextureCoding
                 return;
             }
 
-            var color = ReadVoidExtentUNorm(source, srgb);
+            var color = ReadVoidExtentUNorm(source);
             FillUNormBlock(destination, blockWidth, blockHeight, blockDepth, color);
             return;
         }
@@ -885,48 +840,34 @@ internal sealed class AstcTextureCoding
         int blockWidth,
         int blockHeight,
         int blockDepth,
-        bool srgb,
         TextureCompressionLevel compressionMode,
         Span<byte> destination)
     {
         if (blockDepth == 1)
         {
-            EncodeLdrBlock(source, blockWidth, blockHeight, srgb, compressionMode, destination);
+            EncodeLdrBlock(source, blockWidth, blockHeight, compressionMode, destination);
             return;
         }
 
         var texelCount = checked(blockWidth * blockHeight * blockDepth);
-        var storage = new Rgba8UNormTexelBlock();
-        for (var i = 0; i < texelCount; i++)
-        {
-            storage[i] = EncodeStorageColor(source[i], srgb);
-        }
-
-        if (IsSolidBlock(storage, texelCount, out var solidColor))
+        if (IsSolidBlock(source, texelCount, out var solidColor))
         {
             WriteLdrVoidExtentBlock(solidColor, destination);
             return;
         }
 
-        EncodeLdrBlock3DOptimized(storage, blockWidth, blockHeight, blockDepth, texelCount, compressionMode, destination);
+        EncodeLdrBlock3DOptimized(source, blockWidth, blockHeight, blockDepth, texelCount, compressionMode, destination);
     }
 
     private static void EncodeLdrBlock(
         ReadOnlySpan<Rgba8UNorm> source,
         int blockWidth,
         int blockHeight,
-        bool srgb,
         TextureCompressionLevel compressionMode,
         Span<byte> destination)
     {
         var texelCount = blockWidth * blockHeight;
-        var storage = new Rgba8UNormTexelBlock();
-        for (var i = 0; i < texelCount; i++)
-        {
-            storage[i] = EncodeStorageColor(source[i], srgb);
-        }
-
-        if (IsSolidBlock(storage, texelCount, out var solidColor))
+        if (IsSolidBlock(source, texelCount, out var solidColor))
         {
             WriteLdrVoidExtentBlock(solidColor, destination);
             return;
@@ -935,12 +876,12 @@ internal sealed class AstcTextureCoding
         switch (compressionMode)
         {
             case TextureCompressionLevel.Fast:
-                EncodeLdrBlockFast(storage, blockWidth, blockHeight, texelCount, destination);
+                EncodeLdrBlockFast(source, blockWidth, blockHeight, texelCount, destination);
                 return;
             case TextureCompressionLevel.Normal:
             case TextureCompressionLevel.High:
             case TextureCompressionLevel.Exhaustive:
-                EncodeLdrBlockOptimized(storage, blockWidth, blockHeight, texelCount, compressionMode, destination);
+                EncodeLdrBlockOptimized(source, blockWidth, blockHeight, texelCount, compressionMode, destination);
                 return;
             default:
                 throw new ArgumentOutOfRangeException(
@@ -4516,14 +4457,6 @@ internal sealed class AstcTextureCoding
         return (exponent << 11) | Math.Clamp(lnsMantissa, 0, 0x7FF);
     }
 
-    private static Rgba8UNorm EncodeStorageColor(Rgba8UNorm color, bool srgb) => srgb
-        ? new Rgba8UNorm(
-            RgbaColorConversions.LinearUNorm8ToSrgb8(color.Red),
-            RgbaColorConversions.LinearUNorm8ToSrgb8(color.Green),
-            RgbaColorConversions.LinearUNorm8ToSrgb8(color.Blue),
-            color.Alpha)
-        : color;
-
     private static bool ColorEquals(Rgba8UNorm left, Rgba8UNorm right) =>
         left.Red == right.Red
         && left.Green == right.Green
@@ -4548,9 +4481,7 @@ internal sealed class AstcTextureCoding
         var blue = (byte)(Interpolate(ExpandLdrEndpoint(endpoint.B0, srgb, 2), ExpandLdrEndpoint(endpoint.B1, srgb, 2), blueWeight) >> 8);
         var alpha = (byte)(Interpolate(endpoint.A0 * 257, endpoint.A1 * 257, alphaWeight) >> 8);
 
-        return srgb
-            ? new Rgba8UNorm(RgbaColorConversions.Srgb8ToLinearUNorm8(red), RgbaColorConversions.Srgb8ToLinearUNorm8(green), RgbaColorConversions.Srgb8ToLinearUNorm8(blue), alpha)
-            : new Rgba8UNorm(red, green, blue, alpha);
+        return new Rgba8UNorm(red, green, blue, alpha);
     }
 
     private static Rgba16Float DecodeHdrTexel(AstcEndpointPair endpoint, int redWeight, int greenWeight, int blueWeight, int alphaWeight)
@@ -6590,16 +6521,14 @@ internal sealed class AstcTextureCoding
         return random;
     }
 
-    private static Rgba8UNorm ReadVoidExtentUNorm(ReadOnlySpan<byte> source, bool srgb)
+    private static Rgba8UNorm ReadVoidExtentUNorm(ReadOnlySpan<byte> source)
     {
         var red = (byte)(BinaryPrimitives.ReadUInt16LittleEndian(source[8..]) >> 8);
         var green = (byte)(BinaryPrimitives.ReadUInt16LittleEndian(source[10..]) >> 8);
         var blue = (byte)(BinaryPrimitives.ReadUInt16LittleEndian(source[12..]) >> 8);
         var alpha = (byte)(BinaryPrimitives.ReadUInt16LittleEndian(source[14..]) >> 8);
 
-        return srgb
-            ? new Rgba8UNorm(RgbaColorConversions.Srgb8ToLinearUNorm8(red), RgbaColorConversions.Srgb8ToLinearUNorm8(green), RgbaColorConversions.Srgb8ToLinearUNorm8(blue), alpha)
-            : new Rgba8UNorm(red, green, blue, alpha);
+        return new Rgba8UNorm(red, green, blue, alpha);
     }
 
     private static Rgba16Float ReadVoidExtentUNormAsFloat(ReadOnlySpan<byte> source) => new(
@@ -6672,7 +6601,7 @@ internal sealed class AstcTextureCoding
         return (value << 32) | (value >> 32);
     }
 
-    private void LoadUNormBlock<TPixel>(BitmapView<TPixel> source, int blockX, int blockY, Span<Rgba8UNorm> destination)
+    private void LoadUNormBlock<TPixel>(BitmapView<TPixel> source, int blockX, int blockY, Span<Rgba8UNorm> destination, bool srgb)
         where TPixel : unmanaged, IPixel<TPixel>
     {
         var originX = blockX * _blockWidth;
@@ -6686,7 +6615,7 @@ internal sealed class AstcTextureCoding
             for (var x = 0; x < _blockWidth; x++)
             {
                 var sourceX = Math.Min(originX + x, lastSourceX);
-                destination[blockOffset++] = TPixel.ToRgba8UNorm(sourceRow[sourceX]);
+                destination[blockOffset++] = srgb ? RgbaColorConversions.ToSrgbStorage(sourceRow[sourceX]) : TPixel.ToRgba8UNorm(sourceRow[sourceX]);
             }
         }
     }
@@ -6710,7 +6639,7 @@ internal sealed class AstcTextureCoding
         }
     }
 
-    private void StoreUNormBlock<TPixel>(ReadOnlySpan<Rgba8UNorm> block, int blockX, int blockY, BitmapView<TPixel> destination)
+    private void StoreUNormBlock<TPixel>(ReadOnlySpan<Rgba8UNorm> block, int blockX, int blockY, BitmapView<TPixel> destination, bool srgb)
         where TPixel : unmanaged, IPixel<TPixel>
     {
         var originX = blockX * _blockWidth;
@@ -6732,12 +6661,14 @@ internal sealed class AstcTextureCoding
                     break;
                 }
 
-                destinationRow[destinationX] = TPixel.FromRgba8UNorm(block[(y * _blockWidth) + x]);
+                var color = block[(y * _blockWidth) + x];
+
+                destinationRow[destinationX] = srgb ? RgbaColorConversions.FromSrgbStorage<TPixel>(color) : TPixel.FromRgba8UNorm(color);
             }
         }
     }
 
-    private void StoreUNormBlock<TPixel>(ReadOnlySpan<Rgba8UNorm> block, int blockX, int blockY, int blockZ, VolumeBitmapView<TPixel> destination)
+    private void StoreUNormBlock<TPixel>(ReadOnlySpan<Rgba8UNorm> block, int blockX, int blockY, int blockZ, VolumeBitmapView<TPixel> destination, bool srgb)
         where TPixel : unmanaged, IPixel<TPixel>
     {
         var originX = blockX * _blockWidth;
@@ -6770,7 +6701,9 @@ internal sealed class AstcTextureCoding
                         break;
                     }
 
-                    destinationRow[destinationX] = TPixel.FromRgba8UNorm(block[blockRowOffset + x]);
+                    var color = block[blockRowOffset + x];
+
+                    destinationRow[destinationX] = srgb ? RgbaColorConversions.FromSrgbStorage<TPixel>(color) : TPixel.FromRgba8UNorm(color);
                 }
             }
         }
@@ -6800,7 +6733,7 @@ internal sealed class AstcTextureCoding
         }
     }
 
-    private void LoadUNormBlock<TPixel>(VolumeBitmapView<TPixel> source, int blockX, int blockY, int blockZ, Span<Rgba8UNorm> destination)
+    private void LoadUNormBlock<TPixel>(VolumeBitmapView<TPixel> source, int blockX, int blockY, int blockZ, Span<Rgba8UNorm> destination, bool srgb)
         where TPixel : unmanaged, IPixel<TPixel>
     {
         var originX = blockX * _blockWidth;
@@ -6818,7 +6751,7 @@ internal sealed class AstcTextureCoding
                 for (var x = 0; x < _blockWidth; x++)
                 {
                     var sourceX = Math.Min(originX + x, lastSourceX);
-                    destination[blockOffset++] = TPixel.ToRgba8UNorm(sourceRow[sourceX]);
+                    destination[blockOffset++] = srgb ? RgbaColorConversions.ToSrgbStorage(sourceRow[sourceX]) : TPixel.ToRgba8UNorm(sourceRow[sourceX]);
                 }
             }
         }
