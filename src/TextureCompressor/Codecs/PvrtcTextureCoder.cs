@@ -833,13 +833,15 @@ public sealed class PvrtcTextureCoder : ITextureCoder
             {
                 var mod = GetModulationValue(ref values, ref modes, x + halfWordWidth, y + halfWordHeight, bitsPerPixel);
                 Pixel128 result;
+                var index = y * wordWidth + x;
                 if (mod > 10)
                 {
-                    result = default;
+                    // PVRTC-I punch-through replaces alpha but keeps interpolated RGB.
+                    // PVRTC-II soft transitions use transparent black for this selector.
+                    result = versionII ? default : InterpolatePixel(upscaledColorA[index], upscaledColorB[index], mod - 10) with { Alpha = 0 };
                 }
                 else
                 {
-                    var index = y * wordWidth + x;
                     result = InterpolatePixel(upscaledColorA[index], upscaledColorB[index], mod);
                 }
 

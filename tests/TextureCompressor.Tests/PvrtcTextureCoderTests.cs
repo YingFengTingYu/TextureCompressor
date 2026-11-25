@@ -19,6 +19,26 @@ public sealed unsafe class PvrtcTextureCoderTests
     private static readonly ulong Rgba32PixelFormat = PVRDefine.PVRTGENPIXELID4('r', 'g', 'b', 'a', 32, 32, 32, 32);
 
     [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void PunchThroughMatchesReferenceForNonBlackEndpoints(bool versionII)
+    {
+        var format = versionII ? TextureFormats.RgbaPvrtcII4BppUNorm : TextureFormats.RgbaPvrtcI4BppUNorm;
+        var coder = new PvrtcTextureCoder(format);
+        var data = new byte[coder.GetEncodedByteCount(8, 8)];
+        for (var i = 0; i < data.Length; i += 8)
+        {
+            System.Buffers.Binary.BinaryPrimitives.WriteUInt32LittleEndian(data.AsSpan(i), 0xaaaaaaaa);
+            System.Buffers.Binary.BinaryPrimitives.WriteUInt32LittleEndian(data.AsSpan(i + 4), versionII ? 0x801f7c01u : 0x801ffc01u);
+        }
+        var reference = DecodeWithPvrTexLib(format, 8, 8, data);
+        var decoded = new ArrayBitmap<Rgba8UNorm>(8, 8);
+        coder.Decode(data, decoded.AsView());
+        Assert.Equal(reference, decoded.Pixels);
+        Assert.All(reference, p => Assert.Equal(versionII ? new Rgba8UNorm(0, 0, 0, 0) : new Rgba8UNorm(127, 0, 127, 0), p));
+    }
+
+    [Theory]
     [MemberData(nameof(PvrtcFormats))]
     public void GlobalManagerFindsPvrtcTextureCoders(TextureFormat format)
     {
