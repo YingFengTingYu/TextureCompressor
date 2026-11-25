@@ -41,11 +41,14 @@ public sealed class BCnEncoderTextureCoder : IPitchTextureCoder
         new(TextureFormats.Bc4UNorm, CompressionFormat.Bc4, SourceKind.Rgba8),
         new(TextureFormats.Rgtc1UNorm, CompressionFormat.Bc4, SourceKind.Rgba8),
         new(TextureFormats.Ati1UNorm, CompressionFormat.Bc4, SourceKind.Rgba8),
+        new(TextureFormats.Ati1N, CompressionFormat.Bc4, SourceKind.Rgba8),
         new(TextureFormats.Latc1UNorm, CompressionFormat.Bc4, SourceKind.Rgba8),
 
         new(TextureFormats.Bc5UNorm, CompressionFormat.Bc5, SourceKind.Rgba8),
         new(TextureFormats.Rgtc2UNorm, CompressionFormat.Bc5, SourceKind.Rgba8),
         new(TextureFormats.Ati2UNorm, CompressionFormat.Bc5, SourceKind.Rgba8),
+        new(TextureFormats.Ati2N, CompressionFormat.Bc5, SourceKind.Rgba8),
+        new(TextureFormats.Ati2NXy, CompressionFormat.Bc5, SourceKind.Rgba8),
         new(TextureFormats.Latc2UNorm, CompressionFormat.Bc5, SourceKind.Rgba8),
 
         new(TextureFormats.Bc6HUFloat, CompressionFormat.Bc6U, SourceKind.RgbFloat),
@@ -212,18 +215,18 @@ public sealed class BCnEncoderTextureCoder : IPitchTextureCoder
         var encoder = new BcEncoder(_mapping.CompressionFormat);
         encoder.OutputOptions.Quality = _options.Quality;
         encoder.OutputOptions.Format = _mapping.CompressionFormat;
-        encoder.InputOptions.Bc4Component = _options.Bc4Component;
-        encoder.InputOptions.Bc5Component1 = _options.Bc5Component1;
-        encoder.InputOptions.Bc5Component2 = _options.Bc5Component2;
+        encoder.InputOptions.Bc4Component = Format.Components == TextureComponents.Luminance ? ColorComponent.R : _options.Bc4Component;
+        encoder.InputOptions.Bc5Component1 = Format.Components == TextureComponents.LuminanceAlpha ? ColorComponent.R : _options.Bc5Component1;
+        encoder.InputOptions.Bc5Component2 = Format.Components == TextureComponents.LuminanceAlpha ? ColorComponent.A : _options.Bc5Component2;
         return encoder;
     }
 
     private BcDecoder CreateDecoder()
     {
         var decoder = new BcDecoder();
-        decoder.OutputOptions.Bc4Component = _options.Bc4Component;
-        decoder.OutputOptions.Bc5Component1 = _options.Bc5Component1;
-        decoder.OutputOptions.Bc5Component2 = _options.Bc5Component2;
+        decoder.OutputOptions.Bc4Component = Format.Components == TextureComponents.Luminance ? ColorComponent.R : _options.Bc4Component;
+        decoder.OutputOptions.Bc5Component1 = Format.Components == TextureComponents.LuminanceAlpha ? ColorComponent.R : _options.Bc5Component1;
+        decoder.OutputOptions.Bc5Component2 = Format.Components == TextureComponents.LuminanceAlpha ? ColorComponent.A : _options.Bc5Component2;
         return decoder;
     }
 
@@ -308,6 +311,12 @@ public sealed class BCnEncoderTextureCoder : IPitchTextureCoder
                     pixel = DecodeSrgb(pixel);
                 }
 
+                if (Format.Components is TextureComponents.Luminance or TextureComponents.LuminanceAlpha)
+                {
+                    pixel.Green = pixel.Red;
+                    pixel.Blue = pixel.Red;
+                    if (Format.Components == TextureComponents.Luminance) pixel.Alpha = 255;
+                }
                 if (_mapping.Premultiplied) pixel = RgbaColorConversions.UnpremultiplyAlpha(pixel);
                 destinationRow[destinationX] = TPixel.FromRgba8UNorm(pixel);
             }

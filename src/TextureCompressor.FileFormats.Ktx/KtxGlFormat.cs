@@ -79,6 +79,10 @@ public enum KtxGlFormat : uint
     CompressedSrgbAlphaS3tcDxt3 = 0x8c4e,
     CompressedSrgbAlphaS3tcDxt5 = 0x8c4f,
 
+    CompressedLuminanceLatc1 = 0x8c70,
+    CompressedSignedLuminanceLatc1 = 0x8c71,
+    CompressedLuminanceAlphaLatc2 = 0x8c72,
+    CompressedSignedLuminanceAlphaLatc2 = 0x8c73,
     CompressedRedRgtc1 = 0x8dbb,
     CompressedSignedRedRgtc1 = 0x8dbc,
     CompressedRgRgtc2 = 0x8dbd,

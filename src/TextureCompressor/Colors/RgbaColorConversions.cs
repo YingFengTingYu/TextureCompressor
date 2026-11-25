@@ -2,6 +2,24 @@ namespace TextureCompressor.Colors;
 
 public static class RgbaColorConversions
 {
+    // The default IPixel float methods go through UNORM8. A custom signed
+    // pixel may implement only the SNORM8 transfer and still represent negatives.
+    public static Rgba32Float ToSignedRgba32Float<TPixel>(TPixel value) where TPixel : unmanaged, IPixel<TPixel> =>
+        SignedTransfer<TPixel>.HasFloatInput ? TPixel.ToRgba32Float(value)
+            : Rgba32Float.FromRgba8SNorm(TPixel.ToRgba8SNorm(value));
+
+    public static TPixel FromSignedRgba32Float<TPixel>(Rgba32Float value) where TPixel : unmanaged, IPixel<TPixel> =>
+        SignedTransfer<TPixel>.HasFloatOutput ? TPixel.FromRgba32Float(value)
+            : TPixel.FromRgba8SNorm(Rgba32Float.ToRgba8SNorm(value));
+
+    private static class SignedTransfer<TPixel> where TPixel : unmanaged, IPixel<TPixel>
+    {
+        internal static readonly bool HasFloatInput =
+            ((Func<TPixel, Rgba32Float>)TPixel.ToRgba32Float).Method.DeclaringType != typeof(IPixel<TPixel>);
+        internal static readonly bool HasFloatOutput =
+            ((Func<Rgba32Float, TPixel>)TPixel.FromRgba32Float).Method.DeclaringType != typeof(IPixel<TPixel>);
+    }
+
     public static Rgba8UNorm PremultiplyAlpha(Rgba8UNorm p) => new(
         (byte)(p.Red * p.Alpha / 255), (byte)(p.Green * p.Alpha / 255),
         (byte)(p.Blue * p.Alpha / 255), p.Alpha);

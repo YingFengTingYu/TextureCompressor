@@ -1,4 +1,4 @@
-﻿using System.Buffers.Binary;
+using System.Buffers.Binary;
 using TextureCompressor.Bitmaps;
 using TextureCompressor.Codecs;
 using TextureCompressor.Colors;
@@ -117,6 +117,32 @@ public sealed class S3tcTextureCoderTests
     }
 
     [Fact]
+    public void Dxt3AFastSelectsTheNearestOfSixteenAlphaLevels()
+    {
+        var image = new ArrayBitmap<Rgba8UNorm>(16, 16, Enumerable.Range(0, 256)
+            .Select(a => new Rgba8UNorm(91, 53, 17, (byte)a)).ToArray());
+        ITextureCoder coder = new S3tcTextureCoder(TextureFormats.Dxt3A,
+            new TextureCompressionOptions { CompressionMode = TextureCompressionLevel.Fast });
+        var blocks = new byte[coder.GetEncodedByteCount(16, 16)];
+        coder.Encode(image.AsView(), blocks);
+        coder.Decode(blocks, image.AsView());
+        for (int i = 0; i < 256; i++)
+            Assert.Equal(new Rgba8UNorm(0, 0, 0, (byte)(17 * Math.Round(i / 17.0))), image.Pixels[i]);
+    }
+
+    [Fact]
+    public void XenosDxt5AAndDxnUseByteInterpolation()
+    {
+        byte[] channel = Convert.FromHexString("0500020000000000");
+        var image = new ArrayBitmap<Rgba8UNorm>(4, 4);
+        ((ITextureCoder)new S3tcTextureCoder(TextureFormats.Dxt5A)).Decode(channel, image.AsView());
+        Assert.Equal(new Rgba8UNorm(0, 0, 0, 4), image.Pixels[0]);
+        ((ITextureCoder)new S3tcTextureCoder(TextureFormats.Dxn)).Decode([.. channel, 19, 20, 6, 0, 0, 0, 0, 0], image.AsView());
+        Assert.Equal(new Rgba8UNorm(4, 0, 0), image.Pixels[0]);
+        Assert.Equal(new Rgba8UNorm(5, 19, 0), image.Pixels[1]);
+    }
+
+    [Fact]
     public void EncodeAndDecodeDxt3A1111RoundTripsSolidOneBitRgba()
     {
         var source = new ArrayBitmap<Rgba8UNorm>(
@@ -205,16 +231,16 @@ public sealed class S3tcTextureCoderTests
     [Fact]
     public void Ctx1DecodesSharedIndicesToRgba8RedGreen()
     {
-        var encoded = new byte[TextureFormats.Ctx1.GetByteCount(4, 4)];
-        WriteCtx1Block(encoded, 255, 0, 64, 192, 1);
+        // Little-endian Xenos endpoints are G0 R0 G1 R1. Each row selects 0,1,2,3.
+        byte[] encoded = Convert.FromHexString("40FFC000E4E4E4E4");
 
         var decoded = new ArrayBitmap<Rgba8UNorm>(4, 4);
         var coder = new S3tcTextureCoder(TextureFormats.Ctx1);
 
         coder.Decode(encoded, decoded.AsView(), coder.GetDefaultPitch(decoded.Width));
 
-        Assert.Equal(new Rgba8UNorm(0, 192, 0, 255), decoded.Pixels[0]);
-        Assert.Equal(new Rgba8UNorm(255, 64, 0, 255), decoded.Pixels[1]);
+        Rgba8UNorm[] row = [new(255, 64, 0), new(0, 192, 0), new(170, 106, 0), new(85, 149, 0)];
+        for (int i = 0; i < 16; i++) Assert.Equal(row[i % 4], decoded.Pixels[i]);
     }
 
     [Fact]
@@ -233,6 +259,24 @@ public sealed class S3tcTextureCoderTests
         coder.Decode(encoded, decoded.AsView(), rowPitch);
 
         Assert.All(decoded.Pixels, pixel => Assert.Equal(new Rgba8UNorm(34, 200, 0, 255), pixel));
+    }
+
+    [Theory]
+    [InlineData(TextureCompressionLevel.Fast)]
+    [InlineData(TextureCompressionLevel.Normal)]
+    [InlineData(TextureCompressionLevel.High)]
+    [InlineData(TextureCompressionLevel.Exhaustive)]
+    public void Ctx1EncodesAnticorrelatedComponentsWithSharedSelectors(TextureCompressionLevel level)
+    {
+        Rgba8UNorm[] colors = [new(0, 255, 0), new(85, 170, 0), new(170, 85, 0), new(255, 0, 0)];
+        var image = new ArrayBitmap<Rgba8UNorm>(4, 4, Enumerable.Range(0, 16).Select(i => colors[i % 4]).ToArray());
+        ITextureCoder coder = new S3tcTextureCoder(TextureFormats.Ctx1, new TextureCompressionOptions { CompressionMode = level });
+        var block = new byte[8];
+        coder.Encode(image.AsView(), block);
+        Assert.True(block.AsSpan(0, 4).SequenceEqual(new byte[] { 255, 0, 0, 255 })
+            || block.AsSpan(0, 4).SequenceEqual(new byte[] { 0, 255, 255, 0 }));
+        coder.Decode(block, image.AsView());
+        for (int i = 0; i < 16; i++) Assert.Equal(colors[i % 4], image.Pixels[i]);
     }
 
     [Fact]
@@ -688,21 +732,6 @@ public sealed class S3tcTextureCoderTests
         {
             destination[2 + i] = (byte)(indices >> (8 * i));
         }
-    }
-
-    private static void WriteCtx1Block(
-        Span<byte> destination,
-        byte red0,
-        byte red1,
-        byte green0,
-        byte green1,
-        uint indices)
-    {
-        destination[0] = red0;
-        destination[1] = red1;
-        destination[2] = green0;
-        destination[3] = green1;
-        BinaryPrimitives.WriteUInt32LittleEndian(destination[4..], indices);
     }
 
     private static byte Srgb8ToLinearUNorm8(byte value)

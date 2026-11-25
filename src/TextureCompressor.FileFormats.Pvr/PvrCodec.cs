@@ -1,4 +1,4 @@
-﻿using System.Buffers.Binary;
+using System.Buffers.Binary;
 using System.Runtime.CompilerServices;
 using TextureCompressor.Bitmaps;
 using TextureCompressor.Codecs;
@@ -1628,6 +1628,7 @@ public static class PvrCodec
         Add(TextureFormats.Bc4UNorm, (uint)PvrPixelFormat.Bc4, PvrColourSpace.Linear, PvrChannelType.UnsignedByteNorm);
         Add(TextureFormats.Rgtc1UNorm, (uint)PvrPixelFormat.Bc4, PvrColourSpace.Linear, PvrChannelType.UnsignedByteNorm);
         Add(TextureFormats.Ati1UNorm, (uint)PvrPixelFormat.Bc4, PvrColourSpace.Linear, PvrChannelType.UnsignedByteNorm);
+        Add(TextureFormats.Ati1N, (uint)PvrPixelFormat.Bc4, PvrColourSpace.Linear, PvrChannelType.UnsignedByteNorm);
         Add(TextureFormats.Latc1UNorm, (uint)PvrPixelFormat.Bc4, PvrColourSpace.Linear, PvrChannelType.UnsignedByteNorm);
         Add(TextureFormats.Bc4SNorm, (uint)PvrPixelFormat.Bc4, PvrColourSpace.Linear, PvrChannelType.SignedByteNorm);
         Add(TextureFormats.Rgtc1SNorm, (uint)PvrPixelFormat.Bc4, PvrColourSpace.Linear, PvrChannelType.SignedByteNorm);
@@ -1636,6 +1637,8 @@ public static class PvrCodec
         Add(TextureFormats.Bc5UNorm, (uint)PvrPixelFormat.Bc5, PvrColourSpace.Linear, PvrChannelType.UnsignedByteNorm);
         Add(TextureFormats.Rgtc2UNorm, (uint)PvrPixelFormat.Bc5, PvrColourSpace.Linear, PvrChannelType.UnsignedByteNorm);
         Add(TextureFormats.Ati2UNorm, (uint)PvrPixelFormat.Bc5, PvrColourSpace.Linear, PvrChannelType.UnsignedByteNorm);
+        Add(TextureFormats.Ati2N, (uint)PvrPixelFormat.Bc5, PvrColourSpace.Linear, PvrChannelType.UnsignedByteNorm);
+        Add(TextureFormats.Ati2NXy, (uint)PvrPixelFormat.Bc5, PvrColourSpace.Linear, PvrChannelType.UnsignedByteNorm);
         Add(TextureFormats.Latc2UNorm, (uint)PvrPixelFormat.Bc5, PvrColourSpace.Linear, PvrChannelType.UnsignedByteNorm);
         Add(TextureFormats.Bc5SNorm, (uint)PvrPixelFormat.Bc5, PvrColourSpace.Linear, PvrChannelType.SignedByteNorm);
         Add(TextureFormats.Rgtc2SNorm, (uint)PvrPixelFormat.Bc5, PvrColourSpace.Linear, PvrChannelType.SignedByteNorm);

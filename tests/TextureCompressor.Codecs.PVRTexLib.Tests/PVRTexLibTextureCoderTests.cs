@@ -12,6 +12,9 @@ public sealed class PVRTexLibTextureCoderTests : global::TextureCompressor.Tests
 {
     protected override ITextureCoder CreateDxtCoder(TextureFormat format) => new PVRTexLibTextureCoder(format);
 
+    [Fact]
+    public void Bc45PreservesSignedChannelsAndFractionalValues() => CheckSignedBc5AndFractionalBc4();
+
     private static readonly PVRTexLibCompressorOptions SFastOptions = new()
     {
         EtcQuality = PVRTexLibCompressorQuality.ETCFast,

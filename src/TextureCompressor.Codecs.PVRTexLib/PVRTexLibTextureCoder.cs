@@ -61,9 +61,9 @@ public sealed unsafe class PVRTexLibTextureCoder : IPitchTextureCoder
         new(TextureFormats.Bc3Rgba, PVRTexLibPixelFormat.BC3, SourceKind.Rgba8, PVRTexLibVariableType.UnsignedByteNorm, CompressorFamily.Other),
         new(TextureFormats.Bc3RgbaSrgb, PVRTexLibPixelFormat.BC3, SourceKind.Rgba8, PVRTexLibVariableType.UnsignedByteNorm, CompressorFamily.Other),
         new(TextureFormats.Bc4UNorm, PVRTexLibPixelFormat.BC4, SourceKind.Rgba8, PVRTexLibVariableType.UnsignedByteNorm, CompressorFamily.Other),
-        new(TextureFormats.Bc4SNorm, PVRTexLibPixelFormat.BC4, SourceKind.Rgba8SNorm, PVRTexLibVariableType.SignedByteNorm, CompressorFamily.Other),
+        new(TextureFormats.Bc4SNorm, PVRTexLibPixelFormat.BC4, SourceKind.SignedBc45, PVRTexLibVariableType.SignedByteNorm, CompressorFamily.Other),
         new(TextureFormats.Bc5UNorm, PVRTexLibPixelFormat.BC5, SourceKind.Rgba8, PVRTexLibVariableType.UnsignedByteNorm, CompressorFamily.Other),
-        new(TextureFormats.Bc5SNorm, PVRTexLibPixelFormat.BC5, SourceKind.Rgba8SNorm, PVRTexLibVariableType.SignedByteNorm, CompressorFamily.Other),
+        new(TextureFormats.Bc5SNorm, PVRTexLibPixelFormat.BC5, SourceKind.SignedBc45, PVRTexLibVariableType.SignedByteNorm, CompressorFamily.Other),
         new(TextureFormats.RgbaAstc4x4UNorm, PVRTexLibPixelFormat.ASTC_4x4, SourceKind.Rgba8, PVRTexLibVariableType.UnsignedByteNorm, CompressorFamily.Astc),
         new(TextureFormats.RgbaAstc4x4Srgb, PVRTexLibPixelFormat.ASTC_4x4, SourceKind.Rgba8, PVRTexLibVariableType.UnsignedByteNorm, CompressorFamily.Astc),
         new(TextureFormats.RgbaAstc4x4Float, PVRTexLibPixelFormat.ASTC_4x4, SourceKind.Rgba32Float, PVRTexLibVariableType.SignedFloat, CompressorFamily.Astc),
@@ -112,6 +112,7 @@ public sealed unsafe class PVRTexLibTextureCoder : IPitchTextureCoder
 
     private readonly FormatMapping _mapping;
     private readonly PVRTexLibCompressorOptions _options;
+    private readonly RgtcLatcTextureCoder? _bc45;
 
     public PVRTexLibTextureCoder(TextureFormat format, PVRTexLibCompressorOptions? options = null)
     {
@@ -121,6 +122,8 @@ public sealed unsafe class PVRTexLibTextureCoder : IPitchTextureCoder
         }
 
         Format = format;
+        if (_mapping.PixelFormat is PVRTexLibPixelFormat.BC4 or PVRTexLibPixelFormat.BC5)
+            _bc45 = new RgtcLatcTextureCoder(format);
         _options = options ?? new PVRTexLibCompressorOptions();
     }
 
@@ -148,6 +151,13 @@ public sealed unsafe class PVRTexLibTextureCoder : IPitchTextureCoder
     public void Decode<TPixel>(ReadOnlySpan<byte> source, BitmapView<TPixel> destination, int rowPitch)
         where TPixel : unmanaged, IPixel<TPixel>
     {
+        // The native BC4/5 decoder quantizes interpolants to bytes and treats
+        // signed endpoints as unsigned when selecting the interpolation mode.
+        if (_bc45 is not null)
+        {
+            _bc45.Decode(source, destination, rowPitch);
+            return;
+        }
         var packed = CopyToPackedRows(source, destination.Width, destination.Height, rowPitch);
         fixed (byte* sourcePtr = packed)
         {
@@ -187,18 +197,9 @@ public sealed unsafe class PVRTexLibTextureCoder : IPitchTextureCoder
                     return;
                 }
 
-            case SourceKind.Rgba8SNorm:
-                var rgba8SNorm = new Rgba8SNorm[pixelCount];
-                for (var i = 0; i < rgba8SNorm.Length; i++)
-                {
-                    rgba8SNorm[i] = TPixel.ToRgba8SNorm(source.Pixels[i]);
-                }
-
-                fixed (Rgba8SNorm* ptr = rgba8SNorm)
-                {
-                    TranscodeAndCopy(SRgba8PixelFormat, source.Width, source.Height, PVRTexLibVariableType.SignedByteNorm, ptr, destination, rowPitch);
-                    return;
-                }
+            case SourceKind.SignedBc45:
+                _bc45!.Encode(source, destination, rowPitch);
+                return;
 
             case SourceKind.Rgba16UNorm:
                 var rgba16 = new Rgba16UNorm[pixelCount];
@@ -265,9 +266,6 @@ public sealed unsafe class PVRTexLibTextureCoder : IPitchTextureCoder
                     if (_mapping.Premultiplied) pixel = RgbaColorConversions.UnpremultiplyAlpha(pixel);
                     destination.Pixels[i] = TPixel.FromRgba8UNorm(pixel);
                 }
-                return;
-            case SourceKind.Rgba8SNorm:
-                CopyPixels(new ReadOnlySpan<Rgba8SNorm>(data, pixelCount), destination, static value => TPixel.FromRgba8SNorm(value));
                 return;
             case SourceKind.Rgba16UNorm:
                 CopyPixels(new ReadOnlySpan<Rgba16UNorm>(data, pixelCount), destination, static value => TPixel.FromRgba16UNorm(value));
@@ -449,7 +447,7 @@ public sealed unsafe class PVRTexLibTextureCoder : IPitchTextureCoder
 
     private static ulong GetIntermediatePixelFormat(SourceKind sourceKind) => sourceKind switch
     {
-        SourceKind.Rgba8 or SourceKind.Rgba8SNorm => SRgba8PixelFormat,
+        SourceKind.Rgba8 => SRgba8PixelFormat,
         SourceKind.Rgba16UNorm or SourceKind.Rgba16SNorm => SRgba16PixelFormat,
         SourceKind.Rgba32Float => SRgba32PixelFormat,
         _ => throw new ArgumentOutOfRangeException(nameof(sourceKind), sourceKind, null)
@@ -467,7 +465,7 @@ public sealed unsafe class PVRTexLibTextureCoder : IPitchTextureCoder
     private enum SourceKind
     {
         Rgba8,
-        Rgba8SNorm,
+        SignedBc45,
         Rgba16UNorm,
         Rgba16SNorm,
         Rgba32Float

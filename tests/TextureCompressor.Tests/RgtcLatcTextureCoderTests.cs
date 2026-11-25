@@ -326,6 +326,9 @@ public sealed class RgtcLatcTextureCoderTests
 
     public static TheoryData<TextureFormat> RgtcLatcFormats() => new()
     {
+        TextureFormats.Ati1N,
+        TextureFormats.Ati2N,
+        TextureFormats.Ati2NXy,
         TextureFormats.Bc4UNorm,
         TextureFormats.Bc4SNorm,
         TextureFormats.Bc5UNorm,

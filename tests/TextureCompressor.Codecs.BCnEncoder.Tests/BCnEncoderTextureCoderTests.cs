@@ -11,6 +11,19 @@ public sealed class BCnEncoderTextureCoderTests : global::TextureCompressor.Test
 {
     protected override ITextureCoder CreateDxtCoder(TextureFormat format) => new BCnEncoderTextureCoder(format);
 
+    [Fact]
+    public void Latc2KeepsLuminanceAndAlphaInSeparateBlocks()
+    {
+        var image = new ArrayBitmap<Rgba8UNorm>(4, 4, Enumerable.Repeat(new Rgba8UNorm(53, 149, 211, 17), 16).ToArray());
+        var encoder = CreateDxtCoder(TextureFormats.Latc2UNorm);
+        var block = new byte[16];
+        encoder.Encode(image.AsView(), block);
+        ((ITextureCoder)new RgtcLatcTextureCoder(TextureFormats.Bc5UNorm)).Decode(block, image.AsView());
+        Assert.Equal(new Rgba8UNorm(53, 17, 0), image.Pixels[0]);
+        encoder.Decode(block, image.AsView());
+        Assert.Equal(new Rgba8UNorm(53, 53, 53, 17), image.Pixels[0]);
+    }
+
     private static readonly BCnEncoderCoderOptions SFastOptions = new()
     {
         Quality = CompressionQuality.Fast

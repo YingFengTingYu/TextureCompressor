@@ -1,4 +1,4 @@
-﻿using System.Buffers.Binary;
+using System.Buffers.Binary;
 using System.Runtime.CompilerServices;
 using TextureCompressor.Bitmaps;
 using TextureCompressor.Codecs;
@@ -387,7 +387,7 @@ public static class DdsCodec
         ArgumentNullException.ThrowIfNull(texture);
         ArgumentNullException.ThrowIfNull(stream);
 
-        var headerKind = GetEncodingHeaderKind(options);
+        var headerKind = GetEncodingHeaderKind(options, texture.Texture.Format);
         ValidateEncodingHeaderKind(headerKind);
 
         var coder = texture.Texture.Depth == 1
@@ -931,8 +931,17 @@ public static class DdsCodec
         throw new NotSupportedException($"DDS legacy pixel format '{legacyPixelFormat}' cannot be used for encoding.");
     }
 
-    private static DdsHeaderKind GetEncodingHeaderKind(DdsEncodingOptions? options) =>
-        options?.HeaderKind ?? DdsHeaderKind.Dxt10;
+    private static DdsHeaderKind GetEncodingHeaderKind(DdsEncodingOptions? options, TextureFormat? payloadFormat = null)
+    {
+        if (options?.RequestedHeaderKind is { } requested) return requested;
+        if (options?.DxgiFormat is not null) return DdsHeaderKind.Dxt10;
+        if (options?.LegacyPixelFormat is not null) return DdsHeaderKind.Legacy;
+        if ((payloadFormat ?? options?.TextureFormat) is { } format
+            && (format == TextureFormats.Ati2NXy || (!SFormatMappings.Value.TextureToDxgi.ContainsKey(format)
+                && SFormatMappings.Value.TextureToLegacy.ContainsKey(format))))
+            return DdsHeaderKind.Legacy;
+        return DdsHeaderKind.Dxt10;
+    }
 
     private static DdsAlphaMode GetEncodingAlphaMode(DdsEncodingOptions? options) =>
         options?.AlphaMode ?? DdsAlphaMode.Unknown;
@@ -1081,6 +1090,9 @@ public static class DdsCodec
         AddDxgi(TextureFormats.Rgtc2SNorm, DdsDxgiFormat.BC5SNorm);
         AddDxgi(TextureFormats.Ati2UNorm, DdsDxgiFormat.BC5UNorm);
         AddDxgi(TextureFormats.Ati2SNorm, DdsDxgiFormat.BC5SNorm);
+        AddDxgi(TextureFormats.Ati1N, DdsDxgiFormat.BC4UNorm);
+        AddDxgi(TextureFormats.Ati2N, DdsDxgiFormat.BC5UNorm);
+        AddDxgi(TextureFormats.Ati2NXy, DdsDxgiFormat.BC5UNorm);
         AddDxgi(TextureFormats.Rgb565UNorm, DdsDxgiFormat.B5G6R5UNorm);
         AddDxgi(TextureFormats.A1Rgb5UNorm, DdsDxgiFormat.B5G5R5A1UNorm);
         AddDxgi(TextureFormats.Bgra8, DdsDxgiFormat.B8G8R8A8UNorm);
@@ -1170,11 +1182,19 @@ public static class DdsCodec
         var dxt5 = LegacyFourCc(MakeFourCc("DXT5"));
         AddLegacy(TextureFormats.Bc3Rgba, DdsLegacyPixelFormat.Dxt5, dxt5);
         AddLegacyAlias(TextureFormats.Dxt5Rgba, dxt5);
+        AddLegacy(TextureFormats.Dxt5Xgbr, DdsLegacyPixelFormat.Dxt5Xgbr, LegacyFourCc(MakeFourCc("xGBR")));
+        AddLegacy(TextureFormats.Dxt5Rxbg, DdsLegacyPixelFormat.Dxt5Rxbg, LegacyFourCc(MakeFourCc("RxBG")));
+        AddLegacy(TextureFormats.Dxt5Rbxg, DdsLegacyPixelFormat.Dxt5Rbxg, LegacyFourCc(MakeFourCc("RBxG")));
+        AddLegacy(TextureFormats.Dxt5Xrbg, DdsLegacyPixelFormat.Dxt5Xrbg, LegacyFourCc(MakeFourCc("xRBG")));
+        AddLegacy(TextureFormats.Dxt5Rgxb, DdsLegacyPixelFormat.Dxt5Rgxb, LegacyFourCc(MakeFourCc("RGxB")));
+        AddLegacy(TextureFormats.Dxt5Xgxr, DdsLegacyPixelFormat.Dxt5Xgxr, LegacyFourCc(MakeFourCc("xGxR")));
+        AddLegacy(TextureFormats.Ati2NDxt5, DdsLegacyPixelFormat.Ati2NDxt5, LegacyFourCc(MakeFourCc("A2D5")));
 
         var ati1 = LegacyFourCc(MakeFourCc("ATI1"));
         AddLegacy(TextureFormats.Bc4UNorm, DdsLegacyPixelFormat.Ati1, ati1);
         AddLegacyAlias(TextureFormats.Rgtc1UNorm, ati1);
         AddLegacyAlias(TextureFormats.Ati1UNorm, ati1);
+        AddLegacyAlias(TextureFormats.Ati1N, ati1);
         AddLegacy(TextureFormats.Bc4UNorm, DdsLegacyPixelFormat.Bc4UNorm, LegacyFourCc(MakeFourCc("BC4U")));
         AddLegacy(TextureFormats.Bc4SNorm, DdsLegacyPixelFormat.Bc4SNorm, LegacyFourCc(MakeFourCc("BC4S")));
 
@@ -1182,6 +1202,9 @@ public static class DdsCodec
         AddLegacy(TextureFormats.Bc5UNorm, DdsLegacyPixelFormat.Ati2, ati2);
         AddLegacyAlias(TextureFormats.Rgtc2UNorm, ati2);
         AddLegacyAlias(TextureFormats.Ati2UNorm, ati2);
+        AddLegacyAlias(TextureFormats.Ati2N, ati2);
+        AddLegacy(TextureFormats.Ati2NXy, DdsLegacyPixelFormat.Ati2NXy,
+            new LegacyFormatDescriptor(ati2.PixelFormat with { RgbBitCount = MakeFourCc("A2XY") }));
         AddLegacy(TextureFormats.Bc5UNorm, DdsLegacyPixelFormat.Bc5UNorm, LegacyFourCc(MakeFourCc("BC5U")));
         AddLegacy(TextureFormats.Bc5SNorm, DdsLegacyPixelFormat.Bc5SNorm, LegacyFourCc(MakeFourCc("BC5S")));
 
@@ -1203,7 +1226,17 @@ public static class DdsCodec
     {
         if ((pixelFormat.Flags & PixelFormatFlagFourCc) != 0)
         {
-            return new LegacyFormatKey(LegacyFormatKind.FourCc, pixelFormat.FourCc, RgbBitCount: 0, RedMask: 0, GreenMask: 0, BlueMask: 0, AlphaMask: 0);
+            uint fourCc = pixelFormat.FourCc;
+            // AMD also writes a secondary FourCC in the otherwise unused bit count.
+            uint secondary = pixelFormat.RgbBitCount;
+            if ((fourCc == MakeFourCc("ATI2") && secondary == MakeFourCc("A2XY"))
+                || (fourCc == MakeFourCc("DXT5") && (secondary == MakeFourCc("xGBR") || secondary == MakeFourCc("RxBG")
+                    || secondary == MakeFourCc("RBxG") || secondary == MakeFourCc("xRBG") || secondary == MakeFourCc("RGxB")
+                    || secondary == MakeFourCc("xGxR") || secondary == MakeFourCc("A2D5"))))
+            {
+                fourCc = secondary;
+            }
+            return new LegacyFormatKey(LegacyFormatKind.FourCc, fourCc, RgbBitCount: 0, RedMask: 0, GreenMask: 0, BlueMask: 0, AlphaMask: 0);
         }
 
         var kind = pixelFormat.Flags switch

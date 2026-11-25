@@ -51,6 +51,27 @@ public sealed partial class S3tcTextureCoder
         axis = redAxis * axis.X + greenAxis * axis.Y + blueAxis * axis.Z;
 
         Span<float> projections = stackalloc float[TexelsPerBlock];
+        Span<Vector3> prefix = stackalloc Vector3[TexelsPerBlock + 1];
+        ProjectAndSort(colors[..count], axis, projections, prefix);
+
+        var best = new ColorBlockEncoding { Error = long.MaxValue };
+        for (var tier = TextureCompressionLevel.Normal; tier <= level; tier++)
+        {
+            var candidate = FitProjectedRamp(source, projections[..count], prefix[..(count + 1)], mode,
+                punchThrough, tier);
+            if (candidate.Error < best.Error) best = candidate;
+            if (best.Error == 0) break;
+        }
+        if (level == TextureCompressionLevel.Exhaustive && best.Error > 0)
+        {
+            RefineWithSelectorChanges(source, mode, punchThrough, ref best);
+        }
+        return best;
+    }
+
+    private static void ProjectAndSort(Span<Vector3> colors, Vector3 axis, Span<float> projections, Span<Vector3> prefix)
+    {
+        int count = colors.Length;
         for (int i = 0; i < count; i++)
         {
             var color = colors[i];
@@ -67,26 +88,11 @@ public sealed partial class S3tcTextureCoder
             colors[j] = color;
         }
 
-        Span<Vector3> prefix = stackalloc Vector3[TexelsPerBlock + 1];
         prefix[0] = Vector3.Zero;
         for (int i = 0; i < count; i++)
         {
             prefix[i + 1] = prefix[i] + colors[i];
         }
-
-        var best = new ColorBlockEncoding { Error = long.MaxValue };
-        for (var tier = TextureCompressionLevel.Normal; tier <= level; tier++)
-        {
-            var candidate = FitProjectedRamp(source, projections[..count], prefix[..(count + 1)], mode,
-                punchThrough, tier);
-            if (candidate.Error < best.Error) best = candidate;
-            if (best.Error == 0) break;
-        }
-        if (level == TextureCompressionLevel.Exhaustive && best.Error > 0)
-        {
-            RefineWithSelectorChanges(source, mode, punchThrough, ref best);
-        }
-        return best;
     }
 
     private static void RefineWithSelectorChanges(ReadOnlySpan<Rgba8UNorm> source, Dxt1ColorMode mode,
@@ -136,6 +142,26 @@ public sealed partial class S3tcTextureCoder
     private static ColorBlockEncoding FitProjectedRamp(ReadOnlySpan<Rgba8UNorm> source, ReadOnlySpan<float> projections,
         ReadOnlySpan<Vector3> prefix, Dxt1ColorMode mode, bool punchThrough, TextureCompressionLevel level)
     {
+        FindRampEndpoints(projections, prefix, punchThrough, level, out var low, out var high);
+        var best = EvaluateColorCandidate(source, mode, punchThrough, PackNearest565(low), PackNearest565(high));
+        if (best.Error != 0)
+        {
+            var ramp = punchThrough ? ColorRamp.BcPunchThrough : ColorRamp.BcFour;
+            int passes = level == TextureCompressionLevel.Normal ? 2 : 4;
+            for (int pass = 0; pass < passes; pass++)
+            {
+                var pair = BlockColorRefinement.Refine(source, best.Color0, best.Color1, best.Indices, ramp, 1);
+                var improved = EvaluateColorCandidate(source, mode, punchThrough, pair.First, pair.Second);
+                if (improved.Error >= best.Error) break;
+                best = improved;
+            }
+        }
+        return best;
+    }
+
+    private static void FindRampEndpoints(ReadOnlySpan<float> projections, ReadOnlySpan<Vector3> prefix,
+        bool punchThrough, TextureCompressionLevel level, out Vector3 low, out Vector3 high)
+    {
         int count = projections.Length;
         var sum = prefix[count];
         int steps = punchThrough ? 2 : 3;
@@ -156,8 +182,8 @@ public sealed partial class S3tcTextureCoder
             _ => count
         };
         float bestScore = float.PositiveInfinity;
-        var low = prefix[1];
-        var high = sum - prefix[count - 1];
+        low = prefix[1];
+        high = sum - prefix[count - 1];
         // Move the ramp ends on the projected axis. Prefix sums allow each
         // set of assigned selectors to be refitted without walking 16 texels.
         int subdivisions = level == TextureCompressionLevel.Normal ? 1 : 2;
@@ -203,21 +229,6 @@ public sealed partial class S3tcTextureCoder
                 }
             }
         }
-
-        var best = EvaluateColorCandidate(source, mode, punchThrough, PackNearest565(low), PackNearest565(high));
-        if (best.Error != 0)
-        {
-            var ramp = punchThrough ? ColorRamp.BcPunchThrough : ColorRamp.BcFour;
-            int passes = level == TextureCompressionLevel.Normal ? 2 : 4;
-            for (int pass = 0; pass < passes; pass++)
-            {
-                var pair = BlockColorRefinement.Refine(source, best.Color0, best.Color1, best.Indices, ramp, 1);
-                var improved = EvaluateColorCandidate(source, mode, punchThrough, pair.First, pair.Second);
-                if (improved.Error >= best.Error) break;
-                best = improved;
-            }
-        }
-        return best;
     }
 
     private static int CountBelow(ReadOnlySpan<float> sorted, float threshold)

@@ -9,6 +9,31 @@ public abstract class DxtAdapterConformanceTests
 {
     protected abstract ITextureCoder CreateDxtCoder(TextureFormat format);
 
+    protected void CheckSignedBc5AndFractionalBc4()
+    {
+        var image = new ArrayBitmap<Rgba32Float>(4, 4);
+        var bc4 = CreateDxtCoder(TextureFormats.Bc4UNorm);
+        bc4.Decode(Convert.FromHexString("0500020000000000"), image.AsView());
+        var p = image.Pixels[0];
+        Assert.InRange(Math.Abs(p.Red - 30f / (7 * 255)), 0, 0.000001f);
+        Assert.Equal((0f, 0f, 1f), (p.Green, p.Blue, p.Alpha));
+
+        var bc5 = CreateDxtCoder(TextureFormats.Bc5SNorm);
+        bc5.Decode(Convert.FromHexString("01FB02000000000017F8070000000000"), image.AsView());
+        p = image.Pixels[0];
+        Assert.InRange(Math.Abs(p.Red - 1f / (7 * 127)), 0, 0.000001f);
+        Assert.InRange(Math.Abs(p.Green + 25f / (7 * 127)), 0, 0.000001f);
+        for (int i = 0; i < 16; i++) image.Pixels[i] = new Rgba32Float(-.8f + .1f * i, .6f - i / 12f, 0);
+        var block = new byte[16];
+        bc5.Encode(image.AsView(), block);
+        ((ITextureCoder)new RgtcLatcTextureCoder(TextureFormats.Bc5SNorm)).Decode(block, image.AsView());
+        for (int i = 0; i < 16; i++)
+        {
+            Assert.InRange(Math.Abs(image.Pixels[i].Red - (-.8f + .1f * i)), 0, .14f);
+            Assert.InRange(Math.Abs(image.Pixels[i].Green - (.6f - i / 12f)), 0, .14f);
+        }
+    }
+
     [Fact]
     public void Dxt1BlackSelectorUsesTheRequestedAlphaConvention()
     {

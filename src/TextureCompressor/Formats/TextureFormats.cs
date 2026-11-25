@@ -1,4 +1,4 @@
-﻿namespace TextureCompressor.Formats;
+namespace TextureCompressor.Formats;
 
 public static class TextureFormats
 {
@@ -1482,6 +1482,10 @@ public static class TextureFormats
     public static readonly TextureFormat RgbaBptcSrgb =
         TextureFormat.BlockCompressed("SRGB_ALPHA_BPTC_UNORM", TextureComponents.Rgba, TextureValueKind.Srgb, 8, 8, 8, 8, 4, 4, 128);
 
+    public static readonly TextureFormat Ati1N = RgtcLatc1("ATI1N", TextureComponents.R, TextureValueKind.UNorm);
+    public static readonly TextureFormat Ati2N = RgtcLatc2("ATI2N", TextureComponents.Rg, TextureValueKind.UNorm);
+    public static readonly TextureFormat Ati2NXy = RgtcLatc2("ATI2N_XY", TextureComponents.Rg, TextureValueKind.UNorm);
+
     public static readonly TextureFormat Ati1UNorm =
         RgtcLatc1("ATI1_UNORM", TextureComponents.R, TextureValueKind.UNorm);
 
@@ -1795,6 +1799,14 @@ public static class TextureFormats
             4,
             4,
             128);
+
+    public static readonly TextureFormat Dxt5Xgbr = Dxt5Swizzled("DXT5_xGBR", 8, 6, 5);
+    public static readonly TextureFormat Dxt5Rxbg = Dxt5Swizzled("DXT5_RxBG", 5, 8, 5);
+    public static readonly TextureFormat Dxt5Rbxg = Dxt5Swizzled("DXT5_RBxG", 5, 8, 6);
+    public static readonly TextureFormat Dxt5Xrbg = Dxt5Swizzled("DXT5_xRBG", 6, 8, 5);
+    public static readonly TextureFormat Dxt5Rgxb = Dxt5Swizzled("DXT5_RGxB", 5, 6, 8);
+    public static readonly TextureFormat Dxt5Xgxr = Dxt5Swizzled("DXT5_xGxR", 8, 6, 0);
+    public static readonly TextureFormat Ati2NDxt5 = Dxt5Swizzled("ATI2N_DXT5", 8, 6, 0);
 
     public static readonly TextureFormat Dxt5A =
         TextureFormat.BlockCompressed("DXT5A", TextureComponents.Alpha, TextureValueKind.UNorm, 0, 0, 0, 8, 4, 4, 64);
@@ -2151,6 +2163,10 @@ public static class TextureFormats
         2,
         1,
         64);
+
+    private static TextureFormat Dxt5Swizzled(string name, int redBits, int greenBits, int blueBits) =>
+        TextureFormat.BlockCompressed(name, blueBits == 0 ? TextureComponents.Rg : TextureComponents.Rgb,
+            TextureValueKind.UNorm, redBits, greenBits, blueBits, 0, 4, 4, 128);
 
     private static TextureFormat RgtcLatc1(string name, TextureComponents components, TextureValueKind valueKind) =>
         TextureFormat.BlockCompressed(name, components, valueKind, 8, 0, 0, 0, 4, 4, 64);

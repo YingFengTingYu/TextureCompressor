@@ -11,6 +11,9 @@ public sealed class DirectXTexTextureCoderTests : global::TextureCompressor.Test
     protected override ITextureCoder CreateDxtCoder(TextureFormat format) => new DirectXTexTextureCoder(format);
 
     [Fact]
+    public void Bc45PreservesSignedChannelsAndFractionalValues() => CheckSignedBc5AndFractionalBc4();
+
+    [Fact]
     public void RegisterDirectXTexCodersOverridesManagerUntilDisposed()
     {
         var manager = new TextureCoderManager();

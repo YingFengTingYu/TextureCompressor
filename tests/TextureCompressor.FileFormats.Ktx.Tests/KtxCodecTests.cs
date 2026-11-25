@@ -9,6 +9,25 @@ namespace TextureCompressor.FileFormats.Ktx.Tests;
 
 public sealed class KtxCodecTests
 {
+    [Theory]
+    [InlineData(false, false, 0x8c70u)]
+    [InlineData(false, true, 0x8c71u)]
+    [InlineData(true, false, 0x8c72u)]
+    [InlineData(true, true, 0x8c73u)]
+    public void Ktx1PreservesLatcLayout(bool alpha, bool signed, uint token)
+    {
+        var format = alpha ? (signed ? TextureFormats.Latc2SNorm : TextureFormats.Latc2UNorm)
+            : (signed ? TextureFormats.Latc1SNorm : TextureFormats.Latc1UNorm);
+        var source = new ArrayBitmap<Rgba32Float>(4, 4, Enumerable.Repeat(new Rgba32Float(.3f, .7f, 0, .8f), 16).ToArray());
+        var ktx = KtxCodec.Encode(source, new KtxEncodingOptions { Version = KtxVersion.Version1, TextureFormat = format });
+        Assert.Equal(token, BinaryPrimitives.ReadUInt32LittleEndian(ktx.AsSpan(28)));
+        Assert.Equal(format, KtxCodec.Read(ktx).Texture.Format);
+        var p = KtxCodec.Decode<Rgba32Float>(ktx).Pixels[0];
+        Assert.InRange(Math.Abs(p.Red - .3f), 0, .005f);
+        Assert.Equal((p.Red, p.Red), (p.Green, p.Blue));
+        Assert.InRange(Math.Abs(p.Alpha - (alpha ? .8f : 1f)), 0, .005f);
+    }
+
     [Fact]
     public void EncodeRgba8WritesReadableKtx()
     {

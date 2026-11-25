@@ -222,7 +222,7 @@ public sealed class AtcTextureCoder : IPitchTextureCoder
         public static void DecodeBlock(ReadOnlySpan<byte> source, Span<Rgba8UNorm> destination)
         {
             DecodeColorBlock(source[8..], destination);
-            DecodeExplicitAlphaBlock(source[..8], destination);
+            ExplicitAlphaBlock.Decode(source[..8], destination);
         }
 
         public static void EncodeBlock(
@@ -230,7 +230,7 @@ public sealed class AtcTextureCoder : IPitchTextureCoder
             Span<byte> destination,
             TextureCompressionLevel compressionMode)
         {
-            EncodeExplicitAlphaBlock(source, destination[..8]);
+            ExplicitAlphaBlock.Encode(source, destination[..8]);
             EncodeColorBlock(source, destination[8..], compressionMode);
         }
     }
@@ -747,26 +747,6 @@ public sealed class AtcTextureCoder : IPitchTextureCoder
         }
     }
 
-    private static void DecodeExplicitAlphaBlock(ReadOnlySpan<byte> source, Span<Rgba8UNorm> destination)
-    {
-        for (var i = 0; i < TexelsPerBlock; i++)
-        {
-            var packed = source[i >> 1];
-            var alpha4 = (i & 1) == 0 ? packed & 0x0f : packed >> 4;
-            destination[i].Alpha = (byte)((alpha4 << 4) | alpha4);
-        }
-    }
-
-    private static void EncodeExplicitAlphaBlock(ReadOnlySpan<Rgba8UNorm> source, Span<byte> destination)
-    {
-        for (var i = 0; i < 8; i++)
-        {
-            var low = QuantizeExplicitAlpha(source[i * 2].Alpha);
-            var high = QuantizeExplicitAlpha(source[(i * 2) + 1].Alpha);
-            destination[i] = (byte)(low | (high << 4));
-        }
-    }
-
     private static void DecodeInterpolatedAlphaBlock(ReadOnlySpan<byte> source, Span<Rgba8UNorm> destination)
     {
         var palette = new InlineArray8<byte>();
@@ -1107,13 +1087,6 @@ public sealed class AtcTextureCoder : IPitchTextureCoder
         var expanded = (value & 0xfc) | ((value & 0xc0) >> 6);
         var alternate = expanded ^ 0x04;
         return Math.Abs(value - alternate) < Math.Abs(value - expanded) ? alternate >> 2 : value >> 2;
-    }
-
-    private static int QuantizeExplicitAlpha(byte alpha)
-    {
-        var alpha4 = alpha >> 4;
-        var quantized = (alpha + (alpha4 < 8 ? 7 : 8) - alpha4) >> 4;
-        return Math.Min(quantized, 0x0f);
     }
 
     private static void LoadBlock<TPixel>(BitmapView<TPixel> source, int blockX, int blockY, Span<Rgba8UNorm> destination)

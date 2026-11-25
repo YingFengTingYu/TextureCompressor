@@ -23,7 +23,10 @@ described in [AMD Compressonator's BC1 encoder](https://github.com/GPUOpen-Tools
 The ATC palette, luminance regions, black selector and alpha blocks were checked
 against the [ATI color codec](https://github.com/GPUOpen-Tools/compressonator/blob/095a143ad8cfbf9ed5afa4ea63c735bfd0fd04dd/cmp_compressonatorlib/ati/compressonatori_tc.c)
 and [AMD's ATC wrapper](https://github.com/GPUOpen-Tools/compressonator/blob/095a143ad8cfbf9ed5afa4ea63c735bfd0fd04dd/cmp_compressonatorlib/atc/codec_atc.cpp).
-The ATC conformance vectors were produced with Compressonator CLI 4.6.0.
+The ATC and swizzled DDS conformance blocks were produced with Compressonator CLI 4.6.0.
+The six DXT5 channel layouts follow the [AMD format definitions](https://github.com/GPUOpen-Tools/compressonator/blob/095a143ad8cfbf9ed5afa4ea63c735bfd0fd04dd/cmp_compressonatorlib/compressonator.h).
+The BC4/5 and LATC interpolants follow the [Khronos RGTC](https://registry.khronos.org/OpenGL/extensions/ARB/ARB_texture_compression_rgtc.txt) and [LATC](https://registry.khronos.org/OpenGL/extensions/EXT/EXT_texture_compression_latc.txt) extensions.
+Xbox 360 channel order and selectors were checked against Xenia's [CTX1 loader](https://github.com/xenia-project/xenia/blob/master/src/xenia/gpu/shaders/texture_load_ctx1.cs.xesl) and [pixel format helpers](https://github.com/xenia-project/xenia/blob/master/src/xenia/gpu/shaders/pixel_formats.xesli).
 For hardware-specific interpolation behavior, see Fabian Giesen's
 [GPU BCn decoding](https://fgiesen.wordpress.com/2021/10/04/gpu-bcn-decoding/).
 

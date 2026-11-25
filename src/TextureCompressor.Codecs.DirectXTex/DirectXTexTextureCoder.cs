@@ -32,19 +32,22 @@ public sealed unsafe class DirectXTexTextureCoder : IPitchTextureCoder
         new(TextureFormats.Dxt5Rgba, DxgiFormat.BC3UNorm, SourceKind.Rgba8),
         new(TextureFormats.Dxt5RgbaSrgb, DxgiFormat.BC3UNormSrgb, SourceKind.Rgba8),
 
-        new(TextureFormats.Bc4UNorm, DxgiFormat.BC4UNorm, SourceKind.Rgba8),
-        new(TextureFormats.Bc4SNorm, DxgiFormat.BC4SNorm, SourceKind.Rgba8SNorm),
-        new(TextureFormats.Rgtc1UNorm, DxgiFormat.BC4UNorm, SourceKind.Rgba8),
-        new(TextureFormats.Rgtc1SNorm, DxgiFormat.BC4SNorm, SourceKind.Rgba8SNorm),
-        new(TextureFormats.Ati1UNorm, DxgiFormat.BC4UNorm, SourceKind.Rgba8),
-        new(TextureFormats.Ati1SNorm, DxgiFormat.BC4SNorm, SourceKind.Rgba8SNorm),
+        new(TextureFormats.Bc4UNorm, DxgiFormat.BC4UNorm, SourceKind.Rgba32Float),
+        new(TextureFormats.Bc4SNorm, DxgiFormat.BC4SNorm, SourceKind.Rgba32Float),
+        new(TextureFormats.Rgtc1UNorm, DxgiFormat.BC4UNorm, SourceKind.Rgba32Float),
+        new(TextureFormats.Rgtc1SNorm, DxgiFormat.BC4SNorm, SourceKind.Rgba32Float),
+        new(TextureFormats.Ati1UNorm, DxgiFormat.BC4UNorm, SourceKind.Rgba32Float),
+        new(TextureFormats.Ati1N, DxgiFormat.BC4UNorm, SourceKind.Rgba32Float),
+        new(TextureFormats.Ati1SNorm, DxgiFormat.BC4SNorm, SourceKind.Rgba32Float),
 
-        new(TextureFormats.Bc5UNorm, DxgiFormat.BC5UNorm, SourceKind.Rgba8),
-        new(TextureFormats.Bc5SNorm, DxgiFormat.BC5SNorm, SourceKind.Rgba8SNorm),
-        new(TextureFormats.Rgtc2UNorm, DxgiFormat.BC5UNorm, SourceKind.Rgba8),
-        new(TextureFormats.Rgtc2SNorm, DxgiFormat.BC5SNorm, SourceKind.Rgba8SNorm),
-        new(TextureFormats.Ati2UNorm, DxgiFormat.BC5UNorm, SourceKind.Rgba8),
-        new(TextureFormats.Ati2SNorm, DxgiFormat.BC5SNorm, SourceKind.Rgba8SNorm),
+        new(TextureFormats.Bc5UNorm, DxgiFormat.BC5UNorm, SourceKind.Rgba32Float),
+        new(TextureFormats.Bc5SNorm, DxgiFormat.BC5SNorm, SourceKind.Rgba32Float),
+        new(TextureFormats.Rgtc2UNorm, DxgiFormat.BC5UNorm, SourceKind.Rgba32Float),
+        new(TextureFormats.Rgtc2SNorm, DxgiFormat.BC5SNorm, SourceKind.Rgba32Float),
+        new(TextureFormats.Ati2UNorm, DxgiFormat.BC5UNorm, SourceKind.Rgba32Float),
+        new(TextureFormats.Ati2N, DxgiFormat.BC5UNorm, SourceKind.Rgba32Float),
+        new(TextureFormats.Ati2NXy, DxgiFormat.BC5UNorm, SourceKind.Rgba32Float),
+        new(TextureFormats.Ati2SNorm, DxgiFormat.BC5SNorm, SourceKind.Rgba32Float),
 
         new(TextureFormats.Bc6HUFloat, DxgiFormat.BC6HUFloat16, SourceKind.Rgba32Float),
         new(TextureFormats.Bc6HSFloat, DxgiFormat.BC6HSFloat16, SourceKind.Rgba32Float),
@@ -139,8 +142,6 @@ public sealed unsafe class DirectXTexTextureCoder : IPitchTextureCoder
         {
             case SourceKind.Rgba8:
                 return EncodeRgba8(source);
-            case SourceKind.Rgba8SNorm:
-                return EncodeRgba8SNorm(source);
             case SourceKind.Rgba32Float:
                 return EncodeRgba32Float(source);
             default:
@@ -162,25 +163,14 @@ public sealed unsafe class DirectXTexTextureCoder : IPitchTextureCoder
         return Compress(source.Width, source.Height, DxgiFormat.R8G8B8A8UNorm, rgba);
     }
 
-    private byte[] EncodeRgba8SNorm<TPixel>(BitmapView<TPixel> source)
-        where TPixel : unmanaged, IPixel<TPixel>
-    {
-        var rgba = new Rgba8SNorm[checked(source.Width * source.Height)];
-        for (var i = 0; i < rgba.Length; i++)
-        {
-            rgba[i] = TPixel.ToRgba8SNorm(source.Pixels[i]);
-        }
-
-        return Compress(source.Width, source.Height, DxgiFormat.R8G8B8A8SNorm, rgba);
-    }
-
     private byte[] EncodeRgba32Float<TPixel>(BitmapView<TPixel> source)
         where TPixel : unmanaged, IPixel<TPixel>
     {
         var rgba = new Rgba32Float[checked(source.Width * source.Height)];
         for (var i = 0; i < rgba.Length; i++)
         {
-            rgba[i] = TPixel.ToRgba32Float(source.Pixels[i]);
+            rgba[i] = Format.ValueKind == TextureValueKind.SNorm
+                ? RgbaColorConversions.ToSignedRgba32Float(source.Pixels[i]) : TPixel.ToRgba32Float(source.Pixels[i]);
         }
 
         return Compress(source.Width, source.Height, DxgiFormat.R32G32B32A32Float, rgba);
@@ -232,9 +222,6 @@ public sealed unsafe class DirectXTexTextureCoder : IPitchTextureCoder
             case SourceKind.Rgba8:
                 CopyRgba8ImageToBitmap(image, destination);
                 return;
-            case SourceKind.Rgba8SNorm:
-                CopyRgba8SNormImageToBitmap(image, destination);
-                return;
             case SourceKind.Rgba32Float:
                 CopyRgba32FloatImageToBitmap(image, destination);
                 return;
@@ -260,21 +247,7 @@ public sealed unsafe class DirectXTexTextureCoder : IPitchTextureCoder
         }
     }
 
-    private static void CopyRgba8SNormImageToBitmap<TPixel>(Image* image, BitmapView<TPixel> destination)
-        where TPixel : unmanaged, IPixel<TPixel>
-    {
-        for (var y = 0; y < destination.Height; y++)
-        {
-            var row = new ReadOnlySpan<Rgba8SNorm>(image->Pixels + checked((int)image->RowPitch * y), destination.Width);
-            var destinationRow = destination.GetRowSpan(y);
-            for (var x = 0; x < row.Length; x++)
-            {
-                destinationRow[x] = TPixel.FromRgba8SNorm(row[x]);
-            }
-        }
-    }
-
-    private static void CopyRgba32FloatImageToBitmap<TPixel>(Image* image, BitmapView<TPixel> destination)
+    private void CopyRgba32FloatImageToBitmap<TPixel>(Image* image, BitmapView<TPixel> destination)
         where TPixel : unmanaged, IPixel<TPixel>
     {
         for (var y = 0; y < destination.Height; y++)
@@ -283,7 +256,14 @@ public sealed unsafe class DirectXTexTextureCoder : IPitchTextureCoder
             var destinationRow = destination.GetRowSpan(y);
             for (var x = 0; x < row.Length; x++)
             {
-                destinationRow[x] = TPixel.FromRgba32Float(row[x]);
+                var pixel = row[x];
+                if (Format.Components == TextureComponents.R)
+                {
+                    pixel.Green = 0;
+                    pixel.Blue = 0;
+                }
+                destinationRow[x] = Format.ValueKind == TextureValueKind.SNorm
+                    ? RgbaColorConversions.FromSignedRgba32Float<TPixel>(pixel) : TPixel.FromRgba32Float(pixel);
             }
         }
     }
@@ -390,7 +370,6 @@ public sealed unsafe class DirectXTexTextureCoder : IPitchTextureCoder
     private static int GetSourceDxgiFormat(SourceKind sourceKind) => sourceKind switch
     {
         SourceKind.Rgba8 => DxgiFormat.R8G8B8A8UNorm,
-        SourceKind.Rgba8SNorm => DxgiFormat.R8G8B8A8SNorm,
         SourceKind.Rgba32Float => DxgiFormat.R32G32B32A32Float,
         _ => throw new ArgumentOutOfRangeException(nameof(sourceKind), sourceKind, null)
     };
@@ -405,7 +384,6 @@ public sealed unsafe class DirectXTexTextureCoder : IPitchTextureCoder
     private enum SourceKind
     {
         Rgba8,
-        Rgba8SNorm,
         Rgba32Float
     }
 
@@ -413,7 +391,6 @@ public sealed unsafe class DirectXTexTextureCoder : IPitchTextureCoder
     {
         public const int R32G32B32A32Float = 2;
         public const int R8G8B8A8UNorm = 28;
-        public const int R8G8B8A8SNorm = 31;
         public const int BC1UNorm = 71;
         public const int BC1UNormSrgb = 72;
         public const int BC2UNorm = 74;

@@ -1,4 +1,4 @@
-﻿# 纹理格式支持情况
+# 纹理格式支持情况
 
 核心库内置以下 texture coder，均可通过 `TextureCompressor.Registry.TextureCoderManager.Global.GetCoder(format)` 获取。容器格式是否能写出某个格式，还取决于 DDS/KTX/PVR/ASTC 容器本身是否有对应映射。
 
@@ -32,13 +32,18 @@
         - `Dxt5Rgba`
         - `Dxt5RgbaSrgb`
         - `Dxt5A`
+        - `Dxt5Xgbr`, `Dxt5Rxbg`, `Dxt5Rbxg`, `Dxt5Xrbg`, `Dxt5Rgxb`, `Dxt5Xgxr`
+        - `Ati2NDxt5`
     - 其他 S3TC 派生格式
         - `Dxn`
         - `Ctx1`
+
+    DDS 默认用 legacy FourCC 写入六种 DXT5 通道重排和 `Ati2NDxt5`。CTX1 按 Xbox 360 线性小端块顺序 `G0 R0 G1 R1` 读取端点。以前由本库生成的 CTX1 使用 `R0 R1 G0 G1`，已有资源应从原图重新编码。
+
 - RGTC / LATC / ATI
     - BC4 / RGTC1 / ATI1 UNorm
         - `Bc4UNorm`
-        - `Ati1UNorm`
+        - `Ati1UNorm`, `Ati1N`
         - `Rgtc1UNorm`
     - BC4 / RGTC1 / ATI1 SNorm
         - `Bc4SNorm`
@@ -46,7 +51,7 @@
         - `Rgtc1SNorm`
     - BC5 / RGTC2 / ATI2 UNorm
         - `Bc5UNorm`
-        - `Ati2UNorm`
+        - `Ati2UNorm`, `Ati2N`, `Ati2NXy`
         - `Rgtc2UNorm`
     - BC5 / RGTC2 / ATI2 SNorm
         - `Bc5SNorm`
@@ -57,6 +62,8 @@
         - `Latc1SNorm`
         - `Latc2UNorm`
         - `Latc2SNorm`
+
+    KTX1 的 LATC 标识能保留亮度和 Alpha 的通道语义。PVR 使用 BC4/BC5 的格式编号，读取其有效载荷时得到 R 或 RG，使用方需自行还原亮度和 Alpha。
 - BPTC / BC6H / BC7
     - BC6H unsigned float
         - `Bc6HUFloat`

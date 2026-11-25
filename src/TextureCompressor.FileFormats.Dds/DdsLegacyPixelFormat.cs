@@ -35,5 +35,13 @@ public enum DdsLegacyPixelFormat
     Uyvy422,
     Yuy2422,
     R8G8B8G8_422,
-    G8R8G8B8_422
+    G8R8G8B8_422,
+    Dxt5Xgbr,
+    Dxt5Rxbg,
+    Dxt5Rbxg,
+    Dxt5Xrbg,
+    Dxt5Rgxb,
+    Dxt5Xgxr,
+    Ati2NDxt5,
+    Ati2NXy
 }
