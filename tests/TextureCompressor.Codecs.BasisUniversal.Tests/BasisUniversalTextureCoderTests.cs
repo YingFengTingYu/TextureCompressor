@@ -15,14 +15,16 @@ public sealed class BasisUniversalTextureCoderTests
         QualityLevel = 50
     };
 
-    [Fact]
-    public void NativeDecoderPreservesManagedEtc1sColorAndAlpha()
+    [Theory]
+    [InlineData(8)]
+    [InlineData(512)]
+    public void NativeDecoderPreservesManagedEtc1sColorAndAlpha(int size)
     {
-        var source = new ArrayBitmap<Rgba8UNorm>(8, 8);
+        var source = new ArrayBitmap<Rgba8UNorm>(size, size);
         new Random(42).NextBytes(System.Runtime.InteropServices.MemoryMarshal.AsBytes(source.PixelSpan));
         var payload = BasisEtc1sTextureCoder.Encode(source.AsView()).AsRawPayload();
-        var managed = new ArrayBitmap<Rgba8UNorm>(8, 8);
-        var native = new ArrayBitmap<Rgba8UNorm>(8, 8);
+        var managed = new ArrayBitmap<Rgba8UNorm>(size, size);
+        var native = new ArrayBitmap<Rgba8UNorm>(size, size);
         BasisEtc1sTextureCoder.Decode(payload, managed.AsView());
         new BasisUniversalEtc1sTextureCoder(TextureFormats.RgbaBasisEtc1sUNorm).Decode(payload, native.AsView());
         Assert.True(managed.PixelSpan.SequenceEqual(native.PixelSpan));

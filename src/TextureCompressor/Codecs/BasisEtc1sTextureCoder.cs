@@ -80,7 +80,8 @@ public sealed class BasisEtc1sTextureCoder : IBasisEtc1sTextureCoder
     private const int BlockWidth = 4;
     private const int BlockHeight = 4;
     private const int TexelsPerBlock = BlockWidth * BlockHeight;
-    private const int MaxHuffmanSymbols = 1 << 14;
+    // The stream stores the number of Huffman symbols in 14 bits.
+    private const int MaxCodebookEntries = (1 << BasisHuffmanDecodingTable.MaxSymbolsLog2) - 1;
 
     private static ReadOnlySpan<int> Etc1IntensityModifiers =>
     [
@@ -100,11 +101,10 @@ public sealed class BasisEtc1sTextureCoder : IBasisEtc1sTextureCoder
         var blockCountX = GetBlockCount(source.Width);
         var blockCountY = GetBlockCount(source.Height);
         var blockCount = checked(blockCountX * blockCountY);
-        ValidateSupportedBlockCount(blockCount);
 
-        var endpointCount = checked(blockCount * 2);
-        var endpoints = new BasisEtc1sEncodedEndpoint[endpointCount];
-        var selectors = new BasisEtc1sEncodedSelector[endpointCount];
+        var sliceBlockCount = checked(blockCount * 2);
+        var endpoints = new BasisEtc1sEncodedEndpoint[sliceBlockCount];
+        var selectors = new uint[sliceBlockCount];
 
         Span<Rgba8UNorm> texels = stackalloc Rgba8UNorm[TexelsPerBlock];
         for (var blockY = 0; blockY < blockCountY; blockY++)
@@ -119,20 +119,86 @@ public sealed class BasisEtc1sTextureCoder : IBasisEtc1sTextureCoder
             }
         }
 
-        var endpointData = EncodeEndpointCodebook(endpoints);
-        var selectorData = EncodeSelectorCodebook(selectors);
-        var huffmanTables = EncodeSliceHuffmanTables(blockCount, endpointCount);
-        var colorSliceData = EncodeSliceData(blockCountX, blockCountY, endpointStart: 0, selectorStart: 0, endpointCount, selectorCount: endpointCount);
-        var alphaSliceData = EncodeSliceData(blockCountX, blockCountY, endpointStart: blockCount, selectorStart: blockCount, endpointCount, selectorCount: endpointCount);
+        var endpointPalette = BuildCodebook(endpoints, EndpointSortKey, out var endpointIndices);
+        var selectorPalette = BuildCodebook(selectors, SelectorSortKey, out var selectorIndices);
+        var endpointCodes = BasisHuffmanEncodingTable.CreateFixed(endpointPalette.Length - 1);
+        var selectorCodes = BasisHuffmanEncodingTable.CreateFixed(selectorPalette.Length - 1);
+        var predictorCodes = BasisHuffmanEncodingTable.CreateFixed(maxSymbol: 255);
+        var tables = EncodeSliceHuffmanTables(predictorCodes, endpointCodes, selectorCodes);
 
-        return new BasisEtc1sEncodedPayload(
-            endpointCount,
-            endpointData,
-            endpointCount,
-            selectorData,
-            huffmanTables,
-            colorSliceData,
-            alphaSliceData);
+        byte[] EncodeSlice(int start) => EncodeSliceData(blockCountX, blockCountY,
+            endpointIndices.AsSpan(start, blockCount), selectorIndices.AsSpan(start, blockCount),
+            endpointPalette.Length, predictorCodes, endpointCodes, selectorCodes);
+
+        return new BasisEtc1sEncodedPayload(endpointPalette.Length, EncodeEndpointCodebook(endpointPalette),
+            selectorPalette.Length, EncodeSelectorCodebook(selectorPalette), tables, EncodeSlice(0), EncodeSlice(blockCount));
+    }
+
+    private static T[] BuildCodebook<T>(T[] values, Func<T, uint> sortKey, out int[] indices) where T : notnull
+    {
+        var counts = new Dictionary<T, int>();
+        foreach (var value in values)
+        {
+            counts[value] = counts.GetValueOrDefault(value) + 1;
+        }
+
+        var unique = counts.Keys.ToArray();
+        var palette = new T[Math.Min(unique.Length, MaxCodebookEntries)];
+        if (unique.Length > palette.Length)
+        {
+            // Group nearby quantized colours or selector patterns only when exact
+            // deduplication exceeds the stream limit. Keep the most frequent member.
+            Array.Sort(unique.Select(sortKey).ToArray(), unique);
+        }
+
+        for (var i = 0; i < palette.Length; i++)
+        {
+            int start = (int)((long)i * unique.Length / palette.Length);
+            int end = (int)((long)(i + 1) * unique.Length / palette.Length);
+            var representative = unique[start];
+            var bestCount = counts[representative];
+            for (var j = start; j < end; j++)
+            {
+                var value = unique[j];
+                if (counts[value] > bestCount)
+                {
+                    bestCount = counts[value];
+                    representative = value;
+                }
+                counts[value] = i;
+            }
+            palette[i] = representative;
+        }
+
+        indices = new int[values.Length];
+        for (var i = 0; i < values.Length; i++)
+        {
+            indices[i] = counts[values[i]];
+        }
+        return palette;
+    }
+
+    private static uint EndpointSortKey(BasisEtc1sEncodedEndpoint e)
+    {
+        uint key = 0;
+        for (var bit = 4; bit >= 0; bit--)
+        {
+            key = (key << 3) | (uint)((((e.Red5 >> bit) & 1) << 2) |
+                (((e.Green5 >> bit) & 1) << 1) | ((e.Blue5 >> bit) & 1));
+        }
+        return (key << 3) | (uint)e.Intensity;
+    }
+
+    private static uint SelectorSortKey(uint selector)
+    {
+        // Place the high bit of every two-bit selector before the low bits.
+        uint key = 0;
+        for (var i = 0; i < TexelsPerBlock; i++)
+        {
+            var value = selector >> (i * 2);
+            key |= ((value & 1) | (((value >> 1) & 1) << 16)) << i;
+        }
+        return key;
     }
 
     private static byte[] EncodeEndpointCodebook(ReadOnlySpan<BasisEtc1sEncodedEndpoint> endpoints)
@@ -167,7 +233,7 @@ public sealed class BasisEtc1sTextureCoder : IBasisEtc1sTextureCoder
         return writer.ToArray();
     }
 
-    private static byte[] EncodeSelectorCodebook(ReadOnlySpan<BasisEtc1sEncodedSelector> selectors)
+    private static byte[] EncodeSelectorCodebook(ReadOnlySpan<uint> selectors)
     {
         var writer = new BasisBitwiseWriter();
         writer.WriteBits(0, 1);
@@ -177,18 +243,17 @@ public sealed class BasisEtc1sTextureCoder : IBasisEtc1sTextureCoder
         {
             for (var row = 0; row < BlockHeight; row++)
             {
-                writer.WriteBits(selector.Rows[row], 8);
+                writer.WriteBits((int)((selector >> (8 * row)) & 255), 8);
             }
         }
 
         return writer.ToArray();
     }
 
-    private static byte[] EncodeSliceHuffmanTables(int blockCount, int selectorCount)
+    private static byte[] EncodeSliceHuffmanTables(
+        BasisHuffmanEncodingTable endpointPredCodes, BasisHuffmanEncodingTable deltaEndpointCodes,
+        BasisHuffmanEncodingTable selectorCodes)
     {
-        var endpointPredCodes = BasisHuffmanEncodingTable.CreateFixed(maxSymbol: 255);
-        var deltaEndpointCodes = BasisHuffmanEncodingTable.CreateFixed(Math.Max(1, blockCount));
-        var selectorCodes = BasisHuffmanEncodingTable.CreateFixed(selectorCount - 1);
         var selectorHistoryRleCodes = BasisHuffmanEncodingTable.CreateFixed(maxSymbol: 0);
         var writer = new BasisBitwiseWriter();
 
@@ -203,15 +268,13 @@ public sealed class BasisEtc1sTextureCoder : IBasisEtc1sTextureCoder
     private static byte[] EncodeSliceData(
         int blockCountX,
         int blockCountY,
-        int endpointStart,
-        int selectorStart,
+        ReadOnlySpan<int> endpointIndices,
+        ReadOnlySpan<int> selectorIndices,
         int endpointCount,
-        int selectorCount)
+        BasisHuffmanEncodingTable endpointPredCodes,
+        BasisHuffmanEncodingTable deltaEndpointCodes,
+        BasisHuffmanEncodingTable selectorCodes)
     {
-        var endpointPredCodes = BasisHuffmanEncodingTable.CreateFixed(maxSymbol: 255);
-        var blockCount = checked(blockCountX * blockCountY);
-        var deltaEndpointCodes = BasisHuffmanEncodingTable.CreateFixed(Math.Max(1, blockCount));
-        var selectorCodes = BasisHuffmanEncodingTable.CreateFixed(selectorCount - 1);
         var writer = new BasisBitwiseWriter();
         var previousEndpointIndex = 0;
 
@@ -225,7 +288,7 @@ public sealed class BasisEtc1sTextureCoder : IBasisEtc1sTextureCoder
                 }
 
                 var blockIndex = (blockY * blockCountX) + blockX;
-                var endpointIndex = endpointStart + blockIndex;
+                var endpointIndex = endpointIndices[blockIndex];
                 var endpointDelta = endpointIndex - previousEndpointIndex;
                 if (endpointDelta < 0)
                 {
@@ -235,7 +298,7 @@ public sealed class BasisEtc1sTextureCoder : IBasisEtc1sTextureCoder
                 writer.WriteHuffmanSymbol(deltaEndpointCodes, endpointDelta);
                 previousEndpointIndex = endpointIndex;
 
-                writer.WriteHuffmanSymbol(selectorCodes, selectorStart + blockIndex);
+                writer.WriteHuffmanSymbol(selectorCodes, selectorIndices[blockIndex]);
             }
         }
 
@@ -262,7 +325,7 @@ public sealed class BasisEtc1sTextureCoder : IBasisEtc1sTextureCoder
     private static void EncodeColorBlock(
         ReadOnlySpan<Rgba8UNorm> texels,
         out BasisEtc1sEncodedEndpoint endpoint,
-        out BasisEtc1sEncodedSelector selector)
+        out uint selector)
     {
         var red5 = Quantize8To5(Average(texels, static pixel => pixel.Red));
         var green5 = Quantize8To5(Average(texels, static pixel => pixel.Green));
@@ -272,11 +335,11 @@ public sealed class BasisEtc1sTextureCoder : IBasisEtc1sTextureCoder
         var baseBlue = Expand5To8(blue5);
         var bestError = long.MaxValue;
         var bestIntensity = 0;
-        var bestSelector = default(BasisEtc1sEncodedSelector);
+        uint bestSelector = 0;
 
         for (var intensity = 0; intensity < 8; intensity++)
         {
-            var candidate = new BasisEtc1sEncodedSelector();
+            uint candidate = 0;
             var error = 0L;
             for (var y = 0; y < BlockHeight; y++)
             {
@@ -289,7 +352,7 @@ public sealed class BasisEtc1sTextureCoder : IBasisEtc1sTextureCoder
                     error += selectorError;
                 }
 
-                candidate.Rows[y] = checked((byte)row);
+                candidate |= (uint)row << (y * 8);
             }
 
             if (error < bestError)
@@ -307,17 +370,17 @@ public sealed class BasisEtc1sTextureCoder : IBasisEtc1sTextureCoder
     private static void EncodeAlphaBlock(
         ReadOnlySpan<Rgba8UNorm> texels,
         out BasisEtc1sEncodedEndpoint endpoint,
-        out BasisEtc1sEncodedSelector selector)
+        out uint selector)
     {
         var alpha5 = Quantize8To5(Average(texels, static pixel => pixel.Alpha));
         var baseAlpha = Expand5To8(alpha5);
         var bestError = long.MaxValue;
         var bestIntensity = 0;
-        var bestSelector = default(BasisEtc1sEncodedSelector);
+        uint bestSelector = 0;
 
         for (var intensity = 0; intensity < 8; intensity++)
         {
-            var candidate = new BasisEtc1sEncodedSelector();
+            uint candidate = 0;
             var error = 0L;
             for (var y = 0; y < BlockHeight; y++)
             {
@@ -330,7 +393,7 @@ public sealed class BasisEtc1sTextureCoder : IBasisEtc1sTextureCoder
                     error += selectorError;
                 }
 
-                candidate.Rows[y] = checked((byte)row);
+                candidate |= (uint)row << (y * 8);
             }
 
             if (error < bestError)
@@ -438,16 +501,6 @@ public sealed class BasisEtc1sTextureCoder : IBasisEtc1sTextureCoder
         return checked((dimension + 3) / 4);
     }
 
-    private static void ValidateSupportedBlockCount(int blockCount)
-    {
-        var paletteEntries = checked(blockCount * 2);
-        if (paletteEntries > MaxHuffmanSymbols)
-        {
-            throw new NotSupportedException(
-                $"The first managed Basis ETC1S encoder supports up to {MaxHuffmanSymbols / 2} blocks because it emits direct endpoint and selector symbols.");
-        }
-    }
-
     private static int Quantize8To5(int value) => Math.Clamp(((value * 31) + 127) / 255, 0, 31);
 
     private static int Expand5To8(int value) => (value << 3) | (value >> 2);
@@ -455,15 +508,6 @@ public sealed class BasisEtc1sTextureCoder : IBasisEtc1sTextureCoder
     private static byte ClampToByte(int value) => checked((byte)Math.Clamp(value, 0, 255));
 
     private static int Squared(int value) => value * value;
-
-    private struct BasisEtc1sEncodedSelector
-    {
-        public byte[] Rows = new byte[BlockHeight];
-
-        public BasisEtc1sEncodedSelector()
-        {
-        }
-    }
 
     private readonly record struct BasisEtc1sEncodedEndpoint(int Red5, int Green5, int Blue5, int Intensity);
 
@@ -1423,15 +1467,19 @@ public sealed class BasisEtc1sTextureCoder : IBasisEtc1sTextureCoder
         public static BasisHuffmanEncodingTable CreateFixed(int maxSymbol)
         {
             ArgumentOutOfRangeException.ThrowIfNegative(maxSymbol);
-            var symbolCount = NextPowerOfTwo(maxSymbol + 1);
-            if (symbolCount > BasisHuffmanDecodingTable.MaxSymbols)
+            var symbolCount = checked(maxSymbol + 1);
+            if (symbolCount > MaxCodebookEntries)
             {
-                throw new NotSupportedException("Basis Huffman tables support at most 16384 symbols.");
+                throw new ArgumentOutOfRangeException(nameof(maxSymbol));
             }
 
-            var codeSize = symbolCount == 1 ? 1 : Log2(symbolCount);
+            // A complete prefix tree can represent a non-power-of-two alphabet
+            // using two adjacent code lengths, with no padded symbols on the wire.
+            var fullWidth = NextPowerOfTwo(symbolCount);
+            var codeSize = Math.Max(1, Log2(fullWidth));
             var codeSizes = new byte[symbolCount];
-            Array.Fill(codeSizes, checked((byte)codeSize));
+            Array.Fill(codeSizes, (byte)codeSize);
+            codeSizes.AsSpan(0, fullWidth - symbolCount).Fill((byte)(codeSize - 1));
             return Build(codeSizes);
         }
 

@@ -6,6 +6,39 @@ namespace TextureCompressor.Codecs.Tests;
 
 public sealed class BasisEtc1sTextureCoderTests
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void LargeImagesUseBoundedSharedCodebooks(bool noise)
+    {
+        var source = new ArrayBitmap<Rgba8UNorm>(512, 512);
+        if (noise)
+        {
+            new Random(12345).NextBytes(System.Runtime.InteropServices.MemoryMarshal.AsBytes(source.PixelSpan));
+        }
+        else
+        {
+            Array.Fill(source.Pixels, new Rgba8UNorm(120, 64, 220, 180));
+        }
+
+        var encoded = BasisEtc1sTextureCoder.Encode(source.AsView());
+        Assert.InRange(encoded.EndpointCount, 1, noise ? 16383 : 2);
+        Assert.InRange(encoded.SelectorCount, 1, noise ? 16383 : 2);
+        var decoded = new ArrayBitmap<Rgba8UNorm>(512, 512);
+        BasisEtc1sTextureCoder.Decode(encoded.AsRawPayload(), decoded.AsView());
+        if (noise)
+        {
+            Assert.Equal(16383, encoded.SelectorCount);
+            Assert.NotEqual(decoded.Pixels[0], decoded.Pixels[^1]);
+        }
+        else
+        {
+            Assert.InRange(decoded.Pixels[0].Red, 112, 128);
+            Assert.InRange(decoded.Pixels[0].Alpha, 172, 188);
+            Assert.All(decoded.Pixels, pixel => Assert.Equal(decoded.Pixels[0], pixel));
+        }
+    }
+
     [Fact]
     public void FixedLengthTextureCoderMethodsPointToBasisEtc1sInterface()
     {
