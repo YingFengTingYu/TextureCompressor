@@ -25,9 +25,9 @@ public sealed class BasisUastcLdr4x4TextureCoder : IPitchTextureCoder
     private const int AstcEndpointOrderValueCount = 256;
     private const int SolidColorModeEncodedValue = 0x17;
     private const int SolidColorModeEncodedBitCount = 5;
-    private const int InterpolatedRgbaModeEncodedValue = 0x0d;
-    private const int InterpolatedRgbaModeEncodedBitCount = 5;
-    private const int InterpolatedRgbaHintBitCount = 23;
+    private const int RgbMode = 5;
+    private const int RgbaMode = 14;
+    private const int LuminanceAlphaMode = 15;
 
     private static readonly TextureFormat[] SSupportedFormats =
     [
@@ -221,24 +221,68 @@ public sealed class BasisUastcLdr4x4TextureCoder : IPitchTextureCoder
 
     private static void EncodeBlock(ReadOnlySpan<Rgba8UNorm> source, Span<byte> destination)
     {
-        var solidColor = AverageBlockColor(source);
-        var solidError = EvaluateSolidBlock(source, solidColor);
-        var endpoints = FindEndpointBounds(source);
-
-        var interpolatedError = EvaluateInterpolatedRgbaBlock(source, endpoints.Low, endpoints.High);
-        var swappedInterpolatedError = EvaluateInterpolatedRgbaBlock(source, endpoints.High, endpoints.Low);
-        var useSwappedEndpoints = swappedInterpolatedError < interpolatedError;
-        var bestInterpolatedError = useSwappedEndpoints ? swappedInterpolatedError : interpolatedError;
-
-        if (solidError <= bestInterpolatedError)
+        source = source[..TexelsPerBlock];
+        var bounds = FindEndpointBounds(source);
+        if (bounds.Low.Equals(bounds.High))
         {
-            EncodeSolidColorBlock(solidColor, destination);
+            EncodeSolidColorBlock(bounds.Low, destination);
             return;
         }
 
-        var low = useSwappedEndpoints ? endpoints.High : endpoints.Low;
-        var high = useSwappedEndpoints ? endpoints.Low : endpoints.High;
-        EncodeInterpolatedRgbaBlock(source, low, high, destination);
+        var average = AverageBlockColor(source);
+        var bestError = EvaluateSolidBlock(source, average);
+        EncodeSolidColorBlock(average, destination);
+        var opaque = bounds.Low.Alpha == 255;
+        var grayscale = true;
+        foreach (var p in source)
+        {
+            grayscale &= p.Red == p.Green && p.Green == p.Blue;
+        }
+
+        TryEndpointPair(source, bounds, opaque, grayscale, destination, ref bestError);
+        if (bestError == 0)
+        {
+            return;
+        }
+
+        // Component minima can belong to different pixels. A pair of actual texels
+        // also captures blocks in which one channel rises while another falls.
+        var a = FarthestTexel(source, average);
+        var b = FarthestTexel(source, a);
+        if (!(a.Equals(bounds.Low) && b.Equals(bounds.High)) && !(b.Equals(bounds.Low) && a.Equals(bounds.High)))
+        {
+            TryEndpointPair(source, new(a, b), opaque, grayscale, destination, ref bestError);
+        }
+    }
+
+    private static Rgba8UNorm FarthestTexel(ReadOnlySpan<Rgba8UNorm> source, Rgba8UNorm origin)
+    {
+        var farthest = source[0];
+        var maxDistance = -1L;
+        foreach (var texel in source)
+        {
+            var distance = ColorError(texel, origin);
+            if (distance > maxDistance)
+            {
+                maxDistance = distance;
+                farthest = texel;
+            }
+        }
+        return farthest;
+    }
+
+    private static void TryEndpointPair(ReadOnlySpan<Rgba8UNorm> source, UastcRgbaEndpointPair endpoints,
+        bool opaque, bool grayscale, Span<byte> destination, ref long bestError)
+    {
+        TryInterpolatedMode(source, endpoints, RgbaMode, destination, ref bestError);
+        if (opaque && bestError > 0)
+        {
+            TryInterpolatedMode(source, endpoints, RgbMode, destination, ref bestError);
+        }
+        if (grayscale && bestError > 0)
+        {
+            TryInterpolatedMode(source, endpoints, LuminanceAlphaMode, destination, ref bestError);
+        }
     }
 
     private static void LoadBlock<TPixel>(BitmapView<TPixel> source, int blockX, int blockY, Span<Rgba8UNorm> destination)
@@ -271,31 +315,75 @@ public sealed class BasisUastcLdr4x4TextureCoder : IPitchTextureCoder
         WriteBits(destination, ref bitOffset, color.Alpha, 8);
     }
 
-    private static void EncodeInterpolatedRgbaBlock(
-        ReadOnlySpan<Rgba8UNorm> source,
-        Rgba8UNorm low,
-        Rgba8UNorm high,
-        Span<byte> destination)
+    private static void TryInterpolatedMode(ReadOnlySpan<Rgba8UNorm> source, UastcRgbaEndpointPair endpoints,
+        int mode, Span<byte> destination, ref long bestError)
     {
-        destination[..BytesPerBlock].Clear();
+        var weightBits = GetWeightBitCount(mode);
+        var paletteSize = 1 << weightBits;
+        var low = endpoints.Low;
+        var high = endpoints.High;
+        Span<Rgba8UNorm> palette = stackalloc Rgba8UNorm[16];
+        for (var w = 0; w < paletteSize; w++)
+        {
+            palette[w] = Interpolate(low, high, GetWeight(weightBits, w));
+        }
 
-        var bitOffset = 0;
-        WriteBits(destination, ref bitOffset, InterpolatedRgbaModeEncodedValue, InterpolatedRgbaModeEncodedBitCount);
-        WriteBits(destination, ref bitOffset, 0, InterpolatedRgbaHintBitCount);
-        WriteBits(destination, ref bitOffset, low.Red, 8);
-        WriteBits(destination, ref bitOffset, high.Red, 8);
-        WriteBits(destination, ref bitOffset, low.Green, 8);
-        WriteBits(destination, ref bitOffset, high.Green, 8);
-        WriteBits(destination, ref bitOffset, low.Blue, 8);
-        WriteBits(destination, ref bitOffset, high.Blue, 8);
-        WriteBits(destination, ref bitOffset, low.Alpha, 8);
-        WriteBits(destination, ref bitOffset, high.Alpha, 8);
-
+        Span<byte> weights = stackalloc byte[TexelsPerBlock];
+        long error = 0;
         for (var i = 0; i < TexelsPerBlock; i++)
         {
-            var weight = FindBestInterpolatedWeight(source[i], low, high, i == 0 ? 1 : 3, out _);
-            WriteBits(destination, ref bitOffset, weight, i == 0 ? 1 : 2);
+            var bestWeight = 0;
+            var texelError = ColorError(source[i], palette[0]);
+            for (var w = 1; w < paletteSize; w++)
+            {
+                var candidate = ColorError(source[i], palette[w]);
+                if (candidate < texelError)
+                {
+                    texelError = candidate;
+                    bestWeight = w;
+                }
+            }
+            error += texelError;
+            if (error >= bestError)
+            {
+                return;
+            }
+            weights[i] = (byte)bestWeight;
         }
+
+        // The anchor omits its top weight bit. All weights are symmetric, so
+        // reversing the endpoints preserves every colour and makes the anchor fit.
+        var reverse = weights[0] >= paletteSize / 2;
+        if (reverse)
+        {
+            (low, high) = (high, low);
+        }
+        destination[..BytesPerBlock].Clear();
+        var bitOffset = 0;
+        var modeCode = mode switch { RgbMode => 0x0b, LuminanceAlphaMode => 0x05, _ => 0x0d };
+        WriteBits(destination, ref bitOffset, modeCode, mode == LuminanceAlphaMode ? 7 : 5);
+        var hintBits = GetHintBitCountBeforePartitionOrEndpoints(mode);
+        WriteBits(destination, ref bitOffset, HasEtc2Hints(mode) ? 1 << (hintBits - 4) : 0, hintBits);
+        WriteBits(destination, ref bitOffset, low.Red, 8);
+        WriteBits(destination, ref bitOffset, high.Red, 8);
+        if (mode != LuminanceAlphaMode)
+        {
+            WriteBits(destination, ref bitOffset, low.Green, 8);
+            WriteBits(destination, ref bitOffset, high.Green, 8);
+            WriteBits(destination, ref bitOffset, low.Blue, 8);
+            WriteBits(destination, ref bitOffset, high.Blue, 8);
+        }
+        if (mode != RgbMode)
+        {
+            WriteBits(destination, ref bitOffset, low.Alpha, 8);
+            WriteBits(destination, ref bitOffset, high.Alpha, 8);
+        }
+        for (var i = 0; i < TexelsPerBlock; i++)
+        {
+            var weight = reverse ? paletteSize - 1 - weights[i] : weights[i];
+            WriteBits(destination, ref bitOffset, weight, i == 0 ? weightBits - 1 : weightBits);
+        }
+        bestError = error;
     }
 
     private static Rgba8UNorm AverageBlockColor(ReadOnlySpan<Rgba8UNorm> source)
@@ -333,18 +421,6 @@ public sealed class BasisUastcLdr4x4TextureCoder : IPitchTextureCoder
         return error;
     }
 
-    private static long EvaluateInterpolatedRgbaBlock(ReadOnlySpan<Rgba8UNorm> source, Rgba8UNorm low, Rgba8UNorm high)
-    {
-        var error = 0L;
-        for (var i = 0; i < TexelsPerBlock; i++)
-        {
-            _ = FindBestInterpolatedWeight(source[i], low, high, i == 0 ? 1 : 3, out var texelError);
-            error += texelError;
-        }
-
-        return error;
-    }
-
     private static UastcRgbaEndpointPair FindEndpointBounds(ReadOnlySpan<Rgba8UNorm> source)
     {
         var minRed = byte.MaxValue;
@@ -371,29 +447,6 @@ public sealed class BasisUastcLdr4x4TextureCoder : IPitchTextureCoder
         return new(
             new Rgba8UNorm(minRed, minGreen, minBlue, minAlpha),
             new Rgba8UNorm(maxRed, maxGreen, maxBlue, maxAlpha));
-    }
-
-    private static int FindBestInterpolatedWeight(
-        Rgba8UNorm texel,
-        Rgba8UNorm low,
-        Rgba8UNorm high,
-        int maxWeight,
-        out long bestError)
-    {
-        var bestWeight = 0;
-        bestError = long.MaxValue;
-        for (var weight = 0; weight <= maxWeight; weight++)
-        {
-            var color = Interpolate(low, high, InterpolatedWeights[weight]);
-            var error = ColorError(texel, color);
-            if (error < bestError)
-            {
-                bestWeight = weight;
-                bestError = error;
-            }
-        }
-
-        return bestWeight;
     }
 
     private static Rgba8UNorm Interpolate(Rgba8UNorm low, Rgba8UNorm high, uint weight) => new(
@@ -478,8 +531,6 @@ public sealed class BasisUastcLdr4x4TextureCoder : IPitchTextureCoder
 
     private static NotSupportedException CreateUnsupportedFormatException(TextureFormat format) =>
         new($"Basis UASTC LDR 4x4 texture coder does not support texture format '{format.Name}'.");
-
-    private static ReadOnlySpan<uint> InterpolatedWeights => [0, 21, 43, 64];
 
     private readonly record struct UastcRgbaEndpointPair(Rgba8UNorm Low, Rgba8UNorm High);
 

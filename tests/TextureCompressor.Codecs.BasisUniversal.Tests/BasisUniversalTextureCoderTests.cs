@@ -30,6 +30,35 @@ public sealed class BasisUniversalTextureCoderTests
         Assert.True(managed.PixelSpan.SequenceEqual(native.PixelSpan));
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void UastcGradientsUseHigherPrecisionWeightsAndMatchNative(bool luminanceAlpha)
+    {
+        var source = new ArrayBitmap<Rgba8UNorm>(4, 4);
+        for (var i = 0; i < 16; i++)
+        {
+            var v = (byte)(255 - i * 17);
+            source.Pixels[i] = luminanceAlpha ? new(v, v, v, (byte)(255 - v)) : new(v, (byte)(255 - v), 64, 255);
+        }
+        var format = TextureFormats.RgbaBasisUastcLdr4x4UNorm;
+        ITextureCoder managed = new BasisUastcLdr4x4TextureCoder(format);
+        ITextureCoder native = new BasisUniversalTextureCoder(format);
+        var data = new byte[16];
+        managed.Encode(source.AsView(), data);
+        Assert.Equal(luminanceAlpha ? 0x05 : 0x0b, data[0] & (luminanceAlpha ? 0x7f : 0x1f));
+
+        var decoded = new ArrayBitmap<Rgba8UNorm>(4, 4);
+        var reference = new ArrayBitmap<Rgba8UNorm>(4, 4);
+        managed.Decode(data, decoded.AsView());
+        native.Decode(data, reference.AsView());
+        Assert.True(decoded.PixelSpan.SequenceEqual(reference.PixelSpan));
+        for (var i = 0; i < 16; i++)
+        {
+            Assert.InRange(Math.Abs(source.Pixels[i].Red - reference.Pixels[i].Red), 0, luminanceAlpha ? 5 : 20);
+        }
+    }
+
     [Fact]
     public void RegisterBasisUniversalCodersOverridesManagerUntilDisposed()
     {
