@@ -1,4 +1,6 @@
-﻿using System.Runtime.CompilerServices;
+using System.Buffers.Binary;
+using System.Numerics;
+using System.Runtime.CompilerServices;
 using TextureCompressor.Colors;
 using TextureCompressor.Formats;
 using TextureCompressor.Bitmaps;
@@ -11,8 +13,6 @@ public sealed class BptcTextureCoder : IPitchTextureCoder
 {
     private const int BlockSize = 4;
     private const int TexelsPerBlock = BlockSize * BlockSize;
-    private const int Bc6HEncoderMode = 3;
-    private const int Bc7EncoderMode = 6;
     private const int BytesPerBlock = 16;
 
     private static readonly TextureFormat[] SSupportedFormats =
@@ -103,6 +103,9 @@ public sealed class BptcTextureCoder : IPitchTextureCoder
     private void EncodeByTransfer<TPixel>(BitmapView<TPixel> source, Span<byte> destination, int rowPitch)
         where TPixel : unmanaged, IPixel<TPixel>
     {
+        if (_options.CompressionMode is < TextureCompressionLevel.Fast or > TextureCompressionLevel.Exhaustive)
+            throw new ArgumentOutOfRangeException(nameof(_options.CompressionMode), _options.CompressionMode, "Unsupported BPTC compression mode.");
+
         switch (_transfer)
         {
             case BptcTransfer.Bc6HUFloat:
@@ -226,9 +229,9 @@ public sealed class BptcTextureCoder : IPitchTextureCoder
             var blockOffset = rowOffset;
             for (var blockX = 0; blockX < blockCountX; blockX++)
             {
-                TTransfer.DecodeBlock(source.Slice(blockOffset, TTransfer.BytesPerBlock), block);
-                StoreUNormBlock(block, blockX, blockY, destination);
-                blockOffset = checked(blockOffset + TTransfer.BytesPerBlock);
+                DecodeBc7Block(source.Slice(blockOffset, BytesPerBlock), block);
+                StoreUNormBlock<TPixel, TTransfer>(block, blockX, blockY, destination);
+                blockOffset = checked(blockOffset + BytesPerBlock);
             }
 
             rowOffset = checked(rowOffset + rowPitch);
@@ -271,12 +274,12 @@ public sealed class BptcTextureCoder : IPitchTextureCoder
                         var blockOffset = checked(blockY * rowPitch);
                         for (var blockX = 0; blockX < blockCountX; blockX++)
                         {
-                            LoadUNormBlock(localSource, blockX, blockY, block);
-                            TTransfer.EncodeBlock(
+                            LoadUNormBlock<TPixel, TTransfer>(localSource, blockX, blockY, block);
+                            EncodeBc7Block(
                                 block,
-                                localDestination.Slice(blockOffset, TTransfer.BytesPerBlock),
+                                localDestination.Slice(blockOffset, BytesPerBlock),
                                 compressionMode);
-                            blockOffset = checked(blockOffset + TTransfer.BytesPerBlock);
+                            blockOffset = checked(blockOffset + BytesPerBlock);
                         }
                     });
                 }
@@ -293,9 +296,9 @@ public sealed class BptcTextureCoder : IPitchTextureCoder
             var blockOffset = rowOffset;
             for (var blockX = 0; blockX < blockCountX; blockX++)
             {
-                LoadUNormBlock(source, blockX, blockY, block);
-                TTransfer.EncodeBlock(block, destination.Slice(blockOffset, TTransfer.BytesPerBlock), compressionMode);
-                blockOffset = checked(blockOffset + TTransfer.BytesPerBlock);
+                LoadUNormBlock<TPixel, TTransfer>(source, blockX, blockY, block);
+                EncodeBc7Block(block, destination.Slice(blockOffset, BytesPerBlock), compressionMode);
+                blockOffset = checked(blockOffset + BytesPerBlock);
             }
 
             rowOffset = checked(rowOffset + rowPitch);
@@ -316,14 +319,8 @@ public sealed class BptcTextureCoder : IPitchTextureCoder
 
     private interface IBc7Transfer
     {
-        static abstract int BytesPerBlock { get; }
-
-        static abstract void DecodeBlock(ReadOnlySpan<byte> source, Span<Rgba8UNorm> destination);
-
-        static abstract void EncodeBlock(
-            ReadOnlySpan<Rgba8UNorm> source,
-            Span<byte> destination,
-            TextureCompressionLevel compressionMode);
+        static abstract Rgba8UNorm ToStorage<TPixel>(TPixel pixel) where TPixel : unmanaged, IPixel<TPixel>;
+        static abstract TPixel FromStorage<TPixel>(Rgba8UNorm pixel) where TPixel : unmanaged, IPixel<TPixel>;
     }
 
     private readonly struct Bc6HUFloatTransfer : IBc6HTransfer
@@ -356,30 +353,37 @@ public sealed class BptcTextureCoder : IPitchTextureCoder
 
     private readonly struct Bc7UNormTransfer : IBc7Transfer
     {
-        public static int BytesPerBlock => 16;
+        public static Rgba8UNorm ToStorage<TPixel>(TPixel pixel) where TPixel : unmanaged, IPixel<TPixel> =>
+            TPixel.ToRgba8UNorm(pixel);
 
-        public static void DecodeBlock(ReadOnlySpan<byte> source, Span<Rgba8UNorm> destination) =>
-            DecodeBc7Block(source, srgb: false, destination);
-
-        public static void EncodeBlock(
-            ReadOnlySpan<Rgba8UNorm> source,
-            Span<byte> destination,
-            TextureCompressionLevel compressionMode) =>
-            EncodeBc7Block(source, srgb: false, destination, compressionMode);
+        public static TPixel FromStorage<TPixel>(Rgba8UNorm pixel) where TPixel : unmanaged, IPixel<TPixel> =>
+            TPixel.FromRgba8UNorm(pixel);
     }
 
     private readonly struct Bc7SrgbTransfer : IBc7Transfer
     {
-        public static int BytesPerBlock => 16;
+        public static Rgba8UNorm ToStorage<TPixel>(TPixel pixel) where TPixel : unmanaged, IPixel<TPixel>
+        {
+            if (typeof(TPixel) == typeof(Rgba8UNorm))
+            {
+                var c = TPixel.ToRgba8UNorm(pixel);
+                return new(RgbaColorConversions.LinearUNorm8ToSrgb8(c.Red), RgbaColorConversions.LinearUNorm8ToSrgb8(c.Green),
+                    RgbaColorConversions.LinearUNorm8ToSrgb8(c.Blue), c.Alpha);
+            }
+            var linear = TPixel.ToRgba32Float(pixel);
+            return new(RgbaColorConversions.LinearFloatToSrgb8(linear.Red), RgbaColorConversions.LinearFloatToSrgb8(linear.Green),
+                RgbaColorConversions.LinearFloatToSrgb8(linear.Blue), RgbaColorConversions.FloatToUNorm8(linear.Alpha));
+        }
 
-        public static void DecodeBlock(ReadOnlySpan<byte> source, Span<Rgba8UNorm> destination) =>
-            DecodeBc7Block(source, srgb: true, destination);
-
-        public static void EncodeBlock(
-            ReadOnlySpan<Rgba8UNorm> source,
-            Span<byte> destination,
-            TextureCompressionLevel compressionMode) =>
-            EncodeBc7Block(source, srgb: true, destination, compressionMode);
+        public static TPixel FromStorage<TPixel>(Rgba8UNorm pixel) where TPixel : unmanaged, IPixel<TPixel>
+        {
+            if (typeof(TPixel) == typeof(Rgba8UNorm))
+                return TPixel.FromRgba8UNorm(new(RgbaColorConversions.Srgb8ToLinearUNorm8(pixel.Red),
+                    RgbaColorConversions.Srgb8ToLinearUNorm8(pixel.Green), RgbaColorConversions.Srgb8ToLinearUNorm8(pixel.Blue), pixel.Alpha));
+            return TPixel.FromRgba32Float(new(RgbaColorConversions.Srgb8ToLinearFloat(pixel.Red),
+                RgbaColorConversions.Srgb8ToLinearFloat(pixel.Green), RgbaColorConversions.Srgb8ToLinearFloat(pixel.Blue),
+                RgbaColorConversions.UNorm8ToFloat(pixel.Alpha)));
+        }
     }
 
     private static void DecodeBc6HBlock(ReadOnlySpan<byte> source, bool signed, Span<Rgba32Float> destination)
@@ -402,7 +406,7 @@ public sealed class BptcTextureCoder : IPitchTextureCoder
         var epG = new InlineArray4<int>();
         var epB = new InlineArray4<int>();
 
-        ReadBc6HEndpoints(mode, ref bit, epR, epG, epB);
+        TransferBc6HEndpoints(mode, ref bit, epR, epG, epB);
 
         if (signed)
         {
@@ -471,371 +475,247 @@ public sealed class BptcTextureCoder : IPitchTextureCoder
         }
     }
 
-    private static void EncodeBc6HBlock(
-        ReadOnlySpan<Rgba32Float> source,
-        bool signed,
-        Span<byte> destination,
+    private static void EncodeBc6HBlock(ReadOnlySpan<Rgba32Float> source, bool signed, Span<byte> destination,
         TextureCompressionLevel compressionMode)
     {
-        switch (compressionMode)
+        var colors = new InlineArray16<Rgba32Float>();
+        for (int i = 0; i < TexelsPerBlock; i++) colors[i] = ClampBc6HColor(source[i], signed);
+        var seeds = new InlineArray4<Rgba32Float>();
+        FindBc6HSubsetEndpoints(colors, 0xffff, out seeds[0], out seeds[1]);
+        float bestError = float.MaxValue;
+        TryBc6HMode(colors, signed, 3, 0, seeds, destination, ref bestError);
+        if (compressionMode == TextureCompressionLevel.Fast || bestError == 0) return;
+        foreach (int mode in (ReadOnlySpan<int>)[7, 11, 15])
+            TryBc6HBothDirections(colors, signed, mode, seeds, destination, ref bestError);
+        if (bestError == 0) return;
+
+        // Rank the 32 legal partitions by within-subset RGB variance. Only the
+        // highest-ranked partitions need endpoint quantization and a palette search.
+        Span<float> scores = stackalloc float[32];
+        Span<int> partitions = stackalloc int[32];
+        var total = Vector3.Zero;
+        for (int i = 0; i < TexelsPerBlock; i++) total += Bc6HRgb(colors[i]);
+        for (int p = 0; p < 32; p++)
         {
-            case TextureCompressionLevel.Fast:
-                WriteBc6HMode3Block(source, signed, destination);
-                return;
-            case TextureCompressionLevel.Normal:
-            case TextureCompressionLevel.High:
-            case TextureCompressionLevel.Exhaustive:
-                EncodeBc6HBlockWithModeSearch(source, signed, destination, compressionMode);
-                return;
-            default:
-                throw new ArgumentOutOfRangeException(
-                    nameof(compressionMode),
-                    compressionMode,
-                    "Unsupported BPTC compression mode.");
-        }
-    }
-
-    private static void WriteBc6HMode3Block(ReadOnlySpan<Rgba32Float> source, bool signed, Span<byte> destination)
-    {
-        destination.Clear();
-        FindBc6HEndpoints(source, signed, out var endpoint0, out var endpoint1);
-
-        var q0 = new InlineArray3<int>();
-        var q1 = new InlineArray3<int>();
-        q0[0] = QuantizeBc6HEndpoint(endpoint0.Red, signed, 10);
-        q0[1] = QuantizeBc6HEndpoint(endpoint0.Green, signed, 10);
-        q0[2] = QuantizeBc6HEndpoint(endpoint0.Blue, signed, 10);
-        q1[0] = QuantizeBc6HEndpoint(endpoint1.Red, signed, 10);
-        q1[1] = QuantizeBc6HEndpoint(endpoint1.Green, signed, 10);
-        q1[2] = QuantizeBc6HEndpoint(endpoint1.Blue, signed, 10);
-
-        var palette = new InlineArray16<Rgba32Float>();
-        BuildBc6HMode3Palette(q0, q1, signed, palette);
-
-        var indices = new InlineArray16<int>();
-        for (var i = 0; i < TexelsPerBlock; i++)
-        {
-            var maxIndex = i == 0 ? 8 : 16;
-            indices[i] = FindNearestColorIndex(ClampBc6HColor(source[i], signed), palette, maxIndex);
-        }
-
-        var writer = new BptcBitWriter(destination);
-        writer.Write(Bc6HEncoderMode, 2);
-        writer.Write(0, 3);
-        writer.Write(q0[0], 10);
-        writer.Write(q0[1], 10);
-        writer.Write(q0[2], 10);
-        writer.Write(q1[0], 10);
-        writer.Write(q1[1], 10);
-        writer.Write(q1[2], 10);
-        writer.Write(indices[0], 3);
-        for (var i = 1; i < TexelsPerBlock; i++)
-        {
-            writer.Write(indices[i], 4);
-        }
-    }
-
-    private static void EncodeBc6HBlockWithModeSearch(
-        ReadOnlySpan<Rgba32Float> source,
-        bool signed,
-        Span<byte> destination,
-        TextureCompressionLevel compressionMode)
-    {
-        Span<byte> best = stackalloc byte[BytesPerBlock];
-        Span<byte> candidate = stackalloc byte[BytesPerBlock];
-        var bestError = float.MaxValue;
-
-        TryBc6HModeCandidates(source, signed, Bc6HEncoderMode, compressionMode, candidate, best, ref bestError);
-        TryBc6HModeCandidates(source, signed, mode: 7, compressionMode, candidate, best, ref bestError);
-        TryBc6HModeCandidates(source, signed, mode: 11, compressionMode, candidate, best, ref bestError);
-        TryBc6HModeCandidates(source, signed, mode: 15, compressionMode, candidate, best, ref bestError);
-
-        best.CopyTo(destination);
-    }
-
-    private static void TryBc6HModeCandidates(
-        ReadOnlySpan<Rgba32Float> source,
-        bool signed,
-        int mode,
-        TextureCompressionLevel compressionMode,
-        Span<byte> candidate,
-        Span<byte> best,
-        ref float bestError)
-    {
-        FindBc6HEndpoints(source, signed, out var endpoint0, out var endpoint1);
-        TryBc6HModeCandidate(source, signed, mode, endpoint0, endpoint1, candidate, best, ref bestError);
-
-        if (compressionMode is TextureCompressionLevel.High or TextureCompressionLevel.Exhaustive)
-        {
-            FindBc6HComponentBounds(source, signed, out endpoint0, out endpoint1);
-            TryBc6HModeCandidate(source, signed, mode, endpoint0, endpoint1, candidate, best, ref bestError);
-        }
-
-        if (compressionMode != TextureCompressionLevel.Exhaustive)
-        {
-            return;
-        }
-
-        for (var i = 0; i < TexelsPerBlock; i++)
-        {
-            var a = ClampBc6HColor(source[i], signed);
-            for (var j = i + 1; j < TexelsPerBlock; j++)
+            uint mask = SBptcP2[p];
+            int count = BitOperations.PopCount(mask);
+            var sum = Vector3.Zero;
+            while (mask != 0)
             {
-                var b = ClampBc6HColor(source[j], signed);
-                TryBc6HModeCandidate(source, signed, mode, a, b, candidate, best, ref bestError);
+                sum += Bc6HRgb(colors[BitOperations.TrailingZeroCount(mask)]);
+                mask &= mask - 1;
             }
+            // Total sum of squares is constant across partitions.
+            scores[p] = -(sum.LengthSquared() / count + (total - sum).LengthSquared() / (16 - count));
+            partitions[p] = p;
         }
-    }
-
-    private static void TryBc6HModeCandidate(
-        ReadOnlySpan<Rgba32Float> source,
-        bool signed,
-        int mode,
-        Rgba32Float endpoint0,
-        Rgba32Float endpoint1,
-        Span<byte> candidate,
-        Span<byte> best,
-        ref float bestError)
-    {
-        WriteBc6HModeBlock(source, signed, mode, endpoint0, endpoint1, candidate);
-        var error = ScoreBc6HBlock(source, signed, candidate);
-        if (error < bestError)
+        scores.Sort(partitions);
+        const int highPartitionCount = 2;
+        int limit = compressionMode switch
         {
-            bestError = error;
-            candidate.CopyTo(best);
-        }
-
-        WriteBc6HModeBlock(source, signed, mode, endpoint1, endpoint0, candidate);
-        error = ScoreBc6HBlock(source, signed, candidate);
-        if (error < bestError)
+            TextureCompressionLevel.Normal => 1,
+            TextureCompressionLevel.High => highPartitionCount,
+            _ => 32
+        };
+        for (int j = 0; j < limit && bestError > 0; j++)
         {
-            bestError = error;
-            candidate.CopyTo(best);
-        }
-    }
-
-    private static void WriteBc6HModeBlock(
-        ReadOnlySpan<Rgba32Float> source,
-        bool signed,
-        int mode,
-        Rgba32Float endpoint0,
-        Rgba32Float endpoint1,
-        Span<byte> destination)
-    {
-        destination.Clear();
-
-        var modeInfo = SBc6HModes[mode];
-        var q0 = new InlineArray3<int>();
-        var q1 = new InlineArray3<int>();
-        QuantizeBc6HModeEndpointPair(endpoint0, endpoint1, signed, modeInfo, q0, q1);
-
-        var palette = new InlineArray16<Rgba32Float>();
-        BuildBc6HPalette(mode, q0, q1, signed, palette);
-
-        var indices = new InlineArray16<int>();
-        for (var i = 0; i < TexelsPerBlock; i++)
-        {
-            var maxIndex = i == 0 ? 8 : 16;
-            indices[i] = FindNearestColorIndex(ClampBc6HColor(source[i], signed), palette, maxIndex);
-        }
-
-        var writer = new BptcBitWriter(destination);
-        WriteBc6HModeHeader(ref writer, mode);
-        WriteBc6HModeEndpoints(ref writer, mode, q0[0], q0[1], q0[2], q1[0], q1[1], q1[2]);
-        writer.Write(indices[0], 3);
-        for (var i = 1; i < TexelsPerBlock; i++)
-        {
-            writer.Write(indices[i], 4);
-        }
-    }
-
-    private static void QuantizeBc6HModeEndpointPair(
-        Rgba32Float endpoint0,
-        Rgba32Float endpoint1,
-        bool signed,
-        Bc6HModeInfo modeInfo,
-        Span<int> q0,
-        Span<int> q1)
-    {
-        q0[0] = QuantizeBc6HEndpoint(endpoint0.Red, signed, modeInfo.EndpointBits);
-        q0[1] = QuantizeBc6HEndpoint(endpoint0.Green, signed, modeInfo.EndpointBits);
-        q0[2] = QuantizeBc6HEndpoint(endpoint0.Blue, signed, modeInfo.EndpointBits);
-
-        var target1 = new InlineArray3<int>();
-        target1[0] = QuantizeBc6HEndpoint(endpoint1.Red, signed, modeInfo.EndpointBits);
-        target1[1] = QuantizeBc6HEndpoint(endpoint1.Green, signed, modeInfo.EndpointBits);
-        target1[2] = QuantizeBc6HEndpoint(endpoint1.Blue, signed, modeInfo.EndpointBits);
-
-        if (!modeInfo.Transformed)
-        {
-            q1[0] = target1[0];
-            q1[1] = target1[1];
-            q1[2] = target1[2];
-            return;
-        }
-
-        q1[0] = QuantizeBc6HDelta(q0[0], target1[0], modeInfo.EndpointBits, modeInfo.DeltaBitsR);
-        q1[1] = QuantizeBc6HDelta(q0[1], target1[1], modeInfo.EndpointBits, modeInfo.DeltaBitsG);
-        q1[2] = QuantizeBc6HDelta(q0[2], target1[2], modeInfo.EndpointBits, modeInfo.DeltaBitsB);
-    }
-
-    private static int QuantizeBc6HDelta(int anchor, int target, int endpointBits, int deltaBits)
-    {
-        var modulo = 1 << endpointBits;
-        var delta = target - anchor;
-        if (delta > modulo / 2)
-        {
-            delta -= modulo;
-        }
-        else if (delta < -modulo / 2)
-        {
-            delta += modulo;
-        }
-
-        var minimum = -(1 << (deltaBits - 1));
-        var maximum = (1 << (deltaBits - 1)) - 1;
-        delta = Math.Clamp(delta, minimum, maximum);
-        return delta & ((1 << deltaBits) - 1);
-    }
-
-    private static void BuildBc6HPalette(int mode, ReadOnlySpan<int> q0, ReadOnlySpan<int> q1, bool signed, Span<Rgba32Float> palette)
-    {
-        var modeInfo = SBc6HModes[mode];
-        var e0 = new InlineArray3<int>();
-        var e1 = new InlineArray3<int>();
-        var mask = (1 << modeInfo.EndpointBits) - 1;
-
-        for (var i = 0; i < 3; i++)
-        {
-            e0[i] = signed ? SignExtend(q0[i], modeInfo.EndpointBits) : q0[i];
-            if (modeInfo.Transformed)
+            if (j == 1)
             {
-                var deltaBits = i switch
+                FindBc6HComponentBounds(colors, out seeds[0], out seeds[1]);
+                foreach (int mode in (ReadOnlySpan<int>)[3, 7, 11, 15])
+                    TryBc6HBothDirections(colors, signed, mode, seeds, destination, ref bestError);
+            }
+            int p = partitions[j], mask = SBptcP2[p];
+            FindBc6HSubsetEndpoints(colors, 0xffff ^ mask, out seeds[0], out seeds[1]);
+            FindBc6HSubsetEndpoints(colors, mask, out seeds[2], out seeds[3]);
+            for (int s = 0; s < 2; s++)
+            {
+                var anchor = colors[s == 0 ? 0 : SBptcA2[p]];
+                if (ColorDistance(anchor, seeds[2 * s]) > ColorDistance(anchor, seeds[2 * s + 1]))
+                    (seeds[2 * s], seeds[2 * s + 1]) = (seeds[2 * s + 1], seeds[2 * s]);
+            }
+            foreach (int mode in (ReadOnlySpan<int>)[30, 1, 14, 0, 18, 22, 26, 2, 6, 10])
+                TryBc6HMode(colors, signed, mode, p, seeds, destination, ref bestError);
+            if (j == 0 || j == highPartitionCount - 1) RefineBc6HBlock(colors, signed, destination, ref bestError);
+        }
+
+        if (compressionMode != TextureCompressionLevel.Exhaustive || bestError == 0) return;
+        for (int i = 0; i < TexelsPerBlock; i++)
+        for (int j = i + 1; j < TexelsPerBlock; j++)
+        {
+            seeds[0] = colors[i];
+            seeds[1] = colors[j];
+            TryBc6HMode(colors, signed, 3, 0, seeds, destination, ref bestError);
+        }
+        RefineBc6HBlock(colors, signed, destination, ref bestError);
+    }
+
+    private static void RefineBc6HBlock(ReadOnlySpan<Rgba32Float> colors, bool signed, Span<byte> best, ref float bestError)
+    {
+        if (bestError == 0) return;
+        int mode = (best[0] & 2) == 0 ? best[0] & 3 : best[0] & 31;
+        bool partitioned = SBc6HModes[mode].PartitionBits != 0;
+        int subsets = partitioned ? 2 : 1, indexBits = partitioned ? 3 : 4;
+        int offset = 128 - (16 * indexBits - subsets);
+        var bits = new BptcBitReader(best);
+        int partition = partitioned ? bits.Peek(offset - 5, 5) : 0;
+        int mask = partitioned ? SBptcP2[partition] : 0;
+        Span<BptcEndpointFit> fits = stackalloc BptcEndpointFit[2];
+        fits.Clear();
+        for (int i = 0; i < TexelsPerBlock; i++)
+        {
+            int subset = (mask >> i) & 1;
+            int count = indexBits - (i == 0 || (partitioned && i == SBptcA2[partition]) ? 1 : 0);
+            int index = bits.Peek(offset, count);
+            offset += count;
+            // BC6H interpolates signed magnitudes of half bit patterns before conversion to float.
+            var c = colors[i];
+            var codes = new Vector4(HalfCode(c.Red), HalfCode(c.Green), HalfCode(c.Blue), 0);
+            fits[subset].Add(codes, SBptcFactors[indexBits - 2][index]);
+        }
+        var seeds = new InlineArray4<Rgba32Float>();
+        for (int s = 0; s < subsets; s++)
+        {
+            fits[s].Solve(out var a, out var b);
+            seeds[2 * s] = new(FromCode(a.X), FromCode(a.Y), FromCode(a.Z), 1);
+            seeds[2 * s + 1] = new(FromCode(b.X), FromCode(b.Y), FromCode(b.Z), 1);
+        }
+        TryBc6HMode(colors, signed, mode, partition, seeds, best, ref bestError);
+
+        static int HalfCode(float value)
+        {
+            int raw = BitConverter.HalfToUInt16Bits((Half)value);
+            return (raw & 0x8000) == 0 ? raw : -(raw & 0x7fff);
+        }
+
+        float FromCode(float value)
+        {
+            int code = Math.Clamp((int)MathF.Round(value), signed ? -0x7bff : 0, 0x7bff);
+            return HalfBitsToSingle((ushort)(code < 0 ? 0x8000 | -code : code));
+        }
+    }
+
+    private static Vector3 Bc6HRgb(Rgba32Float c) => new(c.Red, c.Green, c.Blue);
+
+    private static void FindBc6HSubsetEndpoints(ReadOnlySpan<Rgba32Float> colors, int mask,
+        out Rgba32Float a, out Rgba32Float b)
+    {
+        a = b = colors[BitOperations.TrailingZeroCount((uint)mask)];
+        float bestDistance = 0;
+        while (mask != 0)
+        {
+            int i = BitOperations.TrailingZeroCount((uint)mask);
+            mask &= mask - 1;
+            int remaining = mask;
+            while (remaining != 0)
+            {
+                int j = BitOperations.TrailingZeroCount((uint)remaining);
+                float distance = ColorDistance(colors[i], colors[j]);
+                if (distance > bestDistance)
                 {
-                    0 => modeInfo.DeltaBitsR,
-                    1 => modeInfo.DeltaBitsG,
-                    _ => modeInfo.DeltaBitsB
-                };
-                e1[i] = (q0[i] + SignExtend(q1[i], deltaBits)) & mask;
-                if (signed)
-                {
-                    e1[i] = SignExtend(e1[i], modeInfo.EndpointBits);
+                    bestDistance = distance;
+                    a = colors[i];
+                    b = colors[j];
                 }
+                remaining &= remaining - 1;
             }
-            else
+        }
+    }
+
+    private static void TryBc6HBothDirections(ReadOnlySpan<Rgba32Float> colors, bool signed, int mode,
+        Span<Rgba32Float> seeds, Span<byte> destination, ref float bestError)
+    {
+        TryBc6HMode(colors, signed, mode, 0, seeds, destination, ref bestError);
+        if (!SBc6HModes[mode].Transformed) return;
+        (seeds[0], seeds[1]) = (seeds[1], seeds[0]);
+        TryBc6HMode(colors, signed, mode, 0, seeds, destination, ref bestError);
+        (seeds[0], seeds[1]) = (seeds[1], seeds[0]);
+    }
+
+    private static void TryBc6HMode(ReadOnlySpan<Rgba32Float> colors, bool signed, int mode, int partition,
+        ReadOnlySpan<Rgba32Float> seeds, Span<byte> destination, ref float bestError)
+    {
+        var info = SBc6HModes[mode];
+        bool partitioned = info.PartitionBits != 0;
+        int subsets = partitioned ? 2 : 1, indexBits = partitioned ? 3 : 4;
+        int paletteSize = 1 << indexBits, mask = (1 << info.EndpointBits) - 1;
+        Span<int> fields = stackalloc int[12];
+        Span<int> unquantized = stackalloc int[12];
+        for (int channel = 0; channel < 3; channel++)
+        {
+            int offset = 4 * channel;
+            int deltaBits = channel switch { 0 => info.DeltaBitsR, 1 => info.DeltaBitsG, _ => info.DeltaBitsB };
+            for (int e = 0; e < subsets * 2; e++)
             {
-                e1[i] = signed ? SignExtend(q1[i], modeInfo.EndpointBits) : q1[i];
+                var color = seeds[e];
+                float value = channel switch { 0 => color.Red, 1 => color.Green, _ => color.Blue };
+                int q = QuantizeBc6HEndpoint(value, signed, info.EndpointBits);
+                if (e > 0 && info.Transformed)
+                {
+                    int delta = SignExtend((q - fields[offset]) & mask, info.EndpointBits);
+                    int bound = 1 << (deltaBits - 1);
+                    if (partitioned && (delta < -bound || delta >= bound)) return;
+                    delta = Math.Clamp(delta, -bound, bound - 1);
+                    fields[offset + e] = delta;
+                    q = (fields[offset] + delta) & mask;
+                }
+                else
+                {
+                    fields[offset + e] = q;
+                }
+                unquantized[offset + e] = UnquantizeBc6HEndpoint(signed ? SignExtend(q, info.EndpointBits) : q,
+                    signed, info.EndpointBits);
             }
-
-            e0[i] = UnquantizeBc6HEndpoint(e0[i], signed, modeInfo.EndpointBits);
-            e1[i] = UnquantizeBc6HEndpoint(e1[i], signed, modeInfo.EndpointBits);
         }
 
-        var weights = SBptcFactors[2];
-        for (var i = 0; i < 16; i++)
+        var indices = new InlineArray16<int>();
+        var palette = new InlineArray16<Rgba32Float>();
+        float error = 0;
+        int subsetMask = partitioned ? SBptcP2[partition] : 0;
+        for (int s = 0; s < subsets; s++)
         {
-            var weight = weights[i];
-            palette[i] = new Rgba32Float(
-                HalfBitsToSingle(InterpolateBc6HHalf(e0[0], e1[0], weight, signed)),
-                HalfBitsToSingle(InterpolateBc6HHalf(e0[1], e1[1], weight, signed)),
-                HalfBitsToSingle(InterpolateBc6HHalf(e0[2], e1[2], weight, signed)),
-                1f);
+            int e = 2 * s;
+            for (int k = 0; k < paletteSize; k++)
+            {
+                int w = SBptcFactors[indexBits - 2][k];
+                palette[k] = new(
+                    HalfBitsToSingle(InterpolateBc6HHalf(unquantized[e], unquantized[e + 1], w, signed)),
+                    HalfBitsToSingle(InterpolateBc6HHalf(unquantized[e + 4], unquantized[e + 5], w, signed)),
+                    HalfBitsToSingle(InterpolateBc6HHalf(unquantized[e + 8], unquantized[e + 9], w, signed)), 1);
+            }
+            int anchor = s == 0 ? 0 : SBptcA2[partition];
+            for (int i = 0; i < TexelsPerBlock; i++)
+            {
+                if (((subsetMask >> i) & 1) != s) continue;
+                int count = info.Transformed && i == anchor ? paletteSize / 2 : paletteSize;
+                int index = FindNearestColorIndex(colors[i], palette, count);
+                indices[i] = index;
+                error += ColorDistance(colors[i], palette[index]);
+            }
+            if (error >= bestError) return;
+            if (indices[anchor] < paletteSize / 2) continue;
+            for (int c = 0; c < 3; c++)
+            {
+                int offset = 4 * c + e;
+                (fields[offset], fields[offset + 1]) = (fields[offset + 1], fields[offset]);
+            }
+            for (int i = 0; i < TexelsPerBlock; i++)
+                if (((subsetMask >> i) & 1) == s) indices[i] = paletteSize - 1 - indices[i];
+        }
+
+        bestError = error;
+        var writer = new BptcBitWriter(destination);
+        writer.Write(mode, (mode & 2) == 0 ? 2 : 5);
+        TransferBc6HEndpoints(mode, ref writer, fields[..4], fields[4..8], fields[8..]);
+        writer.Write(partition, info.PartitionBits);
+        for (int i = 0; i < TexelsPerBlock; i++)
+        {
+            bool anchor = i == 0 || (partitioned && i == SBptcA2[partition]);
+            writer.Write(indices[i], indexBits - (anchor ? 1 : 0));
         }
     }
 
-    private static void WriteBc6HModeHeader(ref BptcBitWriter writer, int mode)
-    {
-        writer.Write(mode & 3, 2);
-        if ((mode & 2) != 0)
-        {
-            writer.Write(mode >> 2, 3);
-        }
-    }
-
-    private static void WriteBc6HModeEndpoints(
-        ref BptcBitWriter writer,
-        int mode,
-        int q0R,
-        int q0G,
-        int q0B,
-        int q1R,
-        int q1G,
-        int q1B)
-    {
-        switch (mode)
-        {
-            case 3:
-                writer.Write(q0R, 10);
-                writer.Write(q0G, 10);
-                writer.Write(q0B, 10);
-                writer.Write(q1R, 10);
-                writer.Write(q1G, 10);
-                writer.Write(q1B, 10);
-                break;
-            case 7:
-                writer.Write(q0R, 10);
-                writer.Write(q0G, 10);
-                writer.Write(q0B, 10);
-                writer.Write(q1R, 9);
-                writer.Write(q0R >> 10, 1);
-                writer.Write(q1G, 9);
-                writer.Write(q0G >> 10, 1);
-                writer.Write(q1B, 9);
-                writer.Write(q0B >> 10, 1);
-                break;
-            case 11:
-                writer.Write(q0R, 10);
-                writer.Write(q0G, 10);
-                writer.Write(q0B, 10);
-                writer.Write(q1R, 8);
-                writer.Write(q0R >> 11, 1);
-                writer.Write(q0R >> 10, 1);
-                writer.Write(q1G, 8);
-                writer.Write(q0G >> 11, 1);
-                writer.Write(q0G >> 10, 1);
-                writer.Write(q1B, 8);
-                writer.Write(q0B >> 11, 1);
-                writer.Write(q0B >> 10, 1);
-                break;
-            case 15:
-                writer.Write(q0R, 10);
-                writer.Write(q0G, 10);
-                writer.Write(q0B, 10);
-                writer.Write(q1R, 4);
-                WriteBitsDescending(ref writer, q0R, 15, 10);
-                writer.Write(q1G, 4);
-                WriteBitsDescending(ref writer, q0G, 15, 10);
-                writer.Write(q1B, 4);
-                WriteBitsDescending(ref writer, q0B, 15, 10);
-                break;
-            default:
-                throw new ArgumentOutOfRangeException(nameof(mode), mode, "Unsupported BC6H encoder mode.");
-        }
-    }
-
-    private static void WriteBitsDescending(ref BptcBitWriter writer, int value, int firstBit, int lastBit)
-    {
-        for (var bit = firstBit; bit >= lastBit; bit--)
-        {
-            writer.Write(value >> bit, 1);
-        }
-    }
-
-    private static float ScoreBc6HBlock(ReadOnlySpan<Rgba32Float> source, bool signed, ReadOnlySpan<byte> candidate)
-    {
-        var decoded = new InlineArray16<Rgba32Float>();
-        DecodeBc6HBlock(candidate, signed, decoded);
-
-        var error = 0f;
-        for (var i = 0; i < TexelsPerBlock; i++)
-        {
-            error += ColorDistance(ClampBc6HColor(source[i], signed), decoded[i]);
-        }
-
-        return error;
-    }
-
-    private static void DecodeBc7Block(ReadOnlySpan<byte> source, bool srgb, Span<Rgba8UNorm> destination)
+    private static void DecodeBc7Block(ReadOnlySpan<byte> source, Span<Rgba8UNorm> destination)
     {
         var bit = new BptcBitReader(source);
         var mode = 0;
@@ -976,212 +856,280 @@ public sealed class BptcTextureCoder : IPitchTextureCoder
             }
 
             destination[texel] = new Rgba8UNorm(
-                DecodeStorageByte((byte)red, srgb),
-                DecodeStorageByte((byte)green, srgb),
-                DecodeStorageByte((byte)blue, srgb),
+                (byte)red,
+                (byte)green,
+                (byte)blue,
                 (byte)alpha);
         }
     }
 
     private static void EncodeBc7Block(
-        ReadOnlySpan<Rgba8UNorm> source,
-        bool srgb,
-        Span<byte> destination,
-        TextureCompressionLevel compressionMode)
-    {
-        switch (compressionMode)
-        {
-            case TextureCompressionLevel.Fast:
-                WriteBc7Mode6FastBlock(source, srgb, destination);
-                return;
-            case TextureCompressionLevel.Normal:
-            case TextureCompressionLevel.High:
-            case TextureCompressionLevel.Exhaustive:
-                EncodeBc7BlockWithModeSearch(source, srgb, destination, compressionMode);
-                return;
-            default:
-                throw new ArgumentOutOfRangeException(
-                    nameof(compressionMode),
-                    compressionMode,
-                    "Unsupported BPTC compression mode.");
-        }
-    }
-
-    private static void WriteBc7Mode6FastBlock(ReadOnlySpan<Rgba8UNorm> source, bool srgb, Span<byte> destination)
+        ReadOnlySpan<Rgba8UNorm> source, Span<byte> destination, TextureCompressionLevel compressionMode)
     {
         var storage = new InlineArray16<Bc7Color32>();
-        for (var i = 0; i < TexelsPerBlock; i++)
+        int opaqueError = 0;
+        for (int i = 0; i < TexelsPerBlock; i++)
         {
-            storage[i] = ToBc7StorageColor(source[i], srgb);
+            var c = source[i];
+            storage[i] = new(c.Red, c.Green, c.Blue, c.Alpha);
+            opaqueError += Squared(255 - storage[i].Alpha);
         }
 
-        FindBc7Endpoints(storage, includeAlpha: true, out var a, out var b);
-        var bestA = a;
-        var bestB = b;
-        var bestError = double.MaxValue;
-        TryBc7Candidate(storage, a, b, ref bestA, ref bestB, ref bestError);
-
-        FindBc7Endpoints(storage, includeAlpha: false, out a, out b);
-        TryBc7Candidate(storage, a, b, ref bestA, ref bestB, ref bestError);
-
-        FindBc7ComponentBounds(storage, out a, out b);
-        TryBc7Candidate(storage, a, b, ref bestA, ref bestB, ref bestError);
-
-        FindBc7AlphaBounds(storage, out a, out b);
-        TryBc7Candidate(storage, a, b, ref bestA, ref bestB, ref bestError);
-
-        WriteBc7Mode6Block(storage, bestA, bestB, destination);
-    }
-
-    private static void EncodeBc7BlockWithModeSearch(
-        ReadOnlySpan<Rgba8UNorm> source,
-        bool srgb,
-        Span<byte> destination,
-        TextureCompressionLevel compressionMode)
-    {
-        var storage = new InlineArray16<Bc7Color32>();
-        for (var i = 0; i < TexelsPerBlock; i++)
-        {
-            storage[i] = ToBc7StorageColor(source[i], srgb);
-        }
-
-        Span<byte> best = stackalloc byte[BytesPerBlock];
-        Span<byte> candidate = stackalloc byte[BytesPerBlock];
-        WriteBc7Mode6FastBlock(source, srgb, best);
-        var bestError = ScoreBc7Block(storage, best);
-
-        TryBc7ModeCandidates(storage, mode: 6, partitionLimit: 1, candidate, best, ref bestError);
-        TryBc7ModeCandidates(storage, mode: 5, partitionLimit: 1, candidate, best, ref bestError);
-
-        if (compressionMode is TextureCompressionLevel.High or TextureCompressionLevel.Exhaustive)
-        {
-            var partitionLimit = compressionMode == TextureCompressionLevel.High ? 16 : 64;
-            TryBc7ModeCandidates(storage, mode: 1, partitionLimit, candidate, best, ref bestError);
-            TryBc7ModeCandidates(storage, mode: 3, partitionLimit, candidate, best, ref bestError);
-            TryBc7ModeCandidates(storage, mode: 7, partitionLimit, candidate, best, ref bestError);
-        }
-
-        if (compressionMode == TextureCompressionLevel.Exhaustive)
-        {
-            TryBc7ModeCandidates(storage, mode: 0, partitionLimit: 64, candidate, best, ref bestError);
-            TryBc7ModeCandidates(storage, mode: 2, partitionLimit: 64, candidate, best, ref bestError);
-        }
-
-        best.CopyTo(destination);
-    }
-
-    private static void TryBc7ModeCandidates(
-        ReadOnlySpan<Bc7Color32> source,
-        int mode,
-        int partitionLimit,
-        Span<byte> candidate,
-        Span<byte> best,
-        ref int bestError)
-    {
-        var modeInfo = SBc7Modes[mode];
-        var partitionCount = modeInfo.PartitionBits == 0 ? 1 : Math.Min(partitionLimit, 1 << modeInfo.PartitionBits);
-        for (var partitionSet = 0; partitionSet < partitionCount; partitionSet++)
-        {
-            TryBc7ModePartitionCandidate(source, mode, partitionSet, candidate, best, ref bestError);
-        }
-    }
-
-    private static void TryBc7ModePartitionCandidate(
-        ReadOnlySpan<Bc7Color32> source,
-        int mode,
-        int partitionSet,
-        Span<byte> candidate,
-        Span<byte> best,
-        ref int bestError)
-    {
-        var modeInfo = SBc7Modes[mode];
+        var bestError = int.MaxValue;
         var endpoints = new InlineArray6<Bc7Color32>();
-        for (var subset = 0; subset < modeInfo.SubsetCount; subset++)
+        FindBc7Endpoints(storage, true, out endpoints[0], out endpoints[1]);
+        TryBc7Endpoints(storage, 6, 0, 0, 0, endpoints, destination, ref bestError);
+        if (bestError == 0) return;
+        FindBc7ComponentBounds(storage, out endpoints[0], out endpoints[1]);
+        TryBc7Endpoints(storage, 6, 0, 0, 0, endpoints, destination, ref bestError);
+        if (opaqueError != 0)
         {
-            FindBc7SubsetEndpoints(source, modeInfo, partitionSet, subset, out endpoints[subset * 2], out endpoints[(subset * 2) + 1]);
+            FindBc7Endpoints(storage, false, out endpoints[0], out endpoints[1]);
+            TryBc7Endpoints(storage, 6, 0, 0, 0, endpoints, destination, ref bestError);
+            FindBc7AlphaBounds(storage, out endpoints[0], out endpoints[1]);
+            TryBc7Endpoints(storage, 6, 0, 0, 0, endpoints, destination, ref bestError);
+        }
+        if (compressionMode == TextureCompressionLevel.Fast || bestError == 0) return;
+
+        var rotated = new InlineArray16<Bc7Color32>();
+        for (int rotation = 0; rotation < 4 && bestError > 0; rotation++)
+        {
+            for (int i = 0; i < TexelsPerBlock; i++)
+            {
+                rotated[i] = RotateBc7Color(storage[i], rotation);
+            }
+            FindBc7Endpoints(rotated, false, out var rgb0, out var rgb1);
+            FindBc7AlphaBounds(rotated, out var alpha0, out var alpha1);
+            endpoints[0] = rgb0 with { Alpha = alpha0.Alpha };
+            endpoints[1] = rgb1 with { Alpha = alpha1.Alpha };
+            TryBc7Endpoints(rotated, 4, 0, rotation, 0, endpoints, destination, ref bestError);
+            TryBc7Endpoints(rotated, 4, 0, rotation, 1, endpoints, destination, ref bestError);
+            TryBc7Endpoints(rotated, 5, 0, rotation, 0, endpoints, destination, ref bestError);
         }
 
-        var orientationCount = 1 << modeInfo.SubsetCount;
-        var quantized = new InlineArray6<Bc7Endpoint>();
-        for (var orientation = 0; orientation < orientationCount; orientation++)
+        RefineBc7Block(storage, destination, ref bestError);
+        if (compressionMode == TextureCompressionLevel.Normal || bestError == 0) return;
+
+        int passes = compressionMode == TextureCompressionLevel.Exhaustive ? 2 : 1;
+        for (int pass = 0; pass < passes; pass++)
         {
-            for (var subset = 0; subset < modeInfo.SubsetCount; subset++)
+            int previous = bestError;
+            foreach (int mode in (ReadOnlySpan<int>)[1, 3, 7, 0, 2])
             {
-                var endpoint0 = endpoints[subset * 2];
-                var endpoint1 = endpoints[(subset * 2) + 1];
-                if (((orientation >> subset) & 1) != 0)
+                var info = SBc7Modes[mode];
+                if (info.AlphaBits == 0 && opaqueError >= bestError) continue;
+                if (pass == 0 && info.SubsetCount == 3) continue;
+                int start = pass == 0 || info.SubsetCount == 3 ? 0 : 16;
+                int end = pass == 0 ? 16 : 1 << info.PartitionBits;
+                for (int partition = start; partition < end && bestError > 0; partition++)
                 {
-                    (endpoint0, endpoint1) = (endpoint1, endpoint0);
+                    for (int subset = 0; subset < info.SubsetCount; subset++)
+                    {
+                        FindBc7SubsetEndpoints(storage, info, partition, subset,
+                            out endpoints[2 * subset], out endpoints[2 * subset + 1]);
+                    }
+                    TryBc7Endpoints(storage, mode, partition, 0, 0, endpoints, destination, ref bestError);
                 }
-
-                QuantizeBc7EndpointPair(endpoint0, endpoint1, modeInfo, out quantized[subset * 2], out quantized[(subset * 2) + 1]);
             }
-
-            WriteBc7ModeBlock(source, mode, partitionSet, quantized, candidate);
-            var error = ScoreBc7Block(source, candidate);
-            if (error < bestError)
-            {
-                bestError = error;
-                candidate.CopyTo(best);
-            }
+            if (bestError < previous) RefineBc7Block(storage, destination, ref bestError);
         }
     }
 
-    private static void WriteBc7ModeBlock(
-        ReadOnlySpan<Bc7Color32> source,
-        int mode,
-        int partitionSet,
-        ReadOnlySpan<Bc7Endpoint> endpoints,
+    private static Bc7Color32 RotateBc7Color(Bc7Color32 c, int rotation) => rotation switch
+    {
+        1 => new(c.Alpha, c.Green, c.Blue, c.Red),
+        2 => new(c.Red, c.Alpha, c.Blue, c.Green),
+        3 => new(c.Red, c.Green, c.Alpha, c.Blue),
+        _ => c
+    };
+
+    private static void RefineBc7Block(ReadOnlySpan<Bc7Color32> source, Span<byte> best, ref int bestError)
+    {
+        int mode = BitOperations.TrailingZeroCount((uint)best[0]);
+        var info = SBc7Modes[mode];
+        var block = new InlineArray16<Bc7Color32>();
+        var seeds = new InlineArray6<Bc7Color32>();
+        Span<BptcEndpointFit> fits = stackalloc BptcEndpointFit[3];
+        for (int pass = 0; pass < 2 && bestError > 0; pass++)
+        {
+            var bits = new BptcBitReader(best);
+            bits.Read(mode + 1);
+            int partition = bits.Read(info.PartitionBits);
+            int rotation = bits.Read(info.RotationBits);
+            int selection = bits.Read(info.IndexSelectionBits);
+            bool dual = info.IndexBits1 != 0;
+            int secondaryLength = dual ? 16 * info.IndexBits1 - 1 : 0;
+            int primaryOffset = 128 - secondaryLength - (16 * info.IndexBits0 - info.SubsetCount);
+            int secondaryOffset = 128 - secondaryLength;
+            var selectors = new BptcBitReader(best);
+            fits.Clear();
+            var scalarFit = new BptcEndpointFit();
+            for (int i = 0; i < TexelsPerBlock; i++)
+            {
+                int subset = GetBc7Subset(info, partition, i);
+                int fixup = i == GetBc7Anchor(info, partition, subset) ? 1 : 0;
+                int primary = selectors.Peek(primaryOffset, info.IndexBits0 - fixup);
+                primaryOffset += info.IndexBits0 - fixup;
+                int w = SBptcFactors[info.IndexBits0 - 2][primary];
+                var c = block[i] = RotateBc7Color(source[i], rotation);
+                var v = new Vector4(c.Red, c.Green, c.Blue, c.Alpha);
+                if (dual)
+                {
+                    int secondary = selectors.Peek(secondaryOffset, info.IndexBits1 - fixup);
+                    secondaryOffset += info.IndexBits1 - fixup;
+                    int w2 = SBptcFactors[info.IndexBits1 - 2][secondary];
+                    if (selection == 1) (w, w2) = (w2, w);
+                    scalarFit.Add(v, w2);
+                }
+                fits[subset].Add(v, w);
+            }
+            for (int subset = 0; subset < info.SubsetCount; subset++)
+            {
+                fits[subset].Solve(out var a, out var b);
+                if (dual)
+                {
+                    scalarFit.Solve(out var scalar0, out var scalar1);
+                    a.W = scalar0.W;
+                    b.W = scalar1.W;
+                }
+                seeds[2 * subset] = ToBc7Color(a);
+                seeds[2 * subset + 1] = ToBc7Color(b);
+            }
+            int previous = bestError;
+            TryBc7Endpoints(block, mode, partition, rotation, selection, seeds, best, ref bestError);
+            if (previous == bestError) break;
+        }
+    }
+
+    private static Bc7Color32 ToBc7Color(Vector4 v)
+    {
+        v = Vector4.Clamp(Vector4.Round(v), Vector4.Zero, new Vector4(255));
+        return new((byte)v.X, (byte)v.Y, (byte)v.Z, (byte)v.W);
+    }
+
+    // Solve the two-endpoint least-squares fit for a fixed set of interpolation weights.
+    private struct BptcEndpointFit
+    {
+        private float _aa, _ab, _bb;
+        private Vector4 _av, _bv;
+
+        public void Add(Vector4 color, int weight)
+        {
+            float b = weight / 64f, a = 1 - b;
+            _aa += a * a;
+            _ab += a * b;
+            _bb += b * b;
+            _av += a * color;
+            _bv += b * color;
+        }
+
+        public readonly void Solve(out Vector4 a, out Vector4 b)
+        {
+            float determinant = _aa * _bb - _ab * _ab;
+            if (determinant <= 0)
+            {
+                a = b = (_av + _bv) / (_aa + 2 * _ab + _bb);
+                return;
+            }
+            a = (_bb * _av - _ab * _bv) / determinant;
+            b = (_aa * _bv - _ab * _av) / determinant;
+        }
+    }
+
+    private static void TryBc7Endpoints(ReadOnlySpan<Bc7Color32> source, int mode, int partition, int rotation,
+        int selection, ReadOnlySpan<Bc7Color32> seeds, Span<byte> destination, ref int bestError)
+    {
+        var info = SBc7Modes[mode];
+        bool dual = info.IndexBits1 != 0;
+        int rgbBits = selection == 0 ? info.IndexBits0 : info.IndexBits1;
+        int alphaBits = selection == 0 ? info.IndexBits1 : info.IndexBits0;
+        int rgbCount = 1 << rgbBits, alphaCount = 1 << alphaBits;
+        var endpoints = new InlineArray6<Bc7Endpoint>();
+        var rgbIndices = new InlineArray16<int>();
+        var alphaIndices = new InlineArray16<int>();
+        var rgbPalette = new InlineArray16<Bc7Color32>();
+        var alphaPalette = new InlineArray16<Bc7Color32>();
+        int error = 0;
+
+        for (int subset = 0; subset < info.SubsetCount; subset++)
+        {
+            int offset = 2 * subset;
+            QuantizeBc7EndpointPair(seeds[offset], seeds[offset + 1], info, out var a, out var b);
+            BuildBc7Palette(a.Color, b.Color, rgbBits, rgbPalette);
+            if (dual) BuildBc7Palette(a.Color, b.Color, alphaBits, alphaPalette);
+            for (int i = 0; i < TexelsPerBlock; i++)
+            {
+                if (GetBc7Subset(info, partition, i) != subset) continue;
+                var c = source[i];
+                int nearest = 0, distance = int.MaxValue;
+                for (int k = 0; k < rgbCount; k++)
+                {
+                    int d = dual ? ColorDistanceRgb(c, rgbPalette[k]) : ColorDistance(c, rgbPalette[k]);
+                    if (d < distance)
+                    {
+                        nearest = k;
+                        distance = d;
+                    }
+                }
+                rgbIndices[i] = nearest;
+                error += distance;
+                if (dual)
+                {
+                    distance = int.MaxValue;
+                    for (int k = 0; k < alphaCount; k++)
+                    {
+                        int d = Squared(c.Alpha - alphaPalette[k].Alpha);
+                        if (d < distance)
+                        {
+                            nearest = k;
+                            distance = d;
+                        }
+                    }
+                    alphaIndices[i] = nearest;
+                    error += distance;
+                }
+            }
+            if (error >= bestError) return;
+
+            // Each anchor omits the top selector bit. Reverse only the endpoint pair
+            // of the affected plane and complement its selectors to preserve all texels.
+            int anchor = GetBc7Anchor(info, partition, subset);
+            bool flipRgb = rgbIndices[anchor] >= rgbCount / 2;
+            bool flipAlpha = dual && alphaIndices[anchor] >= alphaCount / 2;
+            endpoints[offset] = flipRgb ? b : a;
+            endpoints[offset + 1] = flipRgb ? a : b;
+            if (dual)
+            {
+                endpoints[offset] = endpoints[offset] with { Alpha = flipAlpha ? b.Alpha : a.Alpha };
+                endpoints[offset + 1] = endpoints[offset + 1] with { Alpha = flipAlpha ? a.Alpha : b.Alpha };
+            }
+            if (!flipRgb && !flipAlpha) continue;
+            for (int i = 0; i < TexelsPerBlock; i++)
+            {
+                if (GetBc7Subset(info, partition, i) != subset) continue;
+                if (flipRgb) rgbIndices[i] = rgbCount - 1 - rgbIndices[i];
+                if (flipAlpha) alphaIndices[i] = alphaCount - 1 - alphaIndices[i];
+            }
+        }
+        bestError = error;
+        if (selection == 0)
+            WriteBc7ModeBlock(mode, partition, rotation, selection, endpoints, rgbIndices, alphaIndices, destination);
+        else
+            WriteBc7ModeBlock(mode, partition, rotation, selection, endpoints, alphaIndices, rgbIndices, destination);
+    }
+
+    private static void WriteBc7ModeBlock(int mode, int partitionSet, int rotation, int selection,
+        ReadOnlySpan<Bc7Endpoint> endpoints, ReadOnlySpan<int> primaryIndices, ReadOnlySpan<int> secondaryIndices,
         Span<byte> destination)
     {
-        destination.Clear();
-
         var modeInfo = SBc7Modes[mode];
         var hasSecondaryIndices = modeInfo.IndexBits1 != 0;
-        var primaryIndices = new InlineArray16<int>();
-        var secondaryIndices = new InlineArray16<int>();
-
-        for (var texel = 0; texel < TexelsPerBlock; texel++)
-        {
-            var subset = GetBc7Subset(modeInfo, partitionSet, texel);
-            var anchor = GetBc7Anchor(modeInfo, partitionSet, subset);
-            var primaryPaletteCount = 1 << (modeInfo.IndexBits0 - (texel == anchor ? 1 : 0));
-            var endpoint = subset * 2;
-
-            if (hasSecondaryIndices)
-            {
-                primaryIndices[texel] = FindNearestBc7RgbIndex(
-                    source[texel],
-                    endpoints[endpoint].Color,
-                    endpoints[endpoint + 1].Color,
-                    modeInfo.IndexBits0,
-                    primaryPaletteCount);
-
-                var secondaryPaletteCount = 1 << (modeInfo.IndexBits1 - (texel == anchor ? 1 : 0));
-                secondaryIndices[texel] = FindNearestBc7AlphaIndex(
-                    source[texel].Alpha,
-                    endpoints[endpoint].Color.Alpha,
-                    endpoints[endpoint + 1].Color.Alpha,
-                    modeInfo.IndexBits1,
-                    secondaryPaletteCount);
-            }
-            else
-            {
-                primaryIndices[texel] = FindNearestBc7Index(
-                    source[texel],
-                    endpoints[endpoint].Color,
-                    endpoints[endpoint + 1].Color,
-                    modeInfo.IndexBits0,
-                    primaryPaletteCount);
-            }
-        }
-
         var writer = new BptcBitWriter(destination);
         writer.Write(0, mode);
         writer.Write(1, 1);
         writer.Write(partitionSet, modeInfo.PartitionBits);
-        writer.Write(0, modeInfo.RotationBits);
-        writer.Write(0, modeInfo.IndexSelectionBits);
+        writer.Write(rotation, modeInfo.RotationBits);
+        writer.Write(selection, modeInfo.IndexSelectionBits);
 
         for (var subset = 0; subset < modeInfo.SubsetCount; subset++)
         {
@@ -1246,296 +1194,297 @@ public sealed class BptcTextureCoder : IPitchTextureCoder
         }
     }
 
-    private static void ReadBc6HEndpoints(
+    // The same bit-field layout packs and unpacks the scattered endpoint bits in each wire mode.
+    private static void TransferBc6HEndpoints<TBits>(
         int mode,
-        scoped ref BptcBitReader bit,
+        scoped ref TBits bit,
         scoped Span<int> epR,
         scoped Span<int> epG,
-        scoped Span<int> epB)
+        scoped Span<int> epB) where TBits : IEndpointFields, allows ref struct
     {
         switch (mode)
         {
             case 0:
-                epG[2] |= bit.Read(1) << 4;
-                epB[2] |= bit.Read(1) << 4;
-                epB[3] |= bit.Read(1) << 4;
-                epR[0] |= bit.Read(10);
-                epG[0] |= bit.Read(10);
-                epB[0] |= bit.Read(10);
-                epR[1] |= bit.Read(5);
-                epG[3] |= bit.Read(1) << 4;
-                epG[2] |= bit.Read(4);
-                epG[1] |= bit.Read(5);
-                epB[3] |= bit.Read(1);
-                epG[3] |= bit.Read(4);
-                epB[1] |= bit.Read(5);
-                epB[3] |= bit.Read(1) << 1;
-                epB[2] |= bit.Read(4);
-                epR[2] |= bit.Read(5);
-                epB[3] |= bit.Read(1) << 2;
-                epR[3] |= bit.Read(5);
-                epB[3] |= bit.Read(1) << 3;
+                bit.Field(ref epG[2], 1, 4);
+                bit.Field(ref epB[2], 1, 4);
+                bit.Field(ref epB[3], 1, 4);
+                bit.Field(ref epR[0], 10);
+                bit.Field(ref epG[0], 10);
+                bit.Field(ref epB[0], 10);
+                bit.Field(ref epR[1], 5);
+                bit.Field(ref epG[3], 1, 4);
+                bit.Field(ref epG[2], 4);
+                bit.Field(ref epG[1], 5);
+                bit.Field(ref epB[3], 1);
+                bit.Field(ref epG[3], 4);
+                bit.Field(ref epB[1], 5);
+                bit.Field(ref epB[3], 1, 1);
+                bit.Field(ref epB[2], 4);
+                bit.Field(ref epR[2], 5);
+                bit.Field(ref epB[3], 1, 2);
+                bit.Field(ref epR[3], 5);
+                bit.Field(ref epB[3], 1, 3);
                 break;
             case 1:
-                epG[2] |= bit.Read(1) << 5;
-                epG[3] |= bit.Read(1) << 4;
-                epG[3] |= bit.Read(1) << 5;
-                epR[0] |= bit.Read(7);
-                epB[3] |= bit.Read(1);
-                epB[3] |= bit.Read(1) << 1;
-                epB[2] |= bit.Read(1) << 4;
-                epG[0] |= bit.Read(7);
-                epB[2] |= bit.Read(1) << 5;
-                epB[3] |= bit.Read(1) << 2;
-                epG[2] |= bit.Read(1) << 4;
-                epB[0] |= bit.Read(7);
-                epB[3] |= bit.Read(1) << 3;
-                epB[3] |= bit.Read(1) << 5;
-                epB[3] |= bit.Read(1) << 4;
-                epR[1] |= bit.Read(6);
-                epG[2] |= bit.Read(4);
-                epG[1] |= bit.Read(6);
-                epG[3] |= bit.Read(4);
-                epB[1] |= bit.Read(6);
-                epB[2] |= bit.Read(4);
-                epR[2] |= bit.Read(6);
-                epR[3] |= bit.Read(6);
+                bit.Field(ref epG[2], 1, 5);
+                bit.Field(ref epG[3], 1, 4);
+                bit.Field(ref epG[3], 1, 5);
+                bit.Field(ref epR[0], 7);
+                bit.Field(ref epB[3], 1);
+                bit.Field(ref epB[3], 1, 1);
+                bit.Field(ref epB[2], 1, 4);
+                bit.Field(ref epG[0], 7);
+                bit.Field(ref epB[2], 1, 5);
+                bit.Field(ref epB[3], 1, 2);
+                bit.Field(ref epG[2], 1, 4);
+                bit.Field(ref epB[0], 7);
+                bit.Field(ref epB[3], 1, 3);
+                bit.Field(ref epB[3], 1, 5);
+                bit.Field(ref epB[3], 1, 4);
+                bit.Field(ref epR[1], 6);
+                bit.Field(ref epG[2], 4);
+                bit.Field(ref epG[1], 6);
+                bit.Field(ref epG[3], 4);
+                bit.Field(ref epB[1], 6);
+                bit.Field(ref epB[2], 4);
+                bit.Field(ref epR[2], 6);
+                bit.Field(ref epR[3], 6);
                 break;
             case 2:
-                epR[0] |= bit.Read(10);
-                epG[0] |= bit.Read(10);
-                epB[0] |= bit.Read(10);
-                epR[1] |= bit.Read(5);
-                epR[0] |= bit.Read(1) << 10;
-                epG[2] |= bit.Read(4);
-                epG[1] |= bit.Read(4);
-                epG[0] |= bit.Read(1) << 10;
-                epB[3] |= bit.Read(1);
-                epG[3] |= bit.Read(4);
-                epB[1] |= bit.Read(4);
-                epB[0] |= bit.Read(1) << 10;
-                epB[3] |= bit.Read(1) << 1;
-                epB[2] |= bit.Read(4);
-                epR[2] |= bit.Read(5);
-                epB[3] |= bit.Read(1) << 2;
-                epR[3] |= bit.Read(5);
-                epB[3] |= bit.Read(1) << 3;
+                bit.Field(ref epR[0], 10);
+                bit.Field(ref epG[0], 10);
+                bit.Field(ref epB[0], 10);
+                bit.Field(ref epR[1], 5);
+                bit.Field(ref epR[0], 1, 10);
+                bit.Field(ref epG[2], 4);
+                bit.Field(ref epG[1], 4);
+                bit.Field(ref epG[0], 1, 10);
+                bit.Field(ref epB[3], 1);
+                bit.Field(ref epG[3], 4);
+                bit.Field(ref epB[1], 4);
+                bit.Field(ref epB[0], 1, 10);
+                bit.Field(ref epB[3], 1, 1);
+                bit.Field(ref epB[2], 4);
+                bit.Field(ref epR[2], 5);
+                bit.Field(ref epB[3], 1, 2);
+                bit.Field(ref epR[3], 5);
+                bit.Field(ref epB[3], 1, 3);
                 break;
             case 3:
-                epR[0] |= bit.Read(10);
-                epG[0] |= bit.Read(10);
-                epB[0] |= bit.Read(10);
-                epR[1] |= bit.Read(10);
-                epG[1] |= bit.Read(10);
-                epB[1] |= bit.Read(10);
+                bit.Field(ref epR[0], 10);
+                bit.Field(ref epG[0], 10);
+                bit.Field(ref epB[0], 10);
+                bit.Field(ref epR[1], 10);
+                bit.Field(ref epG[1], 10);
+                bit.Field(ref epB[1], 10);
                 break;
             case 6:
-                epR[0] |= bit.Read(10);
-                epG[0] |= bit.Read(10);
-                epB[0] |= bit.Read(10);
-                epR[1] |= bit.Read(4);
-                epR[0] |= bit.Read(1) << 10;
-                epG[3] |= bit.Read(1) << 4;
-                epG[2] |= bit.Read(4);
-                epG[1] |= bit.Read(5);
-                epG[0] |= bit.Read(1) << 10;
-                epG[3] |= bit.Read(4);
-                epB[1] |= bit.Read(4);
-                epB[0] |= bit.Read(1) << 10;
-                epB[3] |= bit.Read(1) << 1;
-                epB[2] |= bit.Read(4);
-                epR[2] |= bit.Read(4);
-                epB[3] |= bit.Read(1);
-                epB[3] |= bit.Read(1) << 2;
-                epR[3] |= bit.Read(4);
-                epG[2] |= bit.Read(1) << 4;
-                epB[3] |= bit.Read(1) << 3;
+                bit.Field(ref epR[0], 10);
+                bit.Field(ref epG[0], 10);
+                bit.Field(ref epB[0], 10);
+                bit.Field(ref epR[1], 4);
+                bit.Field(ref epR[0], 1, 10);
+                bit.Field(ref epG[3], 1, 4);
+                bit.Field(ref epG[2], 4);
+                bit.Field(ref epG[1], 5);
+                bit.Field(ref epG[0], 1, 10);
+                bit.Field(ref epG[3], 4);
+                bit.Field(ref epB[1], 4);
+                bit.Field(ref epB[0], 1, 10);
+                bit.Field(ref epB[3], 1, 1);
+                bit.Field(ref epB[2], 4);
+                bit.Field(ref epR[2], 4);
+                bit.Field(ref epB[3], 1);
+                bit.Field(ref epB[3], 1, 2);
+                bit.Field(ref epR[3], 4);
+                bit.Field(ref epG[2], 1, 4);
+                bit.Field(ref epB[3], 1, 3);
                 break;
             case 7:
-                epR[0] |= bit.Read(10);
-                epG[0] |= bit.Read(10);
-                epB[0] |= bit.Read(10);
-                epR[1] |= bit.Read(9);
-                epR[0] |= bit.Read(1) << 10;
-                epG[1] |= bit.Read(9);
-                epG[0] |= bit.Read(1) << 10;
-                epB[1] |= bit.Read(9);
-                epB[0] |= bit.Read(1) << 10;
+                bit.Field(ref epR[0], 10);
+                bit.Field(ref epG[0], 10);
+                bit.Field(ref epB[0], 10);
+                bit.Field(ref epR[1], 9);
+                bit.Field(ref epR[0], 1, 10);
+                bit.Field(ref epG[1], 9);
+                bit.Field(ref epG[0], 1, 10);
+                bit.Field(ref epB[1], 9);
+                bit.Field(ref epB[0], 1, 10);
                 break;
             case 10:
-                epR[0] |= bit.Read(10);
-                epG[0] |= bit.Read(10);
-                epB[0] |= bit.Read(10);
-                epR[1] |= bit.Read(4);
-                epR[0] |= bit.Read(1) << 10;
-                epB[2] |= bit.Read(1) << 4;
-                epG[2] |= bit.Read(4);
-                epG[1] |= bit.Read(4);
-                epG[0] |= bit.Read(1) << 10;
-                epB[3] |= bit.Read(1);
-                epG[3] |= bit.Read(4);
-                epB[1] |= bit.Read(5);
-                epB[0] |= bit.Read(1) << 10;
-                epB[2] |= bit.Read(4);
-                epR[2] |= bit.Read(4);
-                epB[3] |= bit.Read(1) << 1;
-                epB[3] |= bit.Read(1) << 2;
-                epR[3] |= bit.Read(4);
-                epB[3] |= bit.Read(1) << 4;
-                epB[3] |= bit.Read(1) << 3;
+                bit.Field(ref epR[0], 10);
+                bit.Field(ref epG[0], 10);
+                bit.Field(ref epB[0], 10);
+                bit.Field(ref epR[1], 4);
+                bit.Field(ref epR[0], 1, 10);
+                bit.Field(ref epB[2], 1, 4);
+                bit.Field(ref epG[2], 4);
+                bit.Field(ref epG[1], 4);
+                bit.Field(ref epG[0], 1, 10);
+                bit.Field(ref epB[3], 1);
+                bit.Field(ref epG[3], 4);
+                bit.Field(ref epB[1], 5);
+                bit.Field(ref epB[0], 1, 10);
+                bit.Field(ref epB[2], 4);
+                bit.Field(ref epR[2], 4);
+                bit.Field(ref epB[3], 1, 1);
+                bit.Field(ref epB[3], 1, 2);
+                bit.Field(ref epR[3], 4);
+                bit.Field(ref epB[3], 1, 4);
+                bit.Field(ref epB[3], 1, 3);
                 break;
             case 11:
-                epR[0] |= bit.Read(10);
-                epG[0] |= bit.Read(10);
-                epB[0] |= bit.Read(10);
-                epR[1] |= bit.Read(8);
-                epR[0] |= bit.Read(1) << 11;
-                epR[0] |= bit.Read(1) << 10;
-                epG[1] |= bit.Read(8);
-                epG[0] |= bit.Read(1) << 11;
-                epG[0] |= bit.Read(1) << 10;
-                epB[1] |= bit.Read(8);
-                epB[0] |= bit.Read(1) << 11;
-                epB[0] |= bit.Read(1) << 10;
+                bit.Field(ref epR[0], 10);
+                bit.Field(ref epG[0], 10);
+                bit.Field(ref epB[0], 10);
+                bit.Field(ref epR[1], 8);
+                bit.Field(ref epR[0], 1, 11);
+                bit.Field(ref epR[0], 1, 10);
+                bit.Field(ref epG[1], 8);
+                bit.Field(ref epG[0], 1, 11);
+                bit.Field(ref epG[0], 1, 10);
+                bit.Field(ref epB[1], 8);
+                bit.Field(ref epB[0], 1, 11);
+                bit.Field(ref epB[0], 1, 10);
                 break;
             case 14:
-                epR[0] |= bit.Read(9);
-                epB[2] |= bit.Read(1) << 4;
-                epG[0] |= bit.Read(9);
-                epG[2] |= bit.Read(1) << 4;
-                epB[0] |= bit.Read(9);
-                epB[3] |= bit.Read(1) << 4;
-                epR[1] |= bit.Read(5);
-                epG[3] |= bit.Read(1) << 4;
-                epG[2] |= bit.Read(4);
-                epG[1] |= bit.Read(5);
-                epB[3] |= bit.Read(1);
-                epG[3] |= bit.Read(4);
-                epB[1] |= bit.Read(5);
-                epB[3] |= bit.Read(1) << 1;
-                epB[2] |= bit.Read(4);
-                epR[2] |= bit.Read(5);
-                epB[3] |= bit.Read(1) << 2;
-                epR[3] |= bit.Read(5);
-                epB[3] |= bit.Read(1) << 3;
+                bit.Field(ref epR[0], 9);
+                bit.Field(ref epB[2], 1, 4);
+                bit.Field(ref epG[0], 9);
+                bit.Field(ref epG[2], 1, 4);
+                bit.Field(ref epB[0], 9);
+                bit.Field(ref epB[3], 1, 4);
+                bit.Field(ref epR[1], 5);
+                bit.Field(ref epG[3], 1, 4);
+                bit.Field(ref epG[2], 4);
+                bit.Field(ref epG[1], 5);
+                bit.Field(ref epB[3], 1);
+                bit.Field(ref epG[3], 4);
+                bit.Field(ref epB[1], 5);
+                bit.Field(ref epB[3], 1, 1);
+                bit.Field(ref epB[2], 4);
+                bit.Field(ref epR[2], 5);
+                bit.Field(ref epB[3], 1, 2);
+                bit.Field(ref epR[3], 5);
+                bit.Field(ref epB[3], 1, 3);
                 break;
             case 15:
-                epR[0] |= bit.Read(10);
-                epG[0] |= bit.Read(10);
-                epB[0] |= bit.Read(10);
-                epR[1] |= bit.Read(4);
-                epR[0] |= bit.Read(1) << 15;
-                epR[0] |= bit.Read(1) << 14;
-                epR[0] |= bit.Read(1) << 13;
-                epR[0] |= bit.Read(1) << 12;
-                epR[0] |= bit.Read(1) << 11;
-                epR[0] |= bit.Read(1) << 10;
-                epG[1] |= bit.Read(4);
-                epG[0] |= bit.Read(1) << 15;
-                epG[0] |= bit.Read(1) << 14;
-                epG[0] |= bit.Read(1) << 13;
-                epG[0] |= bit.Read(1) << 12;
-                epG[0] |= bit.Read(1) << 11;
-                epG[0] |= bit.Read(1) << 10;
-                epB[1] |= bit.Read(4);
-                epB[0] |= bit.Read(1) << 15;
-                epB[0] |= bit.Read(1) << 14;
-                epB[0] |= bit.Read(1) << 13;
-                epB[0] |= bit.Read(1) << 12;
-                epB[0] |= bit.Read(1) << 11;
-                epB[0] |= bit.Read(1) << 10;
+                bit.Field(ref epR[0], 10);
+                bit.Field(ref epG[0], 10);
+                bit.Field(ref epB[0], 10);
+                bit.Field(ref epR[1], 4);
+                bit.Field(ref epR[0], 1, 15);
+                bit.Field(ref epR[0], 1, 14);
+                bit.Field(ref epR[0], 1, 13);
+                bit.Field(ref epR[0], 1, 12);
+                bit.Field(ref epR[0], 1, 11);
+                bit.Field(ref epR[0], 1, 10);
+                bit.Field(ref epG[1], 4);
+                bit.Field(ref epG[0], 1, 15);
+                bit.Field(ref epG[0], 1, 14);
+                bit.Field(ref epG[0], 1, 13);
+                bit.Field(ref epG[0], 1, 12);
+                bit.Field(ref epG[0], 1, 11);
+                bit.Field(ref epG[0], 1, 10);
+                bit.Field(ref epB[1], 4);
+                bit.Field(ref epB[0], 1, 15);
+                bit.Field(ref epB[0], 1, 14);
+                bit.Field(ref epB[0], 1, 13);
+                bit.Field(ref epB[0], 1, 12);
+                bit.Field(ref epB[0], 1, 11);
+                bit.Field(ref epB[0], 1, 10);
                 break;
             case 18:
-                epR[0] |= bit.Read(8);
-                epG[3] |= bit.Read(1) << 4;
-                epB[2] |= bit.Read(1) << 4;
-                epG[0] |= bit.Read(8);
-                epB[3] |= bit.Read(1) << 2;
-                epG[2] |= bit.Read(1) << 4;
-                epB[0] |= bit.Read(8);
-                epB[3] |= bit.Read(1) << 3;
-                epB[3] |= bit.Read(1) << 4;
-                epR[1] |= bit.Read(6);
-                epG[2] |= bit.Read(4);
-                epG[1] |= bit.Read(5);
-                epB[3] |= bit.Read(1);
-                epG[3] |= bit.Read(4);
-                epB[1] |= bit.Read(5);
-                epB[3] |= bit.Read(1) << 1;
-                epB[2] |= bit.Read(4);
-                epR[2] |= bit.Read(6);
-                epR[3] |= bit.Read(6);
+                bit.Field(ref epR[0], 8);
+                bit.Field(ref epG[3], 1, 4);
+                bit.Field(ref epB[2], 1, 4);
+                bit.Field(ref epG[0], 8);
+                bit.Field(ref epB[3], 1, 2);
+                bit.Field(ref epG[2], 1, 4);
+                bit.Field(ref epB[0], 8);
+                bit.Field(ref epB[3], 1, 3);
+                bit.Field(ref epB[3], 1, 4);
+                bit.Field(ref epR[1], 6);
+                bit.Field(ref epG[2], 4);
+                bit.Field(ref epG[1], 5);
+                bit.Field(ref epB[3], 1);
+                bit.Field(ref epG[3], 4);
+                bit.Field(ref epB[1], 5);
+                bit.Field(ref epB[3], 1, 1);
+                bit.Field(ref epB[2], 4);
+                bit.Field(ref epR[2], 6);
+                bit.Field(ref epR[3], 6);
                 break;
             case 22:
-                epR[0] |= bit.Read(8);
-                epB[3] |= bit.Read(1);
-                epB[2] |= bit.Read(1) << 4;
-                epG[0] |= bit.Read(8);
-                epG[2] |= bit.Read(1) << 5;
-                epG[2] |= bit.Read(1) << 4;
-                epB[0] |= bit.Read(8);
-                epG[3] |= bit.Read(1) << 5;
-                epB[3] |= bit.Read(1) << 4;
-                epR[1] |= bit.Read(5);
-                epG[3] |= bit.Read(1) << 4;
-                epG[2] |= bit.Read(4);
-                epG[1] |= bit.Read(6);
-                epG[3] |= bit.Read(4);
-                epB[1] |= bit.Read(5);
-                epB[3] |= bit.Read(1) << 1;
-                epB[2] |= bit.Read(4);
-                epR[2] |= bit.Read(5);
-                epB[3] |= bit.Read(1) << 2;
-                epR[3] |= bit.Read(5);
-                epB[3] |= bit.Read(1) << 3;
+                bit.Field(ref epR[0], 8);
+                bit.Field(ref epB[3], 1);
+                bit.Field(ref epB[2], 1, 4);
+                bit.Field(ref epG[0], 8);
+                bit.Field(ref epG[2], 1, 5);
+                bit.Field(ref epG[2], 1, 4);
+                bit.Field(ref epB[0], 8);
+                bit.Field(ref epG[3], 1, 5);
+                bit.Field(ref epB[3], 1, 4);
+                bit.Field(ref epR[1], 5);
+                bit.Field(ref epG[3], 1, 4);
+                bit.Field(ref epG[2], 4);
+                bit.Field(ref epG[1], 6);
+                bit.Field(ref epG[3], 4);
+                bit.Field(ref epB[1], 5);
+                bit.Field(ref epB[3], 1, 1);
+                bit.Field(ref epB[2], 4);
+                bit.Field(ref epR[2], 5);
+                bit.Field(ref epB[3], 1, 2);
+                bit.Field(ref epR[3], 5);
+                bit.Field(ref epB[3], 1, 3);
                 break;
             case 26:
-                epR[0] |= bit.Read(8);
-                epB[3] |= bit.Read(1) << 1;
-                epB[2] |= bit.Read(1) << 4;
-                epG[0] |= bit.Read(8);
-                epB[2] |= bit.Read(1) << 5;
-                epG[2] |= bit.Read(1) << 4;
-                epB[0] |= bit.Read(8);
-                epB[3] |= bit.Read(1) << 5;
-                epB[3] |= bit.Read(1) << 4;
-                epR[1] |= bit.Read(5);
-                epG[3] |= bit.Read(1) << 4;
-                epG[2] |= bit.Read(4);
-                epG[1] |= bit.Read(5);
-                epB[3] |= bit.Read(1);
-                epG[3] |= bit.Read(4);
-                epB[1] |= bit.Read(6);
-                epB[2] |= bit.Read(4);
-                epR[2] |= bit.Read(5);
-                epB[3] |= bit.Read(1) << 2;
-                epR[3] |= bit.Read(5);
-                epB[3] |= bit.Read(1) << 3;
+                bit.Field(ref epR[0], 8);
+                bit.Field(ref epB[3], 1, 1);
+                bit.Field(ref epB[2], 1, 4);
+                bit.Field(ref epG[0], 8);
+                bit.Field(ref epB[2], 1, 5);
+                bit.Field(ref epG[2], 1, 4);
+                bit.Field(ref epB[0], 8);
+                bit.Field(ref epB[3], 1, 5);
+                bit.Field(ref epB[3], 1, 4);
+                bit.Field(ref epR[1], 5);
+                bit.Field(ref epG[3], 1, 4);
+                bit.Field(ref epG[2], 4);
+                bit.Field(ref epG[1], 5);
+                bit.Field(ref epB[3], 1);
+                bit.Field(ref epG[3], 4);
+                bit.Field(ref epB[1], 6);
+                bit.Field(ref epB[2], 4);
+                bit.Field(ref epR[2], 5);
+                bit.Field(ref epB[3], 1, 2);
+                bit.Field(ref epR[3], 5);
+                bit.Field(ref epB[3], 1, 3);
                 break;
             case 30:
-                epR[0] |= bit.Read(6);
-                epG[3] |= bit.Read(1) << 4;
-                epB[3] |= bit.Read(1);
-                epB[3] |= bit.Read(1) << 1;
-                epB[2] |= bit.Read(1) << 4;
-                epG[0] |= bit.Read(6);
-                epG[2] |= bit.Read(1) << 5;
-                epB[2] |= bit.Read(1) << 5;
-                epB[3] |= bit.Read(1) << 2;
-                epG[2] |= bit.Read(1) << 4;
-                epB[0] |= bit.Read(6);
-                epG[3] |= bit.Read(1) << 5;
-                epB[3] |= bit.Read(1) << 3;
-                epB[3] |= bit.Read(1) << 5;
-                epB[3] |= bit.Read(1) << 4;
-                epR[1] |= bit.Read(6);
-                epG[2] |= bit.Read(4);
-                epG[1] |= bit.Read(6);
-                epG[3] |= bit.Read(4);
-                epB[1] |= bit.Read(6);
-                epB[2] |= bit.Read(4);
-                epR[2] |= bit.Read(6);
-                epR[3] |= bit.Read(6);
+                bit.Field(ref epR[0], 6);
+                bit.Field(ref epG[3], 1, 4);
+                bit.Field(ref epB[3], 1);
+                bit.Field(ref epB[3], 1, 1);
+                bit.Field(ref epB[2], 1, 4);
+                bit.Field(ref epG[0], 6);
+                bit.Field(ref epG[2], 1, 5);
+                bit.Field(ref epB[2], 1, 5);
+                bit.Field(ref epB[3], 1, 2);
+                bit.Field(ref epG[2], 1, 4);
+                bit.Field(ref epB[0], 6);
+                bit.Field(ref epG[3], 1, 5);
+                bit.Field(ref epB[3], 1, 3);
+                bit.Field(ref epB[3], 1, 5);
+                bit.Field(ref epB[3], 1, 4);
+                bit.Field(ref epR[1], 6);
+                bit.Field(ref epG[2], 4);
+                bit.Field(ref epG[1], 6);
+                bit.Field(ref epG[3], 4);
+                bit.Field(ref epB[1], 6);
+                bit.Field(ref epB[2], 4);
+                bit.Field(ref epR[2], 6);
+                bit.Field(ref epR[3], 6);
                 break;
         }
     }
@@ -1606,36 +1555,14 @@ public sealed class BptcTextureCoder : IPitchTextureCoder
         return (value << shift) >> shift;
     }
 
-    private static void FindBc6HEndpoints(ReadOnlySpan<Rgba32Float> source, bool signed, out Rgba32Float endpoint0, out Rgba32Float endpoint1)
+    private static void FindBc6HComponentBounds(ReadOnlySpan<Rgba32Float> source, out Rgba32Float minimum, out Rgba32Float maximum)
     {
-        endpoint0 = ClampBc6HColor(source[0], signed);
-        endpoint1 = endpoint0;
-        var bestDistance = -1f;
-        for (var i = 0; i < TexelsPerBlock; i++)
-        {
-            var a = ClampBc6HColor(source[i], signed);
-            for (var j = i + 1; j < TexelsPerBlock; j++)
-            {
-                var b = ClampBc6HColor(source[j], signed);
-                var distance = ColorDistance(a, b);
-                if (distance > bestDistance)
-                {
-                    bestDistance = distance;
-                    endpoint0 = a;
-                    endpoint1 = b;
-                }
-            }
-        }
-    }
-
-    private static void FindBc6HComponentBounds(ReadOnlySpan<Rgba32Float> source, bool signed, out Rgba32Float minimum, out Rgba32Float maximum)
-    {
-        minimum = ClampBc6HColor(source[0], signed);
+        minimum = source[0];
         maximum = minimum;
 
         for (var i = 1; i < TexelsPerBlock; i++)
         {
-            var color = ClampBc6HColor(source[i], signed);
+            var color = source[i];
             minimum = new Rgba32Float(
                 MathF.Min(minimum.Red, color.Red),
                 MathF.Min(minimum.Green, color.Green),
@@ -1669,60 +1596,21 @@ public sealed class BptcTextureCoder : IPitchTextureCoder
 
     private static int QuantizeBc6HEndpoint(float value, bool signed, int bits)
     {
-        var halfBits = BitConverter.HalfToUInt16Bits((Half)ClampBc6HValue(value, signed));
-        if (!signed)
+        int half = BitConverter.HalfToUInt16Bits((Half)value);
+        int scale = signed ? 32 : 64;
+        int magnitude = half & 0x7fff;
+        // Invert the decoder's final truncation, including the full 16-bit mode.
+        int target = (magnitude * scale + 30) / 31;
+        int max = (1 << (signed ? bits - 1 : bits)) - 1;
+        int q = Math.Min(target >> (16 - bits), max);
+        if (bits < 16)
         {
-            var target = (int)MathF.Round(((halfBits & 0x7fff) * 64f) / 31f);
-            return QuantizeBc6HUnsigned(target, bits);
+            int reconstructed = FinishBc6HUnquantize(UnquantizeBc6HEndpoint(q, signed, bits), signed);
+            int neighbor = Math.Clamp(q + Math.Sign(magnitude - reconstructed), 0, max);
+            int other = FinishBc6HUnquantize(UnquantizeBc6HEndpoint(neighbor, signed, bits), signed);
+            if (Math.Abs(magnitude - other) < Math.Abs(magnitude - reconstructed)) q = neighbor;
         }
-
-        var sign = (halfBits & 0x8000) != 0;
-        var targetMagnitude = (int)MathF.Round(((halfBits & 0x7fff) * 32f) / 31f);
-        var quantizedMagnitude = QuantizeBc6HSignedMagnitude(targetMagnitude, bits);
-        if (!sign || quantizedMagnitude == 0)
-        {
-            return quantizedMagnitude;
-        }
-
-        return ((1 << bits) - quantizedMagnitude) & ((1 << bits) - 1);
-    }
-
-    private static int QuantizeBc6HUnsigned(int value, int bits)
-    {
-        value = Math.Clamp(value, 0, 0xffff);
-        var max = (1 << bits) - 1;
-        return (value * max + 32767) / 65535;
-    }
-
-    private static int QuantizeBc6HSignedMagnitude(int value, int bits)
-    {
-        value = Math.Clamp(value, 0, 0x7fff);
-        var max = (1 << (bits - 1)) - 1;
-        return (value * max + 16383) / 32767;
-    }
-
-    private static void BuildBc6HMode3Palette(ReadOnlySpan<int> q0, ReadOnlySpan<int> q1, bool signed, Span<Rgba32Float> palette)
-    {
-        var e0 = new InlineArray3<int>();
-        var e1 = new InlineArray3<int>();
-        for (var i = 0; i < 3; i++)
-        {
-            e0[i] = signed ? SignExtend(q0[i], 10) : q0[i];
-            e1[i] = signed ? SignExtend(q1[i], 10) : q1[i];
-            e0[i] = UnquantizeBc6HEndpoint(e0[i], signed, 10);
-            e1[i] = UnquantizeBc6HEndpoint(e1[i], signed, 10);
-        }
-
-        var weights = SBptcFactors[2];
-        for (var i = 0; i < 16; i++)
-        {
-            var weight = weights[i];
-            palette[i] = new Rgba32Float(
-                HalfBitsToSingle(InterpolateBc6HHalf(e0[0], e1[0], weight, signed)),
-                HalfBitsToSingle(InterpolateBc6HHalf(e0[1], e1[1], weight, signed)),
-                HalfBitsToSingle(InterpolateBc6HHalf(e0[2], e1[2], weight, signed)),
-                1f);
-        }
+        return (half & 0x8000) == 0 ? q : (-q & ((1 << bits) - 1));
     }
 
     private static void ApplyBc7PBit(Span<int> endpoints, int subset, int p0, int p1)
@@ -1765,51 +1653,11 @@ public sealed class BptcTextureCoder : IPitchTextureCoder
     private static int InterpolateByte(int endpoint0, int endpoint1, int weight) =>
         ((endpoint0 * (64 - weight)) + (endpoint1 * weight) + 32) >> 6;
 
-    private static Bc7Color32 ToBc7StorageColor(Rgba8UNorm color, bool srgb) => new(
-        EncodeStorageByte(color.Red, srgb),
-        EncodeStorageByte(color.Green, srgb),
-        EncodeStorageByte(color.Blue, srgb),
-        color.Alpha);
-
     private static void FindBc7SubsetEndpoints(
         ReadOnlySpan<Bc7Color32> source,
         Bc7ModeInfo modeInfo,
         int partitionSet,
         int subset,
-        out Bc7Color32 endpoint0,
-        out Bc7Color32 endpoint1)
-    {
-        if (modeInfo.IndexBits1 != 0)
-        {
-            FindBc7SubsetColorEndpoints(source, modeInfo, partitionSet, subset, includeAlpha: false, out var color0, out var color1);
-            FindBc7SubsetAlphaBounds(source, modeInfo, partitionSet, subset, out var alpha0, out var alpha1);
-            endpoint0 = new Bc7Color32(color0.Red, color0.Green, color0.Blue, alpha0);
-            endpoint1 = new Bc7Color32(color1.Red, color1.Green, color1.Blue, alpha1);
-            return;
-        }
-
-        FindBc7SubsetColorEndpoints(
-            source,
-            modeInfo,
-            partitionSet,
-            subset,
-            includeAlpha: modeInfo.AlphaBits != 0,
-            out endpoint0,
-            out endpoint1);
-
-        if (modeInfo.AlphaBits == 0)
-        {
-            endpoint0 = new Bc7Color32(endpoint0.Red, endpoint0.Green, endpoint0.Blue, byte.MaxValue);
-            endpoint1 = new Bc7Color32(endpoint1.Red, endpoint1.Green, endpoint1.Blue, byte.MaxValue);
-        }
-    }
-
-    private static void FindBc7SubsetColorEndpoints(
-        ReadOnlySpan<Bc7Color32> source,
-        Bc7ModeInfo modeInfo,
-        int partitionSet,
-        int subset,
-        bool includeAlpha,
         out Bc7Color32 endpoint0,
         out Bc7Color32 endpoint1)
     {
@@ -1839,7 +1687,7 @@ public sealed class BptcTextureCoder : IPitchTextureCoder
                     continue;
                 }
 
-                var distance = includeAlpha
+                var distance = modeInfo.AlphaBits != 0
                     ? ColorDistance(source[i], source[j])
                     : ColorDistanceRgb(source[i], source[j]);
                 if (distance > bestDistance)
@@ -1852,28 +1700,6 @@ public sealed class BptcTextureCoder : IPitchTextureCoder
         }
     }
 
-    private static void FindBc7SubsetAlphaBounds(
-        ReadOnlySpan<Bc7Color32> source,
-        Bc7ModeInfo modeInfo,
-        int partitionSet,
-        int subset,
-        out byte minimum,
-        out byte maximum)
-    {
-        minimum = byte.MaxValue;
-        maximum = byte.MinValue;
-        for (var i = 0; i < TexelsPerBlock; i++)
-        {
-            if (GetBc7Subset(modeInfo, partitionSet, i) != subset)
-            {
-                continue;
-            }
-
-            minimum = Math.Min(minimum, source[i].Alpha);
-            maximum = Math.Max(maximum, source[i].Alpha);
-        }
-    }
-
     private static void QuantizeBc7EndpointPair(
         Bc7Color32 endpoint0,
         Bc7Color32 endpoint1,
@@ -1882,6 +1708,17 @@ public sealed class BptcTextureCoder : IPitchTextureCoder
         out Bc7Endpoint quantized1)
     {
         var modePBits = modeInfo.EndpointPBits != 0 ? modeInfo.EndpointPBits : modeInfo.SharedPBits;
+        // A constant fully transparent or opaque subset can represent alpha exactly.
+        // Modes 6 and 7 share each endpoint's low bit across all four channels.
+        if (modeInfo.EndpointPBits != 0 && modeInfo.AlphaBits != 0 &&
+            endpoint0.Alpha == endpoint1.Alpha && endpoint0.Alpha is 0 or 255)
+        {
+            int p = endpoint0.Alpha & 1;
+            quantized0 = QuantizeBc7Endpoint(endpoint0, modeInfo, modePBits, p, out _);
+            quantized1 = QuantizeBc7Endpoint(endpoint1, modeInfo, modePBits, p, out _);
+            return;
+        }
+
         if (modeInfo.SharedPBits != 0)
         {
             var bestError = int.MaxValue;
@@ -1959,22 +1796,17 @@ public sealed class BptcTextureCoder : IPitchTextureCoder
 
     private static int QuantizeBc7Scalar(byte value, int valueBits, int pBits, int pBit, out int reconstructed)
     {
-        var best = 0;
-        var bestError = int.MaxValue;
-        reconstructed = 0;
-        for (var quantized = 0; quantized < (1 << valueBits); quantized++)
+        int precision = valueBits + pBits;
+        int q = value >> (8 - valueBits);
+        reconstructed = ExpandQuantizedBc7((q << pBits) | pBit, precision);
+        int neighbor = Math.Clamp(q + Math.Sign(value - reconstructed), 0, (1 << valueBits) - 1);
+        int other = ExpandQuantizedBc7((neighbor << pBits) | pBit, precision);
+        if (Math.Abs(value - other) < Math.Abs(value - reconstructed))
         {
-            var expanded = ExpandQuantizedBc7((quantized << pBits) | pBit, valueBits + pBits);
-            var error = Squared(value - expanded);
-            if (error < bestError)
-            {
-                bestError = error;
-                best = quantized;
-                reconstructed = expanded;
-            }
+            reconstructed = other;
+            return neighbor;
         }
-
-        return best;
+        return q;
     }
 
     private static void FindBc7Endpoints(ReadOnlySpan<Bc7Color32> source, bool includeAlpha, out Bc7Color32 endpoint0, out Bc7Color32 endpoint1)
@@ -2044,183 +1876,6 @@ public sealed class BptcTextureCoder : IPitchTextureCoder
         }
     }
 
-    private static int FindNearestBc7Index(
-        Bc7Color32 color,
-        Bc7Color32 endpoint0,
-        Bc7Color32 endpoint1,
-        int indexBits,
-        int paletteCount)
-    {
-        var palette = new InlineArray16<Bc7Color32>();
-        BuildBc7Palette(endpoint0, endpoint1, indexBits, palette);
-        return FindNearestBc7Index(color, palette, paletteCount);
-    }
-
-    private static int FindNearestBc7RgbIndex(
-        Bc7Color32 color,
-        Bc7Color32 endpoint0,
-        Bc7Color32 endpoint1,
-        int indexBits,
-        int paletteCount)
-    {
-        var weights = SBptcFactors[indexBits - 2];
-        var bestIndex = 0;
-        var bestDistance = int.MaxValue;
-        for (var i = 0; i < paletteCount; i++)
-        {
-            var weight = weights[i];
-            var red = InterpolateByte(endpoint0.Red, endpoint1.Red, weight);
-            var green = InterpolateByte(endpoint0.Green, endpoint1.Green, weight);
-            var blue = InterpolateByte(endpoint0.Blue, endpoint1.Blue, weight);
-            var distance =
-                Squared(color.Red - red) +
-                Squared(color.Green - green) +
-                Squared(color.Blue - blue);
-            if (distance < bestDistance)
-            {
-                bestDistance = distance;
-                bestIndex = i;
-            }
-        }
-
-        return bestIndex;
-    }
-
-    private static int FindNearestBc7AlphaIndex(byte alpha, byte endpoint0, byte endpoint1, int indexBits, int paletteCount)
-    {
-        var weights = SBptcFactors[indexBits - 2];
-        var bestIndex = 0;
-        var bestDistance = int.MaxValue;
-        for (var i = 0; i < paletteCount; i++)
-        {
-            var value = InterpolateByte(endpoint0, endpoint1, weights[i]);
-            var distance = Squared(alpha - value);
-            if (distance < bestDistance)
-            {
-                bestDistance = distance;
-                bestIndex = i;
-            }
-        }
-
-        return bestIndex;
-    }
-
-    private static int ScoreBc7Block(ReadOnlySpan<Bc7Color32> source, ReadOnlySpan<byte> candidate)
-    {
-        var decoded = new InlineArray16<Rgba8UNorm>();
-        DecodeBc7Block(candidate, srgb: false, decoded);
-
-        var error = 0;
-        for (var i = 0; i < TexelsPerBlock; i++)
-        {
-            var color = new Bc7Color32(decoded[i].Red, decoded[i].Green, decoded[i].Blue, decoded[i].Alpha);
-            error += ColorDistance(source[i], color);
-        }
-
-        return error;
-    }
-
-    private static void TryBc7Candidate(
-        ReadOnlySpan<Bc7Color32> source,
-        Bc7Color32 endpoint0,
-        Bc7Color32 endpoint1,
-        ref Bc7Color32 bestA,
-        ref Bc7Color32 bestB,
-        ref double bestError)
-    {
-        var error = ScoreBc7Mode6(source, endpoint0, endpoint1);
-        if (error < bestError)
-        {
-            bestError = error;
-            bestA = endpoint0;
-            bestB = endpoint1;
-        }
-
-        error = ScoreBc7Mode6(source, endpoint1, endpoint0);
-        if (error < bestError)
-        {
-            bestError = error;
-            bestA = endpoint1;
-            bestB = endpoint0;
-        }
-    }
-
-    private static float ScoreBc7Mode6(ReadOnlySpan<Bc7Color32> source, Bc7Color32 endpoint0, Bc7Color32 endpoint1)
-    {
-        QuantizeBc7Mode6Endpoint(endpoint0, out var quantized0);
-        QuantizeBc7Mode6Endpoint(endpoint1, out var quantized1);
-        var palette = new InlineArray16<Bc7Color32>();
-        BuildBc7Palette(quantized0.Color, quantized1.Color, palette);
-        var error = 0f;
-        for (var i = 0; i < TexelsPerBlock; i++)
-        {
-            var maxIndex = i == 0 ? 8 : 16;
-            var index = FindNearestBc7Index(source[i], palette, maxIndex);
-            error += ColorDistance(source[i], palette[index]);
-        }
-
-        return error;
-    }
-
-    private static void WriteBc7Mode6Block(ReadOnlySpan<Bc7Color32> source, Bc7Color32 endpoint0, Bc7Color32 endpoint1, Span<byte> destination)
-    {
-        destination.Clear();
-        QuantizeBc7Mode6Endpoint(endpoint0, out var quantized0);
-        QuantizeBc7Mode6Endpoint(endpoint1, out var quantized1);
-        var palette = new InlineArray16<Bc7Color32>();
-        BuildBc7Palette(quantized0.Color, quantized1.Color, palette);
-
-        var writer = new BptcBitWriter(destination);
-        writer.Write(0, Bc7EncoderMode);
-        writer.Write(1, 1);
-        writer.Write(quantized0.Red7, 7);
-        writer.Write(quantized1.Red7, 7);
-        writer.Write(quantized0.Green7, 7);
-        writer.Write(quantized1.Green7, 7);
-        writer.Write(quantized0.Blue7, 7);
-        writer.Write(quantized1.Blue7, 7);
-        writer.Write(quantized0.Alpha7, 7);
-        writer.Write(quantized1.Alpha7, 7);
-        writer.Write(quantized0.PBit, 1);
-        writer.Write(quantized1.PBit, 1);
-
-        for (var i = 0; i < TexelsPerBlock; i++)
-        {
-            var maxIndex = i == 0 ? 8 : 16;
-            var index = FindNearestBc7Index(source[i], palette, maxIndex);
-            writer.Write(index, i == 0 ? 3 : 4);
-        }
-    }
-
-    private static void QuantizeBc7Mode6Endpoint(Bc7Color32 source, out Bc7Mode6Endpoint endpoint)
-    {
-        var bestError = int.MaxValue;
-        endpoint = default;
-        for (var p = 0; p <= 1; p++)
-        {
-            var red7 = QuantizeBc7EndpointByte(source.Red, p, out var red);
-            var green7 = QuantizeBc7EndpointByte(source.Green, p, out var green);
-            var blue7 = QuantizeBc7EndpointByte(source.Blue, p, out var blue);
-            var alpha7 = QuantizeBc7EndpointByte(source.Alpha, p, out var alpha);
-            var error = Squared(source.Red - red) + Squared(source.Green - green) + Squared(source.Blue - blue) + Squared(source.Alpha - alpha);
-            if (error < bestError)
-            {
-                bestError = error;
-                endpoint = new Bc7Mode6Endpoint(red7, green7, blue7, alpha7, p, new Bc7Color32((byte)red, (byte)green, (byte)blue, (byte)alpha));
-            }
-        }
-    }
-
-    private static int QuantizeBc7EndpointByte(byte value, int pBit, out int reconstructed)
-    {
-        var quantized = Math.Clamp((value - pBit + 1) / 2, 0, 127);
-        reconstructed = (quantized << 1) | pBit;
-        return quantized;
-    }
-
-    private static void BuildBc7Palette(Bc7Color32 endpoint0, Bc7Color32 endpoint1, Span<Bc7Color32> palette) =>
-        BuildBc7Palette(endpoint0, endpoint1, indexBits: 4, palette);
-
     private static void BuildBc7Palette(Bc7Color32 endpoint0, Bc7Color32 endpoint1, int indexBits, Span<Bc7Color32> palette)
     {
         var weights = SBptcFactors[indexBits - 2];
@@ -2233,23 +1888,6 @@ public sealed class BptcTextureCoder : IPitchTextureCoder
                 (byte)InterpolateByte(endpoint0.Blue, endpoint1.Blue, weight),
                 (byte)InterpolateByte(endpoint0.Alpha, endpoint1.Alpha, weight));
         }
-    }
-
-    private static int FindNearestBc7Index(Bc7Color32 color, ReadOnlySpan<Bc7Color32> palette, int paletteCount)
-    {
-        var bestIndex = 0;
-        var bestDistance = int.MaxValue;
-        for (var i = 0; i < paletteCount; i++)
-        {
-            var distance = ColorDistance(color, palette[i]);
-            if (distance < bestDistance)
-            {
-                bestDistance = distance;
-                bestIndex = i;
-            }
-        }
-
-        return bestIndex;
     }
 
     private static int FindNearestColorIndex(Rgba32Float color, ReadOnlySpan<Rgba32Float> palette, int paletteCount)
@@ -2284,12 +1922,6 @@ public sealed class BptcTextureCoder : IPitchTextureCoder
         Squared(a.Red - b.Red) + Squared(a.Green - b.Green) + Squared(a.Blue - b.Blue);
 
     private static int Squared(int value) => value * value;
-
-    private static byte DecodeStorageByte(byte value, bool srgb) =>
-        srgb ? RgbaColorConversions.Srgb8ToLinearUNorm8(value) : value;
-
-    private static byte EncodeStorageByte(byte value, bool srgb) =>
-        srgb ? RgbaColorConversions.LinearUNorm8ToSrgb8(value) : value;
 
     private static void LoadFloatBlock<TPixel>(BitmapView<TPixel> source, int blockX, int blockY, Span<Rgba32Float> destination)
         where TPixel : unmanaged, IPixel<TPixel>
@@ -2347,8 +1979,9 @@ public sealed class BptcTextureCoder : IPitchTextureCoder
         }
     }
 
-    private static void LoadUNormBlock<TPixel>(BitmapView<TPixel> source, int blockX, int blockY, Span<Rgba8UNorm> destination)
+    private static void LoadUNormBlock<TPixel, TTransfer>(BitmapView<TPixel> source, int blockX, int blockY, Span<Rgba8UNorm> destination)
         where TPixel : unmanaged, IPixel<TPixel>
+        where TTransfer : IBc7Transfer
     {
         var originX = blockX * BlockSize;
         var originY = blockY * BlockSize;
@@ -2361,18 +1994,19 @@ public sealed class BptcTextureCoder : IPitchTextureCoder
             var sourceX = originX;
             for (var x = 0; x < BlockSize; x++)
             {
-                destination[blockOffset++] = TPixel.ToRgba8UNorm(sourceRow[Math.Min(sourceX, lastSourceX)]);
+                destination[blockOffset++] = TTransfer.ToStorage(sourceRow[Math.Min(sourceX, lastSourceX)]);
                 sourceX++;
             }
         }
     }
 
-    private static void StoreUNormBlock<TPixel>(
+    private static void StoreUNormBlock<TPixel, TTransfer>(
         ReadOnlySpan<Rgba8UNorm> block,
         int blockX,
         int blockY,
         BitmapView<TPixel> destination)
         where TPixel : unmanaged, IPixel<TPixel>
+        where TTransfer : IBc7Transfer
     {
         var originX = blockX * BlockSize;
         var originY = blockY * BlockSize;
@@ -2395,7 +2029,7 @@ public sealed class BptcTextureCoder : IPitchTextureCoder
                     break;
                 }
 
-                destinationRow[destinationX] = TPixel.FromRgba8UNorm(block[rowBlockOffset++]);
+                destinationRow[destinationX] = TTransfer.FromStorage<TPixel>(block[rowBlockOffset++]);
                 destinationX++;
             }
 
@@ -2472,65 +2106,41 @@ public sealed class BptcTextureCoder : IPitchTextureCoder
     private static NotSupportedException CreateUnsupportedFormatException(TextureFormat format) =>
         new($"BPTC texture coder does not support texture format '{format.Name}'.");
 
-    private ref struct BptcBitReader
+    private interface IEndpointFields
     {
-        private readonly ReadOnlySpan<byte> _data;
-        private int _bitPosition;
-
-        public BptcBitReader(ReadOnlySpan<byte> data)
-        {
-            _data = data;
-            _bitPosition = 0;
-        }
-
-        public int Read(int bitCount)
-        {
-            var value = Peek(0, bitCount);
-            _bitPosition += bitCount;
-            return value;
-        }
-
-        public int Peek(int offset, int bitCount)
-        {
-            if (bitCount == 0)
-            {
-                return 0;
-            }
-
-            var position = _bitPosition + offset;
-            var value = 0;
-            for (var i = 0; i < bitCount; i++)
-            {
-                var bit = (_data[(position + i) >> 3] >> ((position + i) & 7)) & 1;
-                value |= bit << i;
-            }
-
-            return value;
-        }
+        void Field(scoped ref int value, int count, int shift = 0);
     }
 
-    private ref struct BptcBitWriter
+    private struct BptcBitReader(ReadOnlySpan<byte> data) : IEndpointFields
     {
-        private readonly Span<byte> _data;
-        private int _bitPosition;
+        private readonly UInt128 _bits = BinaryPrimitives.ReadUInt128LittleEndian(data);
+        private int _position;
 
-        public BptcBitWriter(Span<byte> data)
+        public void Field(scoped ref int value, int count, int shift = 0) => value |= Read(count) << shift;
+
+        public int Read(int count)
         {
-            _data = data;
-            _bitPosition = 0;
+            int value = Peek(0, count);
+            _position += count;
+            return value;
         }
 
-        public void Write(int value, int bitCount)
-        {
-            for (var i = 0; i < bitCount; i++)
-            {
-                if (((value >> i) & 1) != 0)
-                {
-                    _data[_bitPosition >> 3] |= (byte)(1 << (_bitPosition & 7));
-                }
+        public readonly int Peek(int offset, int count) => (int)(_bits >> (_position + offset)) & ((1 << count) - 1);
+    }
 
-                _bitPosition++;
-            }
+    private ref struct BptcBitWriter(Span<byte> data) : IEndpointFields
+    {
+        private readonly Span<byte> _data = data;
+        private UInt128 _bits;
+        private int _position;
+
+        public void Field(scoped ref int value, int count, int shift = 0) => Write(value >> shift, count);
+
+        public void Write(int value, int count)
+        {
+            _bits |= (UInt128)(uint)(value & ((1 << count) - 1)) << _position;
+            _position += count;
+            if (_position == 128) BinaryPrimitives.WriteUInt128LittleEndian(_data, _bits);
         }
     }
 
@@ -2559,8 +2169,6 @@ public sealed class BptcTextureCoder : IPitchTextureCoder
     private readonly record struct Bc7Color32(byte Red, byte Green, byte Blue, byte Alpha);
 
     private readonly record struct Bc7Endpoint(int Red, int Green, int Blue, int Alpha, int PBit, Bc7Color32 Color);
-
-    private readonly record struct Bc7Mode6Endpoint(int Red7, int Green7, int Blue7, int Alpha7, int PBit, Bc7Color32 Color);
 
     private static readonly byte[][] SBptcFactors =
     [
