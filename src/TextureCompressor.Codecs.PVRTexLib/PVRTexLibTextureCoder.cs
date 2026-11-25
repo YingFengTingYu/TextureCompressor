@@ -42,18 +42,18 @@ public sealed unsafe class PVRTexLibTextureCoder : IPitchTextureCoder
         new(TextureFormats.RgbPvrtcII6BppFloat, PVRTexLibPixelFormat.PVRTCII_HDR_6bpp, SourceKind.Rgba32Float, PVRTexLibVariableType.SignedFloat, CompressorFamily.Pvrtc),
         new(TextureFormats.RgbPvrtcII8BppFloat, PVRTexLibPixelFormat.PVRTCII_HDR_8bpp, SourceKind.Rgba32Float, PVRTexLibVariableType.SignedFloat, CompressorFamily.Pvrtc),
 
-        new(TextureFormats.Bc1Rgb, PVRTexLibPixelFormat.BC1, SourceKind.Rgba8, PVRTexLibVariableType.UnsignedByteNorm, CompressorFamily.Other),
-        new(TextureFormats.Bc1RgbSrgb, PVRTexLibPixelFormat.BC1, SourceKind.Rgba8, PVRTexLibVariableType.UnsignedByteNorm, CompressorFamily.Other),
+        new(TextureFormats.Bc1Rgb, PVRTexLibPixelFormat.BC1, SourceKind.Rgba8, PVRTexLibVariableType.UnsignedByteNorm, CompressorFamily.Other, Opaque: true),
+        new(TextureFormats.Bc1RgbSrgb, PVRTexLibPixelFormat.BC1, SourceKind.Rgba8, PVRTexLibVariableType.UnsignedByteNorm, CompressorFamily.Other, Opaque: true),
         new(TextureFormats.Bc1Rgba, PVRTexLibPixelFormat.BC1, SourceKind.Rgba8, PVRTexLibVariableType.UnsignedByteNorm, CompressorFamily.Other),
         new(TextureFormats.Bc1RgbaSrgb, PVRTexLibPixelFormat.BC1, SourceKind.Rgba8, PVRTexLibVariableType.UnsignedByteNorm, CompressorFamily.Other),
-        new(TextureFormats.Dxt1Rgb, PVRTexLibPixelFormat.DXT1, SourceKind.Rgba8, PVRTexLibVariableType.UnsignedByteNorm, CompressorFamily.Other),
-        new(TextureFormats.Dxt1RgbSrgb, PVRTexLibPixelFormat.DXT1, SourceKind.Rgba8, PVRTexLibVariableType.UnsignedByteNorm, CompressorFamily.Other),
+        new(TextureFormats.Dxt1Rgb, PVRTexLibPixelFormat.DXT1, SourceKind.Rgba8, PVRTexLibVariableType.UnsignedByteNorm, CompressorFamily.Other, Opaque: true),
+        new(TextureFormats.Dxt1RgbSrgb, PVRTexLibPixelFormat.DXT1, SourceKind.Rgba8, PVRTexLibVariableType.UnsignedByteNorm, CompressorFamily.Other, Opaque: true),
         new(TextureFormats.Dxt1Rgba, PVRTexLibPixelFormat.DXT1, SourceKind.Rgba8, PVRTexLibVariableType.UnsignedByteNorm, CompressorFamily.Other),
         new(TextureFormats.Dxt1RgbaSrgb, PVRTexLibPixelFormat.DXT1, SourceKind.Rgba8, PVRTexLibVariableType.UnsignedByteNorm, CompressorFamily.Other),
-        new(TextureFormats.Dxt2Rgba, PVRTexLibPixelFormat.DXT2, SourceKind.Rgba8, PVRTexLibVariableType.UnsignedByteNorm, CompressorFamily.Other),
+        new(TextureFormats.Dxt2Rgba, PVRTexLibPixelFormat.DXT2, SourceKind.Rgba8, PVRTexLibVariableType.UnsignedByteNorm, CompressorFamily.Other, Premultiplied: true),
         new(TextureFormats.Dxt3Rgba, PVRTexLibPixelFormat.DXT3, SourceKind.Rgba8, PVRTexLibVariableType.UnsignedByteNorm, CompressorFamily.Other),
         new(TextureFormats.Dxt3RgbaSrgb, PVRTexLibPixelFormat.DXT3, SourceKind.Rgba8, PVRTexLibVariableType.UnsignedByteNorm, CompressorFamily.Other),
-        new(TextureFormats.Dxt4Rgba, PVRTexLibPixelFormat.DXT4, SourceKind.Rgba8, PVRTexLibVariableType.UnsignedByteNorm, CompressorFamily.Other),
+        new(TextureFormats.Dxt4Rgba, PVRTexLibPixelFormat.DXT4, SourceKind.Rgba8, PVRTexLibVariableType.UnsignedByteNorm, CompressorFamily.Other, Premultiplied: true),
         new(TextureFormats.Dxt5Rgba, PVRTexLibPixelFormat.DXT5, SourceKind.Rgba8, PVRTexLibVariableType.UnsignedByteNorm, CompressorFamily.Other),
         new(TextureFormats.Dxt5RgbaSrgb, PVRTexLibPixelFormat.DXT5, SourceKind.Rgba8, PVRTexLibVariableType.UnsignedByteNorm, CompressorFamily.Other),
         new(TextureFormats.Bc2Rgba, PVRTexLibPixelFormat.BC2, SourceKind.Rgba8, PVRTexLibVariableType.UnsignedByteNorm, CompressorFamily.Other),
@@ -176,7 +176,9 @@ public sealed unsafe class PVRTexLibTextureCoder : IPitchTextureCoder
                 var rgba8 = new Rgba8UNorm[pixelCount];
                 for (var i = 0; i < rgba8.Length; i++)
                 {
-                    rgba8[i] = TPixel.ToRgba8UNorm(source.Pixels[i]);
+                    var pixel = TPixel.ToRgba8UNorm(source.Pixels[i]);
+                    if (_mapping.Opaque) pixel.Alpha = 255;
+                    rgba8[i] = _mapping.Premultiplied ? RgbaColorConversions.PremultiplyAlpha(pixel) : pixel;
                 }
 
                 fixed (Rgba8UNorm* ptr = rgba8)
@@ -255,7 +257,14 @@ public sealed unsafe class PVRTexLibTextureCoder : IPitchTextureCoder
         switch (_mapping.SourceKind)
         {
             case SourceKind.Rgba8:
-                CopyPixels(new ReadOnlySpan<Rgba8UNorm>(data, pixelCount), destination, static value => TPixel.FromRgba8UNorm(value));
+                var pixels = new ReadOnlySpan<Rgba8UNorm>(data, pixelCount);
+                for (int i = 0; i < pixels.Length; i++)
+                {
+                    var pixel = pixels[i];
+                    if (_mapping.Opaque) pixel.Alpha = 255;
+                    if (_mapping.Premultiplied) pixel = RgbaColorConversions.UnpremultiplyAlpha(pixel);
+                    destination.Pixels[i] = TPixel.FromRgba8UNorm(pixel);
+                }
                 return;
             case SourceKind.Rgba8SNorm:
                 CopyPixels(new ReadOnlySpan<Rgba8SNorm>(data, pixelCount), destination, static value => TPixel.FromRgba8SNorm(value));
@@ -451,7 +460,9 @@ public sealed unsafe class PVRTexLibTextureCoder : IPitchTextureCoder
         PVRTexLibPixelFormat PixelFormat,
         SourceKind SourceKind,
         PVRTexLibVariableType ChannelType,
-        CompressorFamily Family);
+        CompressorFamily Family,
+        bool Opaque = false,
+        bool Premultiplied = false);
 
     private enum SourceKind
     {

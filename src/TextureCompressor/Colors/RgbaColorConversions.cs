@@ -2,6 +2,14 @@ namespace TextureCompressor.Colors;
 
 public static class RgbaColorConversions
 {
+    public static Rgba8UNorm PremultiplyAlpha(Rgba8UNorm p) => new(
+        (byte)(p.Red * p.Alpha / 255), (byte)(p.Green * p.Alpha / 255),
+        (byte)(p.Blue * p.Alpha / 255), p.Alpha);
+
+    public static Rgba8UNorm UnpremultiplyAlpha(Rgba8UNorm p) => p.Alpha == 0 ? default : new(
+        (byte)Math.Min(255, p.Red * 255 / p.Alpha), (byte)Math.Min(255, p.Green * 255 / p.Alpha),
+        (byte)Math.Min(255, p.Blue * 255 / p.Alpha), p.Alpha);
+
     public static byte ToUNorm8(byte value) => value;
 
     public static byte ToUNorm8(sbyte value) => (byte)ScaleSignedToUnsigned(value, sbyte.MaxValue, byte.MaxValue);

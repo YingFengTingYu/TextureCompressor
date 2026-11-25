@@ -1,4 +1,5 @@
-﻿using System.Buffers.Binary;
+using System.Numerics;
+using System.Buffers.Binary;
 using System.Runtime.CompilerServices;
 using TextureCompressor.Colors;
 using TextureCompressor.Formats;
@@ -324,6 +325,9 @@ public sealed class AtcTextureCoder : IPitchTextureCoder
         AddColorSeed(seeds, ref seedCount, (ushort)(PackRgb555(max) | 0x8000), PackRgb565(min));
         AddColorSeed(seeds, ref seedCount, (ushort)(PackRgb555(max) | 0x8000), PackRgb565(max));
 
+        // The ATI reference splits the block into luminance regions and can
+        // spend one selector on black. Seed both modes with actual region means.
+        AddLuminanceSeeds(source, seeds, ref seedCount);
         if (TryInsetColorBounds(min, max, out var insetMin, out var insetMax))
         {
             AddColorSeed(seeds, ref seedCount, PackRgb555(insetMin), PackRgb565(insetMax));
@@ -361,17 +365,91 @@ public sealed class AtcTextureCoder : IPitchTextureCoder
 
         var best = new ColorBlockEncoding { Error = long.MaxValue };
         var iterationLimit = GetColorOptimizationIterationLimit(compressionMode);
+        var refinementPasses = GetColorRefinementPassLimit(compressionMode);
         for (var i = 0; i < seedCount; i++)
         {
-            OptimizeColorSeed(source, seeds[i].Color0, seeds[i].Color1, iterationLimit, ref best);
+            var candidate = new ColorBlockEncoding { Error = long.MaxValue };
+            OptimizeColorSeed(source, seeds[i].Color0, seeds[i].Color1, iterationLimit, ref candidate);
+            if (compressionMode >= TextureCompressionLevel.High
+                && (best.Error == long.MaxValue || candidate.Error <= best.Error + best.Error / 8)
+                && (best.Error == long.MaxValue || candidate.Color0 != best.Color0 || candidate.Color1 != best.Color1))
+            {
+                RefineColorEndpoints(source, refinementPasses, ref candidate);
+            }
+
+            UpdateBestColorEncoding(candidate, ref best);
+            if (best.Error == 0)
+            {
+                break;
+            }
         }
 
-        RefineColorEndpoints(source, GetColorRefinementPassLimit(compressionMode), ref best);
+        if (compressionMode == TextureCompressionLevel.Normal)
+        {
+            RefineColorEndpoints(source, refinementPasses, ref best);
+        }
+        else if (best.Error > 0)
+        {
+            Span<ushort> neighbors = stackalloc ushort[26];
+            for (int pass = 0; pass < refinementPasses; pass++)
+            {
+                long initialError = best.Error;
+                int count = BlockColorRefinement.GetNeighbors(best.Color0, true, neighbors);
+                for (int i = 0; i < count; i++)
+                {
+                    UpdateBestColorEncoding(EvaluateColorCandidate(source, neighbors[i], best.Color1), ref best);
+                }
+                count = BlockColorRefinement.GetNeighbors(best.Color1, false, neighbors);
+                for (int i = 0; i < count; i++)
+                {
+                    UpdateBestColorEncoding(EvaluateColorCandidate(source, best.Color0, neighbors[i]), ref best);
+                }
+                if (initialError == best.Error) break;
+            }
+        }
 
         BinaryPrimitives.WriteUInt16LittleEndian(destination, best.Color0);
         BinaryPrimitives.WriteUInt16LittleEndian(destination[2..], best.Color1);
         BinaryPrimitives.WriteUInt32LittleEndian(destination[4..], best.Indices);
     }
+
+    private static void AddLuminanceSeeds(ReadOnlySpan<Rgba8UNorm> source, Span<ColorEndpointPair> seeds, ref int count)
+    {
+        Span<int> luma = stackalloc int[TexelsPerBlock];
+        int low = 255, high = 0;
+        for (int i = 0; i < luma.Length; i++)
+        {
+            var p = source[i];
+            int y = (19 * p.Red + 38 * p.Green + 7 * p.Blue) >> 6;
+            luma[i] = y;
+            low = Math.Min(low, y);
+            high = Math.Max(high, y);
+        }
+        if (low == high) return;
+
+        Span<int> totals = stackalloc int[4];
+        Span<Vector3> sums = stackalloc Vector3[4];
+        totals.Clear();
+        sums.Clear();
+        for (int i = 0; i < luma.Length; i++)
+        {
+            var p = source[i];
+            int region = Math.Min(3, 4 * (luma[i] - low) / (high - low));
+            totals[region]++;
+            sums[region] += new Vector3(p.Red, p.Green, p.Blue);
+        }
+        var dark = MeanColor(sums[0], totals[0]);
+        var light = MeanColor(sums[3], totals[3]);
+        AddColorSeed(seeds, ref count, PackRgb555(dark), PackRgb565(light));
+        if (totals[2] > 0)
+        {
+            var middle = MeanColor(sums[2], totals[2]);
+            AddColorSeed(seeds, ref count, (ushort)(0x8000 | PackRgb555(middle)), PackRgb565(light));
+        }
+    }
+
+    private static Rgb24 MeanColor(Vector3 sum, int count) =>
+        new((byte)(sum.X / count), (byte)(sum.Y / count), (byte)(sum.Z / count));
 
     private static void TryEncodeColorCandidate(
         ReadOnlySpan<Rgba8UNorm> source,
@@ -659,53 +737,14 @@ public sealed class AtcTextureCoder : IPitchTextureCoder
         int passLimit,
         ref ColorBlockEncoding best)
     {
-        for (var pass = 0; pass < passLimit; pass++)
+        for (var pass = 0; pass < passLimit && best.Error > 0; pass++)
         {
-            var previousError = best.Error;
-            var baseColor0 = best.Color0;
-            var baseColor1 = best.Color1;
-            for (var delta0 = 0; delta0 < 27; delta0++)
-            {
-                var color0 = OffsetRgb555Endpoint(baseColor0, delta0);
-                for (var delta1 = 0; delta1 < 27; delta1++)
-                {
-                    var color1 = OffsetRgb565Endpoint(baseColor1, delta1);
-                    UpdateBestColorEncoding(EvaluateColorCandidate(source, color0, color1), ref best);
-                }
-            }
-
-            if (best.Error == 0 || best.Error == previousError)
-            {
-                return;
-            }
+            var mode = IsSubtractiveColorMode(best.Color0) ? ColorRamp.AtcBlack : ColorRamp.Atc;
+            var pair = BlockColorRefinement.Refine(source, best.Color0, best.Color1, best.Indices, mode, passLimit == 1 ? 1 : 2);
+            var candidate = EvaluateColorCandidate(source, pair.First, pair.Second);
+            if (candidate.Error >= best.Error) break;
+            best = candidate;
         }
-    }
-
-    private static ushort OffsetRgb555Endpoint(ushort endpoint, int deltaIndex)
-    {
-        var flag = endpoint & 0x8000;
-        var value = endpoint & 0x7fff;
-        DecodeDeltaIndex(deltaIndex, out var redDelta, out var greenDelta, out var blueDelta);
-        var red = ClampToRange(((value >> 10) & 0x1f) + redDelta, 0x1f);
-        var green = ClampToRange(((value >> 5) & 0x1f) + greenDelta, 0x1f);
-        var blue = ClampToRange((value & 0x1f) + blueDelta, 0x1f);
-        return (ushort)(flag | (red << 10) | (green << 5) | blue);
-    }
-
-    private static ushort OffsetRgb565Endpoint(ushort endpoint, int deltaIndex)
-    {
-        DecodeDeltaIndex(deltaIndex, out var redDelta, out var greenDelta, out var blueDelta);
-        var red = ClampToRange(((endpoint >> 11) & 0x1f) + redDelta, 0x1f);
-        var green = ClampToRange(((endpoint >> 5) & 0x3f) + greenDelta, 0x3f);
-        var blue = ClampToRange((endpoint & 0x1f) + blueDelta, 0x1f);
-        return (ushort)((red << 11) | (green << 5) | blue);
-    }
-
-    private static void DecodeDeltaIndex(int deltaIndex, out int redDelta, out int greenDelta, out int blueDelta)
-    {
-        redDelta = (deltaIndex % 3) - 1;
-        greenDelta = ((deltaIndex / 3) % 3) - 1;
-        blueDelta = ((deltaIndex / 9) % 3) - 1;
     }
 
     private static void DecodeExplicitAlphaBlock(ReadOnlySpan<byte> source, Span<Rgba8UNorm> destination)
@@ -731,7 +770,7 @@ public sealed class AtcTextureCoder : IPitchTextureCoder
     private static void DecodeInterpolatedAlphaBlock(ReadOnlySpan<byte> source, Span<Rgba8UNorm> destination)
     {
         var palette = new InlineArray8<byte>();
-        BuildAlphaPalette(source[0], source[1], palette);
+        InterpolatedAlphaBlock.BuildPalette(source[0], source[1], rounded: true, palette);
 
         var indices = ReadAlphaIndices(source);
         for (var i = 0; i < TexelsPerBlock; i++)
@@ -740,359 +779,12 @@ public sealed class AtcTextureCoder : IPitchTextureCoder
         }
     }
 
-    private static void EncodeInterpolatedAlphaBlock(
-        ReadOnlySpan<Rgba8UNorm> source,
-        Span<byte> destination,
-        TextureCompressionLevel compressionMode)
+    private static void EncodeInterpolatedAlphaBlock(ReadOnlySpan<Rgba8UNorm> source,
+        Span<byte> destination, TextureCompressionLevel compressionMode)
     {
-        switch (compressionMode)
-        {
-            case TextureCompressionLevel.Fast:
-                EncodeInterpolatedAlphaBlockFast(source, destination);
-                return;
-            case TextureCompressionLevel.Normal:
-            case TextureCompressionLevel.High:
-                EncodeInterpolatedAlphaBlockOptimized(source, compressionMode, destination);
-                return;
-            case TextureCompressionLevel.Exhaustive:
-                EncodeInterpolatedAlphaBlockExhaustive(source, destination);
-                return;
-            default:
-                throw new ArgumentOutOfRangeException(
-                    nameof(compressionMode),
-                    compressionMode,
-                    "Unsupported ATC compression mode.");
-        }
-    }
-
-    private static void EncodeInterpolatedAlphaBlockFast(ReadOnlySpan<Rgba8UNorm> source, Span<byte> destination)
-    {
-        FindAlphaBounds(source, out var min, out var max);
-
-        var bestError = int.MaxValue;
-        byte bestAlpha0 = max;
-        byte bestAlpha1 = min;
-        ulong bestIndices = 0;
-        TryEncodeInterpolatedAlphaCandidate(source, max, min, ref bestError, ref bestAlpha0, ref bestAlpha1, ref bestIndices);
-        TryEncodeInterpolatedAlphaCandidate(source, min, max, ref bestError, ref bestAlpha0, ref bestAlpha1, ref bestIndices);
-
-        destination[0] = bestAlpha0;
-        destination[1] = bestAlpha1;
-
-        for (var i = 0; i < 6; i++)
-        {
-            destination[2 + i] = (byte)(bestIndices >> (8 * i));
-        }
-    }
-
-    private static void EncodeInterpolatedAlphaBlockOptimized(
-        ReadOnlySpan<Rgba8UNorm> source,
-        TextureCompressionLevel compressionMode,
-        Span<byte> destination)
-    {
-        FindAlphaBounds(source, out var min, out var max);
-        var best = new AlphaBlockEncoding { Error = long.MaxValue };
-        var iterationLimit = GetAlphaOptimizationIterationLimit(compressionMode);
-        OptimizeAlphaSeed(source, max, min, AlphaEndpointMode.EightAlpha, iterationLimit, ref best);
-        OptimizeAlphaSeed(source, min, max, AlphaEndpointMode.SixAlpha, iterationLimit, ref best);
-
-        if (max > min)
-        {
-            var padding = Math.Max(1, (max - min + 13) / 14);
-            var expandedMin = (byte)Math.Max(byte.MinValue, min - padding);
-            var expandedMax = (byte)Math.Min(byte.MaxValue, max + padding);
-            OptimizeAlphaSeed(source, expandedMax, expandedMin, AlphaEndpointMode.EightAlpha, iterationLimit, ref best);
-            OptimizeAlphaSeed(source, expandedMin, expandedMax, AlphaEndpointMode.SixAlpha, iterationLimit, ref best);
-        }
-
-        RefineAlphaEndpoints(source, GetAlphaRefinementPassLimit(compressionMode), ref best);
-        WriteAlphaBlock(best, destination);
-    }
-
-    private static void EncodeInterpolatedAlphaBlockExhaustive(
-        ReadOnlySpan<Rgba8UNorm> source,
-        Span<byte> destination)
-    {
-        var best = new AlphaBlockEncoding { Error = long.MaxValue };
-        for (var alpha0 = 0; alpha0 <= byte.MaxValue; alpha0++)
-        {
-            for (var alpha1 = 0; alpha1 <= byte.MaxValue; alpha1++)
-            {
-                var candidate = EvaluateAlphaCandidate(source, (byte)alpha0, (byte)alpha1, best.Error);
-                UpdateBestAlphaEncoding(candidate, ref best);
-                if (best.Error == 0)
-                {
-                    WriteAlphaBlock(best, destination);
-                    return;
-                }
-            }
-        }
-
-        WriteAlphaBlock(best, destination);
-    }
-
-    private static void TryEncodeInterpolatedAlphaCandidate(
-        ReadOnlySpan<Rgba8UNorm> source,
-        byte alpha0,
-        byte alpha1,
-        ref int bestError,
-        ref byte bestAlpha0,
-        ref byte bestAlpha1,
-        ref ulong bestIndices)
-    {
-        var palette = new InlineArray8<byte>();
-        BuildAlphaPalette(alpha0, alpha1, palette);
-
-        var error = 0;
-        ulong indices = 0;
-        for (var i = 0; i < TexelsPerBlock; i++)
-        {
-            var index = FindNearestAlphaIndex(source[i].Alpha, palette, out var distance);
-            error += distance;
-            if (error >= bestError)
-            {
-                return;
-            }
-
-            indices |= (ulong)index << (i * 3);
-        }
-
-        bestError = error;
-        bestAlpha0 = alpha0;
-        bestAlpha1 = alpha1;
-        bestIndices = indices;
-    }
-
-    private static void OptimizeAlphaSeed(
-        ReadOnlySpan<Rgba8UNorm> source,
-        byte alpha0,
-        byte alpha1,
-        AlphaEndpointMode mode,
-        int iterationLimit,
-        ref AlphaBlockEncoding best)
-    {
-        NormalizeAlphaEndpointOrder(ref alpha0, ref alpha1, mode);
-        for (var iteration = 0; iteration < iterationLimit; iteration++)
-        {
-            var current = EvaluateAlphaCandidate(source, alpha0, alpha1);
-            UpdateBestAlphaEncoding(current, ref best);
-            if (current.Error == 0
-                || !TrySolveAlphaEndpoints(current.Indices, source, mode, out var nextAlpha0, out var nextAlpha1))
-            {
-                return;
-            }
-
-            if (nextAlpha0 == alpha0 && nextAlpha1 == alpha1)
-            {
-                return;
-            }
-
-            alpha0 = nextAlpha0;
-            alpha1 = nextAlpha1;
-        }
-    }
-
-    private static AlphaBlockEncoding EvaluateAlphaCandidate(
-        ReadOnlySpan<Rgba8UNorm> source,
-        byte alpha0,
-        byte alpha1,
-        long maxError = long.MaxValue)
-    {
-        var palette = new InlineArray8<byte>();
-        BuildAlphaPalette(alpha0, alpha1, palette);
-
-        long error = 0;
-        ulong indices = 0;
-        for (var i = 0; i < TexelsPerBlock; i++)
-        {
-            var index = FindNearestAlphaIndex(source[i].Alpha, palette, out var distance);
-            error += distance * distance;
-            indices |= (ulong)index << (i * 3);
-            if (error >= maxError)
-            {
-                return new AlphaBlockEncoding(alpha0, alpha1, indices, error);
-            }
-        }
-
-        return new AlphaBlockEncoding(alpha0, alpha1, indices, error);
-    }
-
-    private static void UpdateBestAlphaEncoding(AlphaBlockEncoding candidate, ref AlphaBlockEncoding best)
-    {
-        if (candidate.Error < best.Error)
-        {
-            best = candidate;
-        }
-    }
-
-    private static bool TrySolveAlphaEndpoints(
-        ulong indices,
-        ReadOnlySpan<Rgba8UNorm> source,
-        AlphaEndpointMode mode,
-        out byte alpha0,
-        out byte alpha1)
-    {
-        var aa = 0d;
-        var ab = 0d;
-        var bb = 0d;
-        var ap = 0d;
-        var bp = 0d;
-        for (var i = 0; i < TexelsPerBlock; i++)
-        {
-            var index = (int)((indices >> (i * 3)) & 0x7u);
-            GetAlphaEndpointWeights(index, mode, out var weightA, out var weightB);
-            if (weightA == 0d && weightB == 0d)
-            {
-                continue;
-            }
-
-            var alpha = source[i].Alpha;
-            aa += weightA * weightA;
-            ab += weightA * weightB;
-            bb += weightB * weightB;
-            ap += weightA * alpha;
-            bp += weightB * alpha;
-        }
-
-        var determinant = (aa * bb) - (ab * ab);
-        if (Math.Abs(determinant) < 1e-8d)
-        {
-            alpha0 = 0;
-            alpha1 = 0;
-            return false;
-        }
-
-        alpha0 = ClampToByte(SolveEndpointA(ap, bp, aa, ab, bb, determinant));
-        alpha1 = ClampToByte(SolveEndpointB(ap, bp, aa, ab, determinant));
-        NormalizeAlphaEndpointOrder(ref alpha0, ref alpha1, mode);
-        return true;
-    }
-
-    private static void GetAlphaEndpointWeights(
-        int index,
-        AlphaEndpointMode mode,
-        out double weightA,
-        out double weightB)
-    {
-        if (index == 0)
-        {
-            weightA = 1d;
-            weightB = 0d;
-            return;
-        }
-
-        if (index == 1)
-        {
-            weightA = 0d;
-            weightB = 1d;
-            return;
-        }
-
-        if (mode == AlphaEndpointMode.EightAlpha)
-        {
-            var weight0 = 8 - index;
-            var weight1 = index - 1;
-            weightA = weight0 / 7d;
-            weightB = weight1 / 7d;
-            return;
-        }
-
-        if (index is 6 or 7)
-        {
-            weightA = 0d;
-            weightB = 0d;
-            return;
-        }
-
-        var sixWeight0 = 6 - index;
-        var sixWeight1 = index - 1;
-        weightA = sixWeight0 / 5d;
-        weightB = sixWeight1 / 5d;
-    }
-
-    private static void NormalizeAlphaEndpointOrder(ref byte alpha0, ref byte alpha1, AlphaEndpointMode mode)
-    {
-        if (mode == AlphaEndpointMode.EightAlpha)
-        {
-            if (alpha0 > alpha1)
-            {
-                return;
-            }
-
-            if (alpha1 < byte.MaxValue)
-            {
-                alpha0 = (byte)(alpha1 + 1);
-                return;
-            }
-
-            alpha0 = byte.MaxValue;
-            alpha1 = byte.MaxValue - 1;
-            return;
-        }
-
-        if (alpha0 > alpha1)
-        {
-            (alpha0, alpha1) = (alpha1, alpha0);
-        }
-    }
-
-    private static int GetAlphaOptimizationIterationLimit(TextureCompressionLevel compressionMode) => compressionMode switch
-    {
-        TextureCompressionLevel.Normal => 4,
-        TextureCompressionLevel.High => 8,
-        _ => throw new ArgumentOutOfRangeException(
-            nameof(compressionMode),
-            compressionMode,
-            "Unsupported ATC compression mode.")
-    };
-
-    private static int GetAlphaRefinementPassLimit(TextureCompressionLevel compressionMode) => compressionMode switch
-    {
-        TextureCompressionLevel.Normal => 1,
-        TextureCompressionLevel.High => 2,
-        _ => throw new ArgumentOutOfRangeException(
-            nameof(compressionMode),
-            compressionMode,
-            "Unsupported ATC compression mode.")
-    };
-
-    private static void RefineAlphaEndpoints(
-        ReadOnlySpan<Rgba8UNorm> source,
-        int passLimit,
-        ref AlphaBlockEncoding best)
-    {
-        var mode = best.Alpha0 > best.Alpha1 ? AlphaEndpointMode.EightAlpha : AlphaEndpointMode.SixAlpha;
-        for (var pass = 0; pass < passLimit; pass++)
-        {
-            var previousError = best.Error;
-            var baseAlpha0 = best.Alpha0;
-            var baseAlpha1 = best.Alpha1;
-            for (var delta0 = -2; delta0 <= 2; delta0++)
-            {
-                for (var delta1 = -2; delta1 <= 2; delta1++)
-                {
-                    var alpha0 = OffsetByte(baseAlpha0, delta0);
-                    var alpha1 = OffsetByte(baseAlpha1, delta1);
-                    NormalizeAlphaEndpointOrder(ref alpha0, ref alpha1, mode);
-                    UpdateBestAlphaEncoding(EvaluateAlphaCandidate(source, alpha0, alpha1), ref best);
-                }
-            }
-
-            if (best.Error == 0 || best.Error == previousError)
-            {
-                return;
-            }
-        }
-    }
-
-    private static void WriteAlphaBlock(AlphaBlockEncoding best, Span<byte> destination)
-    {
-        destination[0] = best.Alpha0;
-        destination[1] = best.Alpha1;
-        for (var i = 0; i < 6; i++)
-        {
-            destination[2 + i] = (byte)(best.Indices >> (8 * i));
-        }
+        Span<byte> values = stackalloc byte[TexelsPerBlock];
+        for (int i = 0; i < values.Length; i++) values[i] = source[i].Alpha;
+        InterpolatedAlphaBlock.Encode(values, destination, compressionMode, rounded: true);
     }
 
     private static void BuildColorPalette(ushort color0, ushort color1, Span<Rgba8UNorm> palette)
@@ -1165,31 +857,6 @@ public sealed class AtcTextureCoder : IPitchTextureCoder
     private static byte Expand5(int value) => (byte)((value << 3) | (value >> 2));
 
     private static byte Expand6(int value) => (byte)((value << 2) | (value >> 4));
-
-    private static void BuildAlphaPalette(byte alpha0, byte alpha1, Span<byte> palette)
-    {
-        palette[0] = alpha0;
-        palette[1] = alpha1;
-
-        if (alpha0 > alpha1)
-        {
-            palette[2] = (byte)(((6 * alpha0) + alpha1 + 3) / 7);
-            palette[3] = (byte)(((5 * alpha0) + (2 * alpha1) + 3) / 7);
-            palette[4] = (byte)(((4 * alpha0) + (3 * alpha1) + 3) / 7);
-            palette[5] = (byte)(((3 * alpha0) + (4 * alpha1) + 3) / 7);
-            palette[6] = (byte)(((2 * alpha0) + (5 * alpha1) + 3) / 7);
-            palette[7] = (byte)((alpha0 + (6 * alpha1) + 3) / 7);
-        }
-        else
-        {
-            palette[2] = (byte)(((4 * alpha0) + alpha1 + 2) / 5);
-            palette[3] = (byte)(((3 * alpha0) + (2 * alpha1) + 2) / 5);
-            palette[4] = (byte)(((2 * alpha0) + (3 * alpha1) + 2) / 5);
-            palette[5] = (byte)((alpha0 + (4 * alpha1) + 2) / 5);
-            palette[6] = 0;
-            palette[7] = 255;
-        }
-    }
 
     private static ulong ReadAlphaIndices(ReadOnlySpan<byte> source)
     {
@@ -1378,17 +1045,6 @@ public sealed class AtcTextureCoder : IPitchTextureCoder
         return true;
     }
 
-    private static void FindAlphaBounds(ReadOnlySpan<Rgba8UNorm> source, out byte min, out byte max)
-    {
-        min = byte.MaxValue;
-        max = byte.MinValue;
-        for (var i = 0; i < TexelsPerBlock; i++)
-        {
-            min = Math.Min(min, source[i].Alpha);
-            max = Math.Max(max, source[i].Alpha);
-        }
-    }
-
     private static int FindNearestColorIndex(Rgba8UNorm color, ReadOnlySpan<Rgba8UNorm> palette, out int bestDistance)
     {
         var bestIndex = 0;
@@ -1399,23 +1055,6 @@ public sealed class AtcTextureCoder : IPitchTextureCoder
             var green = color.Green - palette[i].Green;
             var blue = color.Blue - palette[i].Blue;
             var distance = (red * red) + (green * green) + (blue * blue);
-            if (distance < bestDistance)
-            {
-                bestDistance = distance;
-                bestIndex = i;
-            }
-        }
-
-        return bestIndex;
-    }
-
-    private static int FindNearestAlphaIndex(byte alpha, ReadOnlySpan<byte> palette, out int bestDistance)
-    {
-        var bestIndex = 0;
-        bestDistance = int.MaxValue;
-        for (var i = 0; i < palette.Length; i++)
-        {
-            var distance = Math.Abs(alpha - palette[i]);
             if (distance < bestDistance)
             {
                 bestDistance = distance;
@@ -1455,11 +1094,6 @@ public sealed class AtcTextureCoder : IPitchTextureCoder
 
     private static byte ClampToByte(double value) =>
         (byte)Math.Clamp((int)Math.Round(value), byte.MinValue, byte.MaxValue);
-
-    private static int ClampToRange(int value, int max) => Math.Clamp(value, 0, max);
-
-    private static byte OffsetByte(byte value, int delta) =>
-        (byte)Math.Clamp(value + delta, byte.MinValue, byte.MaxValue);
 
     private static int Quantize5(byte value)
     {
@@ -1591,8 +1225,6 @@ public sealed class AtcTextureCoder : IPitchTextureCoder
 
     private readonly record struct ColorBlockEncoding(ushort Color0, ushort Color1, uint Indices, long Error);
 
-    private readonly record struct AlphaBlockEncoding(byte Alpha0, byte Alpha1, ulong Indices, long Error);
-
     private enum AtcTransfer
     {
         Rgb,
@@ -1600,9 +1232,4 @@ public sealed class AtcTextureCoder : IPitchTextureCoder
         RgbaInterpolatedAlpha
     }
 
-    private enum AlphaEndpointMode
-    {
-        SixAlpha,
-        EightAlpha
-    }
 }

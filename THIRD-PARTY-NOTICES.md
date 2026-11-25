@@ -16,6 +16,39 @@ specific file-format packages such as KTX. If an application references only the
 core library project/package, it does not take dependencies on those external
 encoder, native runtime, CLI, or test packages.
 
+## DXT and ATC encoding references
+
+The managed encoders use the projected color-ramp search and channel refinement
+described in [AMD Compressonator's BC1 encoder](https://github.com/GPUOpen-Tools/compressonator/blob/095a143ad8cfbf9ed5afa4ea63c735bfd0fd04dd/cmp_core/shaders/bc1_cmp.h).
+The ATC palette, luminance regions, black selector and alpha blocks were checked
+against the [ATI color codec](https://github.com/GPUOpen-Tools/compressonator/blob/095a143ad8cfbf9ed5afa4ea63c735bfd0fd04dd/cmp_compressonatorlib/ati/compressonatori_tc.c)
+and [AMD's ATC wrapper](https://github.com/GPUOpen-Tools/compressonator/blob/095a143ad8cfbf9ed5afa4ea63c735bfd0fd04dd/cmp_compressonatorlib/atc/codec_atc.cpp).
+The ATC conformance vectors were produced with Compressonator CLI 4.6.0.
+For hardware-specific interpolation behavior, see Fabian Giesen's
+[GPU BCn decoding](https://fgiesen.wordpress.com/2021/10/04/gpu-bcn-decoding/).
+
+Copyright (c) 2007–2024 Advanced Micro Devices, Inc.
+
+Copyright (c) 2004–2006 ATI Technologies Inc.
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
+
 ## Direct NuGet Package References
 
 | Package | Version | Declared license | Project URL | Referenced by | Usage |

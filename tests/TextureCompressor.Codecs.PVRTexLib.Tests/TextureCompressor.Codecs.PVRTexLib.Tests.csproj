@@ -17,6 +17,7 @@
 
   <ItemGroup>
     <Using Include="Xunit" />
+    <Compile Include="..\Shared\DxtAdapterConformanceTests.cs" Link="DxtAdapterConformanceTests.cs" />
   </ItemGroup>
 
   <ItemGroup>

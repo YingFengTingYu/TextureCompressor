@@ -7,8 +7,10 @@ using TextureCompressor.Registry;
 
 namespace TextureCompressor.Codecs.BCnEncoder.Tests;
 
-public sealed class BCnEncoderTextureCoderTests
+public sealed class BCnEncoderTextureCoderTests : global::TextureCompressor.Tests.DxtAdapterConformanceTests
 {
+    protected override ITextureCoder CreateDxtCoder(TextureFormat format) => new BCnEncoderTextureCoder(format);
+
     private static readonly BCnEncoderCoderOptions SFastOptions = new()
     {
         Quality = CompressionQuality.Fast

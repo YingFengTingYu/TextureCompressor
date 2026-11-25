@@ -11,26 +11,26 @@ public sealed unsafe class DirectXTexTextureCoder : IPitchTextureCoder
 {
     private static readonly FormatMapping[] SMappings =
     [
-        new(TextureFormats.Bc1Rgb, DxgiFormat.BC1UNorm, SourceKind.Rgba8),
+        new(TextureFormats.Bc1Rgb, DxgiFormat.BC1UNorm, SourceKind.Rgba8, Opaque: true),
         new(TextureFormats.Bc1Rgba, DxgiFormat.BC1UNorm, SourceKind.Rgba8),
-        new(TextureFormats.Bc1RgbSrgb, DxgiFormat.BC1UNormSrgb, SourceKind.Rgba8, IsSrgb: true),
-        new(TextureFormats.Bc1RgbaSrgb, DxgiFormat.BC1UNormSrgb, SourceKind.Rgba8, IsSrgb: true),
-        new(TextureFormats.Dxt1Rgb, DxgiFormat.BC1UNorm, SourceKind.Rgba8),
+        new(TextureFormats.Bc1RgbSrgb, DxgiFormat.BC1UNormSrgb, SourceKind.Rgba8, Opaque: true),
+        new(TextureFormats.Bc1RgbaSrgb, DxgiFormat.BC1UNormSrgb, SourceKind.Rgba8),
+        new(TextureFormats.Dxt1Rgb, DxgiFormat.BC1UNorm, SourceKind.Rgba8, Opaque: true),
         new(TextureFormats.Dxt1Rgba, DxgiFormat.BC1UNorm, SourceKind.Rgba8),
-        new(TextureFormats.Dxt1RgbSrgb, DxgiFormat.BC1UNormSrgb, SourceKind.Rgba8, IsSrgb: true),
-        new(TextureFormats.Dxt1RgbaSrgb, DxgiFormat.BC1UNormSrgb, SourceKind.Rgba8, IsSrgb: true),
+        new(TextureFormats.Dxt1RgbSrgb, DxgiFormat.BC1UNormSrgb, SourceKind.Rgba8, Opaque: true),
+        new(TextureFormats.Dxt1RgbaSrgb, DxgiFormat.BC1UNormSrgb, SourceKind.Rgba8),
 
         new(TextureFormats.Bc2Rgba, DxgiFormat.BC2UNorm, SourceKind.Rgba8),
-        new(TextureFormats.Bc2RgbaSrgb, DxgiFormat.BC2UNormSrgb, SourceKind.Rgba8, IsSrgb: true),
-        new(TextureFormats.Dxt2Rgba, DxgiFormat.BC2UNorm, SourceKind.Rgba8),
+        new(TextureFormats.Bc2RgbaSrgb, DxgiFormat.BC2UNormSrgb, SourceKind.Rgba8),
+        new(TextureFormats.Dxt2Rgba, DxgiFormat.BC2UNorm, SourceKind.Rgba8, Premultiplied: true),
         new(TextureFormats.Dxt3Rgba, DxgiFormat.BC2UNorm, SourceKind.Rgba8),
-        new(TextureFormats.Dxt3RgbaSrgb, DxgiFormat.BC2UNormSrgb, SourceKind.Rgba8, IsSrgb: true),
+        new(TextureFormats.Dxt3RgbaSrgb, DxgiFormat.BC2UNormSrgb, SourceKind.Rgba8),
 
         new(TextureFormats.Bc3Rgba, DxgiFormat.BC3UNorm, SourceKind.Rgba8),
-        new(TextureFormats.Bc3RgbaSrgb, DxgiFormat.BC3UNormSrgb, SourceKind.Rgba8, IsSrgb: true),
-        new(TextureFormats.Dxt4Rgba, DxgiFormat.BC3UNorm, SourceKind.Rgba8),
+        new(TextureFormats.Bc3RgbaSrgb, DxgiFormat.BC3UNormSrgb, SourceKind.Rgba8),
+        new(TextureFormats.Dxt4Rgba, DxgiFormat.BC3UNorm, SourceKind.Rgba8, Premultiplied: true),
         new(TextureFormats.Dxt5Rgba, DxgiFormat.BC3UNorm, SourceKind.Rgba8),
-        new(TextureFormats.Dxt5RgbaSrgb, DxgiFormat.BC3UNormSrgb, SourceKind.Rgba8, IsSrgb: true),
+        new(TextureFormats.Dxt5RgbaSrgb, DxgiFormat.BC3UNormSrgb, SourceKind.Rgba8),
 
         new(TextureFormats.Bc4UNorm, DxgiFormat.BC4UNorm, SourceKind.Rgba8),
         new(TextureFormats.Bc4SNorm, DxgiFormat.BC4SNorm, SourceKind.Rgba8SNorm),
@@ -51,9 +51,9 @@ public sealed unsafe class DirectXTexTextureCoder : IPitchTextureCoder
         new(TextureFormats.RgbBptcUFloat, DxgiFormat.BC6HUFloat16, SourceKind.Rgba32Float),
         new(TextureFormats.RgbBptcSFloat, DxgiFormat.BC6HSFloat16, SourceKind.Rgba32Float),
         new(TextureFormats.Bc7UNorm, DxgiFormat.BC7UNorm, SourceKind.Rgba8),
-        new(TextureFormats.Bc7Srgb, DxgiFormat.BC7UNormSrgb, SourceKind.Rgba8, IsSrgb: true),
+        new(TextureFormats.Bc7Srgb, DxgiFormat.BC7UNormSrgb, SourceKind.Rgba8),
         new(TextureFormats.RgbaBptcUNorm, DxgiFormat.BC7UNorm, SourceKind.Rgba8),
-        new(TextureFormats.RgbaBptcSrgb, DxgiFormat.BC7UNormSrgb, SourceKind.Rgba8, IsSrgb: true)
+        new(TextureFormats.RgbaBptcSrgb, DxgiFormat.BC7UNormSrgb, SourceKind.Rgba8)
     ];
 
     private static readonly TextureFormat[] SSupportedFormats = SMappings.Select(static mapping => mapping.Format).ToArray();
@@ -155,7 +155,8 @@ public sealed unsafe class DirectXTexTextureCoder : IPitchTextureCoder
         for (var i = 0; i < rgba.Length; i++)
         {
             var pixel = TPixel.ToRgba8UNorm(source.Pixels[i]);
-            rgba[i] = _mapping.IsSrgb ? EncodeSrgb(pixel) : pixel;
+            if (_mapping.Opaque) pixel.Alpha = 255;
+            rgba[i] = _mapping.Premultiplied ? RgbaColorConversions.PremultiplyAlpha(pixel) : pixel;
         }
 
         return Compress(source.Width, source.Height, DxgiFormat.R8G8B8A8UNorm, rgba);
@@ -204,7 +205,7 @@ public sealed unsafe class DirectXTexTextureCoder : IPitchTextureCoder
             var scratch = DxTex.CreateScratchImage();
             try
             {
-                Check(DxTex.Compress(ref sourceImage, _mapping.DxgiFormat, _options.Flags, _options.AlphaWeight, ref scratch));
+                Check(DxTex.Compress(ref sourceImage, _mapping.DxgiFormat, _options.Flags, _options.AlphaThreshold, ref scratch));
                 var image = GetOnlyImage(scratch);
                 var length = checked((int)image->SlicePitch);
                 var result = new byte[length];
@@ -251,7 +252,9 @@ public sealed unsafe class DirectXTexTextureCoder : IPitchTextureCoder
             var destinationRow = destination.GetRowSpan(y);
             for (var x = 0; x < row.Length; x++)
             {
-                var pixel = _mapping.IsSrgb ? DecodeSrgb(row[x]) : row[x];
+                var pixel = row[x];
+                if (_mapping.Opaque) pixel.Alpha = 255;
+                if (_mapping.Premultiplied) pixel = RgbaColorConversions.UnpremultiplyAlpha(pixel);
                 destinationRow[x] = TPixel.FromRgba8UNorm(pixel);
             }
         }
@@ -392,25 +395,12 @@ public sealed unsafe class DirectXTexTextureCoder : IPitchTextureCoder
         _ => throw new ArgumentOutOfRangeException(nameof(sourceKind), sourceKind, null)
     };
 
-    private static Rgba8UNorm EncodeSrgb(Rgba8UNorm pixel) =>
-        new(
-            RgbaColorConversions.LinearUNorm8ToSrgb8(pixel.Red),
-            RgbaColorConversions.LinearUNorm8ToSrgb8(pixel.Green),
-            RgbaColorConversions.LinearUNorm8ToSrgb8(pixel.Blue),
-            pixel.Alpha);
-
-    private static Rgba8UNorm DecodeSrgb(Rgba8UNorm pixel) =>
-        new(
-            RgbaColorConversions.Srgb8ToLinearUNorm8(pixel.Red),
-            RgbaColorConversions.Srgb8ToLinearUNorm8(pixel.Green),
-            RgbaColorConversions.Srgb8ToLinearUNorm8(pixel.Blue),
-            pixel.Alpha);
-
     private readonly record struct FormatMapping(
         TextureFormat Format,
         int DxgiFormat,
         SourceKind SourceKind,
-        bool IsSrgb = false);
+        bool Opaque = false,
+        bool Premultiplied = false);
 
     private enum SourceKind
     {

@@ -8,8 +8,10 @@ using TextureCompressor.Registry;
 
 namespace TextureCompressor.Codecs.PVRTexLib.Tests;
 
-public sealed class PVRTexLibTextureCoderTests
+public sealed class PVRTexLibTextureCoderTests : global::TextureCompressor.Tests.DxtAdapterConformanceTests
 {
+    protected override ITextureCoder CreateDxtCoder(TextureFormat format) => new PVRTexLibTextureCoder(format);
+
     private static readonly PVRTexLibCompressorOptions SFastOptions = new()
     {
         EtcQuality = PVRTexLibCompressorQuality.ETCFast,

@@ -6,8 +6,10 @@ using TextureCompressor.Registry;
 
 namespace TextureCompressor.Codecs.DirectXTex.Tests;
 
-public sealed class DirectXTexTextureCoderTests
+public sealed class DirectXTexTextureCoderTests : global::TextureCompressor.Tests.DxtAdapterConformanceTests
 {
+    protected override ITextureCoder CreateDxtCoder(TextureFormat format) => new DirectXTexTextureCoder(format);
+
     [Fact]
     public void RegisterDirectXTexCodersOverridesManagerUntilDisposed()
     {

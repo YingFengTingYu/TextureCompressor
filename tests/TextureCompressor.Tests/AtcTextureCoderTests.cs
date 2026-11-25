@@ -20,6 +20,24 @@ public sealed class AtcTextureCoderTests
         Assert.IsType<AtcTextureCoder>(coder);
     }
 
+    // Blocks and complete RGBA output from AMD Compressonator CLI 4.6.0.
+    [Theory]
+    [InlineData("RGB", "E520D9E680E9FFFF", "423929FF423929FF423929FFA99E90FF7F7566FFA99E90FFA99E90FFE7DBCEFFE7DBCEFFE7DBCEFFE7DBCEFFE7DBCEFFE7DBCEFFE7DBCEFFE7DBCEFFE7DBCEFF")]
+    [InlineData("explicit", "EE0FFE0FFE00FE10A0D6C0FF2F0B0200", "FFFB00EEFFFB00EEADAD00FF00000000FFFB00EEADAD00FF000000FF00000000ADAD00EE000000FF0000000000000000000000EE000000FF0000000000000011")]
+    [InlineData("interpolated", "1E00717753EF640EE520D9E680E9FFFF", "42392900423929094239290DA99E90157F756604A99E9009A99E9011E7DBCE1AE7DBCE04E7DBCE0DE7DBCE15E7DBCE1AE7DBCE09E7DBCE11E7DBCE15E7DBCE1E")]
+    public void DecodeMatchesCompressonator(string variant, string block, string rgba)
+    {
+        var format = variant switch
+        {
+            "RGB" => TextureFormats.AtcRgb,
+            "explicit" => TextureFormats.AtcRgbaExplicitAlpha,
+            _ => TextureFormats.AtcRgbaInterpolatedAlpha
+        };
+        var decoded = new ArrayBitmap<Rgba8UNorm>(4, 4);
+        ((ITextureCoder)new AtcTextureCoder(format)).Decode(Convert.FromHexString(block), decoded.AsView());
+        Assert.Equal(Convert.FromHexString(rgba), System.Runtime.InteropServices.MemoryMarshal.AsBytes(decoded.PixelSpan).ToArray());
+    }
+
     [Fact]
     public void AtcRgbDecodesModeZeroColorBlockToRgba8()
     {

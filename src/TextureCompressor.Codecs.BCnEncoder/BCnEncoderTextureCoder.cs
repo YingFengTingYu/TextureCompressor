@@ -28,13 +28,13 @@ public sealed class BCnEncoderTextureCoder : IPitchTextureCoder
 
         new(TextureFormats.Bc2Rgba, CompressionFormat.Bc2, SourceKind.Rgba8),
         new(TextureFormats.Bc2RgbaSrgb, CompressionFormat.Bc2, SourceKind.Rgba8, IsSrgb: true),
-        new(TextureFormats.Dxt2Rgba, CompressionFormat.Bc2, SourceKind.Rgba8),
+        new(TextureFormats.Dxt2Rgba, CompressionFormat.Bc2, SourceKind.Rgba8, Premultiplied: true),
         new(TextureFormats.Dxt3Rgba, CompressionFormat.Bc2, SourceKind.Rgba8),
         new(TextureFormats.Dxt3RgbaSrgb, CompressionFormat.Bc2, SourceKind.Rgba8, IsSrgb: true),
 
         new(TextureFormats.Bc3Rgba, CompressionFormat.Bc3, SourceKind.Rgba8),
         new(TextureFormats.Bc3RgbaSrgb, CompressionFormat.Bc3, SourceKind.Rgba8, IsSrgb: true),
-        new(TextureFormats.Dxt4Rgba, CompressionFormat.Bc3, SourceKind.Rgba8),
+        new(TextureFormats.Dxt4Rgba, CompressionFormat.Bc3, SourceKind.Rgba8, Premultiplied: true),
         new(TextureFormats.Dxt5Rgba, CompressionFormat.Bc3, SourceKind.Rgba8),
         new(TextureFormats.Dxt5RgbaSrgb, CompressionFormat.Bc3, SourceKind.Rgba8, IsSrgb: true),
 
@@ -246,6 +246,7 @@ public sealed class BCnEncoderTextureCoder : IPitchTextureCoder
                     pixel = EncodeSrgb(pixel);
                 }
 
+                if (_mapping.Premultiplied) pixel = RgbaColorConversions.PremultiplyAlpha(pixel);
                 destination[offset++] = new BcColorRgba32(pixel.Red, pixel.Green, pixel.Blue, pixel.Alpha);
             }
         }
@@ -307,6 +308,7 @@ public sealed class BCnEncoderTextureCoder : IPitchTextureCoder
                     pixel = DecodeSrgb(pixel);
                 }
 
+                if (_mapping.Premultiplied) pixel = RgbaColorConversions.UnpremultiplyAlpha(pixel);
                 destinationRow[destinationX] = TPixel.FromRgba8UNorm(pixel);
             }
         }
@@ -414,7 +416,8 @@ public sealed class BCnEncoderTextureCoder : IPitchTextureCoder
         TextureFormat Format,
         CompressionFormat CompressionFormat,
         SourceKind SourceKind,
-        bool IsSrgb = false);
+        bool IsSrgb = false,
+        bool Premultiplied = false);
 
     private enum SourceKind
     {

@@ -396,6 +396,35 @@ public sealed class S3tcTextureCoderTests
         Assert.Contains(decoded.Pixels, pixel => pixel.Alpha > 0);
     }
 
+    [Theory]
+    [InlineData(TextureCompressionLevel.Exhaustive, "0002080F1220252A41597898B9CFF7FF", 891, 902)]
+    [InlineData(TextureCompressionLevel.Exhaustive, "686A6E70737B7D7E8387898D94999DA2", 75, 74)]
+    [InlineData(TextureCompressionLevel.High, "010101DCDCE3E3EAEAF1F1F8F8FFFFFF", 3, 3)]
+    public void InterpolatedAlphaMatchesKnownMinimum(TextureCompressionLevel level, string samples, int dxtError, int atcError)
+    {
+        var alphas = Convert.FromHexString(samples);
+        var source = new ArrayBitmap<Rgba8UNorm>(4, 4, alphas.Select(a => new Rgba8UNorm(0, 0, 0, a)).ToArray());
+        var decoded = new ArrayBitmap<Rgba8UNorm>(4, 4);
+        var quality = new TextureCompressionOptions { CompressionMode = level };
+        foreach (var (coder, expected) in new (ITextureCoder, int)[]
+        {
+            (new S3tcTextureCoder(TextureFormats.Dxt5Rgba, quality), dxtError),
+            (new AtcTextureCoder(TextureFormats.AtcRgbaInterpolatedAlpha, quality), atcError)
+        })
+        {
+            var block = new byte[16];
+            coder.Encode(source.AsView(), block);
+            coder.Decode(block, decoded.AsView());
+            int error = 0;
+            for (int i = 0; i < 16; i++)
+            {
+                int difference = decoded.Pixels[i].Alpha - alphas[i];
+                error += difference * difference;
+            }
+            Assert.Equal(expected, error);
+        }
+    }
+
     [Fact]
     public void EncodeDxt5AExhaustedIsNoWorseThanHighQualitySearch()
     {
