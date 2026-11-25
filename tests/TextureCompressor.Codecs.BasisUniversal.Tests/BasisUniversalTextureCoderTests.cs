@@ -16,6 +16,19 @@ public sealed class BasisUniversalTextureCoderTests
     };
 
     [Fact]
+    public void NativeDecoderPreservesManagedEtc1sColorAndAlpha()
+    {
+        var source = new ArrayBitmap<Rgba8UNorm>(8, 8);
+        new Random(42).NextBytes(System.Runtime.InteropServices.MemoryMarshal.AsBytes(source.PixelSpan));
+        var payload = BasisEtc1sTextureCoder.Encode(source.AsView()).AsRawPayload();
+        var managed = new ArrayBitmap<Rgba8UNorm>(8, 8);
+        var native = new ArrayBitmap<Rgba8UNorm>(8, 8);
+        BasisEtc1sTextureCoder.Decode(payload, managed.AsView());
+        new BasisUniversalEtc1sTextureCoder(TextureFormats.RgbaBasisEtc1sUNorm).Decode(payload, native.AsView());
+        Assert.True(managed.PixelSpan.SequenceEqual(native.PixelSpan));
+    }
+
+    [Fact]
     public void RegisterBasisUniversalCodersOverridesManagerUntilDisposed()
     {
         var manager = new TextureCoderManager();

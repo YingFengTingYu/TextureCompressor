@@ -10,7 +10,8 @@ public sealed class BasisUniversalEtc1sTextureCoder : IBasisEtc1sTextureCoder
 {
     private const int Ktx2HeaderByteCount = 80;
     private const int Ktx2LevelIndexEntryByteCount = 24;
-    private const int Ktx2Etc1sDfdByteCount = 44;
+    private const int Ktx2Etc1sRgbDfdByteCount = 44;
+    private const int Ktx2DfdSampleByteCount = 16;
     private const int Ktx2Etc1sDfdDescriptorBlockHeaderByteCount = 24;
     private const int Ktx2BasisLzHeaderByteCount = 20;
     private const int Ktx2BasisLzImageDescByteCount = 20;
@@ -253,7 +254,9 @@ public sealed class BasisUniversalEtc1sTextureCoder : IBasisEtc1sTextureCoder
         payload.TablesData.CopyTo(sgd.AsSpan(offset));
 
         var dfdOffset = checked(Ktx2HeaderByteCount + Ktx2LevelIndexEntryByteCount);
-        var sgdOffset = checked(dfdOffset + Ktx2Etc1sDfdByteCount);
+        var hasAlpha = !payload.AlphaSliceData.IsEmpty;
+        var dfdLength = Ktx2Etc1sRgbDfdByteCount + (hasAlpha ? Ktx2DfdSampleByteCount : 0);
+        var sgdOffset = (dfdOffset + dfdLength + 7) & ~7;
         var levelOffset = checked(sgdOffset + sgd.Length);
         var result = new byte[checked(levelOffset + levelPayload.Length)];
         Ktx2Identifier.CopyTo(result);
@@ -265,25 +268,25 @@ public sealed class BasisUniversalEtc1sTextureCoder : IBasisEtc1sTextureCoder
         BinaryPrimitives.WriteUInt32LittleEndian(result.AsSpan(40, 4), 1);
         BinaryPrimitives.WriteUInt32LittleEndian(result.AsSpan(44, 4), Ktx2SupercompressionBasisLz);
         BinaryPrimitives.WriteUInt32LittleEndian(result.AsSpan(48, 4), checked((uint)dfdOffset));
-        BinaryPrimitives.WriteUInt32LittleEndian(result.AsSpan(52, 4), Ktx2Etc1sDfdByteCount);
+        BinaryPrimitives.WriteUInt32LittleEndian(result.AsSpan(52, 4), (uint)dfdLength);
         BinaryPrimitives.WriteUInt64LittleEndian(result.AsSpan(64, 8), checked((ulong)sgdOffset));
         BinaryPrimitives.WriteUInt64LittleEndian(result.AsSpan(72, 8), checked((ulong)sgd.Length));
         BinaryPrimitives.WriteUInt64LittleEndian(result.AsSpan(80, 8), checked((ulong)levelOffset));
         BinaryPrimitives.WriteUInt64LittleEndian(result.AsSpan(88, 8), checked((ulong)levelPayload.Length));
         BinaryPrimitives.WriteUInt64LittleEndian(result.AsSpan(96, 8), 0);
 
-        WriteEtc1sDfd(result.AsSpan(dfdOffset, Ktx2Etc1sDfdByteCount), srgb);
+        WriteEtc1sDfd(result.AsSpan(dfdOffset, dfdLength), srgb, hasAlpha);
         sgd.CopyTo(result.AsSpan(sgdOffset));
         levelPayload.CopyTo(result.AsSpan(levelOffset));
         return result;
     }
 
-    private static void WriteEtc1sDfd(Span<byte> destination, bool srgb)
+    private static void WriteEtc1sDfd(Span<byte> destination, bool srgb, bool hasAlpha)
     {
         destination.Clear();
-        BinaryPrimitives.WriteUInt32LittleEndian(destination, Ktx2Etc1sDfdByteCount);
+        BinaryPrimitives.WriteUInt32LittleEndian(destination, (uint)destination.Length);
         BinaryPrimitives.WriteUInt16LittleEndian(destination.Slice(8, 2), 2);
-        BinaryPrimitives.WriteUInt16LittleEndian(destination.Slice(10, 2), Ktx2Etc1sDfdByteCount - 4);
+        BinaryPrimitives.WriteUInt16LittleEndian(destination.Slice(10, 2), (ushort)(destination.Length - 4));
         destination[12] = KhrDataFormatModelEtc1s;
         destination[13] = 1;
         destination[14] = srgb ? KhrDataFormatTransferSrgb : KhrDataFormatTransferLinear;
@@ -297,6 +300,17 @@ public sealed class BasisUniversalEtc1sTextureCoder : IBasisEtc1sTextureCoder
         destination[sampleOffset + 13] = byte.MaxValue;
         destination[sampleOffset + 14] = byte.MaxValue;
         destination[sampleOffset + 15] = byte.MaxValue;
+
+        // Basis Universal uses the DFD sample list to decide whether to transcode
+        // the alpha slice. Its offset and length in the global data alone do not enable it.
+        if (hasAlpha)
+        {
+            destination[21] = 8;
+            var alpha = destination[(sampleOffset + Ktx2DfdSampleByteCount)..];
+            destination.Slice(sampleOffset, Ktx2DfdSampleByteCount).CopyTo(alpha);
+            alpha[0] = 64;
+            alpha[3] = 15; // KHR_DF_CHANNEL_ETC1S_AAA
+        }
     }
 
     private static ReadOnlySpan<byte> SliceKtx2Range(ReadOnlySpan<byte> ktx2, int offsetOffset, int lengthOffset, string name)
